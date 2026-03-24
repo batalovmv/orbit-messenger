@@ -1,0 +1,66 @@
+version: 1
+base_branch: main
+
+components:
+  gateway:
+    resource: orbit-gateway
+    path: services/gateway/**
+    build:
+      dockerfile: services/gateway/Dockerfile
+    port: 8080
+
+  auth:
+    resource: orbit-auth
+    path: services/auth/**
+    build:
+      dockerfile: services/auth/Dockerfile
+    port: 8081
+
+  messaging:
+    resource: orbit-messaging
+    path: services/messaging/**
+    build:
+      dockerfile: services/messaging/Dockerfile
+    port: 8082
+
+  media:
+    resource: orbit-media
+    path: services/media/**
+    build:
+      dockerfile: services/media/Dockerfile
+    port: 8083
+
+  calls:
+    resource: orbit-calls
+    path: services/calls/**
+    build:
+      dockerfile: services/calls/Dockerfile
+    port: 8084
+
+  ai:
+    resource: orbit-ai
+    path: services/ai/**
+    build:
+      dockerfile: services/ai/Dockerfile
+    port: 8085
+
+  bots:
+    resource: orbit-bots
+    path: services/bots/**
+    build:
+      dockerfile: services/bots/Dockerfile
+    port: 8086
+
+  integrations:
+    resource: orbit-integrations
+    path: services/integrations/**
+    build:
+      dockerfile: services/integrations/Dockerfile
+    port: 8087
+
+  web:
+    resource: orbit-web
+    path: web/**
+    build:
+      dockerfile: web/Dockerfile
+    port: 80

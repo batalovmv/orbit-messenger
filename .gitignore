@@ -1,0 +1,54 @@
+# === Secrets ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+private_key*
+
+# === Go ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# === Node.js ===
+node_modules/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === Docker ===
+docker-compose.override.yml
+
+# === OS ===
+.DS_Store
+Desktop.ini
+ehthumbs.db
+
+# === Build artifacts ===
+/web/public/build/
+/desktop/src-tauri/target/
+
+# === Logs ===
+*.log
+npm-debug.log*
+
+# === Coverage ===
+coverage/
+*.cover
+*.coverprofile
