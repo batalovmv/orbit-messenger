@@ -2,12 +2,20 @@ import type { ApiChat, ApiChatFullInfo, ApiChatMember } from '../../types';
 import type { SaturnChat, SaturnChatListItem, SaturnChatMember } from '../types';
 
 export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
+  let title = chat.name || '';
+  if (chat.type === 'direct' && !title && 'other_user' in chat && chat.other_user) {
+    title = chat.other_user.display_name;
+  }
+  if (!title) {
+    title = chat.type === 'direct' ? 'Saved Messages' : 'Chat';
+  }
+
   const apiChat: ApiChat = {
     id: chat.id,
     type: chat.type === 'direct' ? 'chatTypePrivate'
       : chat.type === 'channel' ? 'chatTypeChannel'
         : 'chatTypeBasicGroup',
-    title: chat.name || 'Direct Message',
+    title,
     creationDate: Math.floor(new Date(chat.created_at).getTime() / 1000),
     isMin: false,
   };

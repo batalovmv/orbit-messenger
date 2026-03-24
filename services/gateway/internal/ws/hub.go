@@ -74,10 +74,13 @@ func (h *Hub) IsOnline(userID string) bool {
 // SendToUser sends a message to all connections of a specific user.
 func (h *Hub) SendToUser(userID string, msg interface{}) {
 	h.mu.RLock()
-	conns := h.conns[userID]
+	src := h.conns[userID]
+	// Deep copy to avoid data race with concurrent Unregister
+	snapshot := make([]*Conn, len(src))
+	copy(snapshot, src)
 	h.mu.RUnlock()
 
-	for _, c := range conns {
+	for _, c := range snapshot {
 		if err := c.Send(msg); err != nil {
 			slog.Error("ws: send error", "user_id", userID, "error", err)
 		}

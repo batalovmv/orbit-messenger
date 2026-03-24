@@ -13,6 +13,7 @@ type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	Update(ctx context.Context, u *model.User) error
 	Search(ctx context.Context, query string, limit int) ([]model.User, error)
+	ListAll(ctx context.Context, limit int) ([]model.User, error)
 }
 
 type userStore struct {
@@ -50,8 +51,39 @@ func (s *userStore) Update(ctx context.Context, u *model.User) error {
 	return err
 }
 
+func (s *userStore) ListAll(ctx context.Context, limit int) ([]model.User, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, email, display_name, avatar_url, bio, phone,
+		        status, custom_status, custom_status_emoji, role,
+		        last_seen_at, created_at, updated_at
+		 FROM users
+		 ORDER BY display_name
+		 LIMIT $1`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
+			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+			&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 func (s *userStore) Search(ctx context.Context, query string, limit int) ([]model.User, error) {
-	if limit <= 0 || limit > 20 {
+	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 

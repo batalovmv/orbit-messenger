@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,7 @@ type ChatListItem struct {
 	LastMessage  *Message `json:"last_message,omitempty"`
 	MemberCount  int      `json:"member_count"`
 	UnreadCount  int      `json:"unread_count"`
+	OtherUser    *User    `json:"other_user,omitempty"`
 }
 
 type ChatMember struct {
@@ -60,8 +62,10 @@ type Message struct {
 	ChatID         uuid.UUID  `json:"chat_id"`
 	SenderID       *uuid.UUID `json:"sender_id,omitempty"`
 	Type           string     `json:"type"`
-	Content        *string    `json:"content,omitempty"`
-	ReplyToID      *uuid.UUID `json:"reply_to_id,omitempty"`
+	Content        *string         `json:"content,omitempty"`
+	Entities       json.RawMessage `json:"entities,omitempty"`
+	ReplyToID        *uuid.UUID `json:"reply_to_id,omitempty"`
+	ReplyToSeqNum    *int64     `json:"reply_to_sequence_number,omitempty"`
 	IsEdited       bool       `json:"is_edited"`
 	IsDeleted      bool       `json:"is_deleted"`
 	IsPinned       bool       `json:"is_pinned"`

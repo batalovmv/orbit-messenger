@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -90,7 +92,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 
 	if u.TOTPEnabled {
 		if totpCode == "" {
-			return nil, nil, apperror.BadRequest("2FA code is required")
+			return nil, nil, &apperror.AppError{Code: "2fa_required", Message: "2FA code is required", Status: 400}
 		}
 		if u.TOTPSecret == nil || !totp.Validate(totpCode, *u.TOTPSecret) {
 			return nil, nil, apperror.Unauthorized("Invalid 2FA code")
@@ -152,8 +154,8 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 	return u, nil
 }
 
-// Logout invalidates the current access token.
-func (s *AuthService) Logout(ctx context.Context, tokenStr string) error {
+// Logout invalidates the current access token and deletes the refresh session.
+func (s *AuthService) Logout(ctx context.Context, tokenStr, refreshToken string) error {
 	claims, err := s.parseToken(tokenStr)
 	if err != nil {
 		return apperror.Unauthorized("Invalid token")
@@ -164,9 +166,21 @@ func (s *AuthService) Logout(ctx context.Context, tokenStr string) error {
 		ttl := time.Until(exp.Time)
 		if ttl > 0 {
 			hash := hashToken(tokenStr)
-			s.redis.Set(ctx, "jwt_blacklist:"+hash, "1", ttl)
+			if err := s.redis.Set(ctx, "jwt_blacklist:"+hash, "1", ttl).Err(); err != nil {
+				slog.Error("failed to blacklist token in Redis", "error", err)
+				return fmt.Errorf("failed to blacklist token: %w", err)
+			}
 		}
 	}
+
+	// Delete the refresh session from DB so the token cannot be reused
+	if refreshToken != "" {
+		refreshHash := hashToken(refreshToken)
+		if err := s.sessions.DeleteByTokenHash(ctx, refreshHash); err != nil {
+			slog.Error("failed to delete refresh session on logout", "error", err)
+		}
+	}
+
 	return nil
 }
 
@@ -257,7 +271,10 @@ func (s *AuthService) ListSessions(ctx context.Context, userID uuid.UUID) ([]mod
 func (s *AuthService) RevokeSession(ctx context.Context, sessionID, userID uuid.UUID) error {
 	err := s.sessions.DeleteByID(ctx, sessionID, userID)
 	if err != nil {
-		return apperror.NotFound("Session not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperror.NotFound("Session not found")
+		}
+		return fmt.Errorf("delete session: %w", err)
 	}
 	return nil
 }
@@ -379,7 +396,10 @@ func (s *AuthService) ListInvites(ctx context.Context) ([]model.Invite, error) {
 func (s *AuthService) RevokeInvite(ctx context.Context, inviteID, createdBy uuid.UUID) error {
 	err := s.invites.Revoke(ctx, inviteID, createdBy)
 	if err != nil {
-		return apperror.NotFound("Invite not found or not owned by you")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperror.NotFound("Invite not found or not owned by you")
+		}
+		return fmt.Errorf("revoke invite: %w", err)
 	}
 	return nil
 }

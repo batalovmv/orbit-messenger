@@ -73,7 +73,7 @@ func main() {
 	natsPublisher := service.NewNATSPublisher(nc)
 	chatSvc := service.NewChatService(chatStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher)
-	userSvc := service.NewUserService(userStore)
+	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 
 	// Handlers

@@ -27,6 +27,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Post("/chats", h.CreateGroup)
 	app.Get("/chats/:id", h.GetChat)
 	app.Get("/chats/:id/members", h.GetMembers)
+	app.Get("/chats/:id/member-ids", h.GetMemberIDs)
 }
 
 func (h *ChatHandler) ListChats(c *fiber.Ctx) error {
@@ -37,6 +38,9 @@ func (h *ChatHandler) ListChats(c *fiber.Ctx) error {
 
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 50)
+	if limit > 100 {
+		limit = 100
+	}
 
 	items, nextCursor, hasMore, err := h.svc.ListChats(c.Context(), uid, cursor, limit)
 	if err != nil {
@@ -126,6 +130,9 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 50)
+	if limit > 100 {
+		limit = 100
+	}
 
 	members, nextCursor, hasMore, err := h.svc.GetMembers(c.Context(), chatID, uid, cursor, limit)
 	if err != nil {
@@ -133,6 +140,21 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 	}
 
 	return response.Paginated(c, members, nextCursor, hasMore)
+}
+
+// GetMemberIDs returns just the user IDs of a chat (internal, for gateway typing fanout).
+func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	ids, err := h.svc.GetMemberIDs(c.Context(), chatID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"member_ids": ids})
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {

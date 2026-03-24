@@ -22,6 +22,7 @@ type ChatStore interface {
 	GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
 	AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error
 	IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error)
+	GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 
 type chatStore struct {
@@ -33,8 +34,8 @@ func NewChatStore(pool *pgxpool.Pool) ChatStore {
 }
 
 func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
-	if limit <= 0 || limit > 50 {
-		limit = 50
+	if limit <= 0 || limit > 100 {
+		limit = 100
 	}
 
 	// Decode cursor (timestamp of last chat's activity)
@@ -57,7 +58,8 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		        WHERE msg.chat_id = c.id AND msg.is_deleted = false
 		        AND msg.sequence_number > COALESCE(
 		            (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id), 0
-		        )) as unread_count
+		        )) as unread_count,
+		       ou.id, ou.display_name, ou.avatar_url, ou.status, ou.last_seen_at
 		FROM chat_members cm
 		JOIN chats c ON c.id = cm.chat_id
 		LEFT JOIN LATERAL (
@@ -65,6 +67,13 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		    WHERE chat_id = c.id AND is_deleted = false
 		    ORDER BY sequence_number DESC LIMIT 1
 		) m ON true
+		LEFT JOIN LATERAL (
+		    SELECT u.id, u.display_name, u.avatar_url, u.status, u.last_seen_at
+		    FROM chat_members ocm
+		    JOIN users u ON u.id = ocm.user_id
+		    WHERE ocm.chat_id = c.id AND ocm.user_id != $1 AND c.type = 'direct'
+		    LIMIT 1
+		) ou ON c.type = 'direct'
 		WHERE cm.user_id = $1
 		  AND ($2::timestamptz IS NULL OR COALESCE(m.created_at, c.created_at) < $2)
 		ORDER BY COALESCE(m.created_at, c.created_at) DESC
@@ -90,6 +99,11 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		var msgSeq *int64
 		var msgCreatedAt, msgEditedAt *time.Time
 		var msgIsEdited, msgIsDeleted, msgIsPinned, msgIsForwarded *bool
+		var ouID *uuid.UUID
+		var ouDisplayName *string
+		var ouAvatarURL *string
+		var ouStatus *string
+		var ouLastSeenAt *time.Time
 
 		err := rows.Scan(
 			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
@@ -99,6 +113,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
 			&msgSeq, &msgCreatedAt, &msgEditedAt,
 			&item.MemberCount, &item.UnreadCount,
+			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt,
 		)
 		if err != nil {
 			return nil, "", false, fmt.Errorf("scan chat: %w", err)
@@ -134,6 +149,16 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			}
 			msg.EditedAt = msgEditedAt
 			item.LastMessage = &msg
+		}
+
+		if ouID != nil {
+			item.OtherUser = &model.User{
+				ID:          *ouID,
+				DisplayName: *ouDisplayName,
+				AvatarURL:   ouAvatarURL,
+				Status:      *ouStatus,
+				LastSeenAt:  ouLastSeenAt,
+			}
 		}
 
 		items = append(items, item)
@@ -337,6 +362,30 @@ func (s *chatStore) IsMember(ctx context.Context, chatID, userID uuid.UUID) (boo
 		return false, "", err
 	}
 	return true, role, nil
+}
+
+// GetContactIDs returns distinct user IDs that share at least one chat with the given user.
+func (s *chatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT cm2.user_id
+		 FROM chat_members cm1
+		 JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id
+		 WHERE cm1.user_id = $1 AND cm2.user_id != $1`, userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id.String())
+	}
+	return ids, rows.Err()
 }
 
 func canonicalOrder(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {

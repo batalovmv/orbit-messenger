@@ -3,7 +3,7 @@ import type { ApiInitialArgs, OnApiUpdate } from '../../types';
 import * as saturnClient from '../client';
 import { init as initUpdateEmitter } from '../updates/apiUpdateEmitter';
 import { initWsHandler, setWsCurrentUserId } from '../updates/wsHandler';
-import { setCurrentUserId as setChatUserId } from './chats';
+import { setCurrentUserId as setChatUserId, fetchChats } from './chats';
 import { setCurrentUserId as setMsgUserId } from './messages';
 
 let currentOnUpdate: OnApiUpdate | undefined;
@@ -17,7 +17,12 @@ export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
 
   saturnClient.init(apiUrl, onUpdate);
   initUpdateEmitter(onUpdate);
-  initWsHandler(onUpdate);
+  initWsHandler();
+
+  // On WS reconnect, re-fetch chats to sync any missed updates
+  saturnClient.setOnReconnect(() => {
+    fetchChats({ limit: 50 }).catch(() => {});
+  });
 }
 
 export function setCurrentUser(userId: string) {

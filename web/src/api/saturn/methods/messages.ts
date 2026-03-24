@@ -1,7 +1,7 @@
-import type { ApiMessage, ApiSendMessageAction } from '../../types';
+import type { ApiMessage, ApiMessageEntity, ApiSendMessageAction } from '../../types';
 import type { SaturnMessage, SaturnPaginatedResponse } from '../types';
 
-import { buildApiMessage, getMessageUuid } from '../apiBuilders/messages';
+import { buildApiMessage, buildSaturnEntities, getMessageUuid } from '../apiBuilders/messages';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { trackPendingSend } from '../updates/wsHandler';
@@ -72,10 +72,11 @@ export async function fetchMessagesByDate({
 let localMessageCounter = -1; // Negative IDs for local/pending messages
 
 export async function sendMessage({
-  chatId, text, replyToId,
+  chatId, text, entities, replyToId,
 }: {
   chatId: string;
   text: string;
+  entities?: ApiMessageEntity[];
   replyToId?: number;
 }) {
   // Create local (optimistic) message
@@ -89,7 +90,7 @@ export async function sendMessage({
     isOutgoing: true,
     senderId: currentUserId,
     content: {
-      text: { text, entities: [] },
+      text: { text, entities: entities || [] },
     },
     sendingState: 'messageSendingStatePending',
   };
@@ -104,6 +105,9 @@ export async function sendMessage({
 
   try {
     const body: Record<string, unknown> = { content: text };
+    if (entities?.length) {
+      body.entities = buildSaturnEntities(entities);
+    }
     if (replyToId) {
       const replyUuid = getMessageUuid(chatId, replyToId);
       if (replyUuid) body.reply_to_id = replyUuid;
@@ -139,17 +143,23 @@ export async function sendMessage({
 }
 
 export async function editMessage({
-  chatId, messageId, text,
+  chatId, messageId, text, entities,
 }: {
   chatId: string;
   messageId: number;
   text: string;
+  entities?: ApiMessageEntity[];
 }) {
   const uuid = getMessageUuid(chatId, messageId);
   if (!uuid) return undefined;
 
+  const body: Record<string, unknown> = { content: text };
+  if (entities?.length) {
+    body.entities = buildSaturnEntities(entities);
+  }
+
   const msg = await client.request<SaturnMessage>(
-    'PATCH', `/api/v1/messages/${uuid}`, { content: text },
+    'PATCH', `/api/v1/messages/${uuid}`, body,
   );
 
   const apiMsg = buildApiMessage(msg);

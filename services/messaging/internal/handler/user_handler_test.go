@@ -17,7 +17,7 @@ import (
 // newUserApp creates a Fiber app wired with a UserHandler backed by the given mock store.
 func newUserApp(us *mockUserStore) *fiber.App {
 	app := fiber.New()
-	svc := service.NewUserService(us)
+	svc := service.NewUserService(us, &mockChatStore{})
 	h := NewUserHandler(svc, slog.Default())
 	h.Register(app)
 	return app
@@ -199,16 +199,27 @@ func TestSearchUsers_HappyPath(t *testing.T) {
 	}
 }
 
-func TestSearchUsers_EmptyQuery(t *testing.T) {
-	app := newUserApp(&mockUserStore{})
-	req, _ := http.NewRequest(http.MethodGet, "/users", nil) // no ?q=
+func TestSearchUsers_EmptyQuery_ReturnsAllUsers(t *testing.T) {
+	us := &mockUserStore{
+		listAllFn: func(_ context.Context, _ int) ([]model.User, error) {
+			return []model.User{*sampleUser(uuid.New())}, nil
+		},
+	}
+
+	app := newUserApp(us)
+	req, _ := http.NewRequest(http.MethodGet, "/users", nil) // no ?q= → returns all users
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for empty query, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for empty query (list all), got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["users"] == nil {
+		t.Fatal("response missing 'users' field")
 	}
 }
 

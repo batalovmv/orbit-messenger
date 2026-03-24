@@ -40,6 +40,17 @@ export async function fetchChats({
       noTopChatsRequest: true,
     });
 
+    // For DM chats, dispatch the peer user so TG Web A can resolve the title/avatar
+    if (item.type === 'direct' && item.other_user) {
+      const peerUser = buildApiUser(item.other_user);
+      sendApiUpdate({ '@type': 'updateUser', id: item.other_user.id, user: peerUser });
+      sendApiUpdate({
+        '@type': 'updateUserStatus',
+        userId: item.other_user.id,
+        status: buildApiUserStatus(item.other_user),
+      });
+    }
+
     if (item.last_message) {
       const apiMessage = buildApiMessage(item.last_message);
       if (currentUserId) {

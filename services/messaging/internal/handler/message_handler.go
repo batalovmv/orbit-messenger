@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -59,6 +60,9 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 50)
+	if limit > 100 {
+		limit = 100
+	}
 
 	msgs, nextCursor, hasMore, err := h.svc.ListMessages(c.Context(), chatID, uid, cursor, limit)
 	if err != nil {
@@ -89,6 +93,9 @@ func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
 	}
 
 	limit := c.QueryInt("limit", 50)
+	if limit > 100 {
+		limit = 100
+	}
 	msgs, nextCursor, hasMore, err := h.svc.FindByDate(c.Context(), chatID, uid, date, limit)
 	if err != nil {
 		return response.Error(c, err)
@@ -109,9 +116,10 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Content   string  `json:"content"`
-		ReplyToID *string `json:"reply_to_id"`
-		Type      string  `json:"type"`
+		Content   string          `json:"content"`
+		Entities  json.RawMessage `json:"entities"`
+		ReplyToID *string         `json:"reply_to_id"`
+		Type      string          `json:"type"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -130,7 +138,7 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		replyTo = &id
 	}
 
-	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, replyTo, req.Type)
+	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -150,7 +158,8 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Content string `json:"content"`
+		Content  string          `json:"content"`
+		Entities json.RawMessage `json:"entities"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -159,7 +168,7 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Content is required"))
 	}
 
-	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content)
+	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content, req.Entities)
 	if err != nil {
 		return response.Error(c, err)
 	}

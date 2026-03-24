@@ -20,6 +20,7 @@ type NATSEvent struct {
 	Event     string      `json:"event"`
 	Data      interface{} `json:"data"`
 	MemberIDs []string    `json:"member_ids"`
+	SenderID  string      `json:"sender_id,omitempty"`
 	Timestamp string      `json:"timestamp"`
 }
 
@@ -29,7 +30,7 @@ func NewNoopNATSPublisher() *NATSPublisher {
 	return &NATSPublisher{nc: nil}
 }
 
-func (p *NATSPublisher) Publish(subject string, event string, data interface{}, memberIDs []string) {
+func (p *NATSPublisher) Publish(subject string, event string, data interface{}, memberIDs []string, senderID ...string) {
 	if p.nc == nil {
 		return
 	}
@@ -38,6 +39,9 @@ func (p *NATSPublisher) Publish(subject string, event string, data interface{}, 
 		Data:      data,
 		MemberIDs: memberIDs,
 		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	if len(senderID) > 0 {
+		evt.SenderID = senderID[0]
 	}
 	payload, err := json.Marshal(evt)
 	if err != nil {

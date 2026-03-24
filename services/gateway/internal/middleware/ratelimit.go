@@ -32,15 +32,16 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)
 		ctx := c.Context()
 
-		count, err := cfg.Redis.Incr(ctx, key).Result()
+		// Use pipeline to make INCR+EXPIRE atomic (avoids orphan keys without TTL)
+		pipe := cfg.Redis.Pipeline()
+		incrCmd := pipe.Incr(ctx, key)
+		pipe.Expire(ctx, key, window)
+		_, err := pipe.Exec(ctx)
 		if err != nil {
 			// If Redis is down, allow the request
 			return c.Next()
 		}
-
-		if count == 1 {
-			cfg.Redis.Expire(ctx, key, window)
-		}
+		count := incrCmd.Val()
 
 		// Set rate limit headers
 		c.Set("X-RateLimit-Limit", strconv.Itoa(cfg.MaxPerMin))

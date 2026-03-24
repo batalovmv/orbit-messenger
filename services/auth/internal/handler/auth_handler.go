@@ -205,7 +205,8 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Missing token"))
 	}
 
-	if err := h.svc.Logout(c.Context(), token); err != nil {
+	refreshToken := c.Cookies("refresh_token")
+	if err := h.svc.Logout(c.Context(), token, refreshToken); err != nil {
 		return response.Error(c, err)
 	}
 

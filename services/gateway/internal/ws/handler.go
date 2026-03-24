@@ -1,20 +1,31 @@
 package ws
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
-	pingInterval = 30 * time.Second
-	pongWait     = 10 * time.Second
+	pingInterval   = 30 * time.Second
+	pongWait       = 10 * time.Second
+	authTimeout    = 10 * time.Second
+	authCacheTTL   = 30 * time.Second
+	typingCleanup  = 60 * time.Second
 )
+
+const typingExpire = 6 * time.Second
 
 // Handler manages WebSocket connections and typing debounce.
 type Handler struct {
@@ -22,30 +33,64 @@ type Handler struct {
 	NATS *nats.Conn
 
 	typingMu       sync.Mutex
-	typingDebounce map[string]time.Time // key: chatID+userID -> last broadcast
+	typingDebounce map[string]time.Time   // key: chatID+userID -> last broadcast
+	typingTimers   map[string]*time.Timer // key: chatID+userID -> auto stop_typing timer
 }
 
 func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
-	return &Handler{
+	h := &Handler{
 		Hub:            hub,
 		NATS:           nc,
 		typingDebounce: make(map[string]time.Time),
+		typingTimers:   make(map[string]*time.Timer),
 	}
+	// Periodically clean stale typing entries (#13 memory leak fix)
+	go h.typingCleanupLoop()
+	return h
 }
 
-// Upgrade returns a Fiber middleware that checks for WebSocket upgrade.
-func (h *Handler) Upgrade() fiber.Handler {
+// Upgrade returns a Fiber handler that upgrades to WebSocket.
+// Auth happens via the first "auth" frame — token is NOT in the URL.
+func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handler {
+	authClient := &http.Client{Timeout: authTimeout}
+
 	return websocket.New(func(c *websocket.Conn) {
-		userID := c.Locals("user_id")
-		if userID == nil {
+		// Step 1: Wait for "auth" frame with token
+		c.SetReadDeadline(time.Now().Add(authTimeout))
+		_, msg, err := c.ReadMessage()
+		if err != nil {
+			slog.Warn("ws: no auth frame received", "error", err)
+			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"auth timeout"}`)})
 			c.Close()
 			return
 		}
-		uid, ok := userID.(string)
-		if !ok || uid == "" {
+
+		var cm ClientMessage
+		if err := json.Unmarshal(msg, &cm); err != nil || cm.Type != "auth" {
+			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"expected auth frame"}`)})
 			c.Close()
 			return
 		}
+
+		var authData struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(cm.Data, &authData); err != nil || authData.Token == "" {
+			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"missing token"}`)})
+			c.Close()
+			return
+		}
+
+		// Step 2: Validate token via auth service (with Redis cache)
+		uid, err := validateToken(context.Background(), authClient, rdb, authServiceURL, authData.Token)
+		if err != nil || uid == "" {
+			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"invalid token"}`)})
+			c.Close()
+			return
+		}
+
+		// Step 3: Auth success — send confirmation
+		c.WriteJSON(Envelope{Type: "auth_ok", Data: json.RawMessage(`{}`)})
 
 		conn := &Conn{
 			WS:     c,
@@ -80,6 +125,63 @@ func (h *Handler) Upgrade() fiber.Handler {
 			h.handleClientMessage(conn, msg)
 		}
 	})
+}
+
+// validateToken checks JWT via auth service with Redis cache.
+func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (string, error) {
+	tokenHash := sha256Hash(token)
+	cacheKey := "jwt_cache:" + tokenHash
+
+	// Check cache
+	if cached, err := rdb.Get(ctx, cacheKey).Result(); err == nil {
+		var u struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal([]byte(cached), &u) == nil && u.ID != "" {
+			return u.ID, nil
+		}
+	}
+
+	// Call auth service
+	req, err := http.NewRequestWithContext(ctx, "GET", authURL+"/auth/me", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var user struct {
+		ID   string `json:"id"`
+		Role string `json:"role"`
+	}
+	if err := json.Unmarshal(body, &user); err != nil {
+		return "", err
+	}
+
+	// Cache
+	cuJSON, _ := json.Marshal(user)
+	rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL)
+
+	return user.ID, nil
+}
+
+func sha256Hash(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
 }
 
 func (h *Handler) pingLoop(conn *Conn) {
@@ -134,15 +236,62 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 	h.typingMu.Unlock()
 
 	// Publish typing event to NATS
+	typingData, _ := json.Marshal(map[string]string{
+		"chat_id": td.ChatID,
+		"user_id": conn.UserID,
+	})
 	event := NATSEvent{
 		Event:     EventTyping,
-		Data:      data,
+		Data:      typingData,
 		Timestamp: now.Format(time.RFC3339),
 	}
 	eventJSON, _ := json.Marshal(event)
 	subject := "orbit.chat." + td.ChatID + ".typing"
 	if err := h.NATS.Publish(subject, eventJSON); err != nil {
 		slog.Error("failed to publish typing", "error", err)
+	}
+
+	// Auto-expire: send stop_typing after 6s if no new typing received
+	h.typingMu.Lock()
+	if timer, ok := h.typingTimers[key]; ok {
+		timer.Stop()
+	}
+	chatID := td.ChatID
+	userID := conn.UserID
+	h.typingTimers[key] = time.AfterFunc(typingExpire, func() {
+		stopData, _ := json.Marshal(map[string]string{
+			"chat_id": chatID,
+			"user_id": userID,
+		})
+		stopEvt := NATSEvent{
+			Event:     EventStopTyping,
+			Data:      stopData,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		stopJSON, _ := json.Marshal(stopEvt)
+		stopSubject := "orbit.chat." + chatID + ".typing"
+		h.NATS.Publish(stopSubject, stopJSON)
+
+		h.typingMu.Lock()
+		delete(h.typingTimers, chatID+":"+userID)
+		h.typingMu.Unlock()
+	})
+	h.typingMu.Unlock()
+}
+
+// typingCleanupLoop periodically removes stale entries from typingDebounce map.
+func (h *Handler) typingCleanupLoop() {
+	ticker := time.NewTicker(typingCleanup)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.typingMu.Lock()
+		now := time.Now()
+		for k, v := range h.typingDebounce {
+			if now.Sub(v) > typingCleanup {
+				delete(h.typingDebounce, k)
+			}
+		}
+		h.typingMu.Unlock()
 	}
 }
 

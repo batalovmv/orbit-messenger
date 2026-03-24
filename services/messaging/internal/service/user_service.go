@@ -12,10 +12,15 @@ import (
 
 type UserService struct {
 	users store.UserStore
+	chats store.ChatStore
 }
 
-func NewUserService(users store.UserStore) *UserService {
-	return &UserService{users: users}
+func NewUserService(users store.UserStore, chats store.ChatStore) *UserService {
+	return &UserService{users: users, chats: chats}
+}
+
+func (s *UserService) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	return s.chats.GetContactIDs(ctx, userID)
 }
 
 func (s *UserService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User, error) {
@@ -76,7 +81,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displ
 
 func (s *UserService) SearchUsers(ctx context.Context, query string, limit int) ([]model.User, error) {
 	if query == "" {
-		return nil, apperror.BadRequest("Search query is required")
+		return s.users.ListAll(ctx, limit)
 	}
 	return s.users.Search(ctx, query, limit)
 }

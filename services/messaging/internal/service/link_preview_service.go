@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -169,7 +170,10 @@ func parseOGTags(r io.Reader, rawURL string, parsed *url.URL) (*LinkPreview, err
 				case "og:description":
 					preview.Description = content
 				case "og:image":
-					preview.ImageURL = content
+					if imgURL, err := url.Parse(content); err == nil &&
+						(imgURL.Scheme == "http" || imgURL.Scheme == "https") {
+						preview.ImageURL = content
+					}
 				case "og:site_name":
 					preview.SiteName = content
 				case "og:type":
@@ -235,15 +239,23 @@ func linkPreviewCacheKey(rawURL string) string {
 
 func isPrivateHost(host string) bool {
 	lower := strings.ToLower(host)
-	if lower == "localhost" || lower == "127.0.0.1" || lower == "::1" || lower == "0.0.0.0" {
+	if lower == "localhost" || lower == "0.0.0.0" {
 		return true
 	}
-	// Block common private ranges
-	privatePrefix := []string{"10.", "192.168.", "172.16.", "172.17.", "172.18.", "172.19.",
-		"172.20.", "172.21.", "172.22.", "172.23.", "172.24.", "172.25.", "172.26.",
-		"172.27.", "172.28.", "172.29.", "172.30.", "172.31.", "169.254."}
-	for _, prefix := range privatePrefix {
-		if strings.HasPrefix(host, prefix) {
+
+	// Resolve hostname to IP addresses and check each one
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		// If resolution fails, block to be safe
+		return true
+	}
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			return true
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
 			return true
 		}
 	}

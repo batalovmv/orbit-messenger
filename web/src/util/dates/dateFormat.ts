@@ -273,13 +273,13 @@ export function formatHumanDate(
 
   if (!noWeekdays) {
     if (toIsoString(date) === toIsoString(today)) {
-      return (isUpperFirst || !isShort ? upperFirst : lowerFirst)(lang('Weekday.Today'));
+      return (isUpperFirst || !isShort ? upperFirst : lowerFirst)(lang('WeekdayToday'));
     }
 
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
     if (toIsoString(date) === toIsoString(yesterday)) {
-      return (isUpperFirst || !isShort ? upperFirst : lowerFirst)(lang('Weekday.Yesterday'));
+      return (isUpperFirst || !isShort ? upperFirst : lowerFirst)(lang('WeekdayYesterday'));
     }
 
     const limitBefore = new Date(today);

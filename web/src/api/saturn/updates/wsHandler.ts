@@ -1,4 +1,3 @@
-import type { OnApiUpdate } from '../../types';
 import type { SaturnMessage, SaturnWsMessage } from '../types';
 
 import { buildApiMessage, getMessageSeqNum } from '../apiBuilders/messages';
@@ -27,7 +26,7 @@ export function trackPendingSend(uuid: string) {
   setTimeout(() => pendingSendUuids.delete(uuid), PENDING_UUID_TTL_MS);
 }
 
-export function initWsHandler(onUpdate: OnApiUpdate) {
+export function initWsHandler() {
   setWsMessageHandler(handleWsMessage);
 }
 
@@ -206,7 +205,9 @@ function handleUserStatus(data: Record<string, unknown>) {
     '@type': 'updateUserStatus',
     userId,
     status: {
-      type: status === 'online' ? 'userStatusOnline' : 'userStatusOffline',
+      type: status === 'online' ? 'userStatusOnline'
+        : status === 'recently' ? 'userStatusRecently'
+        : 'userStatusOffline',
       wasOnline: lastSeen ? Math.floor(new Date(lastSeen).getTime() / 1000) : undefined,
       expires: status === 'online' ? Math.floor(Date.now() / 1000) + 300 : undefined,
     },

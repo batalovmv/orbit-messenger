@@ -16,6 +16,7 @@ import (
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error)
 	ListByChat(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error)
 	FindByChatAndDate(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
 	Update(ctx context.Context, msg *model.Message) error
@@ -38,10 +39,10 @@ func NewMessageStore(pool *pgxpool.Pool) MessageStore {
 
 func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 	return s.pool.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, reply_to_id)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, sequence_number, created_at`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.ReplyToID,
+		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID,
 	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded,
 		&msg.SequenceNumber, &msg.CreatedAt)
 }
@@ -49,21 +50,52 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
 	msg := &model.Message{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
+		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		        m.sequence_number, m.created_at, m.edited_at,
-		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url
+		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
+		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		 FROM messages m
 		 LEFT JOIN users u ON u.id = m.sender_id
 		 WHERE m.id = $1`, id,
-	).Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.ReplyToID,
+	).Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
 		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
 		&msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
-		&msg.SenderName, &msg.SenderAvatarURL)
+		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	return msg, err
+}
+
+func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
+		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
+		        m.sequence_number, m.created_at, m.edited_at,
+		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
+		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
+		 FROM messages m
+		 LEFT JOIN users u ON u.id = m.sender_id
+		 WHERE m.id = ANY($1)`, ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messages []model.Message
+	for rows.Next() {
+		var m model.Message
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
+			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
+			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
+			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
+			return nil, err
+		}
+		messages = append(messages, m)
+	}
+	return messages, rows.Err()
 }
 
 func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error) {
@@ -83,10 +115,11 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 	}
 
 	query := `
-		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
+		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		       m.sequence_number, m.created_at, m.edited_at,
-		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url
+		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
+		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.chat_id = $1 AND m.is_deleted = false
@@ -103,10 +136,10 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 	var messages []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.ReplyToID,
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
 			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL); err != nil {
+			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, "", false, err
 		}
 		messages = append(messages, m)
@@ -134,14 +167,15 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 	}
 
 	query := `
-		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
+		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		       m.sequence_number, m.created_at, m.edited_at,
-		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url
+		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
+		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.chat_id = $1 AND m.is_deleted = false AND m.created_at >= $2
-		ORDER BY m.created_at ASC
+		ORDER BY m.sequence_number ASC
 		LIMIT $3`
 
 	rows, err := s.pool.Query(ctx, query, chatID, date, limit+1)
@@ -153,10 +187,10 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 	var messages []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.ReplyToID,
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
 			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL); err != nil {
+			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, "", false, err
 		}
 		messages = append(messages, m)
@@ -180,9 +214,9 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 
 func (s *messageStore) Update(ctx context.Context, msg *model.Message) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE messages SET content = $1, is_edited = true, edited_at = now()
-		 WHERE id = $2`,
-		msg.Content, msg.ID,
+		`UPDATE messages SET content = $1, entities = $2, is_edited = true, edited_at = now()
+		 WHERE id = $3`,
+		msg.Content, msg.Entities, msg.ID,
 	)
 	return err
 }
@@ -196,10 +230,11 @@ func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 
 func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]model.Message, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
+		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		        m.sequence_number, m.created_at, m.edited_at,
-		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url
+		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
+		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		 FROM messages m
 		 LEFT JOIN users u ON u.id = m.sender_id
 		 WHERE m.chat_id = $1 AND m.is_pinned = true AND m.is_deleted = false
@@ -213,10 +248,10 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 	var messages []model.Message
 	for rows.Next() {
 		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.ReplyToID,
+		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
 			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL); err != nil {
+			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, err
 		}
 		messages = append(messages, m)
@@ -252,29 +287,45 @@ func (s *messageStore) UnpinAll(ctx context.Context, chatID uuid.UUID) error {
 }
 
 func (s *messageStore) UpdateReadPointer(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error {
+	// Only advance forward — never regress the read pointer (race condition protection)
 	_, err := s.pool.Exec(ctx,
 		`UPDATE chat_members SET last_read_message_id = $1
-		 WHERE chat_id = $2 AND user_id = $3`,
+		 WHERE chat_id = $2 AND user_id = $3
+		   AND (
+		     last_read_message_id IS NULL
+		     OR (SELECT sequence_number FROM messages WHERE id = $1 AND chat_id = $2) >
+		        (SELECT sequence_number FROM messages WHERE id = last_read_message_id AND chat_id = $2)
+		   )`,
 		lastReadMsgID, chatID, userID,
 	)
 	return err
 }
 
 func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var result []model.Message
 	for i := range msgs {
 		m := &msgs[i]
-		err := s.pool.QueryRow(ctx,
-			`INSERT INTO messages (chat_id, sender_id, type, content, is_forwarded, forwarded_from)
-			 VALUES ($1, $2, $3, $4, true, $5)
+		err := tx.QueryRow(ctx,
+			`INSERT INTO messages (chat_id, sender_id, type, content, entities, is_forwarded, forwarded_from)
+			 VALUES ($1, $2, $3, $4, $5, true, $6)
 			 RETURNING id, is_edited, is_deleted, is_pinned, sequence_number, created_at`,
-			m.ChatID, m.SenderID, m.Type, m.Content, m.ForwardedFrom,
+			m.ChatID, m.SenderID, m.Type, m.Content, m.Entities, m.ForwardedFrom,
 		).Scan(&m.ID, &m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.SequenceNumber, &m.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("create forwarded message: %w", err)
 		}
 		m.IsForwarded = true
 		result = append(result, *m)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 	return result, nil
 }

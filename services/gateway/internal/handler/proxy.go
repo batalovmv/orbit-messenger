@@ -28,7 +28,12 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 
 	// Auth routes: proxy without JWT validation
 	authGroup.All("/*", func(c *fiber.Ctx) error {
-		url := cfg.AuthServiceURL + c.Path()
+		// Strip /api/v1 prefix — auth service listens on /auth/*
+		path := strings.TrimPrefix(c.Path(), "/api/v1")
+		if path == "" {
+			path = "/"
+		}
+		url := cfg.AuthServiceURL + path
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}

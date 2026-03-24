@@ -91,6 +91,10 @@ func (m *mockChatStore) IsMember(ctx context.Context, chatID, userID uuid.UUID) 
 	return true, "member", nil
 }
 
+func (m *mockChatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	return nil, nil
+}
+
 // ---------------------------------------------------------------------------
 // Mock MessageStore
 // ---------------------------------------------------------------------------
@@ -117,6 +121,23 @@ func (m *mockMessageStore) Create(ctx context.Context, msg *model.Message) error
 	msg.ID = uuid.New()
 	msg.CreatedAt = time.Now()
 	return nil
+}
+
+func (m *mockMessageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error) {
+	if m.getByIDFn == nil {
+		return nil, nil
+	}
+	var result []model.Message
+	for _, id := range ids {
+		msg, err := m.getByIDFn(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if msg != nil {
+			result = append(result, *msg)
+		}
+	}
+	return result, nil
 }
 
 func (m *mockMessageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
@@ -211,6 +232,7 @@ type mockUserStore struct {
 	getByIDFn func(ctx context.Context, id uuid.UUID) (*model.User, error)
 	updateFn  func(ctx context.Context, u *model.User) error
 	searchFn  func(ctx context.Context, query string, limit int) ([]model.User, error)
+	listAllFn func(ctx context.Context, limit int) ([]model.User, error)
 }
 
 func (m *mockUserStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
@@ -230,6 +252,13 @@ func (m *mockUserStore) Update(ctx context.Context, u *model.User) error {
 func (m *mockUserStore) Search(ctx context.Context, query string, limit int) ([]model.User, error) {
 	if m.searchFn != nil {
 		return m.searchFn(ctx, query, limit)
+	}
+	return nil, nil
+}
+
+func (m *mockUserStore) ListAll(ctx context.Context, limit int) ([]model.User, error) {
+	if m.listAllFn != nil {
+		return m.listAllFn(ctx, limit)
 	}
 	return nil, nil
 }

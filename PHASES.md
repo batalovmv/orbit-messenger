@@ -154,7 +154,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] `messages_read` — при прочтении (inbox/outbox read pointer)
 - [x] `user_status` — online (broadcast контактам при connect) + offline (при disconnect с TTL 5min)
 - [x] `typing` — broadcast членам чата (auto-expire 6 сек)
-- [ ] `stop_typing` — явная остановка
+- [x] `stop_typing` — явная остановка
 
 **Client → Server:**
 - [x] `typing` — { chat_id } с server-side debounce
@@ -252,6 +252,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] sequence_number BIGINT DEFAULT nextval('messages_seq')
 - [x] created_at TIMESTAMPTZ DEFAULT now()
 - [x] edited_at TIMESTAMPTZ
+- [x] entities JSONB (migration 012 — bold/italic/code/link formatting)
 
 **devices** (для push + Phase 7 E2E):
 - [x] id UUID PK
@@ -283,20 +284,22 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 **Users:**
 - [x] fetchCurrentUser, fetchUser, searchUsers, updateProfile
-- [ ] fetchGlobalUsers
+- [x] fetchGlobalUsers
 
 **Chats:**
 - [x] fetchChats, fetchFullChat, createDirectChat, createGroupChat
-- [ ] getChatInviteLink
+- [x] getChatInviteLink
 
 **Messages:**
 - [x] fetchMessages, sendMessage, editMessage, deleteMessages
 - [x] forwardMessages, fetchPinnedMessages, pinMessage, unpinAllMessages
 - [x] markMessageListRead, sendMessageAction (typing)
-- [ ] fetchMessageLink, reportMessages
+- [x] fetchMessageLink (client-side hash link, серверный deep link → deferred to Phase 4)
+- [~] reportMessages — deferred to Phase 4 (модерация, не нужно для invite-only 150 человек)
 
 **Sync:**
-- [ ] fetchUpdateManager, fetchDifference (stub exists)
+- [x] fetchDifference — no-op stub; вместо diff protocol: re-fetch chats при WS reconnect
+- [~] fetchUpdateManager — deferred (не нужен: WS + reconnect re-fetch покрывает Phase 1)
 
 **WebSocket:**
 - [x] connectWebSocket, disconnectWebSocket, initWebSocket, pingWebSocket
@@ -304,7 +307,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 **Localization:**
 - [x] fetchLangPack, fetchLanguages
-- [ ] fetchLanguage (отдельный метод)
+- [ ] fetchLanguage (отдельный метод) — deferred, fetchLanguages covers Phase 1 needs
 
 **UI features (TG Web A):**
 - [x] Optimistic UI (clock → ✓ → ✓✓) — inherited from TG Web A fork
@@ -312,6 +315,14 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] Scroll-to-bottom кнопка — inherited from TG Web A fork
 - [x] Rich text: **bold**, *italic*, `code`, ~~strike~~ — inherited from TG Web A fork
 - [x] Link previews (OG tags — серверный парсер + Saturn endpoint реализованы)
+
+### Известные отложения и расхождения с ТЗ
+
+- **Scheduled messages** (TZ-PHASES-V2-DESIGN перечисляет в Phase 1) → deferred to Phase 5 (Rich Messaging). Логически относятся к Phase 5 вместе с reactions/stickers/polls.
+- **Message search** (TZ §11.1, Should) → deferred to Phase 4 (Meilisearch). PostgreSQL ILIKE недостаточен для full-text search.
+- **`chat_members.permissions` / `custom_title`** (TZ §6.1 — базовая схема) → Phase 2 ALTER. В Phase 1 используются роли (owner/admin/member), permission bitmask не нужен.
+- **`reportMessages`** → Phase 4 (модерация). Для invite-only 150 человек не критично.
+- **Migration 013**: `direct_chat_lookup.chat_id ON DELETE CASCADE` — добавлено для корректного удаления чатов.
 
 ### Критерий "готово"
 

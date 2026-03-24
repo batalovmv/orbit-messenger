@@ -16,6 +16,8 @@ let wsPingInterval: ReturnType<typeof setInterval> | undefined;
 let wsReconnectTimeout: ReturnType<typeof setTimeout> | undefined;
 let wsReconnectDelay = WS_RECONNECT_BASE_MS;
 let wsIntentionalClose = false;
+let wsHasConnectedBefore = false;
+let onReconnect: (() => void) | undefined;
 
 export function init(apiUrl: string, updateCallback: OnApiUpdate) {
   baseUrl = apiUrl.replace(/\/$/, '');
@@ -104,7 +106,7 @@ export async function request<T>(
       message: response.statusText,
       status: response.status,
     })) as SaturnErrorResponse;
-    throw new ApiError(errorBody.message || errorBody.error, response.status);
+    throw new ApiError(errorBody.message || errorBody.error, response.status, errorBody.error);
   }
 
   if (response.status === 204) {
@@ -116,11 +118,13 @@ export async function request<T>(
 
 export class ApiError extends Error {
   status: number;
+  code: string;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code = 'unknown') {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -133,13 +137,21 @@ export function connectWs() {
   if (!accessToken) return;
 
   wsIntentionalClose = false;
-  const wsUrl = baseUrl.replace(/^http/, 'ws') + `/api/v1/ws?token=${accessToken}`;
+  const wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1/ws';
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
+    // Send auth frame immediately — token is NOT in URL for security
+    ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
     startPing();
     onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateReady' });
+
+    // On reconnect, re-fetch chats to sync missed updates
+    if (wsHasConnectedBefore) {
+      onReconnect?.();
+    }
+    wsHasConnectedBefore = true;
   };
 
   ws.onmessage = (event) => {
@@ -213,6 +225,10 @@ let wsMessageHandler: ((msg: SaturnWsMessage) => void) | undefined;
 
 export function setWsMessageHandler(handler: (msg: SaturnWsMessage) => void) {
   wsMessageHandler = handler;
+}
+
+export function setOnReconnect(handler: () => void) {
+  onReconnect = handler;
 }
 
 function handleWsMessage(msg: SaturnWsMessage) {

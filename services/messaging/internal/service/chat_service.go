@@ -100,3 +100,8 @@ func (s *ChatService) GetMembers(ctx context.Context, chatID, userID uuid.UUID, 
 
 	return s.chats.GetMembers(ctx, chatID, cursor, limit)
 }
+
+// GetMemberIDs returns just the user IDs of chat members (lightweight, for internal use).
+func (s *ChatService) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
+	return s.chats.GetMemberIDs(ctx, chatID)
+}

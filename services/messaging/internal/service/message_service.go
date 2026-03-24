@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -45,7 +46,7 @@ func (s *MessageService) FindByDate(ctx context.Context, chatID, userID uuid.UUI
 	return s.messages.FindByChatAndDate(ctx, chatID, date, limit)
 }
 
-func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
+func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, senderID)
 	if err != nil {
 		return nil, fmt.Errorf("check membership: %w", err)
@@ -63,6 +64,7 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		SenderID:  &senderID,
 		Type:      msgType,
 		Content:   &content,
+		Entities:  entities,
 		ReplyToID: replyToID,
 	}
 	if err := s.messages.Create(ctx, msg); err != nil {
@@ -78,12 +80,12 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	// Publish to NATS
 	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
-	s.nats.Publish(subject, "new_message", full, memberIDs)
+	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 
 	return full, nil
 }
 
-func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUID, content string) (*model.Message, error) {
+func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUID, content string, entities json.RawMessage) (*model.Message, error) {
 	msg, err := s.messages.GetByID(ctx, msgID)
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
@@ -99,6 +101,7 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 	}
 
 	msg.Content = &content
+	msg.Entities = entities
 	if err := s.messages.Update(ctx, msg); err != nil {
 		return nil, fmt.Errorf("update message: %w", err)
 	}
@@ -160,19 +163,38 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 		return nil, apperror.Forbidden("Not a member of the target chat")
 	}
 
+	// Batch fetch all messages in one query (instead of N queries)
+	originals, err := s.messages.GetByIDs(ctx, messageIDs)
+	if err != nil {
+		return nil, fmt.Errorf("batch fetch messages: %w", err)
+	}
+
+	// IDOR: check membership in each unique source chat (1 query per unique chat, not per message)
+	sourceChatChecked := make(map[uuid.UUID]bool)
 	var toForward []model.Message
-	for _, id := range messageIDs {
-		orig, err := s.messages.GetByID(ctx, id)
-		if err != nil || orig == nil {
+	for i := range originals {
+		orig := &originals[i]
+		if orig.IsDeleted {
 			continue
 		}
-		forwardedFrom := orig.SenderID
+		if allowed, checked := sourceChatChecked[orig.ChatID]; checked {
+			if !allowed {
+				continue
+			}
+		} else {
+			isSourceMember, _, err := s.chats.IsMember(ctx, orig.ChatID, senderID)
+			sourceChatChecked[orig.ChatID] = err == nil && isSourceMember
+			if err != nil || !isSourceMember {
+				continue
+			}
+		}
 		toForward = append(toForward, model.Message{
 			ChatID:        toChatID,
 			SenderID:      &senderID,
 			Type:          orig.Type,
 			Content:       orig.Content,
-			ForwardedFrom: forwardedFrom,
+			Entities:      orig.Entities,
+			ForwardedFrom: orig.SenderID,
 		})
 	}
 
@@ -189,7 +211,7 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	memberIDs, _ := s.chats.GetMemberIDs(ctx, toChatID)
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", toChatID.String())
 	for _, m := range created {
-		s.nats.Publish(subject, "new_message", m, memberIDs)
+		s.nats.Publish(subject, "new_message", m, memberIDs, senderID.String())
 	}
 
 	return created, nil
@@ -211,12 +233,23 @@ func (s *MessageService) PinMessage(ctx context.Context, chatID, msgID, userID u
 }
 
 func (s *MessageService) UnpinMessage(ctx context.Context, chatID, msgID, userID uuid.UUID) error {
-	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	isMember, role, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {
 		return fmt.Errorf("check membership: %w", err)
 	}
 	if !isMember {
 		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	// In non-DM chats, only owner/admin can unpin (consistent with UnpinAll)
+	if role != "owner" && role != "admin" {
+		chat, err := s.chats.GetByID(ctx, chatID)
+		if err != nil {
+			return fmt.Errorf("get chat: %w", err)
+		}
+		if chat != nil && chat.Type != "direct" {
+			return apperror.Forbidden("Only admins can unpin messages")
+		}
 	}
 
 	return s.messages.Unpin(ctx, chatID, msgID)

@@ -25,6 +25,7 @@ type NATSEvent struct {
 	Event     string          `json:"event"`
 	Data      json.RawMessage `json:"data"`
 	MemberIDs []string        `json:"member_ids"`
+	SenderID  string          `json:"sender_id,omitempty"`
 	Timestamp string          `json:"timestamp"`
 }
 

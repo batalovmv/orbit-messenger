@@ -1,5 +1,5 @@
-import type { ApiMessage } from '../../types';
-import type { SaturnMessage } from '../types';
+import type { ApiMessage, ApiMessageEntity } from '../../types';
+import type { SaturnMessage, SaturnMessageEntity } from '../types';
 
 // Saturn uses UUID for message IDs, but TG Web A expects numeric IDs.
 // We use sequence_number as the numeric message ID.
@@ -38,7 +38,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     content: {
       text: msg.content ? {
         text: msg.content,
-        entities: [],
+        entities: msg.entities?.map(buildApiEntity) || [],
       } : undefined,
     },
     isEdited: msg.is_edited,
@@ -53,8 +53,14 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
 function buildReplyInfo(msg: SaturnMessage) {
   if (!msg.reply_to_id) return undefined;
 
-  const replySeqNum = uuidToSeqMap.get(msg.reply_to_id);
+  // Try local map first, then use server-provided sequence_number as fallback
+  const replySeqNum = uuidToSeqMap.get(msg.reply_to_id) || msg.reply_to_sequence_number;
   if (!replySeqNum) return undefined;
+
+  // Register the mapping if we got it from the server
+  if (msg.reply_to_sequence_number && !uuidToSeqMap.has(msg.reply_to_id)) {
+    registerMessageId(msg.chat_id, msg.reply_to_id, msg.reply_to_sequence_number);
+  }
 
   return {
     type: 'message' as const,
@@ -70,4 +76,22 @@ function buildForwardInfo(msg: SaturnMessage) {
     date: Math.floor(new Date(msg.created_at).getTime() / 1000),
     senderUserId: msg.forwarded_from || undefined,
   };
+}
+
+function buildApiEntity(e: SaturnMessageEntity): ApiMessageEntity {
+  const base = { type: e.type as ApiMessageEntity['type'], offset: e.offset, length: e.length };
+  if (e.url) return { ...base, type: 'MessageEntityTextUrl' as const, url: e.url };
+  if (e.language) return { ...base, type: 'MessageEntityPre' as const, language: e.language };
+  if (e.user_id) return { ...base, type: 'MessageEntityMentionName' as const, userId: e.user_id };
+  return base as ApiMessageEntity;
+}
+
+export function buildSaturnEntities(entities: ApiMessageEntity[]): SaturnMessageEntity[] {
+  return entities.map((e) => {
+    const base: SaturnMessageEntity = { type: e.type, offset: e.offset, length: e.length };
+    if ('url' in e) base.url = e.url;
+    if ('language' in e) base.language = e.language;
+    if ('userId' in e) base.user_id = e.userId;
+    return base;
+  });
 }

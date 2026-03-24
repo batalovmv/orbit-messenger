@@ -35,6 +35,16 @@ export interface SaturnChatListItem extends SaturnChat {
   last_message?: SaturnMessage;
   member_count: number;
   unread_count: number;
+  other_user?: SaturnUser;
+}
+
+export interface SaturnMessageEntity {
+  type: string;
+  offset: number;
+  length: number;
+  url?: string;
+  language?: string;
+  user_id?: string;
 }
 
 export interface SaturnMessage {
@@ -43,7 +53,9 @@ export interface SaturnMessage {
   sender_id?: string;
   type: string;
   content?: string;
+  entities?: SaturnMessageEntity[];
   reply_to_id?: string;
+  reply_to_sequence_number?: number;
   is_edited: boolean;
   is_deleted: boolean;
   is_pinned: boolean;

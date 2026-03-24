@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -57,7 +56,7 @@ func main() {
 	wsHandler := ws.NewHandler(hub, nc)
 
 	// NATS Subscriber
-	subscriber := ws.NewSubscriber(hub, nc)
+	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL)
 	if err := subscriber.Start(); err != nil {
 		slog.Error("failed to start NATS subscriber", "error", err)
 		os.Exit(1)
@@ -77,7 +76,7 @@ func main() {
 	app.Get("/health", handler.HealthHandler)
 
 	// Auth proxy (no JWT validation needed)
-	authGroup := app.Group("/auth")
+	authGroup := app.Group("/api/v1/auth")
 	authRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
 		Redis: rdb, MaxPerMin: 5, KeyPrefix: "auth",
 	})
@@ -93,37 +92,18 @@ func main() {
 		Redis: rdb, MaxPerMin: 100, KeyPrefix: "api",
 	})
 
-	// WebSocket endpoint (before API group to avoid conflict)
-	app.Use("/api/v1/ws", func(c *fiber.Ctx) error {
+	// WebSocket endpoint — auth happens via first "auth" frame after connection,
+	// NOT via query param (tokens must not appear in URLs per TZ §8.1)
+	wsRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 10, KeyPrefix: "ws",
+	})
+	app.Use("/api/v1/ws", wsRateLimit, func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
-			// Validate JWT from query param or header
-			token := c.Query("token")
-			if token == "" {
-				auth := c.Get("Authorization")
-				if strings.HasPrefix(auth, "Bearer ") {
-					token = auth[7:]
-				}
-			}
-			if token == "" {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-					"error": "unauthorized", "message": "Missing token", "status": 401,
-				})
-			}
-			// Validate via middleware helper — inline for WS
-			c.Request().Header.Set("Authorization", "Bearer "+token)
-			jwtMW(c)
-			userID := string(c.Request().Header.Peek("X-User-ID"))
-			if userID == "" {
-				return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-					"error": "unauthorized", "message": "Invalid token", "status": 401,
-				})
-			}
-			c.Locals("user_id", userID)
 			return c.Next()
 		}
 		return fiber.ErrUpgradeRequired
 	})
-	app.Get("/api/v1/ws", wsHandler.Upgrade())
+	app.Get("/api/v1/ws", wsHandler.Upgrade(authServiceURL, rdb))
 
 	// API group with JWT + rate limiting
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)

@@ -72,7 +72,7 @@ export async function loginWithEmail({
     return { user: apiUser };
   } catch (e) {
     if (e instanceof client.ApiError) {
-      if (e.status === 400 && e.message.includes('2FA')) {
+      if (e.code === '2fa_required') {
         // Need 2FA code
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
