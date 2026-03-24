@@ -185,6 +185,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 **sessions:**
 - [ ] id UUID PK
 - [ ] user_id UUID REFERENCES users(id) ON DELETE CASCADE
+- [ ] device_id UUID REFERENCES devices(id)
 - [ ] token_hash TEXT NOT NULL
 - [ ] ip_address INET
 - [ ] user_agent TEXT
@@ -199,6 +200,8 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [ ] role TEXT DEFAULT 'member'
 - [ ] max_uses INT DEFAULT 1
 - [ ] use_count INT DEFAULT 0
+- [ ] used_by UUID REFERENCES users(id)
+- [ ] used_at TIMESTAMPTZ
 - [ ] expires_at TIMESTAMPTZ
 - [ ] is_active BOOLEAN DEFAULT true
 - [ ] created_at TIMESTAMPTZ DEFAULT now()
@@ -255,6 +258,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [ ] user_id UUID REFERENCES users(id) ON DELETE CASCADE
 - [ ] device_name TEXT
 - [ ] device_type TEXT (web/desktop/ios/android)
+- [ ] identity_key BYTEA (Phase 7: Signal Protocol public key)
 - [ ] push_token TEXT
 - [ ] push_type TEXT (vapid/fcm/apns)
 - [ ] last_active_at TIMESTAMPTZ
@@ -373,6 +377,19 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 **chat_join_requests:**
 - [ ] chat_id + user_id PK, message TEXT, created_at
 
+### @Mentions (Must)
+
+- [ ] Парсинг @username в тексте сообщения → entities массив
+- [ ] Автокомплит @mention в ChatInput (поиск участников чата)
+- [ ] Push-уведомление на @mention (даже в замьюченном чате)
+- [ ] Backend: хранение mention entities в message, notification при @mention
+
+### Channels vs Groups
+
+- [ ] Groups: все пишут (по permissions), авторы видимы
+- [ ] Channels: только owner/admin пишет, автор = название канала (анонимно)
+- [ ] Linked discussion group для канала (Nice to Have)
+
 ### Frontend: Saturn API методы (~30)
 
 - [ ] createChannel, editChatTitle, editChatDescription
@@ -390,7 +407,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ### Критерий "готово"
 
-Создать "MST Dev Team" → добавить 10 человек → назначить 2 admin → чат → pin → invite link. Канал "MST Announcements" → owner пишет, 150 читают. Роли и права работают.
+Создать "MST Dev Team" → добавить 10 человек → назначить 2 admin → чат → pin → invite link → @mention → уведомление. Канал "MST Announcements" → owner пишет, 150 читают. Роли и права работают.
 
 ---
 
@@ -560,6 +577,11 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [ ] user_id PK, theme DEFAULT 'auto', language DEFAULT 'ru'
 - [ ] font_size INT DEFAULT 16, send_by_enter BOOLEAN DEFAULT true
 - [ ] dnd_from TIME, dnd_until TIME, updated_at
+
+### Дополнительные фичи
+
+- [ ] In-app notification banners (сообщение в другом чате → баннер сверху)
+- [ ] In-chat search (лупа → фильтры: from user, date, type)
 
 ### Frontend: Saturn API методы (~25)
 
@@ -900,7 +922,7 @@ Signaling: WebSocket через gateway
 - [ ] **8C Integrations:** Изучить API InsightFlow, Keitaro, Saturn.ac — форматы webhook payload
 - [ ] **8C Integrations:** Спроектировать generic webhook framework — verification (HMAC), retry, logging
 - [ ] **8D ScyllaDB:** Спроектировать migration strategy — dual-write? Shadow read? Cut-over?
-- [ ] **8D ScyllaDB:** Спроектировать CQL schema — partition key (chat_id + month), clustering (sequence_number DESC)
+- [ ] **8D ScyllaDB:** Спроектировать CQL schema — partition key (chat_id + day bucket), clustering (sequence_number DESC)
 - [ ] **8D NATS:** Спроектировать stream topology — MESSAGES, EVENTS, PUSH, WEBHOOKS
 - [ ] **8D Monitoring:** Выбрать: Prometheus+Grafana managed (Saturn?) или self-hosted?
 - [ ] **8D Security:** Составить OWASP checklist для аудита всех сервисов
@@ -919,6 +941,9 @@ Signaling: WebSocket через gateway
 - [ ] GET /ai/usage — статистика использования AI
 
 **Rate limit:** 20 AI-запросов/мин/юзер. Бесплатно для всех.
+
+**@orbit-ai бот** (Nice to Have):
+- [ ] Диалог с AI в любом чате через @orbit-ai mention
 
 **Saturn методы (~10):**
 - [ ] summarizeChat, translateMessages, suggestReply
@@ -973,11 +998,20 @@ Signaling: WebSocket через gateway
 - [ ] fetchWebhooks, createWebhook, editWebhook, deleteWebhook
 - [ ] fetchWebhookLogs, testWebhook, fetchIntegrations, toggleIntegration
 
+**Database Phase 8B — bots:**
+- [ ] id UUID PK, owner_id, username TEXT UNIQUE, display_name, description
+- [ ] avatar_url, webhook_url, api_token TEXT UNIQUE, is_inline BOOLEAN
+- [ ] commands JSONB, is_active BOOLEAN DEFAULT true, created_at
+
+**Database Phase 8C — webhooks:**
+- [ ] id UUID PK, chat_id, name, webhook_url, incoming_webhook_token TEXT UNIQUE
+- [ ] events JSONB, config JSONB, is_active BOOLEAN, created_by, created_at
+
 ### 8D: Production Hardening
 
 **ScyllaDB миграция:**
-- [ ] Messages table → ScyllaDB (partitioned by chat_id + month bucket, clustered by sequence_number DESC)
-- [ ] Dual-write стратегия миграции
+- [ ] Messages table → ScyllaDB (partitioned by chat_id + day bucket (unix/86400), clustered by sequence_number DESC)
+- [ ] Dual-write стратегия миграции (write PostgreSQL + ScyllaDB, read from ScyllaDB, fallback PostgreSQL)
 - [ ] Target: 1000 msg/sec
 
 **NATS JetStream:**
@@ -991,6 +1025,7 @@ Signaling: WebSocket через gateway
 - [ ] `typing:{chatId}:{userId}` → TTL 6sec
 - [ ] `session:{tokenHash}` → user data cache
 - [ ] `ratelimit:{userId}:{endpoint}` → counter
+- [ ] `jwt_blacklist:{tokenHash}` → TTL = remaining token validity
 
 **Мониторинг:**
 - [ ] Prometheus — RPS, latency p50/p95/p99, error rate, WS connections
@@ -1008,12 +1043,19 @@ Signaling: WebSocket через gateway
 - [ ] CORS whitelist
 - [ ] Secrets rotation
 - [ ] Penetration test
+- [ ] GPL-3.0 compliance: license headers, source availability
 
 **Backup:**
 - [ ] PostgreSQL: pg_dump + WAL archiving (daily + PITR)
 - [ ] ScyllaDB: snapshot + incremental (daily)
 - [ ] Redis: RDB snapshot каждые 15 мин
 - [ ] R2: cross-region replication (real-time)
+- [ ] E2E keys: client-side encrypted backup (user-initiated)
+
+**Scaling roadmap (150 → 500 → 1000+):**
+- [ ] 150 users: single PostgreSQL, single Redis, single gateway instance
+- [ ] 500 users: PostgreSQL read replicas, Redis Sentinel, ScyllaDB, 2-3 gateway instances + LB
+- [ ] 1000+ users: sharded PostgreSQL, Redis Cluster, ScyllaDB multi-DC, auto-scaling gateway
 
 **Performance targets:**
 - [ ] Message delivery: p99 <100ms
@@ -1021,7 +1063,13 @@ Signaling: WebSocket через gateway
 - [ ] WS connections: 500 concurrent/instance
 - [ ] Media upload: >100 MB/s aggregate
 - [ ] Search: <50ms per query
+- [ ] Frontend TTI: <3 seconds
+- [ ] Frontend bundle: <2MB gzipped
 - [ ] 150+ concurrent users без деградации
+
+**Inter-service communication:**
+- [ ] HTTP (текущий) — достаточно для 150 юзеров
+- [ ] gRPC миграция — оценить при масштабировании до 500+ (опционально)
 
 ### Критерий "готово"
 
