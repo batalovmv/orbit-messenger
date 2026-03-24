@@ -20,7 +20,7 @@ func newMessageApp(ms *mockMessageStore, cs *mockChatStore) *fiber.App {
 	app := fiber.New()
 	nats := service.NewNoopNATSPublisher()
 	svc := service.NewMessageService(ms, cs, nats)
-	h := NewMessageHandler(svc, slog.Default())
+	h := NewMessageHandler(svc, nil, slog.Default())
 	h.Register(app)
 	return app
 }

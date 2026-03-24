@@ -74,13 +74,13 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 ### Проработка (Шаг 0 — до написания кода)
 
 - [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 1, `docs/TZ-ORBIT-MESSENGER.md` §5, §6, §8, §11.1
-- [ ] Изучить оригинальный TG Web A API layer (`refs/telegram-web-z/src/api/`) — понять формат данных, типы, конвертацию UUID↔BigInt
+- [x] Изучить оригинальный TG Web A API layer — Saturn API layer реализован с UUID↔sequence_number маппингом
 - [x] Спроектировать точный SQL миграций (CREATE TABLE с индексами, constraints, triggers)
 - [x] Спроектировать маршрутизацию gateway: какие запросы проксирует, какие обрабатывает сам
 - [x] Продумать формат WS-событий (JSON schema) — что отправляет сервер, что ожидает фронтенд
 - [x] Продумать стратегию кэширования JWT-валидации в gateway (Redis TTL vs in-memory)
-- [ ] Проверить: как TG Web A ожидает получить список чатов? Какие поля обязательны?
-- [ ] Проверить: как TG Web A обрабатывает optimistic UI? Какой формат sendMessage response?
+- [x] Проверить: как TG Web A ожидает получить список чатов — реализовано в buildApiChat + fetchChats
+- [x] Проверить: optimistic UI — реализовано: sendMessage → localId → updateMessageSendSucceeded с race guard
 - [x] Оценить: нужен ли OG-tag parser для link preview на бэкенде или defer to Phase 4?
 - [x] Составить порядок реализации и предложить пользователю
 
@@ -278,37 +278,40 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 ### Frontend: Saturn API методы (~35)
 
 **Auth:**
-- [ ] checkAuth, validateInviteCode, registerWithInvite, loginWithEmail, logout
-- [ ] restartAuth, provideAuthPhoneNumber (compatibility wrapper)
+- [x] checkAuth, validateInviteCode, registerWithInvite, loginWithEmail, logout
+- [x] restartAuth, provideAuthPhoneNumber (compatibility wrapper)
 
 **Users:**
-- [ ] fetchCurrentUser, fetchUser, fetchGlobalUsers, searchUsers, updateProfile
+- [x] fetchCurrentUser, fetchUser, searchUsers, updateProfile
+- [ ] fetchGlobalUsers
 
 **Chats:**
-- [ ] fetchChats, fetchFullChat, createDirectChat, createGroupChat
+- [x] fetchChats, fetchFullChat, createDirectChat, createGroupChat
 - [ ] getChatInviteLink
 
 **Messages:**
-- [ ] fetchMessages, sendMessage, editMessage, deleteMessages
-- [ ] forwardMessages, fetchMessageLink, reportMessages
-- [ ] fetchPinnedMessages, pinMessage, unpinAllMessages, toggleMessagePinned
-- [ ] markMessageListRead, readHistory
+- [x] fetchMessages, sendMessage, editMessage, deleteMessages
+- [x] forwardMessages, fetchPinnedMessages, pinMessage, unpinAllMessages
+- [x] markMessageListRead, sendMessageAction (typing)
+- [ ] fetchMessageLink, reportMessages
 
 **Sync:**
-- [ ] fetchUpdateManager, fetchDifference
+- [ ] fetchUpdateManager, fetchDifference (stub exists)
 
 **WebSocket:**
-- [ ] connectWebSocket, disconnectWebSocket, sendTypingAction, pingWebSocket, initWebSocket
+- [x] connectWebSocket, disconnectWebSocket, initWebSocket, pingWebSocket
+- [x] WS events: new_message, message_updated, message_deleted, messages_read, typing, user_status
 
 **Localization:**
-- [ ] fetchLangPack, fetchLanguage, fetchLanguages
+- [x] fetchLangPack, fetchLanguages
+- [ ] fetchLanguage (отдельный метод)
 
 **UI features (TG Web A):**
-- [ ] Optimistic UI (clock → ✓ → ✓✓)
-- [ ] Date separators (Today / Yesterday / Day)
-- [ ] Scroll-to-bottom кнопка
-- [ ] Rich text: **bold**, *italic*, `code`, ~~strike~~
-- [ ] Link previews (OG tags — нужен серверный парсер)
+- [x] Optimistic UI (clock → ✓ → ✓✓) — inherited from TG Web A fork
+- [x] Date separators (Today / Yesterday / Day) — inherited from TG Web A fork
+- [x] Scroll-to-bottom кнопка — inherited from TG Web A fork
+- [x] Rich text: **bold**, *italic*, `code`, ~~strike~~ — inherited from TG Web A fork
+- [x] Link previews (OG tags — серверный парсер + Saturn endpoint реализованы)
 
 ### Критерий "готово"
 

@@ -51,7 +51,7 @@ func main() {
 	}
 	rdb := redis.NewClient(opts)
 	defer rdb.Close()
-	_ = rdb // Redis used for future caching needs
+	// Redis used for link preview caching and future needs
 
 	// NATS
 	nc, err := nats.Connect(natsURL,
@@ -74,10 +74,11 @@ func main() {
 	chatSvc := service.NewChatService(chatStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher)
 	userSvc := service.NewUserService(userStore)
+	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger)
-	msgHandler := handler.NewMessageHandler(msgSvc, logger)
+	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
 	userHandler := handler.NewUserHandler(userSvc, logger)
 
 	// Fiber

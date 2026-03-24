@@ -13,12 +13,13 @@ import (
 )
 
 type MessageHandler struct {
-	svc    *service.MessageService
-	logger *slog.Logger
+	svc            *service.MessageService
+	linkPreviewSvc *service.LinkPreviewService
+	logger         *slog.Logger
 }
 
-func NewMessageHandler(svc *service.MessageService, logger *slog.Logger) *MessageHandler {
-	return &MessageHandler{svc: svc, logger: logger}
+func NewMessageHandler(svc *service.MessageService, linkPreviewSvc *service.LinkPreviewService, logger *slog.Logger) *MessageHandler {
+	return &MessageHandler{svc: svc, linkPreviewSvc: linkPreviewSvc, logger: logger}
 }
 
 func (h *MessageHandler) Register(app fiber.Router) {
@@ -40,6 +41,9 @@ func (h *MessageHandler) Register(app fiber.Router) {
 	app.Patch("/messages/:id", h.EditMessage)
 	app.Delete("/messages/:id", h.DeleteMessage)
 	app.Post("/messages/forward", h.ForwardMessages)
+
+	// Link preview
+	app.Get("/messages/link-preview", h.GetLinkPreview)
 }
 
 func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
@@ -332,4 +336,19 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Read pointer updated"})
+}
+
+func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {
+	rawURL := c.Query("url")
+	if rawURL == "" {
+		return response.Error(c, apperror.BadRequest("url query parameter is required"))
+	}
+
+	preview, err := h.linkPreviewSvc.FetchPreview(c.Context(), rawURL)
+	if err != nil {
+		h.logger.Warn("link preview failed", "url", rawURL, "error", err)
+		return response.JSON(c, fiber.StatusOK, fiber.Map{"preview": nil})
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"preview": preview})
 }

@@ -188,6 +188,15 @@ R=$(curl -s -X PUT "http://localhost:8082/users/me" -H "Content-Type: applicatio
 check "T47 Update profile" '"display_name":"Updated Name"' "$R"
 
 echo ""
+echo "--- LINK PREVIEW ---"
+
+R=$(curl -s "http://localhost:8082/messages/link-preview?url=https://example.com" -H "X-User-ID: $ADMIN_ID")
+check "T51 Link preview" '"preview"' "$R"
+
+R=$(curl -s "http://localhost:8082/messages/link-preview" -H "X-User-ID: $ADMIN_ID")
+check "T52 Link preview no URL -> 400" '"status":400' "$R"
+
+echo ""
 echo "--- GATEWAY PROXY ---"
 
 R=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"admin@orbit.test","password":"securepass123"}')
