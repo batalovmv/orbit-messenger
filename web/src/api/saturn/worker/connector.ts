@@ -1,0 +1,87 @@
+// Saturn connector — simplified, no Web Worker needed.
+// REST/WebSocket calls run in the main thread (fetch is non-blocking).
+// Preserves the same callApi/initApi interface that TG Web A global actions use.
+
+import type { ApiInitialArgs, ApiOnProgress, OnApiUpdate } from '../../types';
+import type { MethodArgs, MethodResponse, Methods } from '../methods/types';
+
+import Deferred from '../../../util/Deferred';
+import { initApi as initMethods, callApi as callMethod, cancelApiProgress as cancelProgress } from '../methods/init';
+
+let updateCallback: OnApiUpdate | undefined;
+let isInited = false;
+let apiRequestsQueue: { fnName: any; args: any; deferred: Deferred<any> }[] = [];
+
+export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
+  updateCallback = onUpdate;
+
+  return initMethods(onUpdate, initialArgs).then(() => {
+    isInited = true;
+
+    apiRequestsQueue.forEach((request) => {
+      callApi(request.fnName, ...request.args)
+        .then(request.deferred.resolve)
+        .catch(request.deferred.reject);
+    });
+    apiRequestsQueue = [];
+  });
+}
+
+type EnsurePromise<T> = Promise<Awaited<T>>;
+
+export function callApi<T extends keyof Methods>(
+  fnName: T, ...args: MethodArgs<T>
+): EnsurePromise<MethodResponse<T>>;
+export function callApi(fnName: string, ...args: any[]): Promise<any>;
+export function callApi(fnName: string, ...args: any[]): Promise<any> {
+  if (!isInited) {
+    const deferred = new Deferred();
+    apiRequestsQueue.push({ fnName, args, deferred });
+    return deferred.promise;
+  }
+
+  try {
+    const result = callMethod(fnName, ...args);
+    return result instanceof Promise ? result : Promise.resolve(result);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+export function callApiLocal<T extends keyof Methods>(
+  fnName: T, ...args: MethodArgs<T>
+): EnsurePromise<MethodResponse<T>>;
+export function callApiLocal(fnName: string, ...args: any[]): Promise<any>;
+export function callApiLocal(fnName: string, ...args: any[]): Promise<any> {
+  return callApi(fnName, ...args);
+}
+
+export function cancelApiProgress(progressCallback: ApiOnProgress) {
+  cancelProgress(progressCallback);
+}
+
+export function cancelApiProgressMaster(progressCallback: ApiOnProgress | any) {
+  if (typeof progressCallback === 'function') {
+    cancelProgress(progressCallback);
+  }
+}
+
+export function handleMethodCallback(..._args: any[]) {
+  // No-op for Saturn (no worker)
+}
+
+export function handleMethodResponse(..._args: any[]) {
+  // No-op for Saturn (no worker)
+}
+
+export function updateFullLocalDb(..._args: any[]) {
+  // No-op for Saturn (no GramJS localDb)
+}
+
+export function updateLocalDb(..._args: any[]) {
+  // No-op for Saturn (no GramJS localDb)
+}
+
+export function setShouldEnableDebugLog(_value: boolean) {
+  // No-op for Saturn
+}

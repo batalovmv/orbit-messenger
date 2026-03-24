@@ -1,0 +1,123 @@
+import type { SaturnUser } from '../types';
+
+import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBuilders/users';
+import * as client from '../client';
+import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+
+export async function fetchCurrentUser() {
+  const user = await client.request<SaturnUser>('GET', '/api/v1/users/me');
+
+  const apiUser = buildApiUser(user);
+  apiUser.isSelf = true;
+
+  sendApiUpdate({
+    '@type': 'updateCurrentUser',
+    currentUser: apiUser,
+    currentUserFullInfo: buildApiUserFullInfo(user),
+  });
+
+  sendApiUpdate({
+    '@type': 'updateUserStatus',
+    userId: user.id,
+    status: buildApiUserStatus(user),
+  });
+
+  return { user: apiUser };
+}
+
+export async function fetchUser({ userId }: { userId: string }) {
+  const user = await client.request<SaturnUser>('GET', `/api/v1/users/${userId}`);
+
+  const apiUser = buildApiUser(user);
+
+  sendApiUpdate({
+    '@type': 'updateUser',
+    id: user.id,
+    user: {
+      ...apiUser,
+    },
+  });
+
+  sendApiUpdate({
+    '@type': 'updateUserStatus',
+    userId: user.id,
+    status: buildApiUserStatus(user),
+  });
+
+  return { user: apiUser };
+}
+
+export async function searchUsers({ query, limit = 20 }: { query: string; limit?: number }) {
+  const result = await client.request<{ users: SaturnUser[] }>(
+    'GET', `/api/v1/users?q=${encodeURIComponent(query)}&limit=${limit}`,
+  );
+
+  const apiUsers = result.users.map(buildApiUser);
+
+  result.users.forEach((user) => {
+    sendApiUpdate({
+      '@type': 'updateUser',
+      id: user.id,
+      user: buildApiUser(user),
+    });
+  });
+
+  return {
+    users: apiUsers,
+    userStatusesById: Object.fromEntries(
+      result.users.map((u) => [u.id, buildApiUserStatus(u)]),
+    ),
+  };
+}
+
+export async function fetchGlobalUsers({ limit = 50 }: { limit?: number } = {}) {
+  // Saturn has no "list all users" endpoint; use search with empty query as fallback
+  const result = await client.request<{ users: SaturnUser[] }>(
+    'GET', `/api/v1/users?q=&limit=${limit}`,
+  );
+
+  const apiUsers = result.users.map(buildApiUser);
+
+  result.users.forEach((user) => {
+    sendApiUpdate({
+      '@type': 'updateUser',
+      id: user.id,
+      user: buildApiUser(user),
+    });
+  });
+
+  return {
+    users: apiUsers,
+    userStatusesById: Object.fromEntries(
+      result.users.map((u) => [u.id, buildApiUserStatus(u)]),
+    ),
+  };
+}
+
+export async function updateProfile({
+  displayName, bio, phone, avatarUrl,
+}: {
+  displayName?: string;
+  bio?: string;
+  phone?: string;
+  avatarUrl?: string;
+}) {
+  const body: Record<string, unknown> = {};
+  if (displayName !== undefined) body.display_name = displayName;
+  if (bio !== undefined) body.bio = bio;
+  if (phone !== undefined) body.phone = phone;
+  if (avatarUrl !== undefined) body.avatar_url = avatarUrl;
+
+  const user = await client.request<SaturnUser>('PUT', '/api/v1/users/me', body);
+
+  const apiUser = buildApiUser(user);
+  apiUser.isSelf = true;
+
+  sendApiUpdate({
+    '@type': 'updateCurrentUser',
+    currentUser: apiUser,
+    currentUserFullInfo: buildApiUserFullInfo(user),
+  });
+
+  return { user: apiUser };
+}

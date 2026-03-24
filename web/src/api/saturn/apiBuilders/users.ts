@@ -1,0 +1,47 @@
+import type { ApiUser, ApiUserFullInfo, ApiUserStatus } from '../../types';
+import type { SaturnUser } from '../types';
+
+export function buildApiUser(user: SaturnUser): ApiUser {
+  const nameParts = (user.display_name || '').split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || undefined;
+
+  return {
+    id: user.id,
+    isMin: false,
+    type: 'userTypeRegular',
+    firstName,
+    lastName,
+    phoneNumber: user.phone || '',
+    hasUsername: Boolean(user.email),
+    usernames: user.email ? [{ username: user.email, isActive: true, isEditable: true }] : undefined,
+  };
+}
+
+export function buildApiUserStatus(user: SaturnUser): ApiUserStatus {
+  if (user.status === 'online') {
+    return {
+      type: 'userStatusOnline',
+      expires: Math.floor(Date.now() / 1000) + 300,
+    };
+  }
+
+  if (user.last_seen_at) {
+    return {
+      type: 'userStatusOffline',
+      wasOnline: Math.floor(new Date(user.last_seen_at).getTime() / 1000),
+    };
+  }
+
+  if (user.status === 'recently') {
+    return { type: 'userStatusRecently' };
+  }
+
+  return { type: 'userStatusEmpty' };
+}
+
+export function buildApiUserFullInfo(user: SaturnUser): ApiUserFullInfo {
+  return {
+    bio: user.bio || undefined,
+  };
+}
