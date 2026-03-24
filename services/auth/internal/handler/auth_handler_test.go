@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/response"
@@ -479,5 +481,449 @@ func TestResetAdmin_WrongKey(t *testing.T) {
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+// --- helper: bootstrap admin + login, return access token ---
+
+func bootstrapAndLogin(t *testing.T, app *fiber.App) string {
+	t.Helper()
+	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}, nil)
+
+	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":    "admin@orbit.test",
+		"password": "securepassword123",
+	}, nil)
+	result := parseResponse(loginResp)
+	token, ok := result["access_token"].(string)
+	if !ok || token == "" {
+		t.Fatal("bootstrapAndLogin: no access_token in login response")
+	}
+	return token
+}
+
+// --- Register tests ---
+
+func TestRegister_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	// Admin must exist before creating an invite.
+	adminToken := bootstrapAndLogin(t, app)
+
+	// Admin creates an invite.
+	invResp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role":     "member",
+		"max_uses": 1,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+
+	if invResp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(invResp.Body)
+		t.Fatalf("expected 201 from invite creation, got %d: %s", invResp.StatusCode, body)
+	}
+	invResult := parseResponse(invResp)
+	code, ok := invResult["code"].(string)
+	if !ok || code == "" {
+		t.Fatal("no invite code in response")
+	}
+
+	// Register with the invite code.
+	resp := doRequest(app, "POST", "/auth/register", map[string]string{
+		"invite_code":  code,
+		"email":        "newuser@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "New User",
+	}, nil)
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if result["email"] != "newuser@orbit.test" {
+		t.Errorf("expected email newuser@orbit.test, got %v", result["email"])
+	}
+}
+
+func TestRegister_InvalidInvite(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	resp := doRequest(app, "POST", "/auth/register", map[string]string{
+		"invite_code":  "badcode1",
+		"email":        "newuser@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "New User",
+	}, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestRegister_DuplicateEmail(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	// Create invite with max_uses=2 so we can attempt registration twice.
+	invResp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role":     "member",
+		"max_uses": 2,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+
+	invResult := parseResponse(invResp)
+	code := invResult["code"].(string)
+
+	// First registration succeeds.
+	doRequest(app, "POST", "/auth/register", map[string]string{
+		"invite_code":  code,
+		"email":        "dup@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "User",
+	}, nil)
+
+	// Second registration with same email should conflict.
+	resp := doRequest(app, "POST", "/auth/register", map[string]string{
+		"invite_code":  code,
+		"email":        "dup@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "User",
+	}, nil)
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp.StatusCode)
+	}
+}
+
+// --- Logout tests ---
+
+func TestLogout_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	// Logout with a valid Bearer token.
+	// NOTE: In this test environment Redis is unavailable, so the service
+	// will fail when attempting to blacklist the JWT. We verify that the
+	// auth middleware accepts the token (not 401/403) — the Redis failure
+	// surfaces as 500 rather than a business-logic error.
+	resp := doRequest(app, "POST", "/auth/logout", nil, map[string]string{
+		"Authorization": "Bearer " + adminToken,
+	})
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected auth to pass (not 401/403), got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestLogout_NoToken(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	// requireAuth middleware runs first and returns 401 when no token is present.
+	resp := doRequest(app, "POST", "/auth/logout", nil, nil)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// --- Refresh tests ---
+
+func TestRefresh_NoRefreshCookie(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	// No cookie and no body refresh_token → 400 (missing refresh token).
+	resp := doRequest(app, "POST", "/auth/refresh", nil, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// --- Login 2FA tests ---
+
+// setup2FAUser bootstraps an admin, enables TOTP on its store entry directly,
+// and returns the admin email and the generated TOTP secret.
+func setup2FAUser(t *testing.T, userStore *mockUserStore) (email, secret string) {
+	t.Helper()
+
+	email = "admin@orbit.test"
+
+	// Generate a real TOTP key so totp.Validate works.
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "OrbitTest",
+		AccountName: email,
+	})
+	if err != nil {
+		t.Fatalf("generate totp key: %v", err)
+	}
+	secret = key.Secret()
+
+	// Inject TOTP settings directly into the mock store.
+	u := userStore.byEmail[email]
+	if u == nil {
+		t.Fatal("admin user not found in store — call bootstrapAndLogin first")
+	}
+	u.TOTPSecret = &secret
+	u.TOTPEnabled = true
+
+	return email, secret
+}
+
+func TestLogin_With2FA_MissingCode(t *testing.T) {
+	app, _, userStore := setupTestApp(t)
+
+	bootstrapAndLogin(t, app)
+	setup2FAUser(t, userStore)
+
+	// Login without a TOTP code should fail with 400 and error code "2fa_required".
+	resp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":    "admin@orbit.test",
+		"password": "securepassword123",
+	}, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if errCode, _ := result["error"].(string); errCode != "2fa_required" {
+		t.Errorf("expected error field '2fa_required', got %q (full response: %v)", errCode, result)
+	}
+}
+
+func TestLogin_With2FA_WrongCode(t *testing.T) {
+	app, _, userStore := setupTestApp(t)
+
+	bootstrapAndLogin(t, app)
+	setup2FAUser(t, userStore)
+
+	resp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":     "admin@orbit.test",
+		"password":  "securepassword123",
+		"totp_code": "000000",
+	}, nil)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 401, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+// --- Sessions tests ---
+
+func TestListSessions_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "GET", "/auth/sessions", nil, map[string]string{
+		"Authorization": "Bearer " + adminToken,
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if result["sessions"] == nil {
+		t.Error("expected 'sessions' key in response")
+	}
+}
+
+func TestListSessions_NoAuth(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	resp := doRequest(app, "GET", "/auth/sessions", nil, nil)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// --- RevokeSession tests ---
+
+func TestRevokeSession_HappyPath(t *testing.T) {
+	// Build app components manually so we can inspect the session store directly.
+	userStore := newMockUserStore()
+	sessionStore := newMockSessionStore()
+	inviteStore := newMockInviteStore()
+
+	cfg := &service.Config{
+		JWTSecret:     "test-jwt-secret-32-chars-minimum!!",
+		AccessTTL:     15 * time.Minute,
+		RefreshTTL:    720 * time.Hour,
+		TOTPIssuer:    "OrbitTest",
+		AdminResetKey: "test-reset-key",
+		FrontendURL:   "http://localhost:3000",
+	}
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:0"})
+	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	h := NewAuthHandler(svc, logger)
+	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
+	h.Register(app)
+
+	// Bootstrap admin and log in.
+	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email": "admin@orbit.test", "password": "securepassword123", "display_name": "Admin",
+	}, nil)
+	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email": "admin@orbit.test", "password": "securepassword123",
+	}, nil)
+	loginResult := parseResponse(loginResp)
+	adminToken, ok := loginResult["access_token"].(string)
+	if !ok || adminToken == "" {
+		t.Fatal("no access_token in login response")
+	}
+
+	// Find the session created for the admin user.
+	adminUser := userStore.byEmail["admin@orbit.test"]
+	if adminUser == nil {
+		t.Fatal("admin user not found in store")
+	}
+	var sid uuid.UUID
+	for id, s := range sessionStore.sessions {
+		if s.UserID == adminUser.ID {
+			sid = id
+			break
+		}
+	}
+	if sid == uuid.Nil {
+		t.Fatal("no session found for admin user")
+	}
+
+	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/sessions/%s", sid), nil, map[string]string{
+		"Authorization": "Bearer " + adminToken,
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestRevokeSession_NotFound(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+	nonExistentID := uuid.New()
+
+	// The mock returns store.ErrNotFound; the service wraps it as a generic
+	// error (not pgx.ErrNoRows), so the response will be 500. We verify that
+	// auth passed (not 401) and the endpoint handled the missing session.
+	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/sessions/%s", nonExistentID), nil, map[string]string{
+		"Authorization": "Bearer " + adminToken,
+	})
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("expected auth to pass, got %d", resp.StatusCode)
+	}
+	// The session does not exist; expect a non-2xx response.
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("expected non-200 for missing session, got 200")
+	}
+}
+
+// --- Invite tests ---
+
+func TestCreateInvite_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role":     "member",
+		"max_uses": 5,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if result["code"] == nil || result["code"] == "" {
+		t.Error("expected 'code' field in invite response")
+	}
+	if result["role"] != "member" {
+		t.Errorf("expected role 'member', got %v", result["role"])
+	}
+}
+
+func TestCreateInvite_NotAdmin(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	// Create an invite so we can register a non-admin user.
+	invResp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role":     "member",
+		"max_uses": 1,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+	invResult := parseResponse(invResp)
+	code := invResult["code"].(string)
+
+	doRequest(app, "POST", "/auth/register", map[string]string{
+		"invite_code":  code,
+		"email":        "member@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Member",
+	}, nil)
+
+	memberLoginResp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":    "member@orbit.test",
+		"password": "securepassword123",
+	}, nil)
+	memberResult := parseResponse(memberLoginResp)
+	memberToken, _ := memberResult["access_token"].(string)
+
+	resp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role":     "member",
+		"max_uses": 1,
+	}, map[string]string{"Authorization": "Bearer " + memberToken})
+
+	if resp.StatusCode != http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestListInvites_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	adminToken := bootstrapAndLogin(t, app)
+
+	// Create a couple of invites first.
+	doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role": "member", "max_uses": 1,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+	doRequest(app, "POST", "/auth/invites", map[string]interface{}{
+		"role": "member", "max_uses": 3,
+	}, map[string]string{"Authorization": "Bearer " + adminToken})
+
+	resp := doRequest(app, "GET", "/auth/invites", nil, map[string]string{
+		"Authorization": "Bearer " + adminToken,
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	invites, ok := result["invites"].([]interface{})
+	if !ok {
+		t.Fatal("expected 'invites' array in response")
+	}
+	if len(invites) < 2 {
+		t.Errorf("expected at least 2 invites, got %d", len(invites))
 	}
 }

@@ -286,6 +286,116 @@ func TestGetChat_InvalidID(t *testing.T) {
 // helpers
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// GetMembers
+// ---------------------------------------------------------------------------
+
+func TestGetMembers_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+		getMembersFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) ([]model.ChatMember, string, bool, error) {
+			return []model.ChatMember{
+				{ChatID: chatID, UserID: userID, Role: "member", JoinedAt: time.Now()},
+			}, "", false, nil
+		},
+	}
+
+	app := newChatApp(cs)
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/members", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["data"] == nil {
+		t.Fatal("response missing 'data' field")
+	}
+}
+
+func TestGetMembers_NotMember(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
+
+	app := newChatApp(cs)
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/members", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetMembers_NoAuth(t *testing.T) {
+	chatID := uuid.New()
+
+	app := newChatApp(&mockChatStore{})
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/members", nil)
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetMemberIDs
+// ---------------------------------------------------------------------------
+
+func TestGetMemberIDs_HappyPath(t *testing.T) {
+	chatID := uuid.New()
+	memberID := uuid.New()
+
+	cs := &mockChatStore{
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{memberID.String()}, nil
+		},
+	}
+
+	app := newChatApp(cs)
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/member-ids", nil)
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["member_ids"] == nil {
+		t.Fatal("response missing 'member_ids' field")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
 func readBody(t *testing.T, resp *http.Response) map[string]interface{} {
 	t.Helper()
 	defer resp.Body.Close()

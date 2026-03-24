@@ -421,3 +421,251 @@ func TestMarkRead_InvalidMsgID(t *testing.T) {
 		t.Fatalf("expected 400 for invalid message ID, got %d", resp.StatusCode)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ListMessages
+// ---------------------------------------------------------------------------
+
+func TestListMessages_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	content := "hello"
+
+	ms := &mockMessageStore{
+		listByChatFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) ([]model.Message, string, bool, error) {
+			return []model.Message{
+				{ID: uuid.New(), ChatID: chatID, Content: &content, Type: "text"},
+			}, "", false, nil
+		},
+	}
+
+	app := newMessageApp(ms, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/messages", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["data"] == nil {
+		t.Fatal("response missing 'data' field")
+	}
+}
+
+func TestListMessages_NoAuth(t *testing.T) {
+	chatID := uuid.New()
+
+	app := newMessageApp(&mockMessageStore{}, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/messages", nil)
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestListMessages_NotMember(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
+
+	app := newMessageApp(&mockMessageStore{}, cs)
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/messages", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// PinMessage
+// ---------------------------------------------------------------------------
+
+func TestPinMessage_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	msgID := uuid.New()
+
+	ms := &mockMessageStore{
+		pinFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+
+	app := newMessageApp(ms, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/chats/%s/pin/%s", chatID, msgID), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestPinMessage_NoAuth(t *testing.T) {
+	chatID := uuid.New()
+	msgID := uuid.New()
+
+	app := newMessageApp(&mockMessageStore{}, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("/chats/%s/pin/%s", chatID, msgID), nil)
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UnpinMessage
+// ---------------------------------------------------------------------------
+
+func TestUnpinMessage_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	msgID := uuid.New()
+
+	ms := &mockMessageStore{
+		unpinFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+	// Use admin role so unpin doesn't need to call GetByID
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return true, "admin", nil
+		},
+	}
+
+	app := newMessageApp(ms, cs)
+	req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/chats/%s/pin/%s", chatID, msgID), nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UnpinAll
+// ---------------------------------------------------------------------------
+
+func TestUnpinAll_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	ms := &mockMessageStore{
+		unpinAllFn: func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+	// Use admin role so UnpinAll doesn't need to call GetByID
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return true, "admin", nil
+		},
+	}
+
+	app := newMessageApp(ms, cs)
+	req, _ := http.NewRequest(http.MethodDelete, "/chats/"+chatID.String()+"/pin", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListPinned
+// ---------------------------------------------------------------------------
+
+func TestListPinned_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	content := "pinned msg"
+
+	ms := &mockMessageStore{
+		listPinnedFn: func(_ context.Context, _ uuid.UUID) ([]model.Message, error) {
+			return []model.Message{
+				{ID: uuid.New(), ChatID: chatID, Content: &content, Type: "text"},
+			}, nil
+		},
+	}
+
+	app := newMessageApp(ms, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/pinned", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["messages"] == nil {
+		t.Fatal("response missing 'messages' field")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FindByDate
+// ---------------------------------------------------------------------------
+
+func TestFindByDate_HappyPath(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	content := "dated message"
+
+	ms := &mockMessageStore{
+		findByChatAndDateFn: func(_ context.Context, _ uuid.UUID, _ time.Time, _ int) ([]model.Message, string, bool, error) {
+			return []model.Message{
+				{ID: uuid.New(), ChatID: chatID, Content: &content, Type: "text"},
+			}, "", false, nil
+		},
+	}
+
+	app := newMessageApp(ms, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/history?date=2026-01-01T00:00:00Z", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	body := readBody(t, resp)
+	if body["data"] == nil {
+		t.Fatal("response missing 'data' field")
+	}
+}
