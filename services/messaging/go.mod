@@ -1,6 +1,6 @@
 module github.com/mst-corp/orbit/services/messaging
 
-go 1.24
+go 1.25.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 
@@ -11,7 +11,7 @@ require (
 	github.com/mst-corp/orbit/pkg v0.0.0
 	github.com/nats-io/nats.go v1.37.0
 	github.com/redis/go-redis/v9 v9.7.0
-	golang.org/x/net v0.52.0
+	golang.org/x/net v0.33.0
 )
 
 require (
@@ -31,7 +31,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.58.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
