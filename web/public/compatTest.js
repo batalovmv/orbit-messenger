@@ -15,7 +15,8 @@ function compatTest() {
   var hasArrayAt = typeof new Array(0).at !== 'undefined';
   var hasDecompressionStream = typeof DecompressionStream !== 'undefined';
 
-  var isCompatible = hasPromise && hasWebSockets && hasWebCrypto && hasObjectFromEntries && hasResizeObserver
+  // WebCrypto.subtle is only available on HTTPS — skip check for dev/staging HTTP
+  var isCompatible = hasPromise && hasWebSockets && hasObjectFromEntries && hasResizeObserver
     && hasCssSupports && hasDisplayNames && hasPluralRules && hasNumberFormat && hasWebLocks && hasBigInt && hasBroadcastChannel
     && hasArrayAt && hasDecompressionStream;
 
