@@ -23,27 +23,72 @@ jobs:
       - name: Test gateway service
         run: cd services/gateway && go test ./... -count=1 -timeout 60s
 
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        env:
+          SATURN_API_URL: http://176.12.73.45:8080/api/v1
+        run: |
+          cd web
+          npm ci --ignore-scripts
+          npm run build:production
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 1
+
   deploy:
-    needs: test
+    needs: [test, build-web]
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy .env and deploy
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist/
+
+      - name: Deploy backend + frontend
         run: |
           cp /opt/orbit/.env .env
+
+          # Build backend services only (no web)
           docker compose down --remove-orphans || true
-          docker compose build --no-cache --parallel
-          docker compose up -d
+          docker compose build --no-cache gateway auth messaging
+          docker compose up -d postgres redis nats meilisearch
+          sleep 5
+          docker compose up -d auth messaging gateway
+
+          # Deploy frontend via nginx container with pre-built dist
+          docker rm -f orbit-web 2>/dev/null || true
+          docker run -d --name orbit-web \
+            -p 3000:80 \
+            -v $(pwd)/web-dist:/usr/share/nginx/html:ro \
+            -v $(pwd)/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
+            nginx:alpine
+
           echo "Waiting for services to start..."
           sleep 10
           docker compose ps
+          docker ps --filter name=orbit-web
 
       - name: Health check
         run: |
           for i in 1 2 3 4 5; do
             if curl -sf http://localhost:8080/health > /dev/null; then
               echo "Gateway is healthy!"
+              curl -sI http://localhost:3000 | head -3
               exit 0
             fi
             echo "Attempt $i: waiting..."
