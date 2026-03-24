@@ -8,6 +8,49 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ---
 
+## Порядок работы в каждой фазе
+
+Каждая фаза начинается в **новом чате**. Ассистент ОБЯЗАН пройти шаги в указанном порядке:
+
+### Шаг 0: Анализ и проработка (ПЕРЕД написанием кода)
+
+1. **Прочитать ТЗ** — прочитать `docs/TZ-PHASES-V2-DESIGN.md` (секцию текущей фазы), `docs/TZ-ORBIT-MESSENGER.md` (соответствующие разделы), `CLAUDE.md`
+2. **Прочитать текущий код** — изучить все уже написанные сервисы, миграции, фронтенд. Понять что уже есть, какие паттерны используются, какие зависимости
+3. **Найти противоречия** — сверить этот план (PHASES.md) с ТЗ-документами. Если есть расхождения — сообщить пользователю ПЕРЕД началом работы
+4. **Продумать архитектуру** — предложить:
+   - Структуру файлов для новых/изменяемых сервисов
+   - Схему взаимодействия между сервисами (HTTP/WS/NATS)
+   - SQL-миграции (точный SQL, не псевдокод)
+   - Порядок реализации (что первое, что зависит от чего)
+5. **Найти потенциальные проблемы** — подумать о:
+   - Edge cases (что если 0 чатов? что если 10000 сообщений? что если параллельные запросы?)
+   - Безопасность (IDOR, injection, race conditions, rate limits)
+   - Перформанс (N+1, отсутствие индексов, большие payloads)
+   - Совместимость с TG Web A фронтендом (формат данных, UUID→BigInt конвертация, ожидаемые поля)
+6. **Составить план работы** — разбить фазу на конкретные шаги, предложить пользователю на согласование
+7. **Получить одобрение** — НЕ НАЧИНАТЬ код пока пользователь не подтвердит план
+
+### Шаг 1: Реализация
+
+- Писать код согласно утверждённому плану
+- Отмечать [x] задачи в PHASES.md по мере выполнения
+- Коммитить логическими блоками (не один гигантский коммит)
+
+### Шаг 2: Самопроверка
+
+- Перечитать весь написанный код
+- Проверить: SQL injection? IDOR? N+1? Race conditions? Error handling?
+- Запустить тесты (если написаны)
+- Проверить что фронтенд получает данные в ожидаемом формате
+
+### Шаг 3: Отчёт
+
+- Обновить PHASES.md — отметить выполненные задачи
+- Записать известные ограничения / tech debt / что не вошло
+- Предложить что проверить вручную
+
+---
+
 ## Phase 0: Костяк (текущая)
 
 **Цель:** Структура проекта, конфиги, документация.
@@ -27,6 +70,19 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 **Цель:** Люди могут переписываться в личке. Надёжно. С reply/forward/edit/pin.
 **Сервисы:** gateway, auth, messaging
 **Фронтенд:** Форк TG Web A + Saturn API layer
+
+### Проработка (Шаг 0 — до написания кода)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 1, `docs/TZ-ORBIT-MESSENGER.md` §5, §6, §8, §11.1
+- [ ] Изучить оригинальный TG Web A API layer (`refs/telegram-web-z/src/api/`) — понять формат данных, типы, конвертацию UUID↔BigInt
+- [ ] Спроектировать точный SQL миграций (CREATE TABLE с индексами, constraints, triggers)
+- [ ] Спроектировать маршрутизацию gateway: какие запросы проксирует, какие обрабатывает сам
+- [ ] Продумать формат WS-событий (JSON schema) — что отправляет сервер, что ожидает фронтенд
+- [ ] Продумать стратегию кэширования JWT-валидации в gateway (Redis TTL vs in-memory)
+- [ ] Проверить: как TG Web A ожидает получить список чатов? Какие поля обязательны?
+- [ ] Проверить: как TG Web A обрабатывает optimistic UI? Какой формат sendMessage response?
+- [ ] Оценить: нужен ли OG-tag parser для link preview на бэкенде или defer to Phase 4?
+- [ ] Составить порядок реализации и предложить пользователю
 
 ### Backend: Auth сервис (порт 8081)
 
@@ -261,6 +317,18 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 **Цель:** Рабочие группы и каналы объявлений.
 **Сервисы:** messaging (расширить), gateway (WS)
 
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 2, `docs/TZ-ORBIT-MESSENGER.md` §11.2
+- [ ] Изучить код Phase 1 (messaging сервис) — понять паттерны, store layer, handler conventions
+- [ ] Спроектировать различие Groups vs Channels: кто может писать, анонимные посты, linked discussion
+- [ ] Спроектировать bitmask permissions — точные значения битов, как проверять в middleware
+- [ ] Продумать: как TG Web A отображает каналы vs группы? Какие поля API отличаются?
+- [ ] Продумать: invite links с модерацией (join requests) — flow UI + backend
+- [ ] SQL: ALTER chat_members + новые таблицы, проверить совместимость с Phase 1 миграциями
+- [ ] Оценить: Topics/Forums — делать сейчас или defer?
+- [ ] Составить порядок реализации и предложить пользователю
+
 ### Backend: Endpoints (15)
 
 - [ ] POST /chats (type=group) — создание группы
@@ -330,6 +398,20 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 **Цель:** Фото, видео, файлы, голосовые, видео-заметки.
 **Сервисы:** media (новый), messaging (расширить)
+
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 3, `docs/TZ-ORBIT-MESSENGER.md` §11.3
+- [ ] Изучить Cloudflare R2 API — S3-совместимость, presigned URLs, multipart upload
+- [ ] Спроектировать media pipeline: upload → process (resize/thumbnail/waveform) → store → serve
+- [ ] Решить: обработка изображений на Go (imaging lib) или external service (sharp)?
+- [ ] Решить: chunked upload — свой протокол или tus.io?
+- [ ] Продумать: как связать media с messages? JOIN table vs inline columns (ТЗ-документы расходятся!)
+- [ ] Продумать: как TG Web A отправляет медиа? FormData? Base64? Какой UI flow?
+- [ ] Продумать: video streaming — прямой R2 presigned URL или прокси через media сервис?
+- [ ] Оценить: ClamAV virus scanning — нужен сейчас или defer?
+- [ ] Спроектировать cleanup policy для one-time media и orphaned uploads
+- [ ] Составить порядок реализации и предложить пользователю
 
 ### Backend: Media сервис (порт 8083) — Endpoints (8)
 
@@ -413,6 +495,19 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 **Цель:** Найти любое сообщение за секунды. Не пропустить ничего. Настроить под себя.
 **Сервисы:** gateway (push), messaging (search), Meilisearch
 
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 4, `docs/TZ-ORBIT-MESSENGER.md` §11.4
+- [ ] Изучить Meilisearch API — индексация, фильтры, ranking rules, typo tolerance
+- [ ] Спроектировать: какие данные индексировать? Как синхронизировать с PostgreSQL? (trigger vs CDC vs cron)
+- [ ] Спроектировать Web Push: VAPID key generation, subscription storage, payload format
+- [ ] Продумать: delivery logic (online → WS → push → mute check → DND check → @mention override)
+- [ ] Продумать: как TG Web A обрабатывает push? Service Worker? Notification API?
+- [ ] Продумать: Phase 7 E2E сломает серверный поиск — нужна ли архитектура, готовая к этому?
+- [ ] Оценить: FCM/APNs — нужны сейчас (для PWA) или только для native apps?
+- [ ] Спроектировать settings sync — серверное хранение vs localStorage
+- [ ] Составить порядок реализации и предложить пользователю
+
 ### Backend: Search (через Meilisearch)
 
 - [ ] GET /search?q=&scope=messages — глобальный поиск сообщений
@@ -491,6 +586,19 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 **Цель:** Реакции, стикеры, GIF, опросы, scheduled messages. Всё бесплатно.
 **Сервисы:** messaging (расширить), gateway (WS)
+
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 5, `docs/TZ-ORBIT-MESSENGER.md` §11.5
+- [ ] Изучить TG Web A sticker rendering — TGS (Lottie), WebP, WebM. Какие библиотеки (rlottie)?
+- [ ] Изучить Tenor API — rate limits, API key, response format, caching strategy
+- [ ] Спроектировать sticker import из Telegram — как работает TG Bot API fetchStickerSet? Легальность?
+- [ ] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee
+- [ ] Продумать: isPremium removal — grep все проверки в TG Web A, составить список файлов для изменения
+- [ ] Продумать: reactions animation — что отправляет сервер? Какой формат ожидает фронтенд?
+- [ ] Продумать: polls real-time — WS broadcast при каждом голосе или батчинг?
+- [ ] Оценить: custom emoji — нужен свой рендер или TG Web A уже умеет?
+- [ ] Составить порядок реализации и предложить пользователю
 
 ### Backend: Endpoints
 
@@ -592,6 +700,20 @@ Long-press → реакция → анимация. Стикер-пикер → 
 **Сервисы:** calls (новый, порт 8084), gateway (WS signaling)
 **Инфра:** Pion SFU на Saturn.ac, coturn на Hetzner VPS
 
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 6, `docs/TZ-ORBIT-MESSENGER.md` §11.6
+- [ ] Изучить Pion WebRTC Go library — SFU vs MCU, room management, codec support
+- [ ] Изучить coturn — конфигурация, REST API для credential rotation, HA (single point of failure!)
+- [ ] Изучить TG Web A calls UI — какие WebRTC events ожидает? Какой signaling protocol?
+- [ ] Спроектировать: WS signaling flow (offer → answer → ICE → connected) через gateway
+- [ ] Спроектировать: как gateway маршрутизирует signaling events к calls сервису?
+- [ ] Продумать: P2P vs SFU routing — автоматический выбор (2 участника → P2P, >2 → SFU)
+- [ ] Продумать: screen sharing — getDisplayMedia API, как мультиплексировать с камерой?
+- [ ] Продумать: push для звонков — высокоприоритетный push когда app закрыт
+- [ ] Оценить: coturn HA — нужен fallback сервер или достаточно одного для 150 юзеров?
+- [ ] Составить порядок реализации и предложить пользователю
+
 ### Architecture
 
 ```
@@ -672,6 +794,22 @@ Signaling: WebSocket через gateway
 **Цель:** Zero-Knowledge — сервер не может прочитать DM. Криптографическая гарантия.
 **Сервисы:** auth (key server), messaging (encrypt/decrypt), shared/crypto (новый)
 
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 7, `docs/TZ-ORBIT-MESSENGER.md` §9, §10, §11.7, `docs/SIGNAL_PROTOCOL.md` (если есть)
+- [ ] Изучить libsignal-protocol-js — API, key generation, session management, message encrypt/decrypt
+- [ ] Изучить Signal Protocol Go implementations — какая библиотека для key server?
+- [ ] **Критический вопрос:** как совместить E2E с Super Access (Killer Feature #1)? Escrow Key design
+- [ ] Спроектировать: key management lifecycle (registration → key upload → session creation → ratchet → key rotation)
+- [ ] Спроектировать: multi-device — как шифровать для N устройств получателя?
+- [ ] Спроектировать: Sender Keys для групп — key distribution, rotation при leave/join
+- [ ] Продумать: impact на Meilisearch (Phase 4) — client-side search architecture
+- [ ] Продумать: impact на push notifications — "Новое сообщение" без plaintext
+- [ ] Продумать: impact на media — AES-256-GCM перед R2 upload, как передать ключ получателю?
+- [ ] Продумать: миграция — существующие plaintext сообщения в БД, что с ними?
+- [ ] Оценить: Sealed Sender — реалистично ли для нашей архитектуры?
+- [ ] Составить rollout план (opt-in → default) и предложить пользователю
+
 ### Signal Protocol Flow
 
 1. Alice запрашивает public keys Bob с сервера
@@ -750,6 +888,25 @@ Signaling: WebSocket через gateway
 ## Phase 8: AI, Bots, Integrations & Production
 
 **Цель:** Claude AI встроен, боты работают, MST-тулы подключены, мониторинг.
+
+### Проработка (Шаг 0)
+
+- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 8, `docs/TZ-ORBIT-MESSENGER.md` §11.8, §11.9
+- [ ] **8A AI:** Изучить Anthropic Claude API — streaming (SSE), rate limits, pricing, context window
+- [ ] **8A AI:** Изучить Whisper API (OpenAI) — audio formats, language detection, speaker diarization options
+- [ ] **8A AI:** Спроектировать embedding pipeline для semantic search (какой model? pgvector vs Qdrant?)
+- [ ] **8B Bots:** Изучить Telegram Bot API spec — какие методы критичны для совместимости?
+- [ ] **8B Bots:** Спроектировать webhook delivery — retry strategy, dead letter queue, timeout handling
+- [ ] **8C Integrations:** Изучить API InsightFlow, Keitaro, Saturn.ac — форматы webhook payload
+- [ ] **8C Integrations:** Спроектировать generic webhook framework — verification (HMAC), retry, logging
+- [ ] **8D ScyllaDB:** Спроектировать migration strategy — dual-write? Shadow read? Cut-over?
+- [ ] **8D ScyllaDB:** Спроектировать CQL schema — partition key (chat_id + month), clustering (sequence_number DESC)
+- [ ] **8D NATS:** Спроектировать stream topology — MESSAGES, EVENTS, PUSH, WEBHOOKS
+- [ ] **8D Monitoring:** Выбрать: Prometheus+Grafana managed (Saturn?) или self-hosted?
+- [ ] **8D Security:** Составить OWASP checklist для аудита всех сервисов
+- [ ] Продумать: backup strategy — pg_dump schedule, WAL archiving, R2 cross-region
+- [ ] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
+- [ ] Составить порядок реализации и предложить пользователю
 
 ### 8A: AI сервис (порт 8085)
 
