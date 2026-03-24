@@ -1,0 +1,54 @@
+name: Test & Deploy
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Test auth service
+        run: cd services/auth && go test ./... -count=1 -timeout 60s
+
+      - name: Test messaging service
+        run: cd services/messaging && go test ./... -count=1 -timeout 60s
+
+      - name: Test gateway service
+        run: cd services/gateway && go test ./... -count=1 -timeout 60s
+
+  deploy:
+    needs: test
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy .env and deploy
+        run: |
+          cp /opt/orbit/.env .env
+          docker compose down --remove-orphans || true
+          docker compose build --parallel
+          docker compose up -d
+          echo "Waiting for services to start..."
+          sleep 10
+          docker compose ps
+
+      - name: Health check
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf http://localhost:8080/health > /dev/null; then
+              echo "Gateway is healthy!"
+              exit 0
+            fi
+            echo "Attempt $i: waiting..."
+            sleep 5
+          done
+          echo "Health check failed"
+          docker compose logs --tail=30
+          exit 1
