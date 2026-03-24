@@ -33,7 +33,7 @@ jobs:
         run: |
           cp /opt/orbit/.env .env
           docker compose down --remove-orphans || true
-          docker compose build --parallel
+          docker compose build --no-cache --parallel
           docker compose up -d
           echo "Waiting for services to start..."
           sleep 10
