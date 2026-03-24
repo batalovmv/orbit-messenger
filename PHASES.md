@@ -73,207 +73,207 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ### Проработка (Шаг 0 — до написания кода)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 1, `docs/TZ-ORBIT-MESSENGER.md` §5, §6, §8, §11.1
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 1, `docs/TZ-ORBIT-MESSENGER.md` §5, §6, §8, §11.1
 - [ ] Изучить оригинальный TG Web A API layer (`refs/telegram-web-z/src/api/`) — понять формат данных, типы, конвертацию UUID↔BigInt
-- [ ] Спроектировать точный SQL миграций (CREATE TABLE с индексами, constraints, triggers)
-- [ ] Спроектировать маршрутизацию gateway: какие запросы проксирует, какие обрабатывает сам
-- [ ] Продумать формат WS-событий (JSON schema) — что отправляет сервер, что ожидает фронтенд
-- [ ] Продумать стратегию кэширования JWT-валидации в gateway (Redis TTL vs in-memory)
+- [x] Спроектировать точный SQL миграций (CREATE TABLE с индексами, constraints, triggers)
+- [x] Спроектировать маршрутизацию gateway: какие запросы проксирует, какие обрабатывает сам
+- [x] Продумать формат WS-событий (JSON schema) — что отправляет сервер, что ожидает фронтенд
+- [x] Продумать стратегию кэширования JWT-валидации в gateway (Redis TTL vs in-memory)
 - [ ] Проверить: как TG Web A ожидает получить список чатов? Какие поля обязательны?
 - [ ] Проверить: как TG Web A обрабатывает optimistic UI? Какой формат sendMessage response?
-- [ ] Оценить: нужен ли OG-tag parser для link preview на бэкенде или defer to Phase 4?
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Оценить: нужен ли OG-tag parser для link preview на бэкенде или defer to Phase 4?
+- [x] Составить порядок реализации и предложить пользователю
 
 ### Backend: Auth сервис (порт 8081)
 
-- [ ] POST /auth/bootstrap — первый admin-аккаунт (самоотключается)
-- [ ] POST /auth/register — регистрация по инвайту
-- [ ] POST /auth/login — email + password + optional 2FA TOTP
-- [ ] POST /auth/logout — выход + Redis blacklist токена
-- [ ] POST /auth/refresh — ротация refresh-токена (get-then-delete)
-- [ ] GET /auth/me — валидация сессии, возврат user data
-- [ ] POST /auth/reset-admin — сброс пароля через ORBIT_ADMIN_RESET_KEY
-- [ ] GET /auth/sessions — список активных сессий юзера
-- [ ] DELETE /auth/sessions/:id — отзыв сессии (ПРОВЕРКА принадлежности user_id!)
-- [ ] POST /auth/2fa/setup — генерация TOTP secret + provisioning URI
-- [ ] POST /auth/2fa/verify — подтверждение кода, включение 2FA
-- [ ] POST /auth/2fa/disable — отключение 2FA (с подтверждением пароля)
-- [ ] POST /auth/invite/validate — проверка инвайт-кода
-- [ ] POST /auth/invites — создание инвайта (admin only)
-- [ ] GET /auth/invites — список инвайтов (admin only, все инвайты)
-- [ ] DELETE /auth/invites/:id — отзыв инвайта (атомарный UPDATE с WHERE created_by)
+- [x] POST /auth/bootstrap — первый admin-аккаунт (самоотключается)
+- [x] POST /auth/register — регистрация по инвайту
+- [x] POST /auth/login — email + password + optional 2FA TOTP
+- [x] POST /auth/logout — выход + Redis blacklist токена
+- [x] POST /auth/refresh — ротация refresh-токена (get-then-delete)
+- [x] GET /auth/me — валидация сессии, возврат user data
+- [x] POST /auth/reset-admin — сброс пароля через ORBIT_ADMIN_RESET_KEY
+- [x] GET /auth/sessions — список активных сессий юзера
+- [x] DELETE /auth/sessions/:id — отзыв сессии (ПРОВЕРКА принадлежности user_id!)
+- [x] POST /auth/2fa/setup — генерация TOTP secret + provisioning URI
+- [x] POST /auth/2fa/verify — подтверждение кода, включение 2FA
+- [x] POST /auth/2fa/disable — отключение 2FA (с подтверждением пароля)
+- [x] POST /auth/invite/validate — проверка инвайт-кода
+- [x] POST /auth/invites — создание инвайта (admin only)
+- [x] GET /auth/invites — список инвайтов (admin only, все инвайты)
+- [x] DELETE /auth/invites/:id — отзыв инвайта (атомарный UPDATE с WHERE created_by)
 
 ### Backend: Gateway (порт 8080)
 
-- [ ] GET /health — health check
-- [ ] GET /api/v1/ws — WebSocket endpoint (JWT из query param или header)
-- [ ] Прокси /api/v1/auth/* → auth сервис (с timeout!)
-- [ ] Прокси /api/v1/* → messaging сервис (с timeout!)
-- [ ] JWT middleware — валидация через auth /me с Redis-кэшем (TTL 30s)
-- [ ] CORS middleware — конкретные origins из FRONTEND_URL, НЕ wildcard
-- [ ] Rate limiting middleware — Redis-backed (100 req/min/user, 5/min auth, 20/min AI)
-- [ ] Request logging middleware — structured JSON (slog)
-- [ ] Ping/pong heartbeat — каждые 30 сек, авто-reconnect с exponential backoff (1s→30s)
+- [x] GET /health — health check
+- [x] GET /api/v1/ws — WebSocket endpoint (JWT из query param или header)
+- [x] Прокси /api/v1/auth/* → auth сервис (с timeout!)
+- [x] Прокси /api/v1/* → messaging сервис (с timeout!)
+- [x] JWT middleware — валидация через auth /me с Redis-кэшем (TTL 30s)
+- [x] CORS middleware — конкретные origins из FRONTEND_URL, НЕ wildcard
+- [x] Rate limiting middleware — Redis-backed (100 req/min/user, 5/min auth, 20/min AI)
+- [x] Request logging middleware — structured JSON (slog)
+- [x] Ping/pong heartbeat — каждые 30 сек, авто-reconnect с exponential backoff (1s→30s)
 
 ### Backend: Messaging (порт 8082)
 
 **Чаты:**
-- [ ] GET /chats — список чатов юзера (JOIN для last_message, member_count, unread — БЕЗ N+1!)
-- [ ] POST /chats/direct — создать/получить DM (дедупликация через direct_chat_lookup)
-- [ ] POST /chats — создать группу (type=group)
-- [ ] GET /chats/:id — информация о чате + members
-- [ ] GET /chats/:id/members — список участников (пагинация)
+- [x] GET /chats — список чатов юзера (JOIN для last_message, member_count, unread — БЕЗ N+1!)
+- [x] POST /chats/direct — создать/получить DM (дедупликация через direct_chat_lookup)
+- [x] POST /chats — создать группу (type=group)
+- [x] GET /chats/:id — информация о чате + members
+- [x] GET /chats/:id/members — список участников (пагинация)
 
 **Сообщения:**
-- [ ] GET /chats/:id/messages — история (пагинация cursor-based, limit max 100)
-- [ ] GET /chats/:id/history?date= — jump to message по дате
-- [ ] POST /chats/:id/messages — отправка (text, replyToId, entities для форматирования)
-- [ ] PATCH /messages/:id — редактирование (только автор, обновить is_edited + edited_at)
-- [ ] DELETE /messages/:id — soft-delete (автор или chat admin, is_deleted=true, content=null)
-- [ ] POST /messages/:id/forward — пересылка (is_forwarded=true, forwarded_from=original_sender)
-- [ ] POST /chats/:id/pin/:messageId — закрепить сообщение
-- [ ] DELETE /chats/:id/pin/:messageId — открепить
-- [ ] DELETE /chats/:id/pin — открепить все
-- [ ] GET /chats/:id/pinned — список закреплённых
+- [x] GET /chats/:id/messages — история (пагинация cursor-based, limit max 100)
+- [x] GET /chats/:id/history?date= — jump to message по дате
+- [x] POST /chats/:id/messages — отправка (text, replyToId, entities для форматирования)
+- [x] PATCH /messages/:id — редактирование (только автор, обновить is_edited + edited_at)
+- [x] DELETE /messages/:id — soft-delete (автор или chat admin, is_deleted=true, content=null)
+- [x] POST /messages/forward — пересылка batch (is_forwarded=true, forwarded_from=original_sender)
+- [x] POST /chats/:id/pin/:messageId — закрепить сообщение
+- [x] DELETE /chats/:id/pin/:messageId — открепить
+- [x] DELETE /chats/:id/pin — открепить все
+- [x] GET /chats/:id/pinned — список закреплённых
 
 **Прочтение:**
-- [ ] PATCH /chats/:id/read — обновить last_read_message_id
+- [x] PATCH /chats/:id/read — обновить last_read_message_id
 
 **Пользователи:**
-- [ ] GET /users/me — текущий юзер
-- [ ] PUT /users/me — обновить профиль (display_name, bio, custom_status)
-- [ ] GET /users/:id — профиль юзера
-- [ ] GET /users?q= — поиск по имени/email (LIMIT 20)
+- [x] GET /users/me — текущий юзер
+- [x] PUT /users/me — обновить профиль (display_name, bio, custom_status)
+- [x] GET /users/:id — профиль юзера
+- [x] GET /users?q= — поиск по имени/email (LIMIT 20)
 
 ### WebSocket события (через Gateway)
 
 **Server → Client:**
-- [ ] `new_message` — broadcast всем членам чата (кроме отправителя)
-- [ ] `message_updated` — при редактировании
-- [ ] `message_deleted` — при soft-delete
-- [ ] `messages_read` — при прочтении (inbox/outbox read pointer)
-- [ ] `user_status` — online (broadcast контактам при connect) + offline (при disconnect с TTL 5min)
-- [ ] `typing` — broadcast членам чата (auto-expire 6 сек)
+- [x] `new_message` — broadcast всем членам чата (кроме отправителя)
+- [x] `message_updated` — при редактировании
+- [x] `message_deleted` — при soft-delete
+- [x] `messages_read` — при прочтении (inbox/outbox read pointer)
+- [x] `user_status` — online (broadcast контактам при connect) + offline (при disconnect с TTL 5min)
+- [x] `typing` — broadcast членам чата (auto-expire 6 сек)
 - [ ] `stop_typing` — явная остановка
 
 **Client → Server:**
-- [ ] `typing` — { chat_id } с server-side debounce
-- [ ] `ping` → server отвечает `pong`
+- [x] `typing` — { chat_id } с server-side debounce
+- [x] `ping` → server отвечает `pong`
 
 ### Database: Миграции
 
 **users:**
-- [ ] id UUID PK DEFAULT gen_random_uuid()
-- [ ] email TEXT UNIQUE NOT NULL
-- [ ] password_hash TEXT NOT NULL
-- [ ] phone TEXT UNIQUE
-- [ ] display_name TEXT NOT NULL
-- [ ] avatar_url TEXT
-- [ ] bio TEXT
-- [ ] status TEXT DEFAULT 'offline' (online/offline/recently)
-- [ ] custom_status TEXT
-- [ ] custom_status_emoji TEXT
-- [ ] role TEXT DEFAULT 'member' (admin/member)
-- [ ] totp_secret TEXT
-- [ ] totp_enabled BOOLEAN DEFAULT false
-- [ ] invited_by UUID REFERENCES users(id)
-- [ ] invite_code TEXT
-- [ ] last_seen_at TIMESTAMPTZ
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
-- [ ] updated_at TIMESTAMPTZ DEFAULT now()
+- [x] id UUID PK DEFAULT gen_random_uuid()
+- [x] email TEXT UNIQUE NOT NULL
+- [x] password_hash TEXT NOT NULL
+- [x] phone TEXT UNIQUE
+- [x] display_name TEXT NOT NULL
+- [x] avatar_url TEXT
+- [x] bio TEXT
+- [x] status TEXT DEFAULT 'offline' (online/offline/recently)
+- [x] custom_status TEXT
+- [x] custom_status_emoji TEXT
+- [x] role TEXT DEFAULT 'member' (admin/member)
+- [x] totp_secret TEXT
+- [x] totp_enabled BOOLEAN DEFAULT false
+- [x] invited_by UUID REFERENCES users(id)
+- [x] invite_code TEXT
+- [x] last_seen_at TIMESTAMPTZ
+- [x] created_at TIMESTAMPTZ DEFAULT now()
+- [x] updated_at TIMESTAMPTZ DEFAULT now()
 
 **sessions:**
-- [ ] id UUID PK
-- [ ] user_id UUID REFERENCES users(id) ON DELETE CASCADE
-- [ ] device_id UUID REFERENCES devices(id)
-- [ ] token_hash TEXT NOT NULL
-- [ ] ip_address INET
-- [ ] user_agent TEXT
-- [ ] expires_at TIMESTAMPTZ NOT NULL
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
+- [x] id UUID PK
+- [x] user_id UUID REFERENCES users(id) ON DELETE CASCADE
+- [x] device_id UUID REFERENCES devices(id)
+- [x] token_hash TEXT NOT NULL
+- [x] ip_address INET
+- [x] user_agent TEXT
+- [x] expires_at TIMESTAMPTZ NOT NULL
+- [x] created_at TIMESTAMPTZ DEFAULT now()
 
 **invites:**
-- [ ] id UUID PK
-- [ ] code TEXT UNIQUE NOT NULL (8 hex chars, crypto/rand)
-- [ ] created_by UUID REFERENCES users(id)
-- [ ] email TEXT (email-lock)
-- [ ] role TEXT DEFAULT 'member'
-- [ ] max_uses INT DEFAULT 1
-- [ ] use_count INT DEFAULT 0
-- [ ] used_by UUID REFERENCES users(id)
-- [ ] used_at TIMESTAMPTZ
-- [ ] expires_at TIMESTAMPTZ
-- [ ] is_active BOOLEAN DEFAULT true
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
+- [x] id UUID PK
+- [x] code TEXT UNIQUE NOT NULL (8 hex chars, crypto/rand)
+- [x] created_by UUID REFERENCES users(id)
+- [x] email TEXT (email-lock)
+- [x] role TEXT DEFAULT 'member'
+- [x] max_uses INT DEFAULT 1
+- [x] use_count INT DEFAULT 0
+- [x] used_by UUID REFERENCES users(id)
+- [x] used_at TIMESTAMPTZ
+- [x] expires_at TIMESTAMPTZ
+- [x] is_active BOOLEAN DEFAULT true
+- [x] created_at TIMESTAMPTZ DEFAULT now()
 
 **chats:**
-- [ ] id UUID PK
-- [ ] type TEXT NOT NULL (direct/group/channel)
-- [ ] name TEXT
-- [ ] description TEXT
-- [ ] avatar_url TEXT
-- [ ] created_by UUID REFERENCES users(id)
-- [ ] is_encrypted BOOLEAN DEFAULT false
-- [ ] max_members INT DEFAULT 200000
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
-- [ ] updated_at TIMESTAMPTZ DEFAULT now()
+- [x] id UUID PK
+- [x] type TEXT NOT NULL (direct/group/channel)
+- [x] name TEXT
+- [x] description TEXT
+- [x] avatar_url TEXT
+- [x] created_by UUID REFERENCES users(id)
+- [x] is_encrypted BOOLEAN DEFAULT false
+- [x] max_members INT DEFAULT 200000
+- [x] created_at TIMESTAMPTZ DEFAULT now()
+- [x] updated_at TIMESTAMPTZ DEFAULT now()
 
 **chat_members:**
-- [ ] chat_id UUID REFERENCES chats(id) ON DELETE CASCADE
-- [ ] user_id UUID REFERENCES users(id) ON DELETE CASCADE
-- [ ] role TEXT DEFAULT 'member' (owner/admin/member/readonly/banned)
-- [ ] last_read_message_id UUID
-- [ ] joined_at TIMESTAMPTZ DEFAULT now()
-- [ ] muted_until TIMESTAMPTZ
-- [ ] notification_level TEXT DEFAULT 'all' (all/mentions/none)
-- [ ] PRIMARY KEY (chat_id, user_id)
+- [x] chat_id UUID REFERENCES chats(id) ON DELETE CASCADE
+- [x] user_id UUID REFERENCES users(id) ON DELETE CASCADE
+- [x] role TEXT DEFAULT 'member' (owner/admin/member/readonly/banned)
+- [x] last_read_message_id UUID
+- [x] joined_at TIMESTAMPTZ DEFAULT now()
+- [x] muted_until TIMESTAMPTZ
+- [x] notification_level TEXT DEFAULT 'all' (all/mentions/none)
+- [x] PRIMARY KEY (chat_id, user_id)
 
 **direct_chat_lookup:**
-- [ ] user1_id UUID NOT NULL (CONSTRAINT user1_id < user2_id)
-- [ ] user2_id UUID NOT NULL
-- [ ] chat_id UUID REFERENCES chats(id)
-- [ ] PRIMARY KEY (user1_id, user2_id)
+- [x] user1_id UUID NOT NULL (CONSTRAINT user1_id < user2_id)
+- [x] user2_id UUID NOT NULL
+- [x] chat_id UUID REFERENCES chats(id)
+- [x] PRIMARY KEY (user1_id, user2_id)
 
 **messages:**
-- [ ] id UUID PK DEFAULT gen_random_uuid()
-- [ ] chat_id UUID REFERENCES chats(id) ON DELETE CASCADE
-- [ ] sender_id UUID REFERENCES users(id)
-- [ ] type TEXT DEFAULT 'text' (text/photo/video/file/voice/videonote/sticker/poll/system)
-- [ ] content TEXT
-- [ ] encrypted_content BYTEA (Phase 7)
-- [ ] reply_to_id UUID REFERENCES messages(id)
-- [ ] is_edited BOOLEAN DEFAULT false
-- [ ] is_deleted BOOLEAN DEFAULT false
-- [ ] is_pinned BOOLEAN DEFAULT false
-- [ ] is_forwarded BOOLEAN DEFAULT false
-- [ ] forwarded_from UUID REFERENCES users(id)
-- [ ] thread_id UUID
-- [ ] expires_at TIMESTAMPTZ (disappearing messages, Phase 7)
-- [ ] sequence_number BIGINT DEFAULT nextval('messages_seq')
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
-- [ ] edited_at TIMESTAMPTZ
+- [x] id UUID PK DEFAULT gen_random_uuid()
+- [x] chat_id UUID REFERENCES chats(id) ON DELETE CASCADE
+- [x] sender_id UUID REFERENCES users(id)
+- [x] type TEXT DEFAULT 'text' (text/photo/video/file/voice/videonote/sticker/poll/system)
+- [x] content TEXT
+- [x] encrypted_content BYTEA (Phase 7)
+- [x] reply_to_id UUID REFERENCES messages(id)
+- [x] is_edited BOOLEAN DEFAULT false
+- [x] is_deleted BOOLEAN DEFAULT false
+- [x] is_pinned BOOLEAN DEFAULT false
+- [x] is_forwarded BOOLEAN DEFAULT false
+- [x] forwarded_from UUID REFERENCES users(id)
+- [x] thread_id UUID
+- [x] expires_at TIMESTAMPTZ (disappearing messages, Phase 7)
+- [x] sequence_number BIGINT DEFAULT nextval('messages_seq')
+- [x] created_at TIMESTAMPTZ DEFAULT now()
+- [x] edited_at TIMESTAMPTZ
 
 **devices** (для push + Phase 7 E2E):
-- [ ] id UUID PK
-- [ ] user_id UUID REFERENCES users(id) ON DELETE CASCADE
-- [ ] device_name TEXT
-- [ ] device_type TEXT (web/desktop/ios/android)
-- [ ] identity_key BYTEA (Phase 7: Signal Protocol public key)
-- [ ] push_token TEXT
-- [ ] push_type TEXT (vapid/fcm/apns)
-- [ ] last_active_at TIMESTAMPTZ
-- [ ] created_at TIMESTAMPTZ DEFAULT now()
+- [x] id UUID PK
+- [x] user_id UUID REFERENCES users(id) ON DELETE CASCADE
+- [x] device_name TEXT
+- [x] device_type TEXT (web/desktop/ios/android)
+- [x] identity_key BYTEA (Phase 7: Signal Protocol public key)
+- [x] push_token TEXT
+- [x] push_type TEXT (vapid/fcm/apns)
+- [x] last_active_at TIMESTAMPTZ
+- [x] created_at TIMESTAMPTZ DEFAULT now()
 
 **Индексы:**
-- [ ] idx_messages_chat_seq (chat_id, sequence_number DESC)
-- [ ] idx_messages_chat_created (chat_id, created_at DESC)
-- [ ] idx_chat_members_user (user_id)
-- [ ] idx_users_email (email)
-- [ ] idx_sessions_user (user_id)
-- [ ] idx_sessions_token (token_hash)
+- [x] idx_messages_chat_seq (chat_id, sequence_number DESC)
+- [x] idx_messages_chat_created (chat_id, created_at DESC)
+- [x] idx_chat_members_user (user_id)
+- [x] idx_users_email (email)
+- [x] idx_sessions_user (user_id)
+- [x] idx_sessions_token (token_hash)
 
 **Триггеры:**
-- [ ] update_updated_at() → users, chats
+- [x] update_updated_at() → users, chats
 
 ### Frontend: Saturn API методы (~35)
 

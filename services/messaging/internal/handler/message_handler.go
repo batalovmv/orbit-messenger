@@ -1,0 +1,335 @@
+package handler
+
+import (
+	"log/slog"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+
+	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/messaging/internal/service"
+)
+
+type MessageHandler struct {
+	svc    *service.MessageService
+	logger *slog.Logger
+}
+
+func NewMessageHandler(svc *service.MessageService, logger *slog.Logger) *MessageHandler {
+	return &MessageHandler{svc: svc, logger: logger}
+}
+
+func (h *MessageHandler) Register(app fiber.Router) {
+	// Message endpoints under /chats/:id
+	app.Get("/chats/:id/messages", h.ListMessages)
+	app.Get("/chats/:id/history", h.FindByDate)
+	app.Post("/chats/:id/messages", h.SendMessage)
+
+	// Pin endpoints
+	app.Get("/chats/:id/pinned", h.ListPinned)
+	app.Post("/chats/:id/pin/:messageId", h.PinMessage)
+	app.Delete("/chats/:id/pin/:messageId", h.UnpinMessage)
+	app.Delete("/chats/:id/pin", h.UnpinAll)
+
+	// Read receipts
+	app.Patch("/chats/:id/read", h.MarkRead)
+
+	// Message actions (no chat prefix)
+	app.Patch("/messages/:id", h.EditMessage)
+	app.Delete("/messages/:id", h.DeleteMessage)
+	app.Post("/messages/forward", h.ForwardMessages)
+}
+
+func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	cursor := c.Query("cursor")
+	limit := c.QueryInt("limit", 50)
+
+	msgs, nextCursor, hasMore, err := h.svc.ListMessages(c.Context(), chatID, uid, cursor, limit)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.Paginated(c, msgs, nextCursor, hasMore)
+}
+
+func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	dateStr := c.Query("date")
+	if dateStr == "" {
+		return response.Error(c, apperror.BadRequest("date query parameter is required"))
+	}
+	date, err := time.Parse(time.RFC3339, dateStr)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid date format (use RFC3339)"))
+	}
+
+	limit := c.QueryInt("limit", 50)
+	msgs, nextCursor, hasMore, err := h.svc.FindByDate(c.Context(), chatID, uid, date, limit)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.Paginated(c, msgs, nextCursor, hasMore)
+}
+
+func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req struct {
+		Content   string  `json:"content"`
+		ReplyToID *string `json:"reply_to_id"`
+		Type      string  `json:"type"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if req.Content == "" {
+		return response.Error(c, apperror.BadRequest("Content is required"))
+	}
+
+	var replyTo *uuid.UUID
+	if req.ReplyToID != nil && *req.ReplyToID != "" {
+		id, err := uuid.Parse(*req.ReplyToID)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid reply_to_id"))
+		}
+		replyTo = &id
+	}
+
+	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, replyTo, req.Type)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, msg)
+}
+
+func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	var req struct {
+		Content string `json:"content"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if req.Content == "" {
+		return response.Error(c, apperror.BadRequest("Content is required"))
+	}
+
+	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, msg)
+}
+
+func (h *MessageHandler) DeleteMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	if err := h.svc.DeleteMessage(c.Context(), msgID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Message deleted"})
+}
+
+func (h *MessageHandler) ForwardMessages(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	var req struct {
+		MessageIDs []string `json:"message_ids"`
+		ToChatID   string   `json:"to_chat_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if len(req.MessageIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("message_ids is required"))
+	}
+
+	toChatID, err := uuid.Parse(req.ToChatID)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid to_chat_id"))
+	}
+
+	var msgIDs []uuid.UUID
+	for _, idStr := range req.MessageIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid message ID: "+idStr))
+		}
+		msgIDs = append(msgIDs, id)
+	}
+
+	msgs, err := h.svc.ForwardMessages(c.Context(), msgIDs, toChatID, uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, fiber.Map{"messages": msgs})
+}
+
+func (h *MessageHandler) PinMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	msgID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	if err := h.svc.PinMessage(c.Context(), chatID, msgID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Message pinned"})
+}
+
+func (h *MessageHandler) UnpinMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	msgID, err := uuid.Parse(c.Params("messageId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	if err := h.svc.UnpinMessage(c.Context(), chatID, msgID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Message unpinned"})
+}
+
+func (h *MessageHandler) UnpinAll(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	if err := h.svc.UnpinAll(c.Context(), chatID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "All messages unpinned"})
+}
+
+func (h *MessageHandler) ListPinned(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	msgs, err := h.svc.ListPinned(c.Context(), chatID, uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"messages": msgs})
+}
+
+func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req struct {
+		LastReadMessageID string `json:"last_read_message_id"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	msgID, err := uuid.Parse(req.LastReadMessageID)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid last_read_message_id"))
+	}
+
+	if err := h.svc.MarkRead(c.Context(), chatID, uid, msgID); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Read pointer updated"})
+}

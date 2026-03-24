@@ -1,0 +1,347 @@
+package store
+
+import (
+	"context"
+	"encoding/base64"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
+)
+
+type ChatStore interface {
+	ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
+	GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
+	Create(ctx context.Context, chat *model.Chat) error
+	GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
+	CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
+	GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
+	GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
+	AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error
+	IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error)
+}
+
+type chatStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewChatStore(pool *pgxpool.Pool) ChatStore {
+	return &chatStore{pool: pool}
+}
+
+func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+
+	// Decode cursor (timestamp of last chat's activity)
+	var cursorTime time.Time
+	if cursor != "" {
+		decoded, err := base64.StdEncoding.DecodeString(cursor)
+		if err == nil {
+			cursorTime, _ = time.Parse(time.RFC3339Nano, string(decoded))
+		}
+	}
+
+	query := `
+		SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
+		       c.is_encrypted, c.max_members, c.created_at, c.updated_at,
+		       m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
+		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
+		       m.sequence_number, m.created_at, m.edited_at,
+		       (SELECT COUNT(*) FROM chat_members cm2 WHERE cm2.chat_id = c.id) as member_count,
+		       (SELECT COUNT(*) FROM messages msg
+		        WHERE msg.chat_id = c.id AND msg.is_deleted = false
+		        AND msg.sequence_number > COALESCE(
+		            (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id), 0
+		        )) as unread_count
+		FROM chat_members cm
+		JOIN chats c ON c.id = cm.chat_id
+		LEFT JOIN LATERAL (
+		    SELECT * FROM messages
+		    WHERE chat_id = c.id AND is_deleted = false
+		    ORDER BY sequence_number DESC LIMIT 1
+		) m ON true
+		WHERE cm.user_id = $1
+		  AND ($2::timestamptz IS NULL OR COALESCE(m.created_at, c.created_at) < $2)
+		ORDER BY COALESCE(m.created_at, c.created_at) DESC
+		LIMIT $3`
+
+	var cursorParam *time.Time
+	if !cursorTime.IsZero() {
+		cursorParam = &cursorTime
+	}
+
+	rows, err := s.pool.Query(ctx, query, userID, cursorParam, limit+1)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("list chats: %w", err)
+	}
+	defer rows.Close()
+
+	var items []model.ChatListItem
+	for rows.Next() {
+		var item model.ChatListItem
+		var msg model.Message
+		var msgID, msgChatID, msgSenderID, msgReplyToID, msgForwardedFrom *uuid.UUID
+		var msgType, msgContent *string
+		var msgSeq *int64
+		var msgCreatedAt, msgEditedAt *time.Time
+		var msgIsEdited, msgIsDeleted, msgIsPinned, msgIsForwarded *bool
+
+		err := rows.Scan(
+			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
+			&item.Chat.AvatarURL, &item.Chat.CreatedBy, &item.Chat.IsEncrypted,
+			&item.Chat.MaxMembers, &item.Chat.CreatedAt, &item.Chat.UpdatedAt,
+			&msgID, &msgChatID, &msgSenderID, &msgType, &msgContent, &msgReplyToID,
+			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
+			&msgSeq, &msgCreatedAt, &msgEditedAt,
+			&item.MemberCount, &item.UnreadCount,
+		)
+		if err != nil {
+			return nil, "", false, fmt.Errorf("scan chat: %w", err)
+		}
+
+		if msgID != nil {
+			msg.ID = *msgID
+			msg.ChatID = *msgChatID
+			msg.SenderID = msgSenderID
+			if msgType != nil {
+				msg.Type = *msgType
+			}
+			msg.Content = msgContent
+			msg.ReplyToID = msgReplyToID
+			if msgIsEdited != nil {
+				msg.IsEdited = *msgIsEdited
+			}
+			if msgIsDeleted != nil {
+				msg.IsDeleted = *msgIsDeleted
+			}
+			if msgIsPinned != nil {
+				msg.IsPinned = *msgIsPinned
+			}
+			if msgIsForwarded != nil {
+				msg.IsForwarded = *msgIsForwarded
+			}
+			msg.ForwardedFrom = msgForwardedFrom
+			if msgSeq != nil {
+				msg.SequenceNumber = *msgSeq
+			}
+			if msgCreatedAt != nil {
+				msg.CreatedAt = *msgCreatedAt
+			}
+			msg.EditedAt = msgEditedAt
+			item.LastMessage = &msg
+		}
+
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", false, err
+	}
+
+	hasMore := len(items) > limit
+	if hasMore {
+		items = items[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(items) > 0 {
+		last := items[len(items)-1]
+		t := last.Chat.CreatedAt
+		if last.LastMessage != nil {
+			t = last.LastMessage.CreatedAt
+		}
+		nextCursor = base64.StdEncoding.EncodeToString([]byte(t.Format(time.RFC3339Nano)))
+	}
+
+	return items, nextCursor, hasMore, nil
+}
+
+func (s *chatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error) {
+	c := &model.Chat{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, type, name, description, avatar_url, created_by,
+		        is_encrypted, max_members, created_at, updated_at
+		 FROM chats WHERE id = $1`, chatID,
+	).Scan(&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
+		&c.IsEncrypted, &c.MaxMembers, &c.CreatedAt, &c.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return c, err
+}
+
+func (s *chatStore) Create(ctx context.Context, chat *model.Chat) error {
+	return s.pool.QueryRow(ctx,
+		`INSERT INTO chats (type, name, description, created_by)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, is_encrypted, max_members, created_at, updated_at`,
+		chat.Type, chat.Name, chat.Description, chat.CreatedBy,
+	).Scan(&chat.ID, &chat.IsEncrypted, &chat.MaxMembers, &chat.CreatedAt, &chat.UpdatedAt)
+}
+
+func (s *chatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error) {
+	u1, u2 := canonicalOrder(user1, user2)
+	var chatID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT chat_id FROM direct_chat_lookup WHERE user1_id = $1 AND user2_id = $2`,
+		u1, u2,
+	).Scan(&chatID)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &chatID, nil
+}
+
+func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	chat := &model.Chat{Type: "direct"}
+	err = tx.QueryRow(ctx,
+		`INSERT INTO chats (type) VALUES ('direct')
+		 RETURNING id, type, is_encrypted, max_members, created_at, updated_at`,
+	).Scan(&chat.ID, &chat.Type, &chat.IsEncrypted, &chat.MaxMembers, &chat.CreatedAt, &chat.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add both users as members
+	_, err = tx.Exec(ctx,
+		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')`,
+		chat.ID, user1, user2,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create lookup entry
+	u1, u2 := canonicalOrder(user1, user2)
+	_, err = tx.Exec(ctx,
+		`INSERT INTO direct_chat_lookup (user1_id, user2_id, chat_id) VALUES ($1, $2, $3)`,
+		u1, u2, chat.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return chat, tx.Commit(ctx)
+}
+
+func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	query := `
+		SELECT cm.chat_id, cm.user_id, cm.role, cm.last_read_message_id,
+		       cm.joined_at, cm.muted_until, cm.notification_level,
+		       u.display_name, u.avatar_url
+		FROM chat_members cm
+		JOIN users u ON u.id = cm.user_id
+		WHERE cm.chat_id = $1
+		  AND ($2::uuid IS NULL OR cm.user_id > $2)
+		ORDER BY cm.user_id
+		LIMIT $3`
+
+	var cursorID *uuid.UUID
+	if cursor != "" {
+		decoded, err := base64.StdEncoding.DecodeString(cursor)
+		if err == nil {
+			id, err := uuid.Parse(string(decoded))
+			if err == nil {
+				cursorID = &id
+			}
+		}
+	}
+
+	rows, err := s.pool.Query(ctx, query, chatID, cursorID, limit+1)
+	if err != nil {
+		return nil, "", false, err
+	}
+	defer rows.Close()
+
+	var members []model.ChatMember
+	for rows.Next() {
+		var m model.ChatMember
+		if err := rows.Scan(&m.ChatID, &m.UserID, &m.Role, &m.LastReadMessageID,
+			&m.JoinedAt, &m.MutedUntil, &m.NotificationLevel,
+			&m.DisplayName, &m.AvatarURL); err != nil {
+			return nil, "", false, err
+		}
+		members = append(members, m)
+	}
+
+	hasMore := len(members) > limit
+	if hasMore {
+		members = members[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(members) > 0 {
+		last := members[len(members)-1]
+		nextCursor = base64.StdEncoding.EncodeToString([]byte(last.UserID.String()))
+	}
+
+	return members, nextCursor, hasMore, rows.Err()
+}
+
+func (s *chatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id FROM chat_members WHERE chat_id = $1`, chatID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id.String())
+	}
+	return ids, rows.Err()
+}
+
+func (s *chatStore) AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, $3)
+		 ON CONFLICT (chat_id, user_id) DO NOTHING`,
+		chatID, userID, role,
+	)
+	return err
+}
+
+func (s *chatStore) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error) {
+	var role string
+	err := s.pool.QueryRow(ctx,
+		`SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2`,
+		chatID, userID,
+	).Scan(&role)
+	if err == pgx.ErrNoRows {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	return true, role, nil
+}
+
+func canonicalOrder(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {
+	if a.String() < b.String() {
+		return a, b
+	}
+	return b, a
+}

@@ -1,0 +1,484 @@
+package handler
+
+import (
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+
+	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/pkg/validator"
+	"github.com/mst-corp/orbit/services/auth/internal/service"
+)
+
+type AuthHandler struct {
+	svc    *service.AuthService
+	logger *slog.Logger
+}
+
+func NewAuthHandler(svc *service.AuthService, logger *slog.Logger) *AuthHandler {
+	return &AuthHandler{svc: svc, logger: logger}
+}
+
+func (h *AuthHandler) Register(app *fiber.App) {
+	auth := app.Group("/auth")
+
+	auth.Post("/bootstrap", h.Bootstrap)
+	auth.Post("/register", h.RegisterUser)
+	auth.Post("/login", h.Login)
+	auth.Post("/logout", h.requireAuth, h.Logout)
+	auth.Post("/refresh", h.Refresh)
+	auth.Get("/me", h.requireAuth, h.GetMe)
+	auth.Post("/reset-admin", h.ResetAdmin)
+	auth.Get("/sessions", h.requireAuth, h.ListSessions)
+	auth.Delete("/sessions/:id", h.requireAuth, h.RevokeSession)
+	auth.Post("/2fa/setup", h.requireAuth, h.Setup2FA)
+	auth.Post("/2fa/verify", h.requireAuth, h.Verify2FA)
+	auth.Post("/2fa/disable", h.requireAuth, h.Disable2FA)
+	auth.Post("/invite/validate", h.ValidateInvite)
+	auth.Post("/invites", h.requireAuth, h.requireAdmin, h.CreateInvite)
+	auth.Get("/invites", h.requireAuth, h.requireAdmin, h.ListInvites)
+	auth.Delete("/invites/:id", h.requireAuth, h.requireAdmin, h.RevokeInvite)
+}
+
+// --- Middleware ---
+
+func (h *AuthHandler) requireAuth(c *fiber.Ctx) error {
+	// When called via gateway, headers are set. When called directly, parse Authorization header.
+	userID := c.Get("X-User-ID")
+	if userID != "" {
+		c.Locals("user_id", userID)
+		c.Locals("user_role", c.Get("X-User-Role", "member"))
+		return c.Next()
+	}
+
+	token := extractBearerToken(c)
+	if token == "" {
+		return response.Error(c, apperror.Unauthorized("Missing authorization"))
+	}
+
+	uid, role, err := h.svc.ValidateAccessToken(c.Context(), token)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	c.Locals("user_id", uid.String())
+	c.Locals("user_role", role)
+	return c.Next()
+}
+
+func (h *AuthHandler) requireAdmin(c *fiber.Ctx) error {
+	role := c.Locals("user_role")
+	if role != "admin" {
+		return response.Error(c, apperror.Forbidden("Admin access required"))
+	}
+	return c.Next()
+}
+
+func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
+	idStr, ok := c.Locals("user_id").(string)
+	if !ok || idStr == "" {
+		return uuid.Nil, apperror.Unauthorized("Missing user context")
+	}
+	return uuid.Parse(idStr)
+}
+
+func extractBearerToken(c *fiber.Ctx) string {
+	auth := c.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		return auth[7:]
+	}
+	return ""
+}
+
+// --- Handlers ---
+
+func (h *AuthHandler) Bootstrap(c *fiber.Ctx) error {
+	var req struct {
+		Email       string `json:"email"`
+		Password    string `json:"password"`
+		DisplayName string `json:"display_name"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.Password, "password", 8, 128); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.DisplayName, "display_name", 1, 100); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	u, err := h.svc.Bootstrap(c.Context(), req.Email, req.Password, req.DisplayName)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, u)
+}
+
+func (h *AuthHandler) RegisterUser(c *fiber.Ctx) error {
+	var req struct {
+		InviteCode  string `json:"invite_code"`
+		Email       string `json:"email"`
+		Password    string `json:"password"`
+		DisplayName string `json:"display_name"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if appErr := validator.RequireString(req.InviteCode, "invite_code", 1, 20); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.Password, "password", 8, 128); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.DisplayName, "display_name", 1, 100); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	u, err := h.svc.Register(c.Context(), req.InviteCode, req.Email, req.Password, req.DisplayName)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, u)
+}
+
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		TOTPCode string `json:"totp_code"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.Password, "password", 1, 128); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	ip := c.IP()
+	ua := c.Get("User-Agent")
+
+	pair, user, err := h.svc.Login(c.Context(), req.Email, req.Password, req.TOTPCode, ip, ua)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	// Set refresh token as httpOnly cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    pair.RefreshToken,
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Strict",
+		Path:     "/auth/refresh",
+		MaxAge:   int(30 * 24 * time.Hour / time.Second),
+	})
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"access_token": pair.AccessToken,
+		"expires_in":   pair.ExpiresIn,
+		"user":         user,
+	})
+}
+
+func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	token := extractBearerToken(c)
+	if token == "" {
+		return response.Error(c, apperror.BadRequest("Missing token"))
+	}
+
+	if err := h.svc.Logout(c.Context(), token); err != nil {
+		return response.Error(c, err)
+	}
+
+	// Clear refresh cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Strict",
+		Path:     "/auth/refresh",
+		MaxAge:   -1,
+	})
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Logged out"})
+}
+
+func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
+	refreshToken := c.Cookies("refresh_token")
+	if refreshToken == "" {
+		// Also accept from body for non-browser clients
+		var req struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := c.BodyParser(&req); err == nil && req.RefreshToken != "" {
+			refreshToken = req.RefreshToken
+		}
+	}
+	if refreshToken == "" {
+		return response.Error(c, apperror.BadRequest("Missing refresh token"))
+	}
+
+	ip := c.IP()
+	ua := c.Get("User-Agent")
+
+	pair, user, err := h.svc.Refresh(c.Context(), refreshToken, ip, ua)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    pair.RefreshToken,
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Strict",
+		Path:     "/auth/refresh",
+		MaxAge:   int(30 * 24 * time.Hour / time.Second),
+	})
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"access_token": pair.AccessToken,
+		"expires_in":   pair.ExpiresIn,
+		"user":         user,
+	})
+}
+
+func (h *AuthHandler) GetMe(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	u, err := h.svc.GetMe(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, u)
+}
+
+func (h *AuthHandler) ResetAdmin(c *fiber.Ctx) error {
+	var req struct {
+		ResetKey    string `json:"reset_key"`
+		Email       string `json:"email"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if appErr := validator.RequireString(req.ResetKey, "reset_key", 1, 256); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireString(req.NewPassword, "new_password", 8, 128); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	if err := h.svc.ResetAdmin(c.Context(), req.ResetKey, req.Email, req.NewPassword); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Admin password reset"})
+}
+
+func (h *AuthHandler) ListSessions(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	sessions, err := h.svc.ListSessions(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"sessions": sessions})
+}
+
+func (h *AuthHandler) RevokeSession(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	sessionID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid session ID"))
+	}
+
+	if err := h.svc.RevokeSession(c.Context(), sessionID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Session revoked"})
+}
+
+func (h *AuthHandler) Setup2FA(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	secret, uri, err := h.svc.Setup2FA(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"secret": secret,
+		"uri":    uri,
+	})
+}
+
+func (h *AuthHandler) Verify2FA(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if appErr := validator.RequireString(req.Code, "code", 6, 6); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	if err := h.svc.Verify2FA(c.Context(), uid, req.Code); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "2FA enabled"})
+}
+
+func (h *AuthHandler) Disable2FA(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if appErr := validator.RequireString(req.Password, "password", 1, 128); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	if err := h.svc.Disable2FA(c.Context(), uid, req.Password); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "2FA disabled"})
+}
+
+func (h *AuthHandler) ValidateInvite(c *fiber.Ctx) error {
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if appErr := validator.RequireString(req.Code, "code", 1, 20); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
+	inv, err := h.svc.ValidateInvite(c.Context(), req.Code)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"valid": true,
+		"email": inv.Email,
+		"role":  inv.Role,
+	})
+}
+
+func (h *AuthHandler) CreateInvite(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	var req struct {
+		Email     *string    `json:"email"`
+		Role      string     `json:"role"`
+		MaxUses   int        `json:"max_uses"`
+		ExpiresAt *time.Time `json:"expires_at"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if req.Role == "" {
+		req.Role = "member"
+	}
+	if req.Role != "admin" && req.Role != "member" {
+		return response.Error(c, apperror.BadRequest("Invalid role"))
+	}
+	if req.MaxUses <= 0 {
+		req.MaxUses = 1
+	}
+
+	inv, err := h.svc.CreateInvite(c.Context(), uid, req.Email, req.Role, req.MaxUses, req.ExpiresAt)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, inv)
+}
+
+func (h *AuthHandler) ListInvites(c *fiber.Ctx) error {
+	invites, err := h.svc.ListInvites(c.Context())
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"invites": invites})
+}
+
+func (h *AuthHandler) RevokeInvite(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	inviteID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid invite ID"))
+	}
+
+	if err := h.svc.RevokeInvite(c.Context(), inviteID, uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Invite revoked"})
+}
