@@ -37,6 +37,23 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
+// DatabaseURL returns DATABASE_URL if set, otherwise builds it from DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.
+func DatabaseURL() string {
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		return v
+	}
+	host := EnvOr("DB_HOST", "localhost")
+	port := EnvOr("DB_PORT", "5432")
+	user := EnvOr("DB_USER", "postgres")
+	pass := os.Getenv("DB_PASSWORD")
+	name := EnvOr("DB_NAME", "postgres")
+	sslmode := EnvOr("DB_SSLMODE", "disable")
+	if pass == "" {
+		return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
+	}
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
+}
+
 // EnvDurationOr returns the duration value of the environment variable or the fallback.
 func EnvDurationOr(key string, fallback time.Duration) time.Duration {
 	v := os.Getenv(key)

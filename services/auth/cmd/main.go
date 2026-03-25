@@ -25,7 +25,7 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8081")
-	dbURL := config.MustEnv("DATABASE_URL")
+	dbURL := config.DatabaseURL()
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
 	accessTTL := config.EnvDurationOr("JWT_ACCESS_TTL", 15*time.Minute)

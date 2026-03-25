@@ -26,7 +26,7 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8082")
-	dbURL := config.MustEnv("DATABASE_URL")
+	dbURL := config.DatabaseURL()
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.EnvOr("NATS_URL", "nats://localhost:4222")
 
