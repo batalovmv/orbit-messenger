@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -40,6 +41,14 @@ func EnvIntOr(key string, fallback int) int {
 // DatabaseURL returns DATABASE_URL if set, otherwise builds it from DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.
 func DatabaseURL() string {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
+		// Ensure sslmode=disable for internal Docker networks
+		if !strings.Contains(v, "sslmode=") {
+			if strings.Contains(v, "?") {
+				v += "&sslmode=disable"
+			} else {
+				v += "?sslmode=disable"
+			}
+		}
 		return v
 	}
 	host := EnvOr("DB_HOST", "localhost")
