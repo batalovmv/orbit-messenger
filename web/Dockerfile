@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git bash
 COPY . .
 RUN git init && git add -A && git -c user.name=build -c user.email=build@ci commit -m "build" --quiet 2>/dev/null || true
 ARG SATURN_API_URL=http://localhost:8080/api/v1
