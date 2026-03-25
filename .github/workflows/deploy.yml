@@ -25,28 +25,27 @@ jobs:
 
   build-web:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build frontend
-        env:
-          SATURN_API_URL: http://176.12.73.45:8080/api/v1
-        run: |
-          cd web
-          npm ci --ignore-scripts
-          npm run build:production
-
-      - uses: actions/upload-artifact@v4
+      - name: Build and push web image
+        uses: docker/build-push-action@v5
         with:
-          name: web-dist
-          path: web/dist/
-          retention-days: 1
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/web:latest
+          build-args: |
+            SATURN_API_URL=https://new-tg-w2bvpo.saturn.ac
 
   deploy:
     needs: [test, build-web]
