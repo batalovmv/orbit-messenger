@@ -33,6 +33,11 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	return func(c *fiber.Ctx) error {
+		// Skip JWT validation for auth routes (login, register, bootstrap, etc.)
+		if strings.HasPrefix(c.Path(), "/api/v1/auth") {
+			return c.Next()
+		}
+
 		token := extractBearerToken(c)
 		if token == "" {
 			return response.Error(c, apperror.Unauthorized("Missing authorization"))
