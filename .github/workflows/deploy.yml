@@ -47,52 +47,5 @@ jobs:
           build-args: |
             SATURN_API_URL=https://new-tg-w2bvpo.saturn.ac
 
-  deploy:
-    needs: [test, build-web]
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: web-dist/
-
-      - name: Deploy backend + frontend
-        run: |
-          cp /opt/orbit/.env .env
-
-          # Build backend services only (no web)
-          docker compose down --remove-orphans || true
-          docker compose build --no-cache gateway auth messaging
-          docker compose up -d postgres redis nats meilisearch
-          sleep 5
-          docker compose up -d auth messaging gateway
-
-          # Deploy frontend via nginx container with pre-built dist
-          docker rm -f orbit-web 2>/dev/null || true
-          docker run -d --name orbit-web \
-            -p 3000:80 \
-            -v $(pwd)/web-dist:/usr/share/nginx/html:ro \
-            -v $(pwd)/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
-            nginx:alpine
-
-          echo "Waiting for services to start..."
-          sleep 10
-          docker compose ps
-          docker ps --filter name=orbit-web
-
-      - name: Health check
-        run: |
-          for i in 1 2 3 4 5; do
-            if curl -sf http://localhost:8080/health > /dev/null; then
-              echo "Gateway is healthy!"
-              curl -sI http://localhost:3000 | head -3
-              exit 0
-            fi
-            echo "Attempt $i: waiting..."
-            sleep 5
-          done
-          echo "Health check failed"
-          docker compose logs --tail=30
-          exit 1
+  # Deploy is handled by Saturn platform (auto-deploy on push)
+  # Saturn pulls Docker images and manages service lifecycle
