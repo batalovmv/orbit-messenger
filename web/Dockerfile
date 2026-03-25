@@ -8,7 +8,9 @@ COPY . .
 ARG SATURN_API_URL=http://localhost:8080/api/v1
 ENV SATURN_API_URL=$SATURN_API_URL
 ENV NODE_OPTIONS="--max-old-space-size=1024"
-RUN npm run build:production
+ENV CHOKIDAR_USEPOLLING=0
+ENV WEBPACK_WATCH=false
+RUN npm run build:production || npm run build:production
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
