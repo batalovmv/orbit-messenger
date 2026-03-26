@@ -137,7 +137,7 @@ export function connectWs() {
   if (!accessToken) return;
 
   wsIntentionalClose = false;
-  const wsUrl = baseUrl.replace(/^http/, 'ws') + '/api/v1/ws';
+  const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {

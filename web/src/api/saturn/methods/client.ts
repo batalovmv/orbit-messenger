@@ -11,9 +11,8 @@ let currentOnUpdate: OnApiUpdate | undefined;
 export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
   currentOnUpdate = onUpdate;
 
-  // Determine API URL from env (injected by webpack DefinePlugin)
-  const apiUrl = (typeof process !== 'undefined' && process.env.SATURN_API_URL)
-    || 'http://localhost:8080';
+  // API URL injected by webpack DefinePlugin at build time
+  const apiUrl = process.env.SATURN_API_URL || 'http://localhost:8080/api/v1';
 
   saturnClient.init(apiUrl, onUpdate);
   initUpdateEmitter(onUpdate);

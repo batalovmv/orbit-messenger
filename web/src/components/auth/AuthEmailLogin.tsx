@@ -93,7 +93,7 @@ const AuthEmailLogin = ({
             label="Email"
             value={email}
             inputMode="email"
-            error={auth.errorKey ? lang(auth.errorKey as any) as string : undefined}
+            error={auth.errorKey ? lang.withRegular(auth.errorKey) : undefined}
             autoComplete="email"
             onChange={handleEmailChange}
           />

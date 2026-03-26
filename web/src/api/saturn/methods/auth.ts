@@ -73,7 +73,6 @@ export async function loginWithEmail({
   } catch (e) {
     if (e instanceof client.ApiError) {
       if (e.code === '2fa_required') {
-        // Need 2FA code
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
           authorizationState: 'authorizationStateWaitPassword',
@@ -81,9 +80,13 @@ export async function loginWithEmail({
         return undefined;
       }
 
+      const errorKey = e.status === 429
+        ? { key: 'FloodWait' as const }
+        : { key: 'ErrorIncorrectPassword' as const };
+
       sendApiUpdate({
         '@type': 'updateAuthorizationError',
-        errorKey: { key: 'ErrorIncorrectPassword' },
+        errorKey,
       });
     }
     return undefined;

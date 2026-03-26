@@ -1,7 +1,7 @@
 import type { ActionReturnType } from '../../types';
 
 import { callApi } from '../../../api/saturn';
-import { addActionHandler } from '../../index';
+import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import { updateAuth } from '../../reducers/auth';
 
 addActionHandler('saturnLoginWithEmail', async (global, actions, payload): Promise<void> => {
@@ -11,22 +11,38 @@ addActionHandler('saturnLoginWithEmail', async (global, actions, payload): Promi
     isLoading: true,
     errorKey: undefined,
   });
+  setGlobal(global);
 
-  void callApi('loginWithEmail', { email, password, totpCode });
+  await callApi('loginWithEmail', { email, password, totpCode });
 });
 
 addActionHandler('saturnGoToInvite', (global): ActionReturnType => {
   return updateAuth(global, {
     state: 'authorizationStateWaitRegistration',
+    errorKey: undefined,
   });
 });
 
 addActionHandler('saturnValidateInvite', async (global, actions, payload): Promise<void> => {
   const { code } = payload;
-  const result = await callApi('validateInviteCode', { code });
-  if (!result) return;
 
-  // Store invite code validation result — will be used by register
+  global = updateAuth(global, {
+    isLoading: true,
+    errorKey: undefined,
+  });
+  setGlobal(global);
+
+  const result = await callApi('validateInviteCode', { code });
+
+  global = getGlobal();
+  if (!result) {
+    global = updateAuth(global, { isLoading: false });
+    setGlobal(global);
+    return;
+  }
+
+  global = updateAuth(global, { isLoading: false });
+  setGlobal(global);
 });
 
 addActionHandler('saturnRegister', async (global, actions, payload): Promise<void> => {
@@ -36,8 +52,9 @@ addActionHandler('saturnRegister', async (global, actions, payload): Promise<voi
     isLoading: true,
     errorKey: undefined,
   });
+  setGlobal(global);
 
-  void callApi('registerWithInvite', {
+  await callApi('registerWithInvite', {
     inviteCode, email, password, displayName,
   });
 });

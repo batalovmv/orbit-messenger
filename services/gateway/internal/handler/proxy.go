@@ -15,6 +15,32 @@ type ProxyConfig struct {
 	MessagingServiceURL string
 }
 
+// saveCORSHeaders captures CORS headers set by the global CORS middleware
+// before the proxy overwrites all response headers with upstream's response.
+func saveCORSHeaders(c *fiber.Ctx) map[string]string {
+	saved := make(map[string]string)
+	for _, key := range []string{
+		"Access-Control-Allow-Origin",
+		"Access-Control-Allow-Credentials",
+		"Access-Control-Allow-Methods",
+		"Access-Control-Allow-Headers",
+		"Access-Control-Max-Age",
+		"Vary",
+	} {
+		if v := c.GetRespHeader(key); v != "" {
+			saved[key] = v
+		}
+	}
+	return saved
+}
+
+// restoreCORSHeaders re-applies CORS headers after the proxy call.
+func restoreCORSHeaders(c *fiber.Ctx, saved map[string]string) {
+	for key, value := range saved {
+		c.Set(key, value)
+	}
+}
+
 // SetupProxy configures reverse proxy routes.
 func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, cfg ProxyConfig) {
 	authClient := &fasthttp.Client{
@@ -37,12 +63,14 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
+		cors := saveCORSHeaders(c)
 		if err := proxy.DoRedirects(c, url, 0, authClient); err != nil {
 			slog.Error("auth proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
 			})
 		}
+		restoreCORSHeaders(c, cors)
 		return nil
 	})
 
@@ -57,12 +85,14 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
+		cors := saveCORSHeaders(c)
 		if err := proxy.DoRedirects(c, url, 0, msgClient); err != nil {
 			slog.Error("messaging proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
 			})
 		}
+		restoreCORSHeaders(c, cors)
 		return nil
 	})
 }

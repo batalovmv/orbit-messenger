@@ -18,6 +18,7 @@ import AuthEmailLogin from './AuthEmailLogin';
 import AuthPhoneNumber from './AuthPhoneNumber';
 import AuthQrCode from './AuthQrCode';
 import AuthRegister from './AuthRegister.async';
+import AuthSaturnRegister from './AuthSaturnRegister';
 
 import './Auth.scss';
 
@@ -61,7 +62,7 @@ const Auth = ({
       case 'authorizationStateWaitPassword':
         return <AuthPassword />;
       case 'authorizationStateWaitRegistration':
-        return <AuthRegister />;
+        return <AuthSaturnRegister />;
       case 'authorizationStateWaitPhoneNumber':
         return <AuthEmailLogin />;
       case 'authorizationStateWaitQrCode':

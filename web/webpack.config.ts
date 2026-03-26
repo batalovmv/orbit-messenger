@@ -40,7 +40,7 @@ const {
 
 const CSP = `
   default-src 'self';
-  connect-src 'self' wss://*.web.telegram.org wss://*.saturn.ac blob: http: https: ${APP_ENV === 'development' ? 'wss: ipc:' : ''};
+  connect-src 'self' wss://*.web.telegram.org wss://*.saturn.ac blob: http: https: ws: wss: ${APP_ENV === 'development' ? 'ipc:' : ''};
   script-src 'self' 'wasm-unsafe-eval' https://t.me/_websync_ https://telegram.me/_websync_;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://ss3.4sqi.net/img/categories_v2/;
@@ -230,7 +230,7 @@ export default function createConfig(
         // eslint-disable-next-line no-null/no-null
         TEST_SESSION: null,
         BASE_URL,
-        SATURN_API_URL: process.env.SATURN_API_URL || 'http://localhost:8080',
+        SATURN_API_URL: process.env.SATURN_API_URL || 'http://localhost:8080/api/v1',
       }),
       // Updates each dev re-build to provide current git branch or commit hash
       new DefinePlugin({

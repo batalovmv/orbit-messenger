@@ -78,7 +78,7 @@ func main() {
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")
 	authRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 5, KeyPrefix: "auth",
+		Redis: rdb, MaxPerMin: 20, KeyPrefix: "auth",
 	})
 	authGroup.Use(authRateLimit)
 
