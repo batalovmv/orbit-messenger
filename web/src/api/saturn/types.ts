@@ -112,8 +112,8 @@ export interface SaturnLoginResponse {
 }
 
 export interface SaturnPaginatedResponse<T> {
-  items: T[];
-  next_cursor?: string;
+  data: T[];
+  cursor?: string;
   has_more: boolean;
 }
 

@@ -1,4 +1,4 @@
-import type { ApiChat } from '../../types';
+import type { ApiChat, ApiMessage, ApiUser, ApiUserStatus } from '../../types';
 import type { SaturnChat, SaturnChatListItem, SaturnChatMember, SaturnPaginatedResponse } from '../types';
 
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
@@ -24,12 +24,16 @@ export async function fetchChats({
   if (cursor) params.set('cursor', cursor);
 
   const result = await client.request<SaturnPaginatedResponse<SaturnChatListItem>>(
-    'GET', `/api/v1/chats?${params.toString()}`,
+    'GET', `/chats?${params.toString()}`,
   );
 
   const apiChats: ApiChat[] = [];
+  const apiUsers: ApiUser[] = [];
+  const userStatusesById: Record<string, ApiUserStatus> = {};
+  const lastMessageByChatId: Record<string, number> = {};
+  const messages: ApiMessage[] = [];
 
-  for (const item of result.items) {
+  for (const item of result.data) {
     const apiChat = buildApiChat(item);
     apiChats.push(apiChat);
 
@@ -40,14 +44,16 @@ export async function fetchChats({
       noTopChatsRequest: true,
     });
 
-    // For DM chats, dispatch the peer user so TG Web A can resolve the title/avatar
+    // For DM chats, collect the peer user
     if (item.type === 'direct' && item.other_user) {
       const peerUser = buildApiUser(item.other_user);
+      apiUsers.push(peerUser);
+      userStatusesById[item.other_user.id] = buildApiUserStatus(item.other_user);
       sendApiUpdate({ '@type': 'updateUser', id: item.other_user.id, user: peerUser });
       sendApiUpdate({
         '@type': 'updateUserStatus',
         userId: item.other_user.id,
-        status: buildApiUserStatus(item.other_user),
+        status: userStatusesById[item.other_user.id],
       });
     }
 
@@ -56,6 +62,8 @@ export async function fetchChats({
       if (currentUserId) {
         apiMessage.isOutgoing = item.last_message.sender_id === currentUserId;
       }
+      lastMessageByChatId[item.id] = apiMessage.id;
+      messages.push(apiMessage);
 
       sendApiUpdate({
         '@type': 'updateChatLastMessage',
@@ -65,23 +73,38 @@ export async function fetchChats({
     }
   }
 
+  const chatIds = apiChats.map((c) => c.id);
+  const totalChatCount = result.has_more ? chatIds.length + 1 : chatIds.length;
+
   return {
-    chatIds: apiChats.map((c) => c.id),
+    chatIds,
+    chats: apiChats,
+    users: apiUsers,
+    userStatusesById,
+    notifyExceptionById: {} as Record<string, never>,
+    draftsById: {} as Record<string, undefined>,
+    lastMessageByChatId,
+    totalChatCount,
+    messages,
+    threadInfos: [],
+    threadReadStatesById: {},
     hasMore: result.has_more,
-    nextCursor: result.next_cursor,
+    nextCursor: result.cursor,
   };
 }
 
-export async function fetchFullChat({ chatId }: { chatId: string }) {
+export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: string; chatId?: string }) {
+  // TG Web A passes full ApiChat object with `id`, Saturn methods used `chatId`
+  if (!chatId) chatId = chatIdAlt!;
   const [chat, membersResult] = await Promise.all([
-    client.request<SaturnChat>('GET', `/api/v1/chats/${chatId}`),
+    client.request<SaturnChat>('GET', `/chats/${chatId}`),
     client.request<SaturnPaginatedResponse<SaturnChatMember>>(
-      'GET', `/api/v1/chats/${chatId}/members?limit=200`,
+      'GET', `/chats/${chatId}/members?limit=200`,
     ),
   ]);
 
   const apiChat = buildApiChat(chat);
-  const fullInfo = buildApiChatFullInfo(chat, membersResult.items);
+  const fullInfo = buildApiChatFullInfo(chat, membersResult.data);
 
   sendApiUpdate({
     '@type': 'updateChat',
@@ -99,13 +122,13 @@ export async function fetchFullChat({ chatId }: { chatId: string }) {
   return {
     chat: apiChat,
     fullInfo,
-    members: membersResult.items.map(buildApiChatMember),
+    members: membersResult.data.map(buildApiChatMember),
   };
 }
 
 export async function createDirectChat({ userId }: { userId: string }) {
   const chat = await client.request<SaturnChat>(
-    'POST', '/api/v1/chats/direct', { user_id: userId },
+    'POST', '/chats/direct', { user_id: userId },
   );
 
   const apiChat = buildApiChat(chat);
@@ -129,7 +152,7 @@ export async function createGroupChat({
   const body: Record<string, unknown> = { name };
   if (description) body.description = description;
 
-  const chat = await client.request<SaturnChat>('POST', '/api/v1/chats', body);
+  const chat = await client.request<SaturnChat>('POST', '/chats', body);
   const apiChat = buildApiChat(chat);
 
   sendApiUpdate({
@@ -160,17 +183,17 @@ export async function getChatMembers({
   if (cursor) params.set('cursor', cursor);
 
   const result = await client.request<SaturnPaginatedResponse<SaturnChatMember>>(
-    'GET', `/api/v1/chats/${chatId}/members?${params.toString()}`,
+    'GET', `/chats/${chatId}/members?${params.toString()}`,
   );
 
   sendApiUpdate({
     '@type': 'updateChatMembers',
     id: chatId,
-    replacedMembers: result.items.map(buildApiChatMember),
+    replacedMembers: result.data.map(buildApiChatMember),
   });
 
   return {
-    members: result.items.map(buildApiChatMember),
+    members: result.data.map(buildApiChatMember),
     hasMore: result.has_more,
   };
 }

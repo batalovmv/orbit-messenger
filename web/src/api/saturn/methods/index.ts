@@ -227,7 +227,7 @@ export async function fetchWebPagePreview({ text }: {
         image?: string;
         type?: string;
       } | undefined;
-    }>('GET', `/api/v1/messages/link-preview?url=${encodeURIComponent(urlMatch[0])}`);
+    }>('GET', `/messages/link-preview?url=${encodeURIComponent(urlMatch[0])}`);
 
     if (!result.preview) return undefined;
 

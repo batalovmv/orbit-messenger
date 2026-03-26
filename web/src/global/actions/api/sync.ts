@@ -72,18 +72,37 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
     releaseStatusTimeout = undefined;
   }, RELEASE_STATUS_TIMEOUT);
 
-  const {
-    loadAllChats, preloadTopChatMessages,
-  } = actions;
-
   initFolderManager();
 
-  loadAllChats({
-    listType: 'active',
-    whenFirstBatchDone: async () => {
-      await loadAndReplaceMessages(global, actions);
-
+  // Saturn simplified sync: just load chats directly via API
+  // No need for complex MTProto diff/replace logic
+  (async () => {
+    try {
+      const result = await callApi('fetchChats', { limit: 100 });
       global = getGlobal();
+
+      if (result) {
+        const newChats = buildCollectionByKey(result.chats, 'id');
+        global = updateChats(global, newChats as Record<string, any>);
+        global = updateUsers(global, buildCollectionByKey(result.users, 'id') as Record<string, any>);
+
+        // Set chat list IDs
+        global = {
+          ...global,
+          chats: {
+            ...global.chats,
+            listIds: {
+              ...global.chats.listIds,
+              active: result.chatIds,
+            },
+            isFullyLoaded: {
+              ...global.chats.isFullyLoaded,
+              active: !result.hasMore,
+            },
+          },
+        };
+      }
+
       global = {
         ...global,
         isSyncing: false,
@@ -96,11 +115,16 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
         // eslint-disable-next-line no-console
         console.log('>>> FINISH SYNC');
       }
-
-      loadAllChats({ listType: 'archived' });
-      preloadTopChatMessages();
-    },
-  });
+    } catch (err) {
+      if (DEBUG) {
+        // eslint-disable-next-line no-console
+        console.error('>>> SYNC ERROR', err);
+      }
+      global = getGlobal();
+      global = { ...global, isSyncing: false };
+      setGlobal(global);
+    }
+  })();
 });
 
 async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions: RequiredGlobalActions) {

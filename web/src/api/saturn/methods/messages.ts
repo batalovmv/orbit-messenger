@@ -13,21 +13,24 @@ export function setCurrentUserId(userId: string) {
 }
 
 export async function fetchMessages({
-  chatId, limit = 50, cursor,
+  chat, chatId: chatIdDirect, limit = 50, cursor, offsetId,
 }: {
-  chatId: string;
+  chat?: { id: string };
+  chatId?: string;
   limit?: number;
   cursor?: string;
+  offsetId?: number;
 }) {
+  const chatId = chat?.id || chatIdDirect!;
   const params = new URLSearchParams();
   params.set('limit', String(limit));
   if (cursor) params.set('cursor', cursor);
 
   const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
-    'GET', `/api/v1/chats/${chatId}/messages?${params.toString()}`,
+    'GET', `/chats/${chatId}/messages?${params.toString()}`,
   );
 
-  const messages: ApiMessage[] = result.items.map((msg) => {
+  const messages: ApiMessage[] = result.data.map((msg) => {
     const apiMsg = buildApiMessage(msg);
     if (currentUserId) {
       apiMsg.isOutgoing = msg.sender_id === currentUserId;
@@ -37,8 +40,10 @@ export async function fetchMessages({
 
   return {
     messages,
+    count: messages.length,
+    topics: [] as any[],
     hasMore: result.has_more,
-    nextCursor: result.next_cursor,
+    nextCursor: result.cursor,
   };
 }
 
@@ -54,11 +59,11 @@ export async function fetchMessagesByDate({
   params.set('limit', String(limit));
 
   const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
-    'GET', `/api/v1/chats/${chatId}/history?${params.toString()}`,
+    'GET', `/chats/${chatId}/history?${params.toString()}`,
   );
 
   return {
-    messages: result.items.map((msg) => {
+    messages: result.data.map((msg) => {
       const apiMsg = buildApiMessage(msg);
       if (currentUserId) {
         apiMsg.isOutgoing = msg.sender_id === currentUserId;
@@ -114,7 +119,7 @@ export async function sendMessage({
     }
 
     const msg = await client.request<SaturnMessage>(
-      'POST', `/api/v1/chats/${chatId}/messages`, body,
+      'POST', `/chats/${chatId}/messages`, body,
     );
 
     // Track UUID so WS handler skips the echo of our own message
@@ -159,7 +164,7 @@ export async function editMessage({
   }
 
   const msg = await client.request<SaturnMessage>(
-    'PATCH', `/api/v1/messages/${uuid}`, body,
+    'PATCH', `/messages/${uuid}`, body,
   );
 
   const apiMsg = buildApiMessage(msg);
@@ -187,7 +192,7 @@ export async function deleteMessages({
   const deletePromises = messageIds.map(async (seqNum) => {
     const uuid = getMessageUuid(chatId, seqNum);
     if (!uuid) return;
-    await client.request('DELETE', `/api/v1/messages/${uuid}`);
+    await client.request('DELETE', `/messages/${uuid}`);
   });
 
   await Promise.all(deletePromises);
@@ -213,7 +218,7 @@ export async function forwardMessages({
   if (!uuids.length) return undefined;
 
   const result = await client.request<{ messages: SaturnMessage[] }>(
-    'POST', '/api/v1/messages/forward', {
+    'POST', '/messages/forward', {
       message_ids: uuids,
       to_chat_id: toChatId,
     },
@@ -237,12 +242,14 @@ export async function forwardMessages({
   return { messages: apiMessages };
 }
 
-export async function fetchPinnedMessages({ chatId }: { chatId: string }) {
+export async function fetchPinnedMessages({ chat, chatId: chatIdDirect }: { chat?: { id: string }; chatId?: string }) {
+  const chatId = chat?.id || chatIdDirect!;
   const result = await client.request<{ messages: SaturnMessage[] }>(
-    'GET', `/api/v1/chats/${chatId}/pinned`,
+    'GET', `/chats/${chatId}/pinned`,
   );
 
-  const messages = result.messages.map((msg) => {
+  const rawMessages = result.messages || [];
+  const messages = rawMessages.map((msg) => {
     const apiMsg = buildApiMessage(msg);
     if (currentUserId) {
       apiMsg.isOutgoing = msg.sender_id === currentUserId;
@@ -270,7 +277,7 @@ export async function pinMessage({
   const uuid = getMessageUuid(chatId, messageId);
   if (!uuid) return;
 
-  await client.request('POST', `/api/v1/chats/${chatId}/pin/${uuid}`);
+  await client.request('POST', `/chats/${chatId}/pin/${uuid}`);
 }
 
 export async function unpinMessage({
@@ -282,11 +289,11 @@ export async function unpinMessage({
   const uuid = getMessageUuid(chatId, messageId);
   if (!uuid) return;
 
-  await client.request('DELETE', `/api/v1/chats/${chatId}/pin/${uuid}`);
+  await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
 }
 
 export async function unpinAllMessages({ chatId }: { chatId: string }) {
-  await client.request('DELETE', `/api/v1/chats/${chatId}/pin`);
+  await client.request('DELETE', `/chats/${chatId}/pin`);
 
   sendApiUpdate({
     '@type': 'updatePinnedIds',
@@ -304,7 +311,7 @@ export async function markMessageListRead({
   const uuid = getMessageUuid(chatId, maxId);
   if (!uuid) return;
 
-  await client.request('PATCH', `/api/v1/chats/${chatId}/read`, {
+  await client.request('PATCH', `/chats/${chatId}/read`, {
     last_read_message_id: uuid,
   });
 

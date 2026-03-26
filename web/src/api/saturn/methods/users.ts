@@ -5,7 +5,7 @@ import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 
 export async function fetchCurrentUser() {
-  const user = await client.request<SaturnUser>('GET', '/api/v1/users/me');
+  const user = await client.request<SaturnUser>('GET', '/users/me');
 
   const apiUser = buildApiUser(user);
   apiUser.isSelf = true;
@@ -26,7 +26,7 @@ export async function fetchCurrentUser() {
 }
 
 export async function fetchUser({ userId }: { userId: string }) {
-  const user = await client.request<SaturnUser>('GET', `/api/v1/users/${userId}`);
+  const user = await client.request<SaturnUser>('GET', `/users/${userId}`);
 
   const apiUser = buildApiUser(user);
 
@@ -49,7 +49,7 @@ export async function fetchUser({ userId }: { userId: string }) {
 
 export async function searchUsers({ query, limit = 20 }: { query: string; limit?: number }) {
   const result = await client.request<{ users: SaturnUser[] }>(
-    'GET', `/api/v1/users?q=${encodeURIComponent(query)}&limit=${limit}`,
+    'GET', `/users?q=${encodeURIComponent(query)}&limit=${limit}`,
   );
 
   const apiUsers = result.users.map(buildApiUser);
@@ -73,7 +73,7 @@ export async function searchUsers({ query, limit = 20 }: { query: string; limit?
 export async function fetchGlobalUsers({ limit = 50 }: { limit?: number } = {}) {
   // Saturn has no "list all users" endpoint; use search with empty query as fallback
   const result = await client.request<{ users: SaturnUser[] }>(
-    'GET', `/api/v1/users?q=&limit=${limit}`,
+    'GET', `/users?q=&limit=${limit}`,
   );
 
   const apiUsers = result.users.map(buildApiUser);
@@ -108,7 +108,7 @@ export async function updateProfile({
   if (phone !== undefined) body.phone = phone;
   if (avatarUrl !== undefined) body.avatar_url = avatarUrl;
 
-  const user = await client.request<SaturnUser>('PUT', '/api/v1/users/me', body);
+  const user = await client.request<SaturnUser>('PUT', '/users/me', body);
 
   const apiUser = buildApiUser(user);
   apiUser.isSelf = true;

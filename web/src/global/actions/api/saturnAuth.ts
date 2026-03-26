@@ -13,7 +13,17 @@ addActionHandler('saturnLoginWithEmail', async (global, actions, payload): Promi
   });
   setGlobal(global);
 
-  await callApi('loginWithEmail', { email, password, totpCode });
+  const result = await callApi('loginWithEmail', { email, password, totpCode });
+
+  if (result) {
+    // Wait a tick for WS to connect and dispatch connectionStateReady
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    global = getGlobal();
+    if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
+      actions.sync();
+    }
+  }
 });
 
 addActionHandler('saturnGoToInvite', (global): ActionReturnType => {
@@ -54,7 +64,16 @@ addActionHandler('saturnRegister', async (global, actions, payload): Promise<voi
   });
   setGlobal(global);
 
-  await callApi('registerWithInvite', {
+  const result = await callApi('registerWithInvite', {
     inviteCode, email, password, displayName,
   });
+
+  if (result) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    global = getGlobal();
+    if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
+      actions.sync();
+    }
+  }
 });

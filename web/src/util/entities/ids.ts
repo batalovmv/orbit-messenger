@@ -1,21 +1,30 @@
 import { CHANNEL_ID_BASE } from '../../config';
 import { toJSNumber } from '../numbers';
 
+// Saturn uses UUID strings as entity IDs — skip BigInt conversion for non-numeric IDs
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-/.test(id);
+}
+
 export function isUserId(entityId: string) {
+  if (isUuid(entityId)) return true; // Saturn UUIDs are always user/chat IDs
   return !entityId.startsWith('-');
 }
 
 export function isChannelId(entityId: string) {
+  if (isUuid(entityId)) return false;
   const n = BigInt(entityId);
   return n < -CHANNEL_ID_BASE;
 }
 
 export function toChannelId(mtpId: string) {
+  if (isUuid(mtpId)) return mtpId;
   const n = BigInt(mtpId);
   return String(-CHANNEL_ID_BASE - n);
 }
 
 export function getRawPeerId(id: string) {
+  if (isUuid(id)) return 0n; // Saturn UUIDs — return 0 as BigInt placeholder
   const n = BigInt(id);
   if (isUserId(id)) {
     return n;
@@ -29,5 +38,6 @@ export function getRawPeerId(id: string) {
 }
 
 export function getPeerIdDividend(peerId: string) {
+  if (isUuid(peerId)) return 0; // Saturn UUIDs — deterministic fallback
   return toJSNumber(getRawPeerId(peerId));
 }
