@@ -131,7 +131,7 @@ func parsePostgresURL(raw string) (dsn string, password string, rawPassword stri
 // NatsURL returns the NATS connection URL.
 // Saturn generates URLs with http:// and port 80, but NATS needs nats:// and port 4222.
 func NatsURL() string {
-	raw := EnvOr("NATS_URL", EnvOr("ORBIT_NATS_URL", "nats://localhost:4222"))
+	raw := EnvOr("ORBIT_NATS_URL", "nats://localhost:4222")
 	// Convert http(s):// to nats://
 	raw = strings.Replace(raw, "https://", "nats://", 1)
 	raw = strings.Replace(raw, "http://", "nats://", 1)

@@ -51,6 +51,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
+	slog.Info("NATS connected", "url", natsURL)
 
 	// WebSocket Hub
 	hub := ws.NewHub()

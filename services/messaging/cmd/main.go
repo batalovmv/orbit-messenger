@@ -96,6 +96,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
+	slog.Info("NATS connected", "url", natsURL)
+
+	natsPublisher := service.NewNATSPublisher(nc)
 
 	// Stores
 	chatStore := store.NewChatStore(pool)
@@ -103,7 +106,6 @@ func main() {
 	userStore := store.NewUserStore(pool)
 
 	// Services
-	natsPublisher := service.NewNATSPublisher(nc)
 	chatSvc := service.NewChatService(chatStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher)
 	userSvc := service.NewUserService(userStore, chatStore)
