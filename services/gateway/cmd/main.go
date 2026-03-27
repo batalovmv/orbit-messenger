@@ -27,6 +27,7 @@ func main() {
 	port := config.EnvOr("PORT", "8080")
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
+	slog.Info("resolved NATS URL", "url", natsURL, "raw_orbit", os.Getenv("ORBIT_NATS_URL"), "raw_nats", os.Getenv("NATS_URL"))
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	frontendURL := config.EnvOr("WEB_URL", config.EnvOr("FRONTEND_URL", "http://localhost:3000"))
