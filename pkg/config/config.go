@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -89,6 +90,14 @@ func parsePostgresURL(raw string) string {
 		pass = userinfo[colonIdx+1:]
 	} else {
 		user = userinfo
+	}
+
+	// URL-decode user and password — Saturn may percent-encode special chars
+	if decoded, err := url.PathUnescape(user); err == nil {
+		user = decoded
+	}
+	if decoded, err := url.PathUnescape(pass); err == nil {
+		pass = decoded
 	}
 
 	// Parse host:port/dbname from hostpath
