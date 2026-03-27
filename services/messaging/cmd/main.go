@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,13 +27,12 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8082")
-	dbURL := config.DatabaseURL()
-	// Debug: log masked DATABASE_URL to diagnose auth failures
-	if len(dbURL) > 30 {
-		slog.Info("database URL resolved", "prefix", dbURL[:30]+"...", "len", len(dbURL), "source_env", os.Getenv("DATABASE_URL") != "")
-	} else {
-		slog.Info("database URL resolved", "url", dbURL, "source_env", os.Getenv("DATABASE_URL") != "")
+	// Use DATABASE_URL directly without modification to avoid breaking URL-encoded passwords
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = config.DatabaseURL() // fallback to DB_* vars for local dev
 	}
+	slog.Info("database URL", "len", len(dbURL), "has_sslmode", strings.Contains(dbURL, "sslmode"))
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 
