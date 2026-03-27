@@ -28,7 +28,7 @@ func main() {
 	port := config.EnvOr("PORT", "8082")
 	dbURL := config.DatabaseURL()
 	redisURL := config.MustEnv("REDIS_URL")
-	natsURL := config.EnvOr("NATS_URL", "nats://localhost:4222")
+	natsURL := config.EnvOr("NATS_URL", config.EnvOr("ORBIT_NATS_URL", "nats://localhost:4222"))
 
 	// PostgreSQL
 	ctx := context.Background()
