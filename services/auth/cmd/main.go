@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -26,16 +25,8 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8081")
-	dbURL := config.DatabaseURL()
-	// Log resulting DSN with masked password
-	dsnLog := dbURL
-	if i := strings.Index(dsnLog, "password='"); i >= 0 {
-		end := strings.Index(dsnLog[i+10:], "'")
-		if end >= 0 {
-			dsnLog = dsnLog[:i] + "password='<REDACTED>'" + dsnLog[i+10+end+1:]
-		}
-	}
-	slog.Info("database dsn", "dsn", dsnLog)
+	dbDSN, dbPassword := config.DatabaseDSN()
+	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
 	accessTTL := config.EnvDurationOr("JWT_ACCESS_TTL", 15*time.Minute)
@@ -50,9 +41,15 @@ func main() {
 		FrontendURL:   config.EnvOr("FRONTEND_URL", "http://localhost:3000"),
 	}
 
-	// PostgreSQL
+	// PostgreSQL — set password programmatically to avoid DSN escaping issues
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbURL)
+	poolCfg, err := pgxpool.ParseConfig(dbDSN)
+	if err != nil {
+		slog.Error("failed to parse database config", "error", err)
+		os.Exit(1)
+	}
+	poolCfg.ConnConfig.Password = dbPassword
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)

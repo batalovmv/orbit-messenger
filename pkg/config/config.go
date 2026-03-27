@@ -39,11 +39,10 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
-// DatabaseURL returns a pgx keyword=value DSN.
-// If DATABASE_URL is set (postgres:// URL from Saturn), it is parsed manually
-// and converted to DSN format. Saturn may inject passwords with special chars
-// ([], \, ?, ^, |) without URL-encoding, which breaks Go's url.Parse.
-func DatabaseURL() string {
+// DatabaseDSN returns a keyword=value DSN (without password) and the raw password separately.
+// The password is returned separately so callers can set it programmatically on pgx config,
+// avoiding all DSN escaping issues with special characters.
+func DatabaseDSN() (dsn string, password string) {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		return parsePostgresURL(v)
 	}
@@ -53,19 +52,17 @@ func DatabaseURL() string {
 	pass := os.Getenv("DB_PASSWORD")
 	name := EnvOr("DB_NAME", "postgres")
 	sslmode := EnvOr("DB_SSLMODE", "disable")
-	if pass == "" {
-		return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
-	}
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
+	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
+	return dsn, pass
 }
 
-// parsePostgresURL manually parses postgres://user:pass@host:port/dbname
-// into a keyword=value DSN. Does NOT use url.Parse because Saturn injects
-// raw passwords with chars that break standard URL parsing ([], \, ?, ^, |).
+// parsePostgresURL manually parses postgres://user:pass@host:port/dbname.
+// Returns DSN without password, and the raw decoded password separately.
 //
-// Format: postgres://USER:PASSWORD@HOST:PORT/DBNAME
-// The password runs from the first ":" after "://" to the LAST "@" before host.
-func parsePostgresURL(raw string) string {
+// Manual parsing is required because Saturn injects passwords with special chars
+// ([], \, ?, ^, |) that may or may not be URL-encoded, breaking Go's url.Parse.
+// Strategy: split on last "@" for host, first ":" in userinfo for user:pass.
+func parsePostgresURL(raw string) (dsn string, password string) {
 	// Strip scheme
 	s := raw
 	for _, prefix := range []string{"postgres://", "postgresql://"} {
@@ -78,7 +75,7 @@ func parsePostgresURL(raw string) string {
 	// Find the last "@" — everything before is userinfo, after is host/db
 	atIdx := strings.LastIndex(s, "@")
 	if atIdx < 0 {
-		return raw // malformed, let pgx try
+		return raw, "" // malformed, let pgx try
 	}
 	userinfo := s[:atIdx]
 	hostpath := s[atIdx+1:]
@@ -92,7 +89,7 @@ func parsePostgresURL(raw string) string {
 		user = userinfo
 	}
 
-	// URL-decode user and password — Saturn may percent-encode special chars
+	// URL-decode user and password — Saturn percent-encodes special chars
 	if decoded, err := url.PathUnescape(user); err == nil {
 		user = decoded
 	}
@@ -101,15 +98,12 @@ func parsePostgresURL(raw string) string {
 	}
 
 	// Parse host:port/dbname from hostpath
-	// Strip query string if present (everything after "?")
-	// But note: password might have had "?" — we already split on last "@" so hostpath is clean
 	host := hostpath
 	dbname := ""
 	if slashIdx := strings.Index(host, "/"); slashIdx >= 0 {
 		dbname = host[slashIdx+1:]
 		host = host[:slashIdx]
 	}
-	// Strip query from dbname
 	if qIdx := strings.Index(dbname, "?"); qIdx >= 0 {
 		dbname = dbname[:qIdx]
 	}
@@ -120,19 +114,8 @@ func parsePostgresURL(raw string) string {
 		host = host[:colonIdx]
 	}
 
-	sslmode := "disable"
-
-	// Build DSN with single-quoted password to handle any special chars
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password='%s' dbname=%s sslmode=%s",
-		host, port, user, escapeDSNValue(pass), dbname, sslmode)
-	return dsn
-}
-
-// escapeDSNValue escapes single quotes and backslashes for libpq DSN values.
-func escapeDSNValue(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `'`, `\'`)
-	return s
+	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable", host, port, user, dbname)
+	return dsn, pass
 }
 
 // NatsURL returns the NATS connection URL.
