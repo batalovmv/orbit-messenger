@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,27 +27,15 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbURL := config.DatabaseURL()
-	// Debug: parse DATABASE_URL to log password hints without exposing it
-	if raw := os.Getenv("DATABASE_URL"); raw != "" {
-		if u, err := url.Parse(raw); err == nil {
-			pass, hasPass := u.User.Password()
-			hint := ""
-			if len(pass) >= 6 {
-				hint = pass[:3] + "..." + pass[len(pass)-3:]
-			}
-			slog.Info("database config",
-				"host", u.Hostname(),
-				"port", u.Port(),
-				"user", u.User.Username(),
-				"dbname", u.Path,
-				"has_password", hasPass,
-				"password_len", len(pass),
-				"password_hint", hint,
-				"raw_url_len", len(raw),
-				"query", u.RawQuery,
-			)
+	// Log resulting DSN with masked password
+	dsnLog := dbURL
+	if i := strings.Index(dsnLog, "password='"); i >= 0 {
+		end := strings.Index(dsnLog[i+10:], "'")
+		if end >= 0 {
+			dsnLog = dsnLog[:i] + "password='<REDACTED>'" + dsnLog[i+10+end+1:]
 		}
 	}
+	slog.Info("database dsn", "dsn", dsnLog)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
 	accessTTL := config.EnvDurationOr("JWT_ACCESS_TTL", 15*time.Minute)

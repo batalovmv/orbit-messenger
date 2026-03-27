@@ -38,22 +38,13 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
-// DatabaseURL returns a connection string for pgx.
-// If DATABASE_URL is set (postgres:// URL from Saturn), returns it directly —
-// pgx v5 natively handles URL parsing and percent-decoding.
-// Otherwise builds a keyword=value DSN from individual DB_* vars.
+// DatabaseURL returns a pgx keyword=value DSN.
+// If DATABASE_URL is set (postgres:// URL from Saturn), it is parsed manually
+// and converted to DSN format. Saturn may inject passwords with special chars
+// ([], \, ?, ^, |) without URL-encoding, which breaks Go's url.Parse.
 func DatabaseURL() string {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
-		// pgx natively parses postgres:// URLs including URL-encoded passwords.
-		// Just ensure sslmode is set for internal Docker networks.
-		if !strings.Contains(v, "sslmode=") {
-			if strings.Contains(v, "?") {
-				v += "&sslmode=disable"
-			} else {
-				v += "?sslmode=disable"
-			}
-		}
-		return v
+		return parsePostgresURL(v)
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
@@ -65,6 +56,74 @@ func DatabaseURL() string {
 		return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
 	}
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
+}
+
+// parsePostgresURL manually parses postgres://user:pass@host:port/dbname
+// into a keyword=value DSN. Does NOT use url.Parse because Saturn injects
+// raw passwords with chars that break standard URL parsing ([], \, ?, ^, |).
+//
+// Format: postgres://USER:PASSWORD@HOST:PORT/DBNAME
+// The password runs from the first ":" after "://" to the LAST "@" before host.
+func parsePostgresURL(raw string) string {
+	// Strip scheme
+	s := raw
+	for _, prefix := range []string{"postgres://", "postgresql://"} {
+		if strings.HasPrefix(s, prefix) {
+			s = s[len(prefix):]
+			break
+		}
+	}
+
+	// Find the last "@" — everything before is userinfo, after is host/db
+	atIdx := strings.LastIndex(s, "@")
+	if atIdx < 0 {
+		return raw // malformed, let pgx try
+	}
+	userinfo := s[:atIdx]
+	hostpath := s[atIdx+1:]
+
+	// Parse user:password from userinfo (split on first ":")
+	var user, pass string
+	if colonIdx := strings.Index(userinfo, ":"); colonIdx >= 0 {
+		user = userinfo[:colonIdx]
+		pass = userinfo[colonIdx+1:]
+	} else {
+		user = userinfo
+	}
+
+	// Parse host:port/dbname from hostpath
+	// Strip query string if present (everything after "?")
+	// But note: password might have had "?" — we already split on last "@" so hostpath is clean
+	host := hostpath
+	dbname := ""
+	if slashIdx := strings.Index(host, "/"); slashIdx >= 0 {
+		dbname = host[slashIdx+1:]
+		host = host[:slashIdx]
+	}
+	// Strip query from dbname
+	if qIdx := strings.Index(dbname, "?"); qIdx >= 0 {
+		dbname = dbname[:qIdx]
+	}
+
+	port := "5432"
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx >= 0 {
+		port = host[colonIdx+1:]
+		host = host[:colonIdx]
+	}
+
+	sslmode := "disable"
+
+	// Build DSN with single-quoted password to handle any special chars
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password='%s' dbname=%s sslmode=%s",
+		host, port, user, escapeDSNValue(pass), dbname, sslmode)
+	return dsn
+}
+
+// escapeDSNValue escapes single quotes and backslashes for libpq DSN values.
+func escapeDSNValue(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	return s
 }
 
 // NatsURL returns the NATS connection URL.
