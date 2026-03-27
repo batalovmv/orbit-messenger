@@ -27,6 +27,12 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8082")
 	dbURL := config.DatabaseURL()
+	// Debug: log masked DATABASE_URL to diagnose auth failures
+	if len(dbURL) > 30 {
+		slog.Info("database URL resolved", "prefix", dbURL[:30]+"...", "len", len(dbURL), "source_env", os.Getenv("DATABASE_URL") != "")
+	} else {
+		slog.Info("database URL resolved", "url", dbURL, "source_env", os.Getenv("DATABASE_URL") != "")
+	}
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 
