@@ -44,7 +44,12 @@ func EnvIntOr(key string, fallback int) int {
 // avoiding all DSN escaping issues with special characters.
 func DatabaseDSN() (dsn string, password string) {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
-		return parsePostgresURL(v)
+		dsn, password = parsePostgresURL(v)
+		// DB_PASSWORD overrides the password from DATABASE_URL if set
+		if override := os.Getenv("DB_PASSWORD"); override != "" {
+			password = override
+		}
+		return dsn, password
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
