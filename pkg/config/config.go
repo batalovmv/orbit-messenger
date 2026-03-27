@@ -63,13 +63,15 @@ func DatabaseURL() string {
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
 }
 
-// NatsURL returns the NATS connection URL, reading ORBIT_NATS_URL or NATS_URL.
-// Saturn generates URLs with http:// protocol, but NATS client requires nats://.
+// NatsURL returns the NATS connection URL.
+// Saturn generates URLs with http:// and port 80, but NATS needs nats:// and port 4222.
 func NatsURL() string {
-	raw := EnvOr("ORBIT_NATS_URL", EnvOr("NATS_URL", "nats://localhost:4222"))
+	raw := EnvOr("NATS_URL", EnvOr("ORBIT_NATS_URL", "nats://localhost:4222"))
 	// Convert http(s):// to nats://
 	raw = strings.Replace(raw, "https://", "nats://", 1)
 	raw = strings.Replace(raw, "http://", "nats://", 1)
+	// Fix Saturn default port 80 → NATS port 4222
+	raw = strings.Replace(raw, ":80", ":4222", 1)
 	// Ensure nats:// prefix
 	if !strings.HasPrefix(raw, "nats://") {
 		raw = "nats://" + raw
