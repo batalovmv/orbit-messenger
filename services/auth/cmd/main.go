@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -26,7 +27,13 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbDSN, dbPassword := config.DatabaseDSN()
-	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
+	// TEMPORARY: log full password hex + raw DATABASE_URL for debugging SASL mismatch
+	slog.Info("database config",
+		"dsn", dbDSN,
+		"password_len", len(dbPassword),
+		"password_hex", fmt.Sprintf("%x", dbPassword),
+		"raw_database_url", os.Getenv("DATABASE_URL"),
+	)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
 	accessTTL := config.EnvDurationOr("JWT_ACCESS_TTL", 15*time.Minute)
