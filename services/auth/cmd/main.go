@@ -26,7 +26,7 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8081")
-	dbDSN, dbPassword := config.DatabaseDSN()
+	dbDSN, dbPassword, dbRawPassword := config.DatabaseDSN()
 	slog.Info("database config",
 		"dsn", dbDSN,
 		"password_len", len(dbPassword),
@@ -55,9 +55,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Try multiple password variants — Saturn may transform the password
+	// during PostgreSQL initialization differently than in DATABASE_URL
 	passwords := []string{dbPassword}
 	if noBS := strings.ReplaceAll(dbPassword, `\`, ""); noBS != dbPassword {
 		passwords = append(passwords, noBS)
+	}
+	if doubleBS := strings.ReplaceAll(dbPassword, `\`, `\\`); doubleBS != dbPassword {
+		passwords = append(passwords, doubleBS)
+	}
+	if dbRawPassword != "" && dbRawPassword != dbPassword {
+		passwords = append(passwords, dbRawPassword)
 	}
 
 	var pool *pgxpool.Pool

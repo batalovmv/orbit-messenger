@@ -27,7 +27,7 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8082")
-	dbDSN, dbPassword := config.DatabaseDSN()
+	dbDSN, dbPassword, dbRawPassword := config.DatabaseDSN()
 	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
@@ -43,6 +43,12 @@ func main() {
 	passwords := []string{dbPassword}
 	if noBS := strings.ReplaceAll(dbPassword, `\`, ""); noBS != dbPassword {
 		passwords = append(passwords, noBS)
+	}
+	if doubleBS := strings.ReplaceAll(dbPassword, `\`, `\\`); doubleBS != dbPassword {
+		passwords = append(passwords, doubleBS)
+	}
+	if dbRawPassword != "" && dbRawPassword != dbPassword {
+		passwords = append(passwords, dbRawPassword)
 	}
 
 	var pool *pgxpool.Pool

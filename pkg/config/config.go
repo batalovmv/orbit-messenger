@@ -42,14 +42,16 @@ func EnvIntOr(key string, fallback int) int {
 // DatabaseDSN returns a keyword=value DSN (without password) and the raw password separately.
 // The password is returned separately so callers can set it programmatically on pgx config,
 // avoiding all DSN escaping issues with special characters.
-func DatabaseDSN() (dsn string, password string) {
+// rawPassword is the URL-encoded password as-is from DATABASE_URL (before decoding).
+func DatabaseDSN() (dsn string, password string, rawPassword string) {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
-		dsn, password = parsePostgresURL(v)
+		dsn, password, rawPassword = parsePostgresURL(v)
 		// DB_PASSWORD overrides the password from DATABASE_URL if set
 		if override := os.Getenv("DB_PASSWORD"); override != "" {
 			password = override
+			rawPassword = override
 		}
-		return dsn, password
+		return dsn, password, rawPassword
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
@@ -58,7 +60,7 @@ func DatabaseDSN() (dsn string, password string) {
 	name := EnvOr("DB_NAME", "postgres")
 	sslmode := EnvOr("DB_SSLMODE", "disable")
 	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
-	return dsn, pass
+	return dsn, pass, pass
 }
 
 // parsePostgresURL manually parses postgres://user:pass@host:port/dbname.
@@ -67,7 +69,7 @@ func DatabaseDSN() (dsn string, password string) {
 // Manual parsing is required because Saturn injects passwords with special chars
 // ([], \, ?, ^, |) that may or may not be URL-encoded, breaking Go's url.Parse.
 // Strategy: split on last "@" for host, first ":" in userinfo for user:pass.
-func parsePostgresURL(raw string) (dsn string, password string) {
+func parsePostgresURL(raw string) (dsn string, password string, rawPassword string) {
 	// Strip scheme
 	s := raw
 	for _, prefix := range []string{"postgres://", "postgresql://"} {
@@ -80,7 +82,7 @@ func parsePostgresURL(raw string) (dsn string, password string) {
 	// Find the last "@" — everything before is userinfo, after is host/db
 	atIdx := strings.LastIndex(s, "@")
 	if atIdx < 0 {
-		return raw, "" // malformed, let pgx try
+		return raw, "", "" // malformed, let pgx try
 	}
 	userinfo := s[:atIdx]
 	hostpath := s[atIdx+1:]
@@ -93,6 +95,9 @@ func parsePostgresURL(raw string) (dsn string, password string) {
 	} else {
 		user = userinfo
 	}
+
+	// Keep raw (URL-encoded) password before decoding
+	rawPass := pass
 
 	// URL-decode user and password — Saturn percent-encodes special chars
 	if decoded, err := url.PathUnescape(user); err == nil {
@@ -120,7 +125,7 @@ func parsePostgresURL(raw string) (dsn string, password string) {
 	}
 
 	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable", host, port, user, dbname)
-	return dsn, pass
+	return dsn, pass, rawPass
 }
 
 // NatsURL returns the NATS connection URL.
