@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,24 +32,43 @@ func main() {
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 
-	// PostgreSQL — set password programmatically to avoid DSN escaping issues
+	// PostgreSQL — try password as-is first, then without backslashes
 	ctx := context.Background()
 	poolCfg, err := pgxpool.ParseConfig(dbDSN)
 	if err != nil {
 		slog.Error("failed to parse database config", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.ConnConfig.Password = dbPassword
-	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+
+	passwords := []string{dbPassword}
+	if noBS := strings.ReplaceAll(dbPassword, `\`, ""); noBS != dbPassword {
+		passwords = append(passwords, noBS)
+	}
+
+	var pool *pgxpool.Pool
+	for i, pass := range passwords {
+		poolCfg.ConnConfig.Password = pass
+		pool, err = pgxpool.NewWithConfig(ctx, poolCfg)
+		if err != nil {
+			slog.Warn("failed to create pool", "attempt", i, "error", err)
+			continue
+		}
+		if err = pool.Ping(ctx); err != nil {
+			pool.Close()
+			slog.Warn("failed to ping database", "attempt", i, "password_len", len(pass), "error", err)
+			continue
+		}
+		if i > 0 {
+			slog.Info("connected with fallback password (backslash stripped)", "password_len", len(pass))
+		}
+		slog.Info("database connected successfully")
+		break
+	}
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
+		slog.Error("all database connection attempts failed")
 		os.Exit(1)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
-		slog.Error("failed to ping database", "error", err)
-		os.Exit(1)
-	}
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)

@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,13 +28,9 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbDSN, dbPassword := config.DatabaseDSN()
-	// TEMPORARY: log base64-encoded DATABASE_URL to bypass Saturn log redaction
-	rawURL := os.Getenv("DATABASE_URL")
 	slog.Info("database config",
 		"dsn", dbDSN,
 		"password_len", len(dbPassword),
-		"password_hex", fmt.Sprintf("%x", dbPassword),
-		"url_b64", base64.StdEncoding.EncodeToString([]byte(rawURL)),
 	)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
@@ -50,24 +46,45 @@ func main() {
 		FrontendURL:   config.EnvOr("FRONTEND_URL", "http://localhost:3000"),
 	}
 
-	// PostgreSQL — set password programmatically to avoid DSN escaping issues
+	// PostgreSQL — try password as-is first, then without backslashes
+	// Saturn may strip backslashes from POSTGRES_PASSWORD env var during DB init,
+	// but preserves %5C in DATABASE_URL (URL-encoded), causing a mismatch.
 	ctx := context.Background()
 	poolCfg, err := pgxpool.ParseConfig(dbDSN)
 	if err != nil {
 		slog.Error("failed to parse database config", "error", err)
 		os.Exit(1)
 	}
-	poolCfg.ConnConfig.Password = dbPassword
-	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+
+	passwords := []string{dbPassword}
+	if noBS := strings.ReplaceAll(dbPassword, `\`, ""); noBS != dbPassword {
+		passwords = append(passwords, noBS)
+	}
+
+	var pool *pgxpool.Pool
+	for i, pass := range passwords {
+		poolCfg.ConnConfig.Password = pass
+		pool, err = pgxpool.NewWithConfig(ctx, poolCfg)
+		if err != nil {
+			slog.Warn("failed to create pool", "attempt", i, "error", err)
+			continue
+		}
+		if err = pool.Ping(ctx); err != nil {
+			pool.Close()
+			slog.Warn("failed to ping database", "attempt", i, "password_len", len(pass), "error", err)
+			continue
+		}
+		if i > 0 {
+			slog.Info("connected with fallback password (backslash stripped)", "password_len", len(pass))
+		}
+		slog.Info("database connected successfully")
+		break
+	}
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
+		slog.Error("all database connection attempts failed")
 		os.Exit(1)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
-		slog.Error("failed to ping database", "error", err)
-		os.Exit(1)
-	}
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)
