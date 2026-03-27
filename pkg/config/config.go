@@ -83,11 +83,42 @@ func postgresURLToDSN(raw string) string {
 		sslmode = "disable"
 	}
 
-	dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, dbname, sslmode)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
+		dsnQuote(host), port, dsnQuote(user), dsnQuote(dbname), sslmode)
 	if pass != "" {
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, dbname, sslmode)
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			dsnQuote(host), port, dsnQuote(user), dsnQuote(pass), dsnQuote(dbname), sslmode)
 	}
 	return dsn
+}
+
+// dsnQuote wraps a value in single quotes for libpq DSN format if it contains
+// special characters (spaces, quotes, backslashes, equals, etc.).
+// Inside quotes, backslashes and single quotes are escaped with a backslash.
+func dsnQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	needsQuote := false
+	for _, c := range s {
+		if c == ' ' || c == '\'' || c == '\\' || c == '=' || c == '#' || c == '@' {
+			needsQuote = true
+			break
+		}
+	}
+	if !needsQuote {
+		return s
+	}
+	var b strings.Builder
+	b.WriteByte('\'')
+	for _, c := range s {
+		if c == '\'' || c == '\\' {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(c)
+	}
+	b.WriteByte('\'')
+	return b.String()
 }
 
 // NatsURL returns the NATS connection URL.
