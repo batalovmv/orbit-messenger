@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -38,18 +39,13 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
-// DatabaseURL returns DATABASE_URL if set, otherwise builds it from DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.
+// DatabaseURL returns a pgx-compatible DSN string.
+// If DATABASE_URL is set (typically a postgres:// URL), it parses it and converts
+// to keyword=value DSN format. This correctly handles URL-encoded passwords with
+// special characters (@, #, %, etc.) that break pgx URL parsing.
 func DatabaseURL() string {
-	if v := os.Getenv("DATABASE_URL"); v != "" {
-		// Ensure sslmode=disable for internal Docker networks
-		if !strings.Contains(v, "sslmode=") {
-			if strings.Contains(v, "?") {
-				v += "&sslmode=disable"
-			} else {
-				v += "?sslmode=disable"
-			}
-		}
-		return v
+	if raw := os.Getenv("DATABASE_URL"); raw != "" {
+		return postgresURLToDSN(raw)
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
@@ -61,6 +57,37 @@ func DatabaseURL() string {
 		return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
 	}
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
+}
+
+// postgresURLToDSN converts a postgres:// URL to keyword=value DSN format.
+// This avoids issues with URL-encoded special characters in passwords.
+func postgresURLToDSN(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		// Fallback: return as-is and let pgx try
+		return raw
+	}
+
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "5432"
+	}
+	user := u.User.Username()
+	pass, _ := u.User.Password()
+	dbname := strings.TrimPrefix(u.Path, "/")
+
+	// Extract sslmode from query params, default to disable
+	sslmode := u.Query().Get("sslmode")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, dbname, sslmode)
+	if pass != "" {
+		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, dbname, sslmode)
+	}
+	return dsn
 }
 
 // NatsURL returns the NATS connection URL.
