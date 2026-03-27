@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -39,44 +38,18 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
-// DatabaseURL returns a DSN connection string for pgx.
-// Parses DATABASE_URL (URL format) and converts to key=value DSN to avoid URL-encoding issues.
+// DatabaseURL returns DATABASE_URL if set, otherwise builds it from DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME.
 func DatabaseURL() string {
-	raw := os.Getenv("DATABASE_URL")
-	if raw != "" {
-		// Parse URL format: postgresql://user:pass@host:port/dbname
-		u, err := url.Parse(raw)
-		if err == nil && u.Host != "" {
-			host := u.Hostname()
-			port := u.Port()
-			if port == "" {
-				port = "5432"
-			}
-			user := u.User.Username()
-			pass, _ := u.User.Password()
-			dbname := strings.TrimPrefix(u.Path, "/")
-			if dbname == "" {
-				dbname = "postgres"
-			}
-			// Get sslmode from query params, default to disable
-			sslmode := u.Query().Get("sslmode")
-			if sslmode == "" {
-				sslmode = "disable"
-			}
-			if pass == "" {
-				return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, dbname, sslmode)
-			}
-			return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, dbname, sslmode)
-		}
-		// If parse failed, use as-is with sslmode
-		if !strings.Contains(raw, "sslmode=") {
-			if strings.Contains(raw, "?") {
-				raw += "&sslmode=disable"
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		// Ensure sslmode=disable for internal Docker networks
+		if !strings.Contains(v, "sslmode=") {
+			if strings.Contains(v, "?") {
+				v += "&sslmode=disable"
 			} else {
-				raw += "?sslmode=disable"
+				v += "?sslmode=disable"
 			}
 		}
-		return raw
+		return v
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
