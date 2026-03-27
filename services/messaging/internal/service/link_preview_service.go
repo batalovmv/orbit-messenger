@@ -86,7 +86,7 @@ func (s *LinkPreviewService) FetchPreview(ctx context.Context, rawURL string) (*
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "OrbitBot/1.0 (+https://orbit.mst.com)")
+	req.Header.Set("User-Agent", "OrbitBot/1.0")
 	req.Header.Set("Accept", "text/html")
 
 	resp, err := s.client.Do(req)

@@ -3,6 +3,7 @@ package response
 import (
 	"errors"
 	"log/slog"
+	"reflect"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -26,7 +27,12 @@ func Error(c *fiber.Ctx, err error) error {
 }
 
 // Paginated sends a paginated JSON response.
+// Ensures data is always a JSON array (never null) for frontend compatibility.
 func Paginated(c *fiber.Ctx, data interface{}, cursor string, hasMore bool) error {
+	// nil slices serialize as null in JSON; force empty array instead
+	if data == nil || (reflect.TypeOf(data).Kind() == reflect.Slice && reflect.ValueOf(data).IsNil()) {
+		data = []struct{}{}
+	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"data":     data,
 		"cursor":   cursor,

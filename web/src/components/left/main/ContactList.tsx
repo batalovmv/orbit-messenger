@@ -8,6 +8,8 @@ import { StoryViewerOrigin } from '../../../types';
 import { sortUserIds } from '../../../global/helpers';
 import { filterPeersByQuery } from '../../../global/helpers/peers';
 
+import { callApi } from '../../../api/gramjs';
+
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
@@ -52,8 +54,12 @@ const ContactList: FC<OwnProps & StateProps> = ({
     onBack: onReset,
   });
 
-  const handleClick = useCallback((id: string) => {
-    openChat({ id, shouldReplaceHistory: true });
+  const handleClick = useCallback(async (id: string) => {
+    // In Saturn, user ID != chat ID. Create/get DM chat first, then open it.
+    const result = await callApi('createDirectChat', { userId: id });
+    if (result) {
+      openChat({ id: result.chat.id, shouldReplaceHistory: true });
+    }
   }, [openChat]);
 
   const listIds = useMemo(() => {

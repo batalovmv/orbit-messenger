@@ -13,6 +13,8 @@ import {
 } from '../../../global/selectors';
 import { convertCurrencyFromBaseUnit } from '../../../util/formatCurrency';
 
+import { request } from '../../../api/saturn/client';
+
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -57,6 +59,7 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     openGiftRecipientPicker,
     openStarsBalanceModal,
     openSettingsScreen,
+    showNotification,
   } = getActions();
 
   const [isSupportDialogOpen, openSupportDialog, closeSupportDialog] = useFlag(false);
@@ -77,6 +80,19 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
   const handleOpenSupport = useLastCallback(() => {
     openSupportChat();
     closeSupportDialog();
+  });
+
+  const handleCreateInvite = useLastCallback(async () => {
+    try {
+      const result = await request<{ id: string; code: string }>('POST', '/auth/invites', {
+        role: 'member',
+        max_uses: 1,
+      });
+      await navigator.clipboard.writeText(result.code);
+      showNotification({ message: `${lang('AdminInviteCreated')}: ${result.code}` });
+    } catch {
+      showNotification({ message: lang('AdminInviteError') });
+    }
   });
 
   return (
@@ -218,6 +234,15 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
             {lang('MenuSendGift')}
           </ListItem>
         )}
+      </div>
+      <div className="settings-main-menu">
+        <ListItem
+          icon="link"
+          narrow
+          onClick={handleCreateInvite}
+        >
+          {lang('AdminCreateInvite')}
+        </ListItem>
       </div>
       <div className="settings-main-menu">
         <ListItem

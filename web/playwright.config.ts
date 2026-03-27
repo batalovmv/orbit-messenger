@@ -34,6 +34,14 @@ const config: PlaywrightTestConfig = {
       name: 'ios',
       use: { ...devices['iPhone X'] },
     },
+    {
+      name: 'mocked-messaging',
+      use: {
+        ...devices['Desktop Chrome'],
+        serviceWorkers: 'block',
+      },
+      testMatch: 'messaging.spec.ts',
+    },
   ],
 };
 export default config;

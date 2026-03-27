@@ -215,9 +215,10 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
   const listedIds = selectListedIds(global, chatId, threadId);
 
   if (!viewportIds || !viewportIds.length || direction === LoadMoreDirection.Around) {
-    const offsetId = !forceLastSlice ? (
-      selectFocusedMessageId(global, chatId, tabId) || selectRealLastReadId(global, chatId, threadId)
-    ) : undefined;
+    const focusedId = selectFocusedMessageId(global, chatId, tabId);
+    const lastReadId = selectRealLastReadId(global, chatId, threadId);
+    const offsetId = !forceLastSlice ? (focusedId || lastReadId) : undefined;
+
     const isOutlying = Boolean(offsetId && listedIds && !listedIds.includes(offsetId));
     const historyIds = (isOutlying
       ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId!)
@@ -1777,16 +1778,25 @@ async function loadViewportMessages<T extends GlobalState>(
   const isSavedDialog = getIsSavedDialog(chatId, threadId, currentUserId);
   const realChatId = isSavedDialog ? String(threadId) : chatId;
 
-  const result = await callApi('fetchMessages', {
-    chat: selectChat(global, realChatId)!,
-    offsetId,
-    addOffset,
-    limit: sliceSize,
-    threadId,
-    isSavedDialog,
-  });
+  const chatForApi = selectChat(global, realChatId);
+
+  let result;
+  try {
+    result = await callApi('fetchMessages', {
+      chat: chatForApi!,
+      offsetId,
+      addOffset,
+      limit: sliceSize,
+      threadId,
+      isSavedDialog,
+    });
+  } catch (err) {
+    onLoaded?.();
+    return;
+  }
 
   if (!result) {
+    onLoaded?.();
     return;
   }
 
@@ -1815,6 +1825,19 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   global = addChatMessagesById(global, chatId, byId);
+
+  // Ensure thread entry exists — Saturn API doesn't provide threadInfo like MTProto,
+  // so threadsById[threadId] may be missing, causing updateListedIds to silently no-op
+  if (!selectThreadInfo(global, chatId, threadId)) {
+    global = updateThreadInfo(global, {
+      chatId,
+      threadId,
+      isCommentsInfo: false,
+      messagesCount: count,
+      lastMessageId: ids.length ? ids[ids.length - 1] : undefined,
+    } as ApiThreadInfo);
+  }
+
   global = isOutlying
     ? updateOutlyingLists(global, chatId, threadId, ids)
     : updateListedIds(global, chatId, threadId, ids);

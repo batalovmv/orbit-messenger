@@ -32,8 +32,11 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   return {
     id: msg.sequence_number,
     chatId: msg.chat_id,
+    // Store Saturn UUID so delete/pin/edit work even after page reload (UUID map is in-memory only)
+    saturnId: msg.id,
     date: Math.floor(new Date(msg.created_at).getTime() / 1000),
     isOutgoing: false, // Will be set by caller based on current user
+    sendingState: undefined, // Server-confirmed message — clear pending state
     senderId: msg.sender_id || undefined,
     content: {
       text: msg.content ? {
@@ -64,7 +67,7 @@ function buildReplyInfo(msg: SaturnMessage) {
 
   return {
     type: 'message' as const,
-    replyMessageId: replySeqNum,
+    replyToMsgId: replySeqNum,
   };
 }
 

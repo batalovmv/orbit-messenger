@@ -525,6 +525,7 @@ export interface LangPair {
   'AttachGame': undefined;
   'JumpToDate': undefined;
   'FloodWait': undefined;
+  'Cache.ClearProgress': undefined;
   'PasscodeWrong': undefined;
   'PasscodeEnterPasscodePlaceholder': undefined;
   'MobileHidden': undefined;
@@ -2002,6 +2003,10 @@ export interface LangPair {
   'GiftPreviewToggleRegularModels': undefined;
   'AriaGiftPreviewPlay': undefined;
   'AriaGiftPreviewStop': undefined;
+  'RegistrationJoinWith': undefined;
+  'AdminCreateInvite': undefined;
+  'AdminInviteCreated': undefined;
+  'AdminInviteError': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

@@ -106,7 +106,7 @@ export function selectCurrentMessageList<T extends GlobalState>(
 ) {
   const { messageLists } = selectTabState(global, tabId);
 
-  if (messageLists.length) {
+  if (messageLists?.length) {
     return messageLists[messageLists.length - 1];
   }
 
@@ -248,7 +248,10 @@ export function selectIsViewportNewest<T extends GlobalState>(
     return true;
   }
 
-  return viewportIds[viewportIds.length - 1] >= lastMessageId;
+  const lastViewportId = viewportIds[viewportIds.length - 1];
+  const isNewest = lastViewportId >= lastMessageId;
+
+  return isNewest;
 }
 
 export function selectChatMessage<T extends GlobalState>(global: T, chatId: string, messageId: number) {

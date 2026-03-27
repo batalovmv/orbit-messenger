@@ -26,6 +26,7 @@ import {
 import { updateTabState } from '../../reducers/tabs';
 import {
   replaceThreadLocalStateParam,
+  updateMainThreadReadStates,
   updateThreadInfo,
   updateThreadLocalState,
   updateThreadReadState,
@@ -101,6 +102,22 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
             },
           },
         };
+
+        // Populate read states so selectRealLastReadId returns correct offsetId
+        if (result.threadReadStatesById) {
+          global = updateMainThreadReadStates(global, result.threadReadStatesById);
+        }
+
+        // Store last messages so chat list shows previews
+        if (result.messages?.length) {
+          const byId = buildCollectionByKey(result.messages, 'id');
+          for (const chatId of result.chatIds) {
+            const lastMsgId = result.lastMessageByChatId[chatId];
+            if (lastMsgId && byId[lastMsgId]) {
+              global = addChatMessagesById(global, chatId, { [lastMsgId]: byId[lastMsgId] });
+            }
+          }
+        }
       }
 
       global = {

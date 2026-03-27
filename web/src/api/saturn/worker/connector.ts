@@ -10,13 +10,17 @@ import { initApi as initMethods, callApi as callMethod, cancelApiProgress as can
 
 let updateCallback: OnApiUpdate | undefined;
 let isInited = false;
+let initPromise: Promise<void> | undefined;
 let apiRequestsQueue: { fnName: any; args: any; deferred: Deferred<any> }[] = [];
 
 export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
+  if (isInited) return Promise.resolve();
+
   updateCallback = onUpdate;
 
-  return initMethods(onUpdate, initialArgs).then(() => {
+  initPromise = initMethods(onUpdate, initialArgs).then(() => {
     isInited = true;
+    initPromise = undefined;
 
     apiRequestsQueue.forEach((request) => {
       callApi(request.fnName, ...request.args)
@@ -24,7 +28,11 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
         .catch(request.deferred.reject);
     });
     apiRequestsQueue = [];
+  }).catch(() => {
+    initPromise = undefined;
   });
+
+  return initPromise;
 }
 
 type EnsurePromise<T> = Promise<Awaited<T>>;
@@ -35,6 +43,11 @@ export function callApi<T extends keyof Methods>(
 export function callApi(fnName: string, ...args: any[]): Promise<any>;
 export function callApi(fnName: string, ...args: any[]): Promise<any> {
   if (!isInited) {
+    // If initApi is in progress, wait for it then execute
+    if (initPromise) {
+      return initPromise.then(() => callApi(fnName, ...args));
+    }
+    // Queue until initApi is called
     const deferred = new Deferred();
     apiRequestsQueue.push({ fnName, args, deferred });
     return deferred.promise;

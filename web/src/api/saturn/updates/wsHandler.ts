@@ -54,6 +54,10 @@ function handleWsMessage(msg: SaturnWsMessage) {
     case 'stop_typing':
       handleStopTyping(msg.data as Record<string, unknown>);
       break;
+    case 'message_pinned':
+    case 'message_unpinned':
+      handleMessagePinChanged(msg.data as Record<string, unknown>);
+      break;
     case 'user_status':
       handleUserStatus(msg.data as Record<string, unknown>);
       break;
@@ -119,13 +123,40 @@ function handleMessageUpdated(data: SaturnMessage) {
   });
 }
 
-function handleMessageDeleted(data: SaturnMessage) {
-  const apiMsg = buildApiMessage(data);
+function handleMessageDeleted(data: Record<string, unknown>) {
+  const chatId = data.chat_id as string;
+  const seqNum = data.sequence_number as number | undefined;
+
+  if (!seqNum || !chatId) return;
 
   sendApiUpdate({
     '@type': 'deleteMessages',
-    ids: [apiMsg.id],
-    chatId: data.chat_id,
+    ids: [seqNum],
+    chatId,
+  });
+}
+
+function handleMessagePinChanged(data: Record<string, unknown>) {
+  const chatId = data.chat_id as string;
+  const seqNum = data.sequence_number as number | undefined;
+  const isPinned = data.is_pinned as boolean;
+
+  if (!seqNum || !chatId) return;
+
+  sendApiUpdate({
+    '@type': 'updateMessage',
+    chatId,
+    id: seqNum,
+    isFull: false,
+    message: { isPinned },
+  });
+
+  // Also update pinned message IDs list
+  sendApiUpdate({
+    '@type': 'updatePinnedIds',
+    chatId,
+    isPinned,
+    messageIds: [seqNum],
   });
 }
 

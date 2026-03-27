@@ -2731,3 +2731,6 @@
 "AriaGiftPreviewPlay" = "Play random previews";
 "AriaGiftPreviewStop" = "Pause random previews";
 "RegistrationJoinWith" = "Register with invite code";
+"AdminCreateInvite" = "Create Invite Code";
+"AdminInviteCreated" = "Invite code copied to clipboard";
+"AdminInviteError" = "Failed to create invite (admin only)";

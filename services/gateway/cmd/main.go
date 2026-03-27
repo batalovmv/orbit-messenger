@@ -95,7 +95,7 @@ func main() {
 	// WebSocket endpoint — auth happens via first "auth" frame after connection,
 	// NOT via query param (tokens must not appear in URLs per TZ §8.1)
 	wsRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 10, KeyPrefix: "ws",
+		Redis: rdb, MaxPerMin: 60, KeyPrefix: "ws",
 	})
 	app.Use("/api/v1/ws", wsRateLimit, func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
@@ -112,6 +112,7 @@ func main() {
 	handler.SetupProxy(app, authGroup, apiGroup, handler.ProxyConfig{
 		AuthServiceURL:      authServiceURL,
 		MessagingServiceURL: messagingServiceURL,
+		FrontendURL:         frontendURL,
 	})
 
 	// Graceful shutdown

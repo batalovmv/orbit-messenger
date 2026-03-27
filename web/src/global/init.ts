@@ -44,10 +44,11 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     };
   }
 
+  // Remove stale tab entries from previous sessions. Only keep the current tab —
+  // other live tabs will re-register themselves via BroadcastChannel.
   global = {
     ...global,
     byTabId: {
-      ...global.byTabId,
       [tabId]: initialTabState,
     },
   };
@@ -60,13 +61,15 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     initSharedState(global.sharedState);
   }
 
-  Object.keys(global.messages.byChatId).forEach((chatId) => {
-    const threadsById = global.messages.byChatId[chatId].threadsById;
+  const byChatId = global.messages?.byChatId || {};
+  Object.keys(byChatId).forEach((chatId) => {
+    const threadsById = byChatId[chatId]?.threadsById;
+    if (!threadsById) return;
     Object.keys(threadsById).forEach((thread) => {
       const threadId = Number(thread);
       const lastViewportIds = selectThreadLocalStateParam(global, chatId, threadId, 'lastViewportIds');
       // Check if migration from previous version is faulty
-      if (!lastViewportIds?.every((id) => isLocalMessageId(id) || global.messages.byChatId[chatId]?.byId[id])) {
+      if (!lastViewportIds?.every((id) => isLocalMessageId(id) || byChatId[chatId]?.byId[id])) {
         global = replaceThreadLocalStateParam(global, chatId, threadId, 'lastViewportIds', undefined);
         return;
       }
@@ -83,8 +86,9 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
   });
 
   // Temporary state fix
-  Object.keys(global.messages.byChatId).forEach((chatId) => {
-    const threadsById = global.messages.byChatId[chatId].threadsById;
+  Object.keys(byChatId).forEach((chatId) => {
+    const threadsById = byChatId[chatId]?.threadsById;
+    if (!threadsById) return;
     const fixedThreadsById = Object.keys(threadsById).reduce((acc, key) => {
       const t = threadsById[key];
       if (!t.localState?.lastViewportIds) {

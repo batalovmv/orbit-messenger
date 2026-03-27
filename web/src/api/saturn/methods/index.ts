@@ -85,7 +85,9 @@ export function fetchCountryList() {
   return Promise.resolve(undefined);
 }
 
-export function fetchContactList(): Promise<{ users: ApiUser[]; userStatusesById: Record<string, ApiUserStatus> } | undefined> {
+export { fetchContactList } from './users';
+
+export function fetchSponsoredPeer() {
   return Promise.resolve(undefined);
 }
 
@@ -181,8 +183,20 @@ export function fetchSavedReactionTags() {
   return Promise.resolve(undefined);
 }
 
-export function fetchChat() {
-  return Promise.resolve(undefined);
+export async function fetchChat({ type, user }: { type?: string; user?: { id: string } } = {}) {
+  // When opening a DM with a user, create/get the direct chat
+  if (type === 'user' && user) {
+    try {
+      const { createDirectChat: createDM } = await import('./chats');
+      const result = await createDM({ userId: user.id });
+      if (result) {
+        return { chat: result.chat };
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return undefined;
 }
 
 export function fetchMessage() {
@@ -315,7 +329,7 @@ export {
 } from './auth';
 
 export {
-  fetchCurrentUser, fetchGlobalUsers, fetchUser, searchUsers, updateProfile,
+  fetchCurrentUser, fetchGlobalUsers, fetchUser, searchChats, searchUsers, updateProfile,
 } from './users';
 
 export {
@@ -329,4 +343,4 @@ export {
 } from './messages';
 
 export { fetchDifference } from './sync';
-export { fetchLangPack, fetchLangStrings, fetchLanguages } from './settings';
+export { fetchLangPack, fetchLangStrings, fetchLanguages, oldFetchLangPack } from './settings';

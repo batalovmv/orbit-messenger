@@ -6,39 +6,73 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/valyala/fasthttp"
 )
 
 type ProxyConfig struct {
 	AuthServiceURL      string
 	MessagingServiceURL string
+	FrontendURL         string
 }
 
-// saveCORSHeaders captures CORS headers set by the global CORS middleware
-// before the proxy overwrites all response headers with upstream's response.
-func saveCORSHeaders(c *fiber.Ctx) map[string]string {
-	saved := make(map[string]string)
-	for _, key := range []string{
-		"Access-Control-Allow-Origin",
-		"Access-Control-Allow-Credentials",
-		"Access-Control-Allow-Methods",
-		"Access-Control-Allow-Headers",
-		"Access-Control-Max-Age",
-		"Vary",
-	} {
-		if v := c.GetRespHeader(key); v != "" {
-			saved[key] = v
+// doProxy performs a manual reverse proxy: sends request to upstream, copies
+// status + body + safe headers back, then sets CORS headers from gateway config.
+// This avoids proxy.DoRedirects which overwrites the entire fasthttp raw response
+// buffer, making it impossible to reliably set CORS headers afterwards.
+func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL string) error {
+	// Build upstream request
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// Copy method, headers, body from original request
+	req.SetRequestURI(url)
+	req.Header.SetMethod(c.Method())
+	c.Request().Header.VisitAll(func(key, value []byte) {
+		k := string(key)
+		// Skip hop-by-hop headers
+		switch strings.ToLower(k) {
+		case "connection", "keep-alive", "transfer-encoding", "te",
+			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate":
+			return
 		}
+		req.Header.SetBytesKV(key, value)
+	})
+	// Forward request body
+	if body := c.Body(); len(body) > 0 {
+		req.SetBody(body)
 	}
-	return saved
-}
 
-// restoreCORSHeaders re-applies CORS headers after the proxy call.
-func restoreCORSHeaders(c *fiber.Ctx, saved map[string]string) {
-	for key, value := range saved {
-		c.Set(key, value)
+	// Execute request to upstream
+	if err := client.Do(req, resp); err != nil {
+		return err
 	}
+
+	// Copy status code
+	c.Status(resp.StatusCode())
+
+	// Copy safe response headers from upstream (content-related only)
+	resp.Header.VisitAll(func(key, value []byte) {
+		k := strings.ToLower(string(key))
+		switch k {
+		case "content-type", "content-disposition", "content-encoding",
+			"cache-control", "etag", "last-modified", "x-request-id",
+			"set-cookie":
+			c.Response().Header.AddBytesKV(key, value)
+		}
+		// Skip CORS headers from upstream — gateway owns CORS
+	})
+
+	// Set CORS headers from gateway config
+	c.Set("Access-Control-Allow-Origin", frontendURL)
+	c.Set("Access-Control-Allow-Credentials", "true")
+	c.Set("Vary", "Origin")
+
+	// Copy response body
+	c.Response().SetBody(resp.Body())
+
+	return nil
 }
 
 // SetupProxy configures reverse proxy routes.
@@ -63,14 +97,12 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
-		cors := saveCORSHeaders(c)
-		if err := proxy.DoRedirects(c, url, 0, authClient); err != nil {
+		if err := doProxy(c, url, authClient, cfg.FrontendURL); err != nil {
 			slog.Error("auth proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
 			})
 		}
-		restoreCORSHeaders(c, cors)
 		return nil
 	})
 
@@ -85,14 +117,12 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
-		cors := saveCORSHeaders(c)
-		if err := proxy.DoRedirects(c, url, 0, msgClient); err != nil {
+		if err := doProxy(c, url, msgClient, cfg.FrontendURL); err != nil {
 			slog.Error("messaging proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
 			})
 		}
-		restoreCORSHeaders(c, cors)
 		return nil
 	})
 }

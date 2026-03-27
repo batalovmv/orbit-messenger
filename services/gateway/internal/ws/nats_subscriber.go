@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -35,6 +36,8 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.message.new",
 		"orbit.chat.*.message.updated",
 		"orbit.chat.*.message.deleted",
+		"orbit.chat.*.message.message_pinned",
+		"orbit.chat.*.message.message_unpinned",
 		"orbit.chat.*.messages.read",
 		"orbit.chat.*.typing",
 		"orbit.user.*.status",
@@ -66,14 +69,38 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
+	slog.Debug("nats: received event", "event", event.Event, "subject", msg.Subject,
+		"member_ids_count", len(event.MemberIDs), "sender_id", event.SenderID)
+
 	envelope := Envelope{
 		Type: event.Event,
 		Data: event.Data,
 	}
 
-	// Route to specific members (messaging service provides member_ids for chat events)
+	// Route to specific members (messaging service provides member_ids for chat events).
+	// Send to ALL members including the sender — the frontend handles dedup for own messages
+	// via pendingSendUuids. Excluding the sender here would block delivery to their other
+	// tabs/devices (SendToUsers excludes by userID, not by connection).
 	if len(event.MemberIDs) > 0 {
-		s.hub.SendToUsers(event.MemberIDs, envelope, event.SenderID)
+		slog.Info("nats: delivering to members", "event", event.Event,
+			"member_count", len(event.MemberIDs), "online_users", len(s.hub.OnlineUserIDs()))
+		s.hub.SendToUsers(event.MemberIDs, envelope, "")
+		return
+	}
+
+	// Fallback: if member_ids is empty for a message event, extract chat_id from subject
+	// and fetch member IDs from messaging service. Subject format: orbit.chat.<chatID>.message.*
+	if event.Event == EventNewMessage || event.Event == EventMessageUpdated ||
+		event.Event == EventMessageDeleted || event.Event == EventMessagesRead {
+		chatID := extractChatIDFromSubject(msg.Subject)
+		if chatID != "" {
+			slog.Warn("nats: member_ids empty, fetching from messaging service",
+				"event", event.Event, "chat_id", chatID)
+			memberIDs := s.fetchChatMemberIDs(chatID)
+			if len(memberIDs) > 0 {
+				s.hub.SendToUsers(memberIDs, envelope, "")
+			}
+		}
 		return
 	}
 
@@ -105,6 +132,15 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 			}
 		}
 	}
+}
+
+// extractChatIDFromSubject parses chat ID from NATS subject like "orbit.chat.<uuid>.message.new"
+func extractChatIDFromSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) >= 3 && parts[0] == "orbit" && parts[1] == "chat" {
+		return parts[2]
+	}
+	return ""
 }
 
 // fetchChatMemberIDs calls messaging service to get member IDs of a chat.

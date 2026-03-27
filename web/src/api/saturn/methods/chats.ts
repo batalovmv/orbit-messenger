@@ -32,8 +32,12 @@ export async function fetchChats({
   const userStatusesById: Record<string, ApiUserStatus> = {};
   const lastMessageByChatId: Record<string, number> = {};
   const messages: ApiMessage[] = [];
+  // TODO: This is an approximation — assumes contiguous sequence_numbers.
+  // If messages were deleted, lastReadSeq may be off by the number of deletions.
+  // Backend should return last_read_sequence_number directly in the chat list API.
+  const threadReadStatesById: Record<string, { lastReadInboxMessageId: number; unreadCount: number }> = {};
 
-  for (const item of result.data) {
+  for (const item of (result.data || [])) {
     const apiChat = buildApiChat(item);
     apiChats.push(apiChat);
 
@@ -70,6 +74,16 @@ export async function fetchChats({
         id: item.id,
         lastMessage: apiMessage,
       });
+
+      const lastMsgSeq = item.last_message.sequence_number;
+      const lastReadSeq = item.unread_count > 0
+        ? Math.max(lastMsgSeq - item.unread_count, 0)
+        : lastMsgSeq;
+      threadReadStatesById[item.id] = {
+        lastReadInboxMessageId: lastReadSeq,
+        unreadCount: item.unread_count,
+      };
+
     }
   }
 
@@ -87,7 +101,7 @@ export async function fetchChats({
     totalChatCount,
     messages,
     threadInfos: [],
-    threadReadStatesById: {},
+    threadReadStatesById,
     hasMore: result.has_more,
     nextCursor: result.cursor,
   };
@@ -120,9 +134,10 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   });
 
   return {
-    chat: apiChat,
+    chats: [apiChat],
     fullInfo,
     members: membersResult.data.map(buildApiChatMember),
+    userStatusesById: {},
   };
 }
 

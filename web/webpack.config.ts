@@ -1,6 +1,7 @@
 import 'webpack-dev-server';
 import 'dotenv/config';
 
+import WebpackObfuscator from 'webpack-obfuscator';
 import WatchFilePlugin from '@mytonwallet/webpack-watch-file-plugin';
 import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
 import { statSync } from 'fs';
@@ -76,7 +77,7 @@ export default function createConfig(
     target: 'web',
 
     devServer: {
-      port: 1234,
+      port: 3000,
       host: '0.0.0.0',
       allowedHosts: 'all',
       hot: false,
@@ -259,6 +260,21 @@ export default function createConfig(
         open: false,
         extensions: [new WebpackContextExtension()],
       }),
+      ...(mode === 'production' ? [new WebpackObfuscator({
+        rotateStringArray: true,
+        stringArray: true,
+        stringArrayThreshold: 0.75,
+        stringArrayEncoding: ['base64'],
+        splitStrings: true,
+        splitStringsChunkLength: 10,
+        identifierNamesGenerator: 'hexadecimal',
+        renameGlobals: false,
+        selfDefending: true,
+        debugProtection: false,
+        disableConsoleOutput: true,
+        transformObjectKeys: true,
+        unicodeEscapeSequence: false,
+      }, ['**/vendor/**', '**/node_modules/**'])] : []),
       new WatchFilePlugin({
         rules: [
           {
@@ -279,7 +295,7 @@ export default function createConfig(
       }),
     ],
 
-    devtool: 'source-map',
+    devtool: mode === 'production' ? false : 'source-map',
 
     optimization: {
       splitChunks: {

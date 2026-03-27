@@ -94,6 +94,54 @@ export async function fetchGlobalUsers({ limit = 50 }: { limit?: number } = {}) 
   };
 }
 
+// Returns all users as "contacts" — Saturn has no separate contact list
+export async function fetchContactList() {
+  const result = await client.request<{ users: SaturnUser[] }>(
+    'GET', '/users?q=&limit=50',
+  );
+
+  const users = (result.users || []).map(buildApiUser);
+
+  users.forEach((user) => {
+    sendApiUpdate({
+      '@type': 'updateUser',
+      id: user.id,
+      user,
+    });
+  });
+
+  return {
+    users,
+    userStatusesById: Object.fromEntries(
+      (result.users || []).map((u) => [u.id, buildApiUserStatus(u)]),
+    ),
+  };
+}
+
+// Used by globalSearch action — returns user IDs matching the query
+export async function searchChats({ query }: { query: string }) {
+  const result = await client.request<{ users: SaturnUser[] }>(
+    'GET', `/users?q=${encodeURIComponent(query)}&limit=20`,
+  );
+
+  const users = (result.users || []).map(buildApiUser);
+
+  users.forEach((user) => {
+    sendApiUpdate({
+      '@type': 'updateUser',
+      id: user.id,
+      user,
+    });
+  });
+
+  const peerIds = users.map((u) => u.id);
+
+  return {
+    accountResultIds: peerIds,
+    globalResultIds: peerIds,
+  };
+}
+
 export async function updateProfile({
   displayName, bio, phone, avatarUrl,
 }: {

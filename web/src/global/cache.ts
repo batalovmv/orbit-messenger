@@ -51,6 +51,7 @@ import {
 import { getIsMobile } from '../hooks/useAppLayout';
 
 const UPDATE_THROTTLE = 5000;
+const IDB_READ_TIMEOUT = 3000;
 
 const updateCacheThrottled = throttle(() => onFullyIdle(() => updateCache()), UPDATE_THROTTLE, false);
 const updateCacheForced = () => updateCache(true);
@@ -123,7 +124,23 @@ export async function loadCache(initialState: GlobalState): Promise<GlobalState 
     return undefined;
   }
 
-  const cache = await readCache(initialState);
+  const cache = await Promise.race([
+    readCache(initialState),
+    new Promise<undefined>((resolve) => {
+      setTimeout(() => {
+        if (DEBUG) {
+          // eslint-disable-next-line no-console
+          console.warn('Cache read timed out, starting fresh');
+        }
+        resolve(undefined);
+      }, IDB_READ_TIMEOUT);
+    }),
+  ]);
+
+  if (!cache) {
+    clearCaching();
+    return undefined;
+  }
 
   if (cache.passcode.hasPasscode || hasStoredSession()) {
     setupCaching();

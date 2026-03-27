@@ -3,13 +3,24 @@ import type { SaturnMessage, SaturnPaginatedResponse } from '../types';
 
 import { buildApiMessage, buildSaturnEntities, getMessageUuid } from '../apiBuilders/messages';
 import * as client from '../client';
-import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+import { sendApiUpdate, sendImmediateApiUpdate } from '../updates/apiUpdateEmitter';
 import { trackPendingSend } from '../updates/wsHandler';
 
 let currentUserId: string | undefined;
 
 export function setCurrentUserId(userId: string) {
   currentUserId = userId;
+}
+
+// Resolve sequence_number → Saturn UUID, with fallback to global state's saturnId field
+function resolveMessageUuid(chatId: string, seqNum: number): string | undefined {
+  // Try in-memory map first (fast path)
+  const uuid = getMessageUuid(chatId, seqNum);
+  if (uuid) return uuid;
+  // Fallback: look up saturnId from cached ApiMessage in global state
+  const global = (window as any).getGlobal?.();
+  const msg = global?.messages?.byChatId?.[chatId]?.byId?.[seqNum];
+  return msg?.saturnId;
 }
 
 export async function fetchMessages({
@@ -24,7 +35,15 @@ export async function fetchMessages({
   const chatId = chat?.id || chatIdDirect!;
   const params = new URLSearchParams();
   params.set('limit', String(limit));
-  if (cursor) params.set('cursor', cursor);
+  if (cursor) {
+    params.set('cursor', cursor);
+  } else if (offsetId !== undefined) {
+    // cursor returns messages with seq < cursor (DESC order)
+    // Add half the limit as forward buffer so we load messages AROUND offsetId
+    // (both older and newer), not just older ones
+    const forwardBuffer = Math.ceil(limit / 2);
+    params.set('cursor', btoa(String(offsetId + forwardBuffer)));
+  }
 
   const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
     'GET', `/chats/${chatId}/messages?${params.toString()}`,
@@ -74,18 +93,25 @@ export async function fetchMessagesByDate({
   };
 }
 
-let localMessageCounter = -1; // Negative IDs for local/pending messages
+let localMessageCounter = 0;
+const LOCAL_MESSAGES_LIMIT = 1e6; // Must match config.ts — keeps local IDs fractional
 
 export async function sendMessage({
-  chatId, text, entities, replyToId,
+  chat, text, entities, replyInfo, lastMessageId,
 }: {
-  chatId: string;
-  text: string;
+  chat: { id: string };
+  text?: string;
   entities?: ApiMessageEntity[];
-  replyToId?: number;
+  replyInfo?: { replyToMsgId?: number; type?: string };
+  lastMessageId?: number;
 }) {
-  // Create local (optimistic) message
-  const localId = localMessageCounter--;
+  const chatId = chat.id;
+  if (!text) return;
+
+  // Create local (optimistic) message.
+  // ID must be fractional so isLocalMessageId() recognizes it (checks !Number.isInteger).
+  // Format matches TG Web A: lastMessageId + counter/1e6 — sorts after existing messages.
+  const localId = (lastMessageId || Math.floor(Date.now() / 1000)) + (++localMessageCounter / LOCAL_MESSAGES_LIMIT);
   const now = Math.floor(Date.now() / 1000);
 
   const localMessage: ApiMessage = {
@@ -100,13 +126,20 @@ export async function sendMessage({
     sendingState: 'messageSendingStatePending',
   };
 
-  // Dispatch optimistic update
-  sendApiUpdate({
+  // Dispatch optimistic update immediately (not batched) so the local message
+  // renders in its own frame before the HTTP response arrives
+  sendImmediateApiUpdate({
     '@type': 'newMessage',
     chatId,
     id: localId,
     message: localMessage,
   });
+
+  // Yield to browser render loop so the local message with ⏱ appears
+  // before the HTTP call blocks the microtask queue
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+  const replyToId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
 
   try {
     const body: Record<string, unknown> = { content: text };
@@ -114,7 +147,7 @@ export async function sendMessage({
       body.entities = buildSaturnEntities(entities);
     }
     if (replyToId) {
-      const replyUuid = getMessageUuid(chatId, replyToId);
+      const replyUuid = resolveMessageUuid(chatId, replyToId);
       if (replyUuid) body.reply_to_id = replyUuid;
     }
 
@@ -155,7 +188,7 @@ export async function editMessage({
   text: string;
   entities?: ApiMessageEntity[];
 }) {
-  const uuid = getMessageUuid(chatId, messageId);
+  const uuid = resolveMessageUuid(chatId, messageId);
   if (!uuid) return undefined;
 
   const body: Record<string, unknown> = { content: text };
@@ -184,14 +217,19 @@ export async function editMessage({
 }
 
 export async function deleteMessages({
-  chatId, messageIds,
+  chat, messageIds,
 }: {
-  chatId: string;
+  chat: { id: string };
   messageIds: number[];
 }) {
+  const chatId = chat.id;
   const deletePromises = messageIds.map(async (seqNum) => {
-    const uuid = getMessageUuid(chatId, seqNum);
-    if (!uuid) return;
+    const uuid = resolveMessageUuid(chatId, seqNum);
+    if (!uuid) {
+      // eslint-disable-next-line no-console
+      console.warn('[Saturn] deleteMessage: no UUID for', chatId, seqNum);
+      return;
+    }
     await client.request('DELETE', `/messages/${uuid}`);
   });
 
@@ -212,7 +250,7 @@ export async function forwardMessages({
   toChatId: string;
 }) {
   const uuids = messageIds
-    .map((seqNum) => getMessageUuid(fromChatId, seqNum))
+    .map((seqNum) => resolveMessageUuid(fromChatId, seqNum))
     .filter(Boolean) as string[];
 
   if (!uuids.length) return undefined;
@@ -269,30 +307,42 @@ export async function fetchPinnedMessages({ chat, chatId: chatIdDirect }: { chat
 }
 
 export async function pinMessage({
-  chatId, messageId,
+  chat, messageId, isUnpin,
 }: {
-  chatId: string;
+  chat: { id: string };
   messageId: number;
+  isUnpin?: boolean;
 }) {
-  const uuid = getMessageUuid(chatId, messageId);
-  if (!uuid) return;
+  const chatId = chat.id;
+  const uuid = resolveMessageUuid(chatId, messageId);
+  if (!uuid) {
+    // eslint-disable-next-line no-console
+    console.warn('[Saturn] pinMessage: no UUID for', chatId, messageId);
+    return;
+  }
 
-  await client.request('POST', `/chats/${chatId}/pin/${uuid}`);
+  if (isUnpin) {
+    await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
+  } else {
+    await client.request('POST', `/chats/${chatId}/pin/${uuid}`);
+  }
 }
 
 export async function unpinMessage({
-  chatId, messageId,
+  chat, messageId,
 }: {
-  chatId: string;
+  chat: { id: string };
   messageId: number;
 }) {
-  const uuid = getMessageUuid(chatId, messageId);
+  const chatId = chat.id;
+  const uuid = resolveMessageUuid(chatId, messageId);
   if (!uuid) return;
 
   await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
 }
 
-export async function unpinAllMessages({ chatId }: { chatId: string }) {
+export async function unpinAllMessages({ chat }: { chat: { id: string } }) {
+  const chatId = chat.id;
   await client.request('DELETE', `/chats/${chatId}/pin`);
 
   sendApiUpdate({
@@ -303,13 +353,19 @@ export async function unpinAllMessages({ chatId }: { chatId: string }) {
 }
 
 export async function markMessageListRead({
-  chatId, maxId,
+  chat, maxId,
 }: {
-  chatId: string;
+  chat: { id: string };
+  threadId?: number;
   maxId: number;
 }) {
-  const uuid = getMessageUuid(chatId, maxId);
-  if (!uuid) return;
+  const chatId = chat.id;
+  const uuid = resolveMessageUuid(chatId, maxId);
+  if (!uuid) {
+    // eslint-disable-next-line no-console
+    console.warn('[Saturn] markMessageListRead: no UUID for seq', maxId, 'in chat', chatId);
+    return;
+  }
 
   await client.request('PATCH', `/chats/${chatId}/read`, {
     last_read_message_id: uuid,
@@ -336,7 +392,7 @@ export async function fetchMessageLink({
 }) {
   // Saturn doesn't have a message permalink endpoint yet.
   // Return a client-side constructed link for now.
-  const uuid = getMessageUuid(chatId, messageId);
+  const uuid = resolveMessageUuid(chatId, messageId);
   if (!uuid) return undefined;
 
   return { link: `#chat/${chatId}/${uuid}` };

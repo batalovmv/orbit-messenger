@@ -22,6 +22,7 @@ import { setServerTimeOffset } from '../../../util/serverTime';
 import { updateSessionUserId } from '../../../util/sessions';
 import { forceWebsync } from '../../../util/websync';
 import { isChatChannel, isChatSuperGroup } from '../../helpers';
+import { callApi } from '../../../api/saturn';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';
@@ -318,4 +319,7 @@ function onUpdateCurrentUser<T extends GlobalState>(global: T, update: ApiUpdate
   setGlobal(global);
 
   updateSessionUserId(currentUser.id);
+
+  // Propagate current user ID to Saturn API layer for WS dedup and message ownership
+  callApi('setCurrentUser', currentUser.id);
 }

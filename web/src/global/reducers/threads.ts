@@ -87,10 +87,9 @@ export function updateThreadReadState<T extends GlobalState>(
   global: T, chatId: string, threadId: ThreadId, threadUpdate: Partial<ThreadReadState>,
 ): T {
   const currentThread = selectThread(global, chatId, threadId);
-  if (!currentThread) return global;
 
   const updated: ThreadReadState = {
-    ...currentThread.readState,
+    ...currentThread?.readState,
     ...threadUpdate,
   };
 

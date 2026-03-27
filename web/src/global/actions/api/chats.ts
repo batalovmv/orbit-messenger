@@ -252,7 +252,11 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
     } else {
       const user = selectUser(global, id);
       if (user) {
-        void callApi('fetchChat', { type: 'user', user });
+        void callApi('fetchChat', { type: 'user', user }).then((result) => {
+          if (result?.chat) {
+            actions.openChat({ id: result.chat.id, shouldReplaceHistory: true });
+          }
+        });
       }
     }
   } else if (isChatOnlySummary && !chat.isMin) {

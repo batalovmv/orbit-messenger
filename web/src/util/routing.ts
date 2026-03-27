@@ -45,7 +45,10 @@ export function parseLocationHash(currentUserId?: string) {
   } else if (parts.length >= 3) {
     [chatId, threadId, type] = parts;
   }
-  if (!chatId?.match(/^-?\d+$/)) return undefined;
+  // Accept both numeric TG IDs (-?\d+) and Saturn UUIDs ([0-9a-f-]{36})
+  if (!chatId?.match(/^(-?\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i)) {
+    return undefined;
+  }
 
   const isType = ['thread', 'pinned', 'scheduled'].includes(type!);
 

@@ -28,6 +28,7 @@ import {
 } from '../../reducers';
 import { removeUnreadReactions } from '../../reducers/reactions';
 import { updateTabState } from '../../reducers/tabs';
+import { replaceThreadReadStateParam } from '../../reducers/threads';
 import { addUnreadMessageToCounter, replaceThreadLocalStateParam } from '../../reducers/threads';
 import {
   selectChat,
@@ -63,6 +64,22 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         };
       }
       global = updateChat(global, update.id, update.chat);
+
+      // Apply readState from Saturn mark-as-read
+      if (update.readState) {
+        if ('unreadCount' in update.readState) {
+          global = updateChat(global, update.id, { unreadCount: update.readState.unreadCount });
+          global = replaceThreadReadStateParam(
+            global, update.id, MAIN_THREAD_ID, 'unreadCount', update.readState.unreadCount,
+          );
+        }
+        if ('lastReadInboxMessageId' in update.readState) {
+          global = replaceThreadReadStateParam(
+            global, update.id, MAIN_THREAD_ID,
+            'lastReadInboxMessageId', update.readState.lastReadInboxMessageId,
+          );
+        }
+      }
 
       if (localChat?.areStoriesHidden !== update.chat.areStoriesHidden) {
         global = updatePeerStoriesHidden(global, update.id, update.chat.areStoriesHidden || false);

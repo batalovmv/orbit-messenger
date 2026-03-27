@@ -4,8 +4,12 @@ import './global/init';
 
 import TeactDOM from './lib/teact/teact-dom';
 import {
-  getActions, getGlobal,
+  getActions, getGlobal, setGlobal,
 } from './global';
+
+// Expose state accessors on window for DevTools inspection
+(window as any).getGlobal = getGlobal;
+(window as any).setGlobal = setGlobal;
 
 import {
   DEBUG, STRICTERDOM_ENABLED,
@@ -59,7 +63,7 @@ async function init() {
   localStorage.setItem(MULTITAB_STORAGE_KEY, '1');
   onBeforeUnload(() => {
     const global = getGlobal();
-    if (Object.keys(global.byTabId).length === 1) {
+    if (global.byTabId && Object.keys(global.byTabId).length === 1) {
       localStorage.removeItem(MULTITAB_STORAGE_KEY);
     }
   });

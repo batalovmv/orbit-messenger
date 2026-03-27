@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -78,7 +79,10 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	}
 
 	// Publish to NATS
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
+	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
 	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 
@@ -112,7 +116,10 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 		return msg, nil
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", msg.ChatID, "error", err)
+	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.updated", msg.ChatID.String())
 	s.nats.Publish(subject, "message_updated", updated, memberIDs)
 
@@ -144,11 +151,15 @@ func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.U
 		return fmt.Errorf("soft delete: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", msg.ChatID, "error", err)
+	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.deleted", msg.ChatID.String())
 	s.nats.Publish(subject, "message_deleted", map[string]interface{}{
-		"id":      msgID.String(),
-		"chat_id": msg.ChatID.String(),
+		"id":              msgID.String(),
+		"chat_id":         msg.ChatID.String(),
+		"sequence_number": msg.SequenceNumber,
 	}, memberIDs)
 
 	return nil
@@ -208,7 +219,10 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	}
 
 	// Publish events for each forwarded message
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, toChatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, toChatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", toChatID, "error", err)
+	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", toChatID.String())
 	for _, m := range created {
 		s.nats.Publish(subject, "new_message", m, memberIDs, senderID.String())
@@ -229,7 +243,12 @@ func (s *MessageService) PinMessage(ctx context.Context, chatID, msgID, userID u
 		return apperror.Forbidden("Not enough permissions to pin")
 	}
 
-	return s.messages.Pin(ctx, chatID, msgID)
+	if err := s.messages.Pin(ctx, chatID, msgID); err != nil {
+		return err
+	}
+
+	s.publishPinEvent(ctx, chatID, msgID, true)
+	return nil
 }
 
 func (s *MessageService) UnpinMessage(ctx context.Context, chatID, msgID, userID uuid.UUID) error {
@@ -252,7 +271,12 @@ func (s *MessageService) UnpinMessage(ctx context.Context, chatID, msgID, userID
 		}
 	}
 
-	return s.messages.Unpin(ctx, chatID, msgID)
+	if err := s.messages.Unpin(ctx, chatID, msgID); err != nil {
+		return err
+	}
+
+	s.publishPinEvent(ctx, chatID, msgID, false)
+	return nil
 }
 
 func (s *MessageService) UnpinAll(ctx context.Context, chatID, userID uuid.UUID) error {
@@ -276,6 +300,30 @@ func (s *MessageService) UnpinAll(ctx context.Context, chatID, userID uuid.UUID)
 	}
 
 	return s.messages.UnpinAll(ctx, chatID)
+}
+
+func (s *MessageService) publishPinEvent(ctx context.Context, chatID, msgID uuid.UUID, pinned bool) {
+	msg, err := s.messages.GetByID(ctx, msgID)
+	if err != nil || msg == nil {
+		slog.Error("failed to get message for pin event", "msg_id", msgID, "error", err)
+		return
+	}
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for pin event", "chat_id", chatID, "error", err)
+		return
+	}
+	eventType := "message_pinned"
+	if !pinned {
+		eventType = "message_unpinned"
+	}
+	subject := fmt.Sprintf("orbit.chat.%s.message.%s", chatID.String(), eventType)
+	s.nats.Publish(subject, eventType, map[string]interface{}{
+		"id":              msgID.String(),
+		"chat_id":         chatID.String(),
+		"sequence_number": msg.SequenceNumber,
+		"is_pinned":       pinned,
+	}, memberIDs)
 }
 
 func (s *MessageService) ListPinned(ctx context.Context, chatID, userID uuid.UUID) ([]model.Message, error) {
@@ -304,7 +352,10 @@ func (s *MessageService) MarkRead(ctx context.Context, chatID, userID, lastReadM
 	}
 
 	// Publish read event
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
+	}
 	subject := fmt.Sprintf("orbit.chat.%s.messages.read", chatID.String())
 	s.nats.Publish(subject, "messages_read", map[string]interface{}{
 		"chat_id":              chatID.String(),

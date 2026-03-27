@@ -24,6 +24,10 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     apiChat.membersCount = chat.member_count;
   }
 
+  if ('unread_count' in chat) {
+    apiChat.unreadCount = chat.unread_count;
+  }
+
   return apiChat;
 }
 

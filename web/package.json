@@ -58,6 +58,7 @@
     "@stylistic/stylelint-plugin": "^5.0.1",
     "@tauri-apps/cli": "^2.9.6",
     "@testing-library/jest-dom": "^6.9.1",
+    "@twbs/fantasticon": "^3.1.0",
     "@types/dom-chromium-ai": "^0.0.13",
     "@types/dom-view-transitions": "^1.0.6",
     "@types/hast": "^3.0.4",
@@ -90,11 +91,11 @@
     "eslint-plugin-tt-multitab": "git+https://github.com/zubiden/eslint-plugin-tt-multitab#137cf50",
     "eslint-plugin-unused-imports": "^4.3.0",
     "fake-indexeddb": "^6.2.5",
-    "@twbs/fantasticon": "^3.1.0",
     "git-revision-webpack-plugin": "^5.0.0",
     "gitlog": "^5.1.0",
     "html-webpack-plugin": "^5.6.6",
     "husky": "^9.1.7",
+    "javascript-obfuscator": "^5.4.1",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "lint-staged": "^16.2.7",
@@ -121,7 +122,8 @@
     "typescript-eslint": "^8.54.0",
     "user-agent-data-types": "^0.4.2",
     "webpack": "^5.104.1",
-    "webpack-dev-server": "^5.2.3"
+    "webpack-dev-server": "^5.2.3",
+    "webpack-obfuscator": "^3.6.0"
   },
   "dependencies": {
     "@cryptography/aes": "^0.1.1",

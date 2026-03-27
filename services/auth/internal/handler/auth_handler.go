@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,19 @@ import (
 	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/auth/internal/service"
 )
+
+func makeRefreshCookie(value string, maxAge int) *fiber.Cookie {
+	secure := !strings.HasPrefix(os.Getenv("FRONTEND_URL"), "http://")
+	return &fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    value,
+		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: "Lax",
+		Path:     "/",
+		MaxAge:   maxAge,
+	}
+}
 
 type AuthHandler struct {
 	svc    *service.AuthService
@@ -182,15 +196,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	// Set refresh token as httpOnly cookie
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    pair.RefreshToken,
-		HTTPOnly: true,
-		Secure:   true,
-		SameSite: "Strict",
-		Path:     "/auth/refresh",
-		MaxAge:   int(30 * 24 * time.Hour / time.Second),
-	})
+	c.Cookie(makeRefreshCookie(pair.RefreshToken, int(30*24*time.Hour/time.Second)))
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"access_token": pair.AccessToken,
@@ -211,15 +217,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	}
 
 	// Clear refresh cookie
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		HTTPOnly: true,
-		Secure:   true,
-		SameSite: "Strict",
-		Path:     "/auth/refresh",
-		MaxAge:   -1,
-	})
+	c.Cookie(makeRefreshCookie("", -1))
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Logged out"})
 }
@@ -247,15 +245,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    pair.RefreshToken,
-		HTTPOnly: true,
-		Secure:   true,
-		SameSite: "Strict",
-		Path:     "/auth/refresh",
-		MaxAge:   int(30 * 24 * time.Hour / time.Second),
-	})
+	c.Cookie(makeRefreshCookie(pair.RefreshToken, int(30*24*time.Hour/time.Second)))
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"access_token": pair.AccessToken,

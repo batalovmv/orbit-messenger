@@ -52,3 +52,9 @@ npm-debug.log*
 coverage/
 *.cover
 *.coverprofile
+
+# === Source maps (never commit to prod) ===
+*.map
+
+# === Saturn ===
+.saturn/

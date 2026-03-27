@@ -11,6 +11,22 @@ let accessToken: string | undefined;
 let tokenExpiresAt = 0;
 let refreshPromise: Promise<void> | undefined;
 let onUpdate: OnApiUpdate | undefined;
+
+// Auth readiness gate: requests wait until initial auth check completes
+let authReadyResolve: (() => void) | undefined;
+let authReadyPromise: Promise<void> | undefined;
+
+export function createAuthGate() {
+  authReadyPromise = new Promise<void>((resolve) => {
+    authReadyResolve = resolve;
+  });
+}
+
+export function resolveAuthGate() {
+  authReadyResolve?.();
+  authReadyPromise = undefined;
+  authReadyResolve = undefined;
+}
 let ws: WebSocket | undefined;
 let wsPingInterval: ReturnType<typeof setInterval> | undefined;
 let wsReconnectTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -83,6 +99,10 @@ export async function request<T>(
   options?: { noAuth?: boolean },
 ): Promise<T> {
   if (!options?.noAuth) {
+    // Wait for initial auth check to complete before making authenticated requests
+    if (authReadyPromise) {
+      await authReadyPromise;
+    }
     await ensureToken();
   }
 
@@ -134,13 +154,21 @@ export function connectWs() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return;
   }
-  if (!accessToken) return;
+  if (!accessToken) {
+    // eslint-disable-next-line no-console
+    console.warn('[Saturn WS] connectWs called without access token');
+    return;
+  }
 
   wsIntentionalClose = false;
   const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
+  // eslint-disable-next-line no-console
+  console.log('[Saturn WS] Connecting to', wsUrl);
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
+    // eslint-disable-next-line no-console
+    console.log('[Saturn WS] Connected, sending auth frame');
     // Send auth frame immediately — token is NOT in URL for security
     ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
@@ -157,13 +185,17 @@ export function connectWs() {
   ws.onmessage = (event) => {
     try {
       const msg: SaturnWsMessage = JSON.parse(event.data as string);
+      // eslint-disable-next-line no-console
+      if (msg.type !== 'pong') console.log('[Saturn WS] Received:', msg.type, msg.data);
       handleWsMessage(msg);
     } catch {
       // Ignore malformed messages
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event) => {
+    // eslint-disable-next-line no-console
+    console.warn('[Saturn WS] Closed:', event.code, event.reason, 'intentional:', wsIntentionalClose);
     stopPing();
     if (!wsIntentionalClose) {
       onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
@@ -171,7 +203,9 @@ export function connectWs() {
     }
   };
 
-  ws.onerror = () => {
+  ws.onerror = (event) => {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn WS] Error:', event);
     // onclose will fire after onerror
   };
 }
