@@ -232,6 +232,7 @@ export default function createConfig(
         TEST_SESSION: null,
         BASE_URL,
         SATURN_API_URL: process.env.SATURN_API_URL || 'http://localhost:8080/api/v1',
+        SATURN_GATEWAY_HOST: process.env.SATURN_GATEWAY_HOST || '',
       }),
       // Updates each dev re-build to provide current git branch or commit hash
       new DefinePlugin({

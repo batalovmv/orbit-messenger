@@ -7,7 +7,9 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN git init && git add -A && git -c user.name=build -c user.email=build@ci commit -m "build" --quiet 2>/dev/null || true
 ARG SATURN_API_URL=http://localhost:8080/api/v1
+ARG SATURN_GATEWAY_HOST=
 ENV SATURN_API_URL=$SATURN_API_URL
+ENV SATURN_GATEWAY_HOST=$SATURN_GATEWAY_HOST
 ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build:production
 
