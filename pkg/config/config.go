@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -39,13 +38,22 @@ func EnvIntOr(key string, fallback int) int {
 	return n
 }
 
-// DatabaseURL returns a pgx-compatible DSN string.
-// If DATABASE_URL is set (typically a postgres:// URL), it parses it and converts
-// to keyword=value DSN format. This correctly handles URL-encoded passwords with
-// special characters (@, #, %, etc.) that break pgx URL parsing.
+// DatabaseURL returns a connection string for pgx.
+// If DATABASE_URL is set (postgres:// URL from Saturn), returns it directly —
+// pgx v5 natively handles URL parsing and percent-decoding.
+// Otherwise builds a keyword=value DSN from individual DB_* vars.
 func DatabaseURL() string {
-	if raw := os.Getenv("DATABASE_URL"); raw != "" {
-		return postgresURLToDSN(raw)
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		// pgx natively parses postgres:// URLs including URL-encoded passwords.
+		// Just ensure sslmode is set for internal Docker networks.
+		if !strings.Contains(v, "sslmode=") {
+			if strings.Contains(v, "?") {
+				v += "&sslmode=disable"
+			} else {
+				v += "?sslmode=disable"
+			}
+		}
+		return v
 	}
 	host := EnvOr("DB_HOST", "localhost")
 	port := EnvOr("DB_PORT", "5432")
@@ -57,68 +65,6 @@ func DatabaseURL() string {
 		return fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, name, sslmode)
 	}
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", host, port, user, pass, name, sslmode)
-}
-
-// postgresURLToDSN converts a postgres:// URL to keyword=value DSN format.
-// This avoids issues with URL-encoded special characters in passwords.
-func postgresURLToDSN(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		// Fallback: return as-is and let pgx try
-		return raw
-	}
-
-	host := u.Hostname()
-	port := u.Port()
-	if port == "" {
-		port = "5432"
-	}
-	user := u.User.Username()
-	pass, _ := u.User.Password()
-	dbname := strings.TrimPrefix(u.Path, "/")
-
-	// Extract sslmode from query params, default to disable
-	sslmode := u.Query().Get("sslmode")
-	if sslmode == "" {
-		sslmode = "disable"
-	}
-
-	dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
-		dsnQuote(host), port, dsnQuote(user), dsnQuote(dbname), sslmode)
-	if pass != "" {
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			dsnQuote(host), port, dsnQuote(user), dsnQuote(pass), dsnQuote(dbname), sslmode)
-	}
-	return dsn
-}
-
-// dsnQuote wraps a value in single quotes for libpq DSN format if it contains
-// special characters (spaces, quotes, backslashes, equals, etc.).
-// Inside quotes, backslashes and single quotes are escaped with a backslash.
-func dsnQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	needsQuote := false
-	for _, c := range s {
-		if c == ' ' || c == '\'' || c == '\\' || c == '=' || c == '#' || c == '@' {
-			needsQuote = true
-			break
-		}
-	}
-	if !needsQuote {
-		return s
-	}
-	var b strings.Builder
-	b.WriteByte('\'')
-	for _, c := range s {
-		if c == '\'' || c == '\\' {
-			b.WriteByte('\\')
-		}
-		b.WriteRune(c)
-	}
-	b.WriteByte('\'')
-	return b.String()
 }
 
 // NatsURL returns the NATS connection URL.

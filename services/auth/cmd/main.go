@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -28,19 +26,9 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbURL := config.DatabaseURL()
-	// Log DSN structure (no secrets) for debugging
-	dsnRedacted := dbURL
-	if i := strings.Index(dsnRedacted, "password="); i >= 0 {
-		end := strings.Index(dsnRedacted[i:], " ")
-		if end == -1 {
-			end = len(dsnRedacted) - i
-		}
-		passVal := dsnRedacted[i+len("password=") : i+end]
-		dsnRedacted = dsnRedacted[:i] + fmt.Sprintf("password=<REDACTED len=%d>", len(passVal)) + dsnRedacted[i+end:]
-	}
 	slog.Info("database config",
 		"database_url_set", os.Getenv("DATABASE_URL") != "",
-		"dsn", dsnRedacted,
+		"url_len", len(dbURL),
 	)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
