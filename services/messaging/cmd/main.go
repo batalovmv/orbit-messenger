@@ -27,12 +27,8 @@ func main() {
 
 	// Config
 	port := config.EnvOr("PORT", "8082")
-	// Use DATABASE_URL directly without modification to avoid breaking URL-encoded passwords
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = config.DatabaseURL() // fallback to DB_* vars for local dev
-	}
-	slog.Info("database URL", "len", len(dbURL), "has_sslmode", strings.Contains(dbURL, "sslmode"))
+	dbURL := config.DatabaseURL()
+	slog.Info("database config", "len", len(dbURL), "has_sslmode", strings.Contains(dbURL, "sslmode"))
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 
