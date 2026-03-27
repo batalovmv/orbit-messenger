@@ -26,10 +26,10 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8080")
 	redisURL := config.MustEnv("REDIS_URL")
-	natsURL := config.EnvOr("NATS_URL", config.EnvOr("ORBIT_NATS_URL", "nats://localhost:4222"))
-	authServiceURL := config.EnvOr("AUTH_SERVICE_URL", config.EnvOr("AUTH_URL", "http://localhost:8081"))
-	messagingServiceURL := config.EnvOr("MESSAGING_SERVICE_URL", config.EnvOr("MESSAGING_URL", "http://localhost:8082"))
-	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
+	natsURL := config.EnvOr("ORBIT_NATS_URL", config.EnvOr("NATS_URL", "nats://localhost:4222"))
+	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
+	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
+	frontendURL := config.EnvOr("WEB_URL", config.EnvOr("FRONTEND_URL", "http://localhost:3000"))
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)
