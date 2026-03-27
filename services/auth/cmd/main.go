@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,10 +27,27 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbURL := config.DatabaseURL()
-	slog.Info("database config",
-		"database_url_set", os.Getenv("DATABASE_URL") != "",
-		"url_len", len(dbURL),
-	)
+	// Debug: parse DATABASE_URL to log password hints without exposing it
+	if raw := os.Getenv("DATABASE_URL"); raw != "" {
+		if u, err := url.Parse(raw); err == nil {
+			pass, hasPass := u.User.Password()
+			hint := ""
+			if len(pass) >= 6 {
+				hint = pass[:3] + "..." + pass[len(pass)-3:]
+			}
+			slog.Info("database config",
+				"host", u.Hostname(),
+				"port", u.Port(),
+				"user", u.User.Username(),
+				"dbname", u.Path,
+				"has_password", hasPass,
+				"password_len", len(pass),
+				"password_hint", hint,
+				"raw_url_len", len(raw),
+				"query", u.RawQuery,
+			)
+		}
+	}
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
 	accessTTL := config.EnvDurationOr("JWT_ACCESS_TTL", 15*time.Minute)
