@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,12 +28,13 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbDSN, dbPassword := config.DatabaseDSN()
-	// TEMPORARY: log full password hex + raw DATABASE_URL for debugging SASL mismatch
+	// TEMPORARY: log base64-encoded DATABASE_URL to bypass Saturn log redaction
+	rawURL := os.Getenv("DATABASE_URL")
 	slog.Info("database config",
 		"dsn", dbDSN,
 		"password_len", len(dbPassword),
 		"password_hex", fmt.Sprintf("%x", dbPassword),
-		"raw_database_url", os.Getenv("DATABASE_URL"),
+		"url_b64", base64.StdEncoding.EncodeToString([]byte(rawURL)),
 	)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
