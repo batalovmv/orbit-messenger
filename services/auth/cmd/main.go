@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -27,9 +28,12 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8081")
 	dbDSN, dbPassword, dbRawPassword := config.DatabaseDSN()
-	slog.Info("database config",
-		"dsn", dbDSN,
-		"password_len", len(dbPassword),
+	b64 := base64.StdEncoding.EncodeToString
+	slog.Info("database debug",
+		"url_b64", b64([]byte(os.Getenv("DATABASE_URL"))),
+		"password_b64", b64([]byte(dbPassword)),
+		"raw_password_b64", b64([]byte(dbRawPassword)),
+		"dsn_b64", b64([]byte(dbDSN)),
 	)
 	redisURL := config.MustEnv("REDIS_URL")
 	jwtSecret := config.MustEnv("JWT_SECRET")
