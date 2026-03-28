@@ -45,6 +45,13 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 
 		tokenHash := hashToken(token)
 		cacheKey := "jwt_cache:" + tokenHash
+		blacklistKey := "jwt_blacklist:" + tokenHash
+
+		// Check blacklist first (logout invalidation)
+		if cfg.Redis.Exists(c.Context(), blacklistKey).Val() > 0 {
+			cfg.Redis.Del(c.Context(), cacheKey) // clean stale cache
+			return response.Error(c, apperror.Unauthorized("Token revoked"))
+		}
 
 		// Check cache
 		cached, err := cfg.Redis.Get(c.Context(), cacheKey).Result()

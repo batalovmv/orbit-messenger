@@ -38,13 +38,36 @@ func NewMessageStore(pool *pgxpool.Pool) MessageStore {
 }
 
 func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
-	return s.pool.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Atomically increment per-chat sequence counter
+	var seq int64
+	err = tx.QueryRow(ctx,
+		`UPDATE chats SET next_sequence_number = next_sequence_number + 1
+		 WHERE id = $1
+		 RETURNING next_sequence_number - 1`,
+		msg.ChatID,
+	).Scan(&seq)
+	if err != nil {
+		return fmt.Errorf("get sequence: %w", err)
+	}
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, sequence_number)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
 		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, sequence_number, created_at`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID,
+		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, seq,
 	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded,
 		&msg.SequenceNumber, &msg.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("insert message: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
@@ -311,11 +334,23 @@ func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message
 	var result []model.Message
 	for i := range msgs {
 		m := &msgs[i]
+		// Get per-chat sequence number
+		var seq int64
 		err := tx.QueryRow(ctx,
-			`INSERT INTO messages (chat_id, sender_id, type, content, entities, is_forwarded, forwarded_from)
-			 VALUES ($1, $2, $3, $4, $5, true, $6)
+			`UPDATE chats SET next_sequence_number = next_sequence_number + 1
+			 WHERE id = $1
+			 RETURNING next_sequence_number - 1`,
+			m.ChatID,
+		).Scan(&seq)
+		if err != nil {
+			return nil, fmt.Errorf("get sequence for forwarded: %w", err)
+		}
+
+		err = tx.QueryRow(ctx,
+			`INSERT INTO messages (chat_id, sender_id, type, content, entities, is_forwarded, forwarded_from, sequence_number)
+			 VALUES ($1, $2, $3, $4, $5, true, $6, $7)
 			 RETURNING id, is_edited, is_deleted, is_pinned, sequence_number, created_at`,
-			m.ChatID, m.SenderID, m.Type, m.Content, m.Entities, m.ForwardedFrom,
+			m.ChatID, m.SenderID, m.Type, m.Content, m.Entities, m.ForwardedFrom, seq,
 		).Scan(&m.ID, &m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.SequenceNumber, &m.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("create forwarded message: %w", err)

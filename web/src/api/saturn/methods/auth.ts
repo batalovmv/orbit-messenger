@@ -29,6 +29,9 @@ export async function registerWithInvite({
   return loginWithEmail({ email, password });
 }
 
+// Stored credentials for 2FA flow (cleared after successful login or auth restart)
+let pending2FACredentials: { email: string; password: string } | undefined;
+
 export async function loginWithEmail({
   email, password, totpCode,
 }: {
@@ -45,6 +48,7 @@ export async function loginWithEmail({
     );
 
     client.setAccessToken(result.access_token, result.expires_in);
+    pending2FACredentials = undefined; // Clear on successful login
 
     const apiUser = buildApiUser(result.user);
     apiUser.isSelf = true;
@@ -73,6 +77,7 @@ export async function loginWithEmail({
   } catch (e) {
     if (e instanceof client.ApiError) {
       if (e.code === '2fa_required') {
+        pending2FACredentials = { email, password };
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
           authorizationState: 'authorizationStateWaitPassword',
@@ -218,6 +223,7 @@ export function provideAuthPhoneNumber() {
 }
 
 export function restartAuth() {
+  pending2FACredentials = undefined;
   client.disconnectWs();
   client.clearAuth();
   sendApiUpdate({
@@ -231,8 +237,20 @@ export function provideAuthCode() {
   // No-op: Saturn uses JWT, no SMS code step
 }
 
-export function provideAuthPassword(_password: string) {
-  // Used for 2FA — Saturn handles this through loginWithEmail with totpCode
+export async function provideAuthPassword(totpCode: string) {
+  if (!pending2FACredentials) {
+    sendApiUpdate({
+      '@type': 'updateAuthorizationError',
+      errorKey: { key: 'ErrorIncorrectPassword' as const },
+    });
+    return;
+  }
+
+  await loginWithEmail({
+    email: pending2FACredentials.email,
+    password: pending2FACredentials.password,
+    totpCode,
+  });
 }
 
 export function provideAuthRegistration() {

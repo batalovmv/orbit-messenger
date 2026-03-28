@@ -41,9 +41,34 @@ type LinkPreviewService struct {
 }
 
 func NewLinkPreviewService(rdb *redis.Client, logger *slog.Logger) *LinkPreviewService {
+	// Custom dialer that checks resolved IPs at connection time (prevents DNS rebinding)
+	safeDialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupHost(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("DNS lookup failed: %w", err)
+			}
+			for _, ipStr := range ips {
+				ip := net.ParseIP(ipStr)
+				if ip == nil || ip.IsLoopback() || ip.IsPrivate() ||
+					ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+					return nil, fmt.Errorf("private address blocked: %s", ipStr)
+				}
+			}
+			// Connect to the first safe IP directly (no second DNS lookup)
+			return safeDialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+		},
+	}
+
 	return &LinkPreviewService{
 		client: &http.Client{
-			Timeout: linkPreviewTimeout,
+			Timeout:   linkPreviewTimeout,
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 5 {
 					return fmt.Errorf("too many redirects")
@@ -67,8 +92,10 @@ func (s *LinkPreviewService) FetchPreview(ctx context.Context, rawURL string) (*
 		return nil, fmt.Errorf("unsupported scheme: %s", parsed.Scheme)
 	}
 
-	// Block private IPs (SSRF protection)
-	if isPrivateHost(parsed.Hostname()) {
+	// Block obvious private hostnames early (SSRF protection).
+	// Full IP-level check happens in the custom DialContext to prevent DNS rebinding.
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" || host == "0.0.0.0" {
 		return nil, fmt.Errorf("private addresses are not allowed")
 	}
 
