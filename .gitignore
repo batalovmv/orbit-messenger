@@ -56,5 +56,17 @@ coverage/
 # === Source maps (never commit to prod) ===
 *.map
 
+# === Sensitive migration scripts ===
+migrations/fix_*.sql
+migrations/test_*.sql
+migrations/local_dump.sql
+
+# === Build artifacts (large generated files) ===
+/web/public/build-stats.json
+/web/public/statoscope-report.html
+
+# === Claude Code ===
+.claude/
+
 # === Saturn ===
 .saturn/

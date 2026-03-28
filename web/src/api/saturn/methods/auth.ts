@@ -157,6 +157,23 @@ export async function checkAuth() {
       );
       client.setAccessToken(result.access_token, result.expires_in);
 
+      // Fetch current user after token refresh
+      const user = await client.request<SaturnUser>('GET', '/auth/me');
+      const apiUser = buildApiUser(user);
+      apiUser.isSelf = true;
+
+      sendApiUpdate({
+        '@type': 'updateCurrentUser',
+        currentUser: apiUser,
+        currentUserFullInfo: buildApiUserFullInfo(user),
+      });
+
+      sendApiUpdate({
+        '@type': 'updateUserStatus',
+        userId: user.id,
+        status: buildApiUserStatus(user),
+      });
+
       sendApiUpdate({
         '@type': 'updateAuthorizationState',
         authorizationState: 'authorizationStateReady',

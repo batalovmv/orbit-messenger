@@ -640,6 +640,7 @@ export type BoughtPaidMedia = Pick<MediaContent, 'photo' | 'video'>;
 export interface ApiMessage {
   id: number;
   chatId: string;
+  saturnId?: string; // UUID from Saturn backend, used for API calls (edit/delete/pin)
   content: MediaContent;
   date: number;
   isOutgoing: boolean;

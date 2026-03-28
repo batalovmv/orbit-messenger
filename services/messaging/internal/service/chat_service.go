@@ -18,6 +18,14 @@ func NewChatService(chats store.ChatStore) *ChatService {
 	return &ChatService{chats: chats}
 }
 
+func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return false, fmt.Errorf("check membership: %w", err)
+	}
+	return isMember, nil
+}
+
 func (s *ChatService) ListChats(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
 	return s.chats.ListByUser(ctx, userID, cursor, limit)
 }

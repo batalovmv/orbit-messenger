@@ -499,7 +499,7 @@ func hashToken(token string) string {
 }
 
 func generateInviteCode() (string, error) {
-	b := make([]byte, 4)
+	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}

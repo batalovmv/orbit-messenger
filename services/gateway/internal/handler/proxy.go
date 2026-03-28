@@ -34,7 +34,8 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		// Skip hop-by-hop headers
 		switch strings.ToLower(k) {
 		case "connection", "keep-alive", "transfer-encoding", "te",
-			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate":
+			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate",
+			"x-user-id", "x-user-role":
 			return
 		}
 		req.Header.SetBytesKV(key, value)

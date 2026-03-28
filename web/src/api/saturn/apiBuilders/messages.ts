@@ -5,8 +5,21 @@ import type { SaturnMessage, SaturnMessageEntity } from '../types';
 // We use sequence_number as the numeric message ID.
 // UUID is stored in a mapping for API calls that need it.
 
+const MAX_UUID_MAP_SIZE = 50000;
 const uuidToSeqMap = new Map<string, number>();
 const seqToUuidMap = new Map<string, Map<number, string>>(); // chatId -> seqNum -> uuid
+
+function evictOldEntries() {
+  if (uuidToSeqMap.size <= MAX_UUID_MAP_SIZE) return;
+  // Map iterates in insertion order — delete oldest entries
+  const toDelete = uuidToSeqMap.size - MAX_UUID_MAP_SIZE;
+  let count = 0;
+  for (const key of uuidToSeqMap.keys()) {
+    if (count >= toDelete) break;
+    uuidToSeqMap.delete(key);
+    count++;
+  }
+}
 
 export function registerMessageId(chatId: string, uuid: string, sequenceNumber: number) {
   uuidToSeqMap.set(uuid, sequenceNumber);
@@ -16,6 +29,7 @@ export function registerMessageId(chatId: string, uuid: string, sequenceNumber: 
     seqToUuidMap.set(chatId, chatMap);
   }
   chatMap.set(sequenceNumber, uuid);
+  evictOldEntries();
 }
 
 export function getMessageUuid(chatId: string, seqNum: number): string | undefined {

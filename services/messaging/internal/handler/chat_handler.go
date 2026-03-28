@@ -144,9 +144,23 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 
 // GetMemberIDs returns just the user IDs of a chat (internal, for gateway typing fanout).
 func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
+	callerID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
 	chatID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	// Verify caller is a member of this chat
+	isMember, err := h.svc.IsMember(c.Context(), chatID, callerID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	if !isMember {
+		return response.Error(c, apperror.Forbidden("Not a member of this chat"))
 	}
 
 	ids, err := h.svc.GetMemberIDs(c.Context(), chatID)
