@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,7 @@ import (
 type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	Update(ctx context.Context, u *model.User) error
+	UpdateStatus(ctx context.Context, userID, status string, lastSeenAt *time.Time) error
 	Search(ctx context.Context, query string, limit int) ([]model.User, error)
 	ListAll(ctx context.Context, limit int) ([]model.User, error)
 }
@@ -47,6 +49,14 @@ func (s *userStore) Update(ctx context.Context, u *model.User) error {
 		 WHERE id=$7`,
 		u.DisplayName, u.Bio, u.Phone, u.AvatarURL,
 		u.CustomStatus, u.CustomStatusEmoji, u.ID,
+	)
+	return err
+}
+
+func (s *userStore) UpdateStatus(ctx context.Context, userID, status string, lastSeenAt *time.Time) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE users SET status=$1, last_seen_at=COALESCE($2, last_seen_at) WHERE id=$3`,
+		status, lastSeenAt, userID,
 	)
 	return err
 }

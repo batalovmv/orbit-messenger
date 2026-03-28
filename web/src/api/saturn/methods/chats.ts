@@ -100,29 +100,6 @@ export async function fetchChats({
   const chatIds = apiChats.map((c) => c.id);
   const totalChatCount = result.has_more ? chatIds.length + 1 : chatIds.length;
 
-  // Re-dispatch lastMessage updates after delay to survive race conditions.
-  // fetchChats runs before Main.tsx lazy-loads apiUpdate handlers, so early updates are lost.
-  if (messages.length > 0) {
-    const chatIdToMsg: Record<string, typeof messages[0]> = {};
-    for (const chatId of Object.keys(lastMessageByChatId)) {
-      const msgId = lastMessageByChatId[chatId];
-      const msg = messages.find((m) => m.id === msgId);
-      if (msg) chatIdToMsg[chatId] = msg;
-    }
-
-    const dispatch = () => {
-      for (const chatId of Object.keys(chatIdToMsg)) {
-        sendApiUpdate({
-          '@type': 'updateChatLastMessage',
-          id: chatId,
-          lastMessage: chatIdToMsg[chatId],
-        });
-      }
-    };
-    setTimeout(dispatch, 1500);
-    setTimeout(dispatch, 4000);
-  }
-
   return {
     chatIds,
     chats: apiChats,

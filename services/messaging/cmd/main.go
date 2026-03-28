@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -110,6 +111,36 @@ func main() {
 	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher)
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
+
+	// NATS subscriber: update user status + last_seen_at in DB
+	_, _ = nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
+		var event struct {
+			Event string          `json:"event"`
+			Data  json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			return
+		}
+		var sd struct {
+			UserID   string `json:"user_id"`
+			Status   string `json:"status"`
+			LastSeen string `json:"last_seen,omitempty"`
+		}
+		if err := json.Unmarshal(event.Data, &sd); err != nil {
+			return
+		}
+		var lastSeen *time.Time
+		if sd.LastSeen != "" {
+			if t, err := time.Parse(time.RFC3339, sd.LastSeen); err == nil {
+				lastSeen = &t
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := userStore.UpdateStatus(ctx, sd.UserID, sd.Status, lastSeen); err != nil {
+			slog.Error("failed to update user status", "user_id", sd.UserID, "error", err)
+		}
+	})
 
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger)
