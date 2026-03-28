@@ -223,6 +223,7 @@ export async function deleteMessages({
   messageIds: number[];
 }) {
   const chatId = chat.id;
+  const deletedIds: number[] = [];
   const deletePromises = messageIds.map(async (seqNum) => {
     const uuid = resolveMessageUuid(chatId, seqNum);
     if (!uuid) {
@@ -230,16 +231,25 @@ export async function deleteMessages({
       console.warn('[Saturn] deleteMessage: no UUID for', chatId, seqNum);
       return;
     }
-    await client.request('DELETE', `/messages/${uuid}`);
+    try {
+      await client.request('DELETE', `/messages/${uuid}`);
+      deletedIds.push(seqNum);
+    } catch (e) {
+      // Silently skip messages user can't delete (not author / not admin)
+      // eslint-disable-next-line no-console
+      console.warn('[Saturn] deleteMessage failed:', e instanceof Error ? e.message : e);
+    }
   });
 
   await Promise.all(deletePromises);
 
-  sendApiUpdate({
-    '@type': 'deleteMessages',
-    ids: messageIds,
-    chatId,
-  });
+  if (deletedIds.length > 0) {
+    sendApiUpdate({
+      '@type': 'deleteMessages',
+      ids: deletedIds,
+      chatId,
+    });
+  }
 }
 
 export async function forwardMessages({

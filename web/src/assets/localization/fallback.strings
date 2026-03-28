@@ -279,6 +279,10 @@
 "DeleteForEveryoneHint_other" = "This will delete them for everyone in this chat.";
 "ConversationDeleteMessagesFor" = "Delete for me and {user}";
 "ConversationDeleteMessagesForEveryone" = "Delete for everyone";
+"Conversation.DeleteMessagesForEveryone" = "Delete for everyone";
+"Chat.DeleteMessagesConfirmation_one" = "Are you sure you want to delete this message?";
+"Chat.DeleteMessagesConfirmation_other" = "Are you sure you want to delete these messages?";
+"Chat.DeleteMessagesConfirmation" = "Are you sure you want to delete this message?";
 "ChatListDeleteForCurrentUser" = "Delete just for me";
 "Delete" = "Delete";
 "FakeMessage" = "FAKE";
