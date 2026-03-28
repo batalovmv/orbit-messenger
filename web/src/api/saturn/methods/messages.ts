@@ -336,6 +336,21 @@ export async function pinMessage({
   } else {
     await client.request('POST', `/chats/${chatId}/pin/${uuid}`);
   }
+
+  sendApiUpdate({
+    '@type': 'updateMessage',
+    chatId,
+    id: messageId,
+    isFull: false,
+    message: { isPinned: !isUnpin },
+  });
+
+  sendApiUpdate({
+    '@type': 'updatePinnedIds',
+    chatId,
+    isPinned: !isUnpin,
+    messageIds: [messageId],
+  });
 }
 
 export async function unpinMessage({
@@ -349,6 +364,21 @@ export async function unpinMessage({
   if (!uuid) return;
 
   await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
+
+  sendApiUpdate({
+    '@type': 'updateMessage',
+    chatId,
+    id: messageId,
+    isFull: false,
+    message: { isPinned: false },
+  });
+
+  sendApiUpdate({
+    '@type': 'updatePinnedIds',
+    chatId,
+    isPinned: false,
+    messageIds: [messageId],
+  });
 }
 
 export async function unpinAllMessages({ chat }: { chat: { id: string } }) {

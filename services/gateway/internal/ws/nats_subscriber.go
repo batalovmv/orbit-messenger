@@ -91,7 +91,8 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	// Fallback: if member_ids is empty for a message event, extract chat_id from subject
 	// and fetch member IDs from messaging service. Subject format: orbit.chat.<chatID>.message.*
 	if event.Event == EventNewMessage || event.Event == EventMessageUpdated ||
-		event.Event == EventMessageDeleted || event.Event == EventMessagesRead {
+		event.Event == EventMessageDeleted || event.Event == EventMessagesRead ||
+		event.Event == EventMessagePinned || event.Event == EventMessageUnpinned {
 		chatID := extractChatIDFromSubject(msg.Subject)
 		if chatID != "" {
 			slog.Warn("nats: member_ids empty, fetching from messaging service",
