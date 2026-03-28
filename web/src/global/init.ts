@@ -139,9 +139,9 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     setGlobal(global);
   });
 
-  if (global.peerColors) {
-    updatePeerColors(global.peerColors.general);
-  }
+  // Always initialize default peer colors (needed for avatar backgrounds).
+  // Saturn API doesn't provide peerColors, so use defaults from updatePeerColors.
+  updatePeerColors(global.peerColors?.general || {});
 
   return updateTabState(global, {
     messageLists: parsedMessageList ? [parsedMessageList] : initialTabState.messageLists,

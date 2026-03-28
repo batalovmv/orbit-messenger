@@ -151,6 +151,9 @@ export interface LangPair {
   'StartText': undefined;
   'LoginPhonePlaceholder': undefined;
   'LoginNext': undefined;
+  'LoginPassword': undefined;
+  'LoginEmail': undefined;
+  'LoginSubtitle': undefined;
   'LoginQRLogin': undefined;
   'LoginQRTitle': undefined;
   'LoginQRHelp1': undefined;

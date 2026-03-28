@@ -1,4 +1,5 @@
 import type { ProfileTabType } from '../../../types';
+import { LeftColumnContent } from '../../../types';
 import type { ActionReturnType, GlobalState } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
@@ -90,6 +91,17 @@ addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionRe
   }
 
   actions.updatePageTitle({ tabId });
+
+  // Reset left column to chat list when opening a chat (e.g. from Contacts view)
+  const currentTabState = selectTabState(global, tabId);
+  if (chatId && currentTabState.leftColumn.contentKey !== LeftColumnContent.ChatList) {
+    global = updateTabState(global, {
+      leftColumn: {
+        ...currentTabState.leftColumn,
+        contentKey: LeftColumnContent.ChatList,
+      },
+    }, tabId);
+  }
 
   return updateCurrentMessageList(global, chatId, threadId, type, shouldReplaceHistory, shouldReplaceLast, tabId);
 });

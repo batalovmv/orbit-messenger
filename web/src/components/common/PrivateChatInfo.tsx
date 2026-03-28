@@ -332,7 +332,11 @@ export default memo(withGlobal<OwnProps>(
     const userStatus = userId ? selectUserStatus(global, userId) : undefined;
     const isSavedMessages = !forceShowSelf && user && user.isSelf;
     const self = isSavedMessages ? user : selectUser(global, global.currentUserId!);
-    const areMessagesLoaded = Boolean(userId ? selectChatMessages(global, userId) : undefined);
+    // For Saturn DM chats, userId (peerUserId) differs from chatId, so messages
+    // may not be found by userId. Fall back to checking isSynced state.
+    const areMessagesLoaded = Boolean(
+      (userId && selectChatMessages(global, userId)) || isSynced,
+    );
 
     const topic = threadId ? selectTopic(global, userId, threadId) : undefined;
     const messagesCount = topic && userId ? selectThreadMessagesCount(global, userId, threadId!) : undefined;

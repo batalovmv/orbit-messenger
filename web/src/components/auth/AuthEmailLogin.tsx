@@ -85,12 +85,12 @@ const AuthEmailLogin = ({
       <div className="auth-form">
         <div id="logo" />
         <h1>Orbit Messenger</h1>
-        <p className="note">{lang('StartText')}</p>
+        <p className="note">{lang('LoginSubtitle')}</p>
         <form action="" onSubmit={handleSubmit}>
           <InputText
             ref={emailRef}
             id="sign-in-email"
-            label="Email"
+            label={lang('LoginEmail')}
             value={email}
             inputMode="email"
             error={auth.errorKey ? lang.withRegular(auth.errorKey) : undefined}
@@ -100,7 +100,7 @@ const AuthEmailLogin = ({
           <InputText
             ref={passwordRef}
             id="sign-in-password"
-            label={lang('LoginPassword' as any) as string}
+            label={lang('LoginPassword')}
             type="password"
             value={password}
             autoComplete="current-password"

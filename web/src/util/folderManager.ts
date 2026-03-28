@@ -119,9 +119,7 @@ if (DEBUG) {
 }
 
 const updateFolderManagerThrottled = throttle(() => {
-  onFullyIdle(() => {
-    updateFolderManager(getGlobal());
-  });
+  updateFolderManager(getGlobal());
 }, UPDATE_THROTTLE);
 
 let inited = false;

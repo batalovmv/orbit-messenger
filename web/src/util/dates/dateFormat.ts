@@ -69,7 +69,10 @@ export function formatPastTimeShort(lang: OldLangFn, datetime: number | Date, al
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
   if (date >= weekAgo) {
-    const weekday = lang(`Weekday.Short${WEEKDAYS_FULL[date.getDay()]}`);
+    // Use Weekday1..7 keys (1=Mon..7=Sun) that exist in fallback.strings
+    const dayIdx = date.getDay(); // 0=Sun, 1=Mon...6=Sat
+    const weekdayKey = dayIdx === 0 ? 7 : dayIdx; // Convert to 1=Mon..7=Sun
+    const weekday = lang(`Weekday${weekdayKey}`) || lang(`Weekday.Short${WEEKDAYS_FULL[dayIdx]}`);
     return alwaysShowTime ? lang('formatDateAtTime', [weekday, time]) : weekday;
   }
 
@@ -304,8 +307,11 @@ export function formatHumanDate(
  * @param day 0 - Sunday, 1 - Monday, ...
  */
 export function formatWeekday(lang: OldLangFn, day: number, isShort = false) {
-  const weekDay = WEEKDAYS_FULL[day];
-  return isShort ? lang(`Weekday.Short${weekDay}`) : lang(`Weekday.${weekDay}`);
+  const weekDayKey = day === 0 ? 7 : day; // Convert JS 0=Sun to 1=Mon..7=Sun
+  if (isShort) {
+    return lang(`Weekday${weekDayKey}`) || lang(`Weekday.Short${WEEKDAYS_FULL[day]}`);
+  }
+  return lang(`Weekday${WEEKDAYS_FULL[day]}`) || lang(`Weekday.${WEEKDAYS_FULL[day]}`);
 }
 
 export function formatMediaDateTime(

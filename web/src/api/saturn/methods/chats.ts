@@ -59,6 +59,10 @@ export async function fetchChats({
         userId: item.other_user.id,
         status: userStatusesById[item.other_user.id],
       });
+      // Map chatId → peerUserId for DM chats.
+      // In Telegram, chatId === peerId for DMs, but in Saturn they differ.
+      // We store the peer userId on the chat object so MiddleHeader can resolve it.
+      apiChat.peerUserId = item.other_user.id;
     }
 
     if (item.last_message) {
@@ -81,14 +85,43 @@ export async function fetchChats({
         : lastMsgSeq;
       threadReadStatesById[item.id] = {
         lastReadInboxMessageId: lastReadSeq,
+        lastReadOutboxMessageId: lastMsgSeq,
         unreadCount: item.unread_count,
       };
-
+    } else if (item.unread_count > 0) {
+      // Populate unread count even for chats without last_message
+      threadReadStatesById[item.id] = {
+        lastReadInboxMessageId: 0,
+        unreadCount: item.unread_count,
+      };
     }
   }
 
   const chatIds = apiChats.map((c) => c.id);
   const totalChatCount = result.has_more ? chatIds.length + 1 : chatIds.length;
+
+  // Re-dispatch lastMessage updates after delay to survive race conditions.
+  // fetchChats runs before Main.tsx lazy-loads apiUpdate handlers, so early updates are lost.
+  if (messages.length > 0) {
+    const chatIdToMsg: Record<string, typeof messages[0]> = {};
+    for (const chatId of Object.keys(lastMessageByChatId)) {
+      const msgId = lastMessageByChatId[chatId];
+      const msg = messages.find((m) => m.id === msgId);
+      if (msg) chatIdToMsg[chatId] = msg;
+    }
+
+    const dispatch = () => {
+      for (const chatId of Object.keys(chatIdToMsg)) {
+        sendApiUpdate({
+          '@type': 'updateChatLastMessage',
+          id: chatId,
+          lastMessage: chatIdToMsg[chatId],
+        });
+      }
+    };
+    setTimeout(dispatch, 1500);
+    setTimeout(dispatch, 4000);
+  }
 
   return {
     chatIds,

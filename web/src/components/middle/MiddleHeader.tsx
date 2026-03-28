@@ -263,6 +263,8 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
     const realChatId = isSavedDialog ? String(threadId) : chatId;
 
     const displayChatId = chat?.isMonoforum ? chat.linkedMonoforumId! : realChatId;
+    // Saturn: for DM chats, use peerUserId to resolve the peer user info
+    const userIdForInfo = chat?.peerUserId || displayChatId;
     return (
       <>
         {(isLeftColumnHideable || currentTransitionKey > 0) && renderBackButton(shouldShowCloseButton, !isSavedDialog)}
@@ -276,8 +278,8 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
         >
           {isUserId(displayChatId) ? (
             <PrivateChatInfo
-              key={displayChatId}
-              userId={displayChatId}
+              key={userIdForInfo}
+              userId={userIdForInfo}
               threadId={!isSavedDialog ? threadId : undefined}
               typingStatus={typingStatus}
               status={connectionStatusText || savedMessagesStatus}

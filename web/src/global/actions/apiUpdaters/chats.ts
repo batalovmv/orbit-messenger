@@ -79,6 +79,12 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             'lastReadInboxMessageId', update.readState.lastReadInboxMessageId,
           );
         }
+        if ('lastReadOutboxMessageId' in update.readState) {
+          global = replaceThreadReadStateParam(
+            global, update.id, MAIN_THREAD_ID,
+            'lastReadOutboxMessageId', update.readState.lastReadOutboxMessageId,
+          );
+        }
       }
 
       if (localChat?.areStoriesHidden !== update.chat.areStoriesHidden) {

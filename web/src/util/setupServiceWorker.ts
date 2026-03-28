@@ -2,6 +2,13 @@ import { getActions } from '../global';
 
 import { DEBUG, DEBUG_MORE, IS_TEST } from '../config';
 import { IS_ANDROID, IS_IOS, IS_SERVICE_WORKER_SUPPORTED } from './browser/windowEnvironment';
+
+// In development mode, unregister any existing service workers to prevent stale cache
+if (DEBUG && IS_SERVICE_WORKER_SUPPORTED) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((r) => r.unregister());
+  });
+}
 import { formatShareText } from './deeplink';
 import { validateFiles } from './files';
 import { notifyClientReady, playNotifySoundDebounced } from './notifications';
@@ -45,7 +52,7 @@ function subscribeToWorker() {
   notifyClientReady();
 }
 
-if (IS_SERVICE_WORKER_SUPPORTED) {
+if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
   window.addEventListener('load', async () => {
     try {
       const controller = navigator.serviceWorker.controller;

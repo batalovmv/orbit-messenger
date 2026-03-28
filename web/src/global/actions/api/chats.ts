@@ -564,6 +564,11 @@ addActionHandler('loadAllChats', async (global, actions, payload): Promise<void>
     if (result?.threadReadStatesById) {
       global = updateMainThreadReadStates(global, result.threadReadStatesById);
     }
+    // Re-apply lastMessageIds that may have been lost in race condition between
+    // loadChats' setGlobal and this getGlobal
+    if (result?.lastMessageByChatId && Object.keys(result.lastMessageByChatId).length) {
+      global = updateChatsLastMessageId(global, result.lastMessageByChatId, listType);
+    }
     setGlobal(global);
     global = getGlobal();
   }
@@ -3353,6 +3358,7 @@ async function loadChats(
     threadInfos: result.threadInfos,
     threadReadStatesById: result.threadReadStatesById,
     messages: result.messages,
+    lastMessageByChatId: result.lastMessageByChatId,
   };
 }
 

@@ -32,15 +32,23 @@ const useContextMenuHandlers = (
 
   const handleBeforeContextMenu = useLastCallback((e: React.MouseEvent) => {
     if (!isMenuDisabled && e.button === 2) {
+      const target = e.target as HTMLElement;
       requestMutation(() => {
-        addExtraClass(e.target as HTMLElement, 'no-selection');
+        addExtraClass(target, 'no-selection');
       });
+      // Fallback cleanup in case contextmenu event doesn't fire or targets a different element
+      setTimeout(() => {
+        requestMutation(() => {
+          removeExtraClass(target, 'no-selection');
+        });
+      }, 300);
     }
   });
 
   const handleContextMenu = useLastCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
     requestMutation(() => {
-      removeExtraClass(e.target as HTMLElement, 'no-selection');
+      removeExtraClass(target, 'no-selection');
     });
 
     if (isMenuDisabled || (shouldDisableOnLink && (e.target as HTMLElement).matches('a[href]'))) {

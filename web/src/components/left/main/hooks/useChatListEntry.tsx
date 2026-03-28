@@ -98,7 +98,7 @@ export default function useChatListEntry({
 
   const renderLastMessageOrTyping = useCallback(() => {
     if (!isSavedDialog && !isPreview
-      && typingStatus && lastMessage && typingStatus.timestamp > lastMessage.date * 1000) {
+      && typingStatus && (!lastMessage || typingStatus.timestamp > lastMessage.date * 1000)) {
       return <TypingStatus typingStatus={typingStatus} />;
     }
 

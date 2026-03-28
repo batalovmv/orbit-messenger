@@ -28,6 +28,7 @@ export interface ApiChat {
   folderId?: number;
   type: ApiChatType;
   title: string;
+  peerUserId?: string; // Saturn: for DM chats, the other user's ID (differs from chatId)
   isVerified?: true;
   areSignaturesShown?: boolean;
   areProfilesShown?: boolean;

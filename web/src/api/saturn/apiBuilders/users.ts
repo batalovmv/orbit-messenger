@@ -37,6 +37,10 @@ export function buildApiUserStatus(user: SaturnUser): ApiUserStatus {
     return { type: 'userStatusRecently' };
   }
 
+  if (user.status === 'offline') {
+    return { type: 'userStatusRecently' };
+  }
+
   return { type: 'userStatusEmpty' };
 }
 
