@@ -31,7 +31,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	req.Header.SetMethod(c.Method())
 	c.Request().Header.VisitAll(func(key, value []byte) {
 		k := string(key)
-		// Skip hop-by-hop headers
+		// Skip hop-by-hop and internal headers (prevent client impersonation)
 		switch strings.ToLower(k) {
 		case "connection", "keep-alive", "transfer-encoding", "te",
 			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate",
@@ -40,6 +40,13 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		}
 		req.Header.SetBytesKV(key, value)
 	})
+	// Re-add X-User-ID/X-User-Role set by JWT middleware (after stripping client-supplied values)
+	if uid := c.Get("X-User-ID"); uid != "" {
+		req.Header.Set("X-User-ID", uid)
+	}
+	if role := c.Get("X-User-Role"); role != "" {
+		req.Header.Set("X-User-Role", role)
+	}
 	// Forward request body
 	if body := c.Body(); len(body) > 0 {
 		req.SetBody(body)
