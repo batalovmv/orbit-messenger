@@ -138,9 +138,12 @@ func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.U
 	// Check: author or chat admin (per TZ spec)
 	isAuthor := msg.SenderID != nil && *msg.SenderID == userID
 	if !isAuthor {
-		_, role, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+		isMember, role, err := s.chats.IsMember(ctx, msg.ChatID, userID)
 		if err != nil {
 			return fmt.Errorf("check membership: %w", err)
+		}
+		if !isMember {
+			return apperror.Forbidden("Not a member of this chat")
 		}
 		if role != "owner" && role != "admin" {
 			return apperror.Forbidden("Only the author or chat admin can delete messages")

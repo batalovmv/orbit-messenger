@@ -366,7 +366,8 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
           />
         )}
         <h3 className={buildClassName(shouldShowOption ? styles.title : styles.singleTitle)}>
-          {oldLang('Chat.DeleteMessagesConfirmation', messageIds?.length)}
+          {messageIds && messageIds.length > 1
+            ? lang('DeleteMultipleMessagesTitle') : lang('DeleteSingleMessagesTitle')}
         </h3>
       </div>
     );

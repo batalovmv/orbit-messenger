@@ -272,6 +272,7 @@
 "ContactInfoNotVerified" = "Not an official account";
 "DeleteForAll" = "Delete for all members";
 "DeleteSingleMessagesTitle" = "Delete message";
+"DeleteMultipleMessagesTitle" = "Delete messages";
 "AreYouSureDeleteSingleMessage" = "Are you sure you want to delete this message?";
 "DeleteForMeChatHint_one" = "This will delete it just for you, not for other participants of the chat.";
 "DeleteForMeChatHint_other" = "This will delete them just for you, not for other participants of the chat.";

@@ -454,7 +454,7 @@ const MessageContextMenu: FC<OwnProps> = ({
           </MenuItem>
         )}
         {canForward && <MenuItem icon="forward" onClick={onForward}>{oldLang('Forward')}</MenuItem>}
-        {canSelect && <MenuItem icon="select" onClick={onSelect}>{oldLang('Common.Select')}</MenuItem>}
+        {canSelect && <MenuItem icon="select" onClick={onSelect}>{oldLang('CommonSelect')}</MenuItem>}
         {canReport && <MenuItem icon="flag" onClick={onReport}>{oldLang('lng_context_report_msg')}</MenuItem>}
         {canDelete && <MenuItem destructive icon="delete" onClick={onDelete}>{oldLang('Delete')}</MenuItem>}
         {hasCustomEmoji && (

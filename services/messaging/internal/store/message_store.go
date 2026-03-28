@@ -246,7 +246,7 @@ func (s *messageStore) Update(ctx context.Context, msg *model.Message) error {
 
 func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE messages SET is_deleted = true, content = NULL WHERE id = $1`, id,
+		`UPDATE messages SET is_deleted = true, content = NULL, entities = NULL WHERE id = $1`, id,
 	)
 	return err
 }

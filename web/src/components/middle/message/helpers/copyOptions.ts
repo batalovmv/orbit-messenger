@@ -140,7 +140,7 @@ function checkMessageHasSelection(message: ApiMessage): boolean {
 }
 function getCopyLabel(hasSelection: boolean): string {
   if (hasSelection) {
-    return 'lng_context_copy_selected';
+    return 'ContextCopySelected';
   }
-  return 'lng_context_copy_text';
+  return 'ContextCopyText';
 }

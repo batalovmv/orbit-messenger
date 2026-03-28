@@ -244,8 +244,11 @@ export interface LangPair {
   'ContactInfoNotVerified': undefined;
   'DeleteForAll': undefined;
   'DeleteSingleMessagesTitle': undefined;
+  'DeleteMultipleMessagesTitle': undefined;
   'AreYouSureDeleteSingleMessage': undefined;
   'ConversationDeleteMessagesForEveryone': undefined;
+  'Conversation.DeleteMessagesForEveryone': undefined;
+  'Chat.DeleteMessagesConfirmation': undefined;
   'ChatListDeleteForCurrentUser': undefined;
   'Delete': undefined;
   'FakeMessage': undefined;
@@ -1017,6 +1020,20 @@ export interface LangPair {
   'WeekdayFriday': undefined;
   'WeekdaySaturday': undefined;
   'WeekdaySunday': undefined;
+  'Weekday.ShortSunday': undefined;
+  'Weekday.ShortMonday': undefined;
+  'Weekday.ShortTuesday': undefined;
+  'Weekday.ShortWednesday': undefined;
+  'Weekday.ShortThursday': undefined;
+  'Weekday.ShortFriday': undefined;
+  'Weekday.ShortSaturday': undefined;
+  'Weekday.Sunday': undefined;
+  'Weekday.Monday': undefined;
+  'Weekday.Tuesday': undefined;
+  'Weekday.Wednesday': undefined;
+  'Weekday.Thursday': undefined;
+  'Weekday.Friday': undefined;
+  'Weekday.Saturday': undefined;
   'WeekdayToday': undefined;
   'Today': undefined;
   'WeekdayYesterday': undefined;
@@ -3525,6 +3542,7 @@ export interface LangPairWithVariables<V = LangVariable> {
 export interface LangPairPlural {
   'DeleteForMeChatHint': undefined;
   'DeleteForEveryoneHint': undefined;
+  'Chat.DeleteMessagesConfirmation': undefined;
   'MediaReplaceInvalidError': undefined;
 }
 
