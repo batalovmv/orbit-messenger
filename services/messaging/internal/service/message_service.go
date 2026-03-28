@@ -135,28 +135,14 @@ func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.U
 		return apperror.NotFound("Message not found")
 	}
 
-	// Check delete permission:
-	// - DM (direct): both participants can delete any message
-	// - Group/channel: only author or admin/owner can delete
+	// Check: author or chat admin (per TZ spec)
 	isAuthor := msg.SenderID != nil && *msg.SenderID == userID
 	if !isAuthor {
-		isMember, role, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+		_, role, err := s.chats.IsMember(ctx, msg.ChatID, userID)
 		if err != nil {
 			return fmt.Errorf("check membership: %w", err)
 		}
-		if !isMember {
-			return apperror.Forbidden("Not a member of this chat")
-		}
-
-		chat, err := s.chats.GetByID(ctx, msg.ChatID)
-		if err != nil {
-			return fmt.Errorf("get chat: %w", err)
-		}
-
-		// In direct chats, both participants can delete any message
-		isDirect := chat != nil && chat.Type == "direct"
-		isAdmin := role == "owner" || role == "admin"
-		if !isDirect && !isAdmin {
+		if role != "owner" && role != "admin" {
 			return apperror.Forbidden("Only the author or chat admin can delete messages")
 		}
 	}

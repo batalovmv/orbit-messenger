@@ -468,15 +468,7 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
             )}
           </>
         )}
-        {canDeleteForAll && (
-          <Checkbox
-            className="dialog-checkbox"
-            label={contactName ? renderText(oldLang('DeleteMessagesOptionAlso', contactName))
-              : oldLang('Conversation.DeleteMessagesForEveryone')}
-            checked={shouldDeleteForAll}
-            onCheck={setShouldDeleteForAll}
-          />
-        )}
+        {/* Saturn: single delete mode (soft-delete for everyone), no checkbox needed */}
         <div className={buildClassName('dialog-buttons',
           isMediaDropdownOpen ? styles.dialogButtons : styles.proceedButtons)}
         >
