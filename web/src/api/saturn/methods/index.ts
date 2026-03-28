@@ -203,9 +203,7 @@ export function fetchMessage() {
   return Promise.resolve(undefined);
 }
 
-export function fetchFullUser() {
-  return Promise.resolve(undefined);
-}
+// fetchFullUser — re-exported from ./users
 
 export function fetchUsers() {
   return Promise.resolve(undefined);
@@ -329,7 +327,7 @@ export {
 } from './auth';
 
 export {
-  fetchCurrentUser, fetchGlobalUsers, fetchUser, searchChats, searchUsers, updateProfile,
+  fetchCurrentUser, fetchFullUser, fetchGlobalUsers, fetchUser, searchChats, searchUsers, updateProfile,
 } from './users';
 
 export {

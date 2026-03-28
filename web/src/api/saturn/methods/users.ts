@@ -47,6 +47,34 @@ export async function fetchUser({ userId }: { userId: string }) {
   return { user: apiUser };
 }
 
+export async function fetchFullUser({ id }: { id: string; accessHash?: string }) {
+  const saturnUser = await client.request<SaturnUser>('GET', `/users/${id}`);
+
+  const user = buildApiUser(saturnUser);
+  const fullInfo = buildApiUserFullInfo(saturnUser);
+  const status = buildApiUserStatus(saturnUser);
+
+  sendApiUpdate({
+    '@type': 'updateUser',
+    id: saturnUser.id,
+    user,
+  });
+
+  sendApiUpdate({
+    '@type': 'updateUserStatus',
+    userId: saturnUser.id,
+    status,
+  });
+
+  return {
+    user,
+    fullInfo,
+    users: [user],
+    chats: [],
+    userStatusesById: { [saturnUser.id]: status },
+  };
+}
+
 export async function searchUsers({ query, limit = 20 }: { query: string; limit?: number }) {
   const result = await client.request<{ users: SaturnUser[] }>(
     'GET', `/users?q=${encodeURIComponent(query)}&limit=${limit}`,
