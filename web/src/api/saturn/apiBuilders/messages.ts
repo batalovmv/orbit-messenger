@@ -48,7 +48,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     text: msg.content ? {
       text: msg.content,
       entities: msg.entities?.map(buildApiEntity) || [],
-    } : undefined,
+    } : { text: '', entities: [] },
   };
 
   // Map media_attachments to TG Web A content fields
