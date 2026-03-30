@@ -38,6 +38,8 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Put("/chats/:id/permissions", h.UpdateDefaultPermissions)
 	app.Put("/chats/:id/members/:userId/permissions", h.UpdateMemberPermissions)
 	app.Post("/chats/:id/slow-mode", h.SetSlowMode)
+	app.Put("/chats/:id/photo", h.UpdateChatPhoto)
+	app.Delete("/chats/:id/photo", h.DeleteChatPhoto)
 }
 
 func (h *ChatHandler) ListChats(c *fiber.Ctx) error {
@@ -460,6 +462,54 @@ func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"member_ids": ids})
+}
+
+func (h *ChatHandler) UpdateChatPhoto(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req struct {
+		AvatarURL string `json:"avatar_url"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if req.AvatarURL == "" {
+		return response.Error(c, apperror.BadRequest("avatar_url is required"))
+	}
+
+	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, nil, nil, &req.AvatarURL)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, chat)
+}
+
+func (h *ChatHandler) DeleteChatPhoto(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	chat, err := h.svc.ClearChatPhoto(c.Context(), chatID, uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, chat)
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {

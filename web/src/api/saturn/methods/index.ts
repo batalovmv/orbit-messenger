@@ -348,3 +348,9 @@ export {
 
 export { fetchDifference } from './sync';
 export { fetchLangPack, fetchLangStrings, fetchLanguages, oldFetchLangPack } from './settings';
+
+export {
+  uploadMedia, initChunkedUpload, uploadChunk, completeChunkedUpload,
+  fetchMediaInfo, deleteMedia, fetchSharedMedia,
+  updateChatPhoto, deleteChatPhoto,
+} from './media';

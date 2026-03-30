@@ -15,6 +15,7 @@ import (
 
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
+	CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error)
 	ListByChat(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error)
@@ -27,6 +28,9 @@ type MessageStore interface {
 	UnpinAll(ctx context.Context, chatID uuid.UUID) error
 	UpdateReadPointer(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error
 	CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error)
+	// Media
+	GetMediaByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.MediaAttachment, error)
+	ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error)
 }
 
 type messageStore struct {

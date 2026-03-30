@@ -1,5 +1,6 @@
 import type { ApiMessage, ApiMessageEntity } from '../../types';
-import type { SaturnMessage, SaturnMessageEntity } from '../types';
+import type { SaturnMediaAttachment, SaturnMessage, SaturnMessageEntity } from '../types';
+import { getBaseUrl } from '../client';
 
 // Saturn uses UUID for message IDs, but TG Web A expects numeric IDs.
 // We use sequence_number as the numeric message ID.
@@ -43,6 +44,18 @@ export function getMessageSeqNum(uuid: string): number | undefined {
 export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   registerMessageId(msg.chat_id, msg.id, msg.sequence_number);
 
+  const content: ApiMessage['content'] = {
+    text: msg.content ? {
+      text: msg.content,
+      entities: msg.entities?.map(buildApiEntity) || [],
+    } : undefined,
+  };
+
+  // Map media_attachments to TG Web A content fields
+  if (msg.media_attachments?.length) {
+    buildMediaContent(content, msg.media_attachments);
+  }
+
   return {
     id: msg.sequence_number,
     chatId: msg.chat_id,
@@ -52,12 +65,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     isOutgoing: false, // Will be set by caller based on current user
     sendingState: undefined, // Server-confirmed message — clear pending state
     senderId: msg.sender_id || undefined,
-    content: {
-      text: msg.content ? {
-        text: msg.content,
-        entities: msg.entities?.map(buildApiEntity) || [],
-      } : undefined,
-    },
+    content,
     isEdited: msg.is_edited,
     editDate: msg.edited_at ? Math.floor(new Date(msg.edited_at).getTime() / 1000) : undefined,
     isPinned: msg.is_pinned,
@@ -65,6 +73,110 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     replyInfo: msg.reply_to_id ? buildReplyInfo(msg) : undefined,
     forwardInfo: msg.is_forwarded ? buildForwardInfo(msg) : undefined,
   };
+}
+
+// Build full media URL from backend-relative path (/media/:id → gateway presigned redirect)
+function fullMediaUrl(relativePath: string): string {
+  if (!relativePath) return '';
+  return `${getBaseUrl()}${relativePath}`;
+}
+
+function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMediaAttachment[]) {
+  const first = attachments[0];
+  if (!first) return;
+
+  switch (first.type) {
+    case 'photo': {
+      content.photo = {
+        mediaType: 'photo',
+        id: first.media_id,
+        date: 0,
+        thumbnail: first.thumbnail_url ? {
+          width: first.width || 320,
+          height: first.height || 320,
+          dataUri: fullMediaUrl(first.thumbnail_url),
+        } : undefined,
+        sizes: [
+          {
+            width: first.width || 320,
+            height: first.height || 320,
+            type: 's' as const,
+          },
+          {
+            width: first.width || 800,
+            height: first.height || 800,
+            type: 'y' as const,
+          },
+        ],
+        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
+        isSpoiler: first.is_spoiler || undefined,
+      };
+      break;
+    }
+    case 'video':
+    case 'videonote': {
+      content.video = {
+        mediaType: 'video',
+        id: first.media_id,
+        mimeType: first.mime_type || 'video/mp4',
+        duration: first.duration_seconds || 0,
+        width: first.width || 0,
+        height: first.height || 0,
+        fileName: first.original_filename || 'video.mp4',
+        size: first.size_bytes,
+        isRound: first.type === 'videonote' || undefined,
+        thumbnail: first.thumbnail_url ? {
+          width: first.width || 320,
+          height: first.height || 320,
+          dataUri: fullMediaUrl(first.thumbnail_url),
+        } : undefined,
+        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
+        isSpoiler: first.is_spoiler || undefined,
+      };
+      break;
+    }
+    case 'voice': {
+      content.voice = {
+        mediaType: 'voice',
+        id: first.media_id,
+        duration: first.duration_seconds || 0,
+        waveform: first.waveform_data || [],
+        size: first.size_bytes,
+      };
+      break;
+    }
+    case 'gif': {
+      content.video = {
+        mediaType: 'video',
+        id: first.media_id,
+        mimeType: 'video/mp4',
+        duration: first.duration_seconds || 0,
+        width: first.width || 0,
+        height: first.height || 0,
+        fileName: 'animation.mp4',
+        size: first.size_bytes,
+        isGif: true,
+        thumbnail: first.thumbnail_url ? {
+          width: first.width || 320,
+          height: first.height || 320,
+          dataUri: fullMediaUrl(first.thumbnail_url),
+        } : undefined,
+        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
+      };
+      break;
+    }
+    case 'file':
+    default: {
+      content.document = {
+        mediaType: 'document',
+        id: first.media_id,
+        mimeType: first.mime_type || 'application/octet-stream',
+        fileName: first.original_filename || 'file',
+        size: first.size_bytes,
+      };
+      break;
+    }
+  }
 }
 
 function buildReplyInfo(msg: SaturnMessage) {

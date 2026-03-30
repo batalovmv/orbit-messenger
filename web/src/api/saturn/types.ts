@@ -69,6 +69,25 @@ export interface SaturnMessage {
   edited_at?: string;
   sender_name: string;
   sender_avatar_url?: string;
+  media_attachments?: SaturnMediaAttachment[];
+}
+
+export interface SaturnMediaAttachment {
+  media_id: string;
+  type: 'photo' | 'video' | 'file' | 'voice' | 'videonote' | 'gif';
+  mime_type: string;
+  url?: string;
+  thumbnail_url?: string;
+  medium_url?: string;
+  original_filename?: string;
+  size_bytes: number;
+  width?: number;
+  height?: number;
+  duration_seconds?: number;
+  waveform_data?: number[];
+  position: number;
+  is_spoiler: boolean;
+  processing_status: string;
 }
 
 export interface SaturnChatMember {

@@ -17,7 +17,7 @@ const (
 
 // Role defaults.
 const (
-	DefaultGroupPermissions   = AllPermissions // groups: everything allowed
+	DefaultGroupPermissions = CanSendMessages | CanSendMedia | CanAddMembers | CanPinMessages // groups: no CanChangeInfo, CanDeleteMessages, CanBanUsers, CanInviteViaLink by default
 	DefaultChannelPermissions = int64(0)       // channels: only admin/owner can post
 	DefaultAdminPermissions   = AllPermissions // new admins get all capabilities
 )

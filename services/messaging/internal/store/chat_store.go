@@ -36,6 +36,7 @@ type ChatStore interface {
 	UpdateMemberPermissions(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
 	SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error
 	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
+	ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error
 }
 
 type chatStore struct {
@@ -450,6 +451,13 @@ func (s *chatStore) UpdateChat(ctx context.Context, chatID uuid.UUID, name, desc
 		 WHERE id = $1`,
 		chatID, name, description, avatarURL,
 	)
+	return err
+}
+
+func (s *chatStore) ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE chats SET avatar_url = NULL, updated_at = NOW() WHERE id = $1`,
+		chatID)
 	return err
 }
 

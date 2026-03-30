@@ -118,6 +118,16 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       fetchFullChat({ id: payload.chat_id as string });
       break;
     }
+    case 'media_ready': {
+      // Media processing finished — could refresh message media URLs
+      // For now just log; full integration in Step 5
+      console.log('[Saturn WS] media_ready', msg.data);
+      break;
+    }
+    case 'media_upload_progress': {
+      console.log('[Saturn WS] media_upload_progress', msg.data);
+      break;
+    }
     default:
       break;
   }

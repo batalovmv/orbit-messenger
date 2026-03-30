@@ -92,9 +92,9 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 		CreatedBy:   &userID,
 	}
 	if chatType == "channel" {
-		chat.DefaultPermissions = 0
+		chat.DefaultPermissions = permissions.DefaultChannelPermissions
 	} else {
-		chat.DefaultPermissions = 255
+		chat.DefaultPermissions = permissions.DefaultGroupPermissions
 	}
 
 	if err := s.chats.Create(ctx, chat); err != nil {
@@ -147,6 +147,45 @@ func (s *ChatService) UpdateChat(ctx context.Context, chatID, userID uuid.UUID, 
 
 	if err := s.chats.UpdateChat(ctx, chatID, name, description, avatarURL); err != nil {
 		return nil, fmt.Errorf("update chat: %w", err)
+	}
+
+	chat, err = s.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get updated chat: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_updated",
+		chat,
+		memberIDs,
+		userID.String(),
+	)
+
+	return chat, nil
+}
+
+func (s *ChatService) ClearChatPhoto(ctx context.Context, chatID, userID uuid.UUID) (*model.Chat, error) {
+	member, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	chat, err := s.chats.GetByID(ctx, chatID)
+	if err != nil || chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanChangeInfo) {
+		return nil, apperror.Forbidden("No permission to edit chat info")
+	}
+
+	if err := s.chats.ClearChatPhoto(ctx, chatID); err != nil {
+		return nil, fmt.Errorf("clear chat photo: %w", err)
 	}
 
 	chat, err = s.chats.GetByID(ctx, chatID)
@@ -302,6 +341,12 @@ func (s *ChatService) UpdateMemberRole(ctx context.Context, chatID, userID, targ
 		if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
 			return apperror.Forbidden("No permission to change member roles")
 		}
+	}
+
+	// When demoting to member, reset permissions to 0 so chat defaults apply.
+	// Only admins/owners should have custom permission overrides.
+	if newRole == "member" {
+		newPerms = 0
 	}
 
 	if err := s.chats.UpdateMemberRole(ctx, chatID, targetID, newRole, newPerms, customTitle); err != nil {

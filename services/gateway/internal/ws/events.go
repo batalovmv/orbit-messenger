@@ -21,6 +21,9 @@ const (
 	EventChatMemberAdded   = "chat_member_added"
 	EventChatMemberRemoved = "chat_member_removed"
 	EventChatMemberUpdated = "chat_member_updated"
+
+	EventMediaUploadProgress = "media_upload_progress"
+	EventMediaReady          = "media_ready"
 )
 
 // Envelope is the standard WebSocket message format.

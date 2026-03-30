@@ -1,8 +1,9 @@
-import type { ApiMessage, ApiMessageEntity, ApiSendMessageAction } from '../../types';
+import type { ApiAttachment, ApiMessage, ApiMessageEntity, ApiSendMessageAction } from '../../types';
 import type { SaturnMessage, SaturnPaginatedResponse } from '../types';
 
 import { buildApiMessage, buildSaturnEntities, getMessageUuid } from '../apiBuilders/messages';
 import * as client from '../client';
+import { uploadMedia } from './media';
 import { sendApiUpdate, sendImmediateApiUpdate } from '../updates/apiUpdateEmitter';
 import { trackPendingSend } from '../updates/wsHandler';
 
@@ -97,16 +98,19 @@ let localMessageCounter = 0;
 const LOCAL_MESSAGES_LIMIT = 1e6; // Must match config.ts — keeps local IDs fractional
 
 export async function sendMessage({
-  chat, text, entities, replyInfo, lastMessageId,
+  chat, text, entities, replyInfo, lastMessageId, mediaIds, isSpoiler, attachment,
 }: {
   chat: { id: string };
   text?: string;
   entities?: ApiMessageEntity[];
   replyInfo?: { replyToMsgId?: number; type?: string };
   lastMessageId?: number;
-}) {
+  mediaIds?: string[];
+  isSpoiler?: boolean;
+  attachment?: ApiAttachment;
+}, progressCallback?: Function) {
   const chatId = chat.id;
-  if (!text) return;
+  if (!text && (!mediaIds || mediaIds.length === 0) && !attachment) return;
 
   // Create local (optimistic) message.
   // ID must be fractional so isLocalMessageId() recognizes it (checks !Number.isInteger).
@@ -121,7 +125,7 @@ export async function sendMessage({
     isOutgoing: true,
     senderId: currentUserId,
     content: {
-      text: { text, entities: entities || [] },
+      text: text ? { text, entities: entities || [] } : undefined,
     },
     sendingState: 'messageSendingStatePending',
   };
@@ -141,10 +145,48 @@ export async function sendMessage({
 
   const replyToId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
 
+  // Upload attachment if provided (photo/video/file/voice/videonote)
+  let uploadedMediaIds = mediaIds || [];
+  if (attachment) {
+    try {
+      const mediaType = detectMediaType(attachment);
+      const onProgress = progressCallback
+        ? (loaded: number, total: number) => {
+          progressCallback(total > 0 ? loaded / total : 0, `${chatId}_${localId}`);
+        }
+        : undefined;
+      const result = await uploadMedia(
+        attachment.blob,
+        mediaType,
+        onProgress,
+        attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0,
+      );
+      uploadedMediaIds = [result.id];
+    } catch (e) {
+      sendApiUpdate({
+        '@type': 'updateMessageSendFailed',
+        chatId,
+        localId,
+        error: e instanceof Error ? e.message : 'Failed to upload media',
+      });
+      return undefined;
+    }
+  }
+
   try {
-    const body: Record<string, unknown> = { content: text };
+    const body: Record<string, unknown> = { content: text || '' };
     if (entities?.length) {
       body.entities = buildSaturnEntities(entities);
+    }
+    if (uploadedMediaIds.length > 0) {
+      body.media_ids = uploadedMediaIds;
+    }
+    if (isSpoiler || attachment?.shouldSendAsSpoiler) {
+      body.is_spoiler = true;
+    }
+    // Set message type based on attachment
+    if (attachment && uploadedMediaIds.length > 0) {
+      body.type = detectMediaType(attachment);
     }
     if (replyToId) {
       const replyUuid = resolveMessageUuid(chatId, replyToId);
@@ -436,6 +478,21 @@ export async function fetchMessageLink({
   if (!uuid) return undefined;
 
   return { link: `#chat/${chatId}/${uuid}` };
+}
+
+// Detect media type from ApiAttachment for Saturn API
+function detectMediaType(attachment: ApiAttachment): string {
+  if (attachment.voice) return 'voice';
+  if (attachment.shouldSendAsFile) return 'file';
+  const mime = attachment.mimeType || '';
+  if (mime === 'image/gif') return 'gif';
+  if (mime.startsWith('image/')) return 'photo';
+  if (mime.startsWith('video/')) {
+    return attachment.quick && attachment.quick.duration && attachment.quick.duration <= 60
+      ? 'video' : 'video';
+  }
+  if (mime.startsWith('audio/')) return 'voice';
+  return 'file';
 }
 
 export function sendMessageAction({

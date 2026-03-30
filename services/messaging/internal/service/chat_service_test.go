@@ -253,6 +253,40 @@ func TestUpdateMemberRole_NATS_MemberUpdated(t *testing.T) {
 	}
 }
 
+func TestUpdateMemberRole_DemoteResetsPermissions(t *testing.T) {
+	ownerID := uuid.New()
+	targetID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	var savedPerms int64 = -1
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, userID uuid.UUID) (*model.ChatMember, error) {
+			if userID == ownerID {
+				return &model.ChatMember{Role: "owner"}, nil
+			}
+			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
+		},
+		updateMemberRoleFn: func(_ context.Context, _, _ uuid.UUID, _ string, perms int64, _ *string) error {
+			savedPerms = perms
+			return nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{ownerID.String(), targetID.String()}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	// Demote admin to member — even if caller passes permissions=255, they should be reset to 0
+	err := svc.UpdateMemberRole(context.Background(), chatID, ownerID, targetID, "member", permissions.AllPermissions, nil)
+	if err != nil {
+		t.Fatalf("UpdateMemberRole: %v", err)
+	}
+	if savedPerms != 0 {
+		t.Fatalf("demoted member should have permissions=0, got %d", savedPerms)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DeleteChat — NATS: sent BEFORE deletion
 // ---------------------------------------------------------------------------
@@ -459,7 +493,7 @@ func TestCreateChat_ChannelDefaultPerms0(t *testing.T) {
 	}
 }
 
-func TestCreateChat_GroupDefaultPerms255(t *testing.T) {
+func TestCreateChat_GroupDefaultPerms(t *testing.T) {
 	ownerID := uuid.New()
 	rec := &RecordingPublisher{}
 
@@ -483,8 +517,9 @@ func TestCreateChat_GroupDefaultPerms255(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateChat group: %v", err)
 	}
-	if createdChat.DefaultPermissions != 255 {
-		t.Fatalf("group default_permissions should be 255, got %d", createdChat.DefaultPermissions)
+	expected := permissions.DefaultGroupPermissions
+	if createdChat.DefaultPermissions != expected {
+		t.Fatalf("group default_permissions should be %d, got %d", expected, createdChat.DefaultPermissions)
 	}
 }
 

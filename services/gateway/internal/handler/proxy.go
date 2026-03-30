@@ -15,8 +15,8 @@ import (
 type ProxyConfig struct {
 	AuthServiceURL      string
 	MessagingServiceURL string
+	MediaServiceURL     string
 	FrontendURL         string
-
 }
 
 // doProxy performs a manual reverse proxy: sends request to upstream, copies
@@ -70,7 +70,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		switch k {
 		case "content-type", "content-disposition", "content-encoding",
 			"cache-control", "etag", "last-modified", "x-request-id",
-			"set-cookie":
+			"set-cookie", "location":
 			c.Response().Header.AddBytesKV(key, value)
 		}
 		// Skip CORS headers from upstream — gateway owns CORS
@@ -96,6 +96,23 @@ func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 			slog.Error("invite proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
+}
+
+// PublicMediaProxy returns a handler that proxies media GET requests without JWT.
+// Used for <img src>, <video src> — presigned R2 URLs are self-authenticating.
+func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
+	client := &fasthttp.Client{ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
+	return func(c *fiber.Ctx) error {
+		path := strings.TrimPrefix(c.Path(), "/api/v1")
+		url := mediaURL + path
+		if err := doProxy(c, url, client, frontendURL); err != nil {
+			slog.Error("media public proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Media service unavailable", "status": 502,
 			})
 		}
 		return nil
@@ -128,6 +145,30 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 			slog.Error("auth proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+
+	// Media routes: proxy with JWT, higher timeouts for uploads
+	mediaClient := &fasthttp.Client{
+		ReadTimeout:         120 * time.Second,
+		WriteTimeout:        120 * time.Second,
+		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB response (for large file info etc)
+	}
+	apiGroup.All("/media/*", func(c *fiber.Ctx) error {
+		path := strings.TrimPrefix(c.Path(), "/api/v1")
+		if path == "" {
+			path = "/"
+		}
+		url := cfg.MediaServiceURL + path
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, mediaClient, cfg.FrontendURL); err != nil {
+			slog.Error("media proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Media service unavailable", "status": 502,
 			})
 		}
 		return nil

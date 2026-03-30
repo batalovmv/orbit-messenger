@@ -187,6 +187,10 @@ func (m *mockChatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, ena
 	return nil
 }
 
+func (m *mockChatStore) ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error {
+	return nil
+}
+
 func (m *mockChatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	return nil, nil
 }
@@ -318,6 +322,20 @@ func (m *mockMessageStore) CreateForwarded(ctx context.Context, msgs []model.Mes
 		result[i] = msg
 	}
 	return result, nil
+}
+
+func (m *mockMessageStore) CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error {
+	msg.ID = uuid.New()
+	msg.SequenceNumber = 1
+	return nil
+}
+
+func (m *mockMessageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.MediaAttachment, error) {
+	return nil, nil
+}
+
+func (m *mockMessageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error) {
+	return nil, "", false, nil
 }
 
 // ---------------------------------------------------------------------------

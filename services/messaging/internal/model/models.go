@@ -82,6 +82,27 @@ type Message struct {
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`
+	// Media attachments (populated via message_media JOIN)
+	MediaAttachments []MediaAttachment `json:"media_attachments,omitempty"`
+}
+
+// MediaAttachment represents a media file attached to a message.
+type MediaAttachment struct {
+	MediaID          string   `json:"media_id"`
+	Type             string   `json:"type"`
+	MimeType         string   `json:"mime_type"`
+	URL              string   `json:"url,omitempty"`
+	ThumbnailURL     string   `json:"thumbnail_url,omitempty"`
+	MediumURL        string   `json:"medium_url,omitempty"`
+	OriginalFilename string   `json:"original_filename,omitempty"`
+	SizeBytes        int64    `json:"size_bytes"`
+	Width            *int     `json:"width,omitempty"`
+	Height           *int     `json:"height,omitempty"`
+	DurationSeconds  *float64 `json:"duration_seconds,omitempty"`
+	WaveformData     []byte   `json:"waveform_data,omitempty"`
+	Position         int      `json:"position"`
+	IsSpoiler        bool     `json:"is_spoiler"`
+	ProcessingStatus string   `json:"processing_status"`
 }
 
 type InviteLink struct {

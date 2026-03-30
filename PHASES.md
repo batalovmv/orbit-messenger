@@ -456,28 +456,28 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 3, `docs/TZ-ORBIT-MESSENGER.md` §11.3
-- [ ] Изучить Cloudflare R2 API — S3-совместимость, presigned URLs, multipart upload
-- [ ] Спроектировать media pipeline: upload → process (resize/thumbnail/waveform) → store → serve
-- [ ] Решить: обработка изображений на Go (imaging lib) или external service (sharp)?
-- [ ] Решить: chunked upload — свой протокол или tus.io?
-- [ ] Продумать: как связать media с messages? JOIN table vs inline columns (ТЗ-документы расходятся!)
-- [ ] Продумать: как TG Web A отправляет медиа? FormData? Base64? Какой UI flow?
-- [ ] Продумать: video streaming — прямой R2 presigned URL или прокси через media сервис?
-- [ ] Оценить: ClamAV virus scanning — нужен сейчас или defer?
-- [ ] Спроектировать cleanup policy для one-time media и orphaned uploads
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 3, `docs/TZ-ORBIT-MESSENGER.md` §11.3
+- [x] Изучить Cloudflare R2 API — S3-совместимость, presigned URLs, multipart upload
+- [x] Спроектировать media pipeline: upload → process (resize/thumbnail/waveform) → store → serve
+- [x] Решить: обработка изображений на Go → disintegration/imaging (pure Go, без CGO)
+- [x] Решить: chunked upload → свой протокол (init/chunk/complete), НЕ tus.io
+- [x] Решить: media↔messages → JOIN table message_media (поддержка альбомов)
+- [x] Продумать: TG Web A media flow → FormData multipart, XHR для progress
+- [x] Решить: video streaming → presigned R2 URL (302 redirect), не проксируем
+- [x] Решить: ClamAV → defer на Phase 7 (Security). 150 invite-only юзеров
+- [x] Спроектировать cleanup policy → background goroutine каждые 6h, orphans >24h
+- [x] Составить план реализации, консолидировать 10 вариантов, согласовать
 
 ### Backend: Media сервис (порт 8083) — Endpoints (8)
 
-- [ ] POST /media/upload — загрузка файла, возврат media_id + URLs
-- [ ] POST /media/upload/chunked/init — начать chunked upload (>10MB)
-- [ ] POST /media/upload/chunked/:uploadId — загрузить chunk
-- [ ] POST /media/upload/chunked/:uploadId/complete — завершить
-- [ ] GET /media/:id — presigned R2 redirect
-- [ ] GET /media/:id/thumbnail — thumbnail
-- [ ] DELETE /media/:id — удалить из R2
-- [ ] GET /media/:id/info — метаданные (size, type, dimensions, duration)
+- [x] POST /media/upload — загрузка файла, возврат media_id + URLs
+- [x] POST /media/upload/chunked/init — начать chunked upload (>10MB)
+- [x] POST /media/upload/chunked/:uploadId — загрузить chunk
+- [x] POST /media/upload/chunked/:uploadId/complete — завершить
+- [x] GET /media/:id — presigned R2 redirect
+- [x] GET /media/:id/thumbnail — thumbnail
+- [x] DELETE /media/:id — удалить из R2
+- [x] GET /media/:id/info — метаданные (size, type, dimensions, duration)
 
 ### Server-side обработка
 
@@ -503,41 +503,52 @@ r2://orbit-media/
 
 ### WebSocket события (2 новых)
 
-- [ ] `media_upload_progress` — прогресс загрузки больших файлов
-- [ ] `media_ready` — thumbnail/resize готов
+- [x] `media_upload_progress` — прогресс загрузки больших файлов
+- [x] `media_ready` — thumbnail/resize готов
 
 ### Database
 
 **media:**
-- [ ] id UUID PK, uploader_id, type, mime_type, original_filename
-- [ ] size_bytes BIGINT, r2_key TEXT, thumbnail_r2_key TEXT
-- [ ] width INT, height INT, duration_seconds INT
-- [ ] waveform_data BYTEA, is_one_time BOOLEAN DEFAULT false
-- [ ] created_at
+- [x] id UUID PK, uploader_id, type, mime_type, original_filename
+- [x] size_bytes BIGINT, r2_key TEXT, thumbnail_r2_key TEXT, medium_r2_key TEXT
+- [x] width INT, height INT, duration_seconds FLOAT
+- [x] waveform_data BYTEA, is_one_time BOOLEAN DEFAULT false, processing_status TEXT
+- [x] created_at
 
 **message_media:**
-- [ ] message_id + media_id PK, position INT (порядок в альбоме)
+- [x] message_id + media_id PK, position INT (порядок в альбоме), is_spoiler BOOLEAN
 
-### Frontend: Saturn API методы (~25)
+### Frontend: Saturn API методы (~12 реализовано)
 
-- [ ] uploadMedia, sendMediaMessage, downloadMedia, fetchMessageMedia
-- [ ] cancelMediaDownload, cancelMediaUpload
-- [ ] sendVoice, sendVideoNote, sendDocument, sendPhoto, sendVideo
-- [ ] sendAlbum, fetchSharedMedia, fetchCommonMedia, resendMedia
-- [ ] fetchMediaViewers, sendOneTimeMedia, openOneTimeMedia
-- [ ] fetchDocumentPreview, setMediaSpoiler, removeMediaSpoiler
+- [x] uploadMedia (XHR с progress), initChunkedUpload, uploadChunk, completeChunkedUpload
+- [x] fetchMediaInfo, deleteMedia, fetchSharedMedia
+- [x] sendMessage с media_ids (расширен)
+- [x] updateChatPhoto, deleteChatPhoto
+- [x] buildApiMessage → media_attachments маппинг (photo/video/voice/document/gif)
+- [x] WS events: media_ready, media_upload_progress (handler stubs)
+- [~] cancelMediaUpload — XHR abort (deferred, trivial)
+- [~] sendVoice, sendVideoNote, sendDocument, sendPhoto, sendVideo — convenience wrappers (deferred to UI wiring)
 
 ### Фичи
 
-- [ ] Drag & Drop в чат
-- [ ] Clipboard paste (Ctrl+V для скриншотов)
-- [ ] Preview перед отправкой + caption
-- [ ] One-time media (self-destruct)
-- [ ] Media spoiler (blur до клика)
-- [ ] Albums (несколько фото в одном сообщении)
-- [ ] Media gallery tab в чате
-- [ ] GIF: Tenor API прокси (search + trending + saved)
-- [ ] PDF preview
+- [ ] Drag & Drop в чат (TG Web A UI exists, needs Saturn API wiring)
+- [ ] Clipboard paste (Ctrl+V для скриншотов) (TG Web A UI exists, needs wiring)
+- [ ] Preview перед отправкой + caption (TG Web A UI exists, needs wiring)
+- [ ] One-time media (self-destruct) — DB flags ready, UI deferred
+- [ ] Media spoiler (blur до клика) — DB flags ready, UI deferred
+- [ ] Albums (несколько фото в одном сообщении) — message_media.position ready
+- [ ] Media gallery tab в чате — fetchSharedMedia endpoint ready, UI deferred
+- [~] GIF: Tenor API прокси — defer to Phase 5 (Rich Messaging)
+- [~] PDF preview — defer
+
+### Известные отложения и решения
+
+- **Thumbnails в JPEG** (не WebP) — Go не имеет стабильного WebP encoder. JPEG для thumb/medium
+- **ClamAV** → Phase 7 (Security). Invite-only, 150 юзеров
+- **GIF Tenor API** → Phase 5 (Rich Messaging). GIF→MP4 конвертация работает
+- **PDF preview** → отложено, не критично
+- **Frontend UI wiring** — TG Web A компоненты (AttachMenu, MediaViewer, VoiceRecorder) существуют, нужна интеграция с Saturn API. Backend полностью готов
+- **Chunked upload state** — Redis с TTL 24h (не DB), автоочистка
 
 ### Критерий "готово"
 

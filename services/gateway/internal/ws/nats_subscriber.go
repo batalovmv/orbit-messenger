@@ -44,6 +44,7 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.lifecycle",
 		"orbit.chat.*.member.*",
 		"orbit.user.*.mention",
+		"orbit.media.*.ready",
 	}
 
 	for _, subj := range subjects {
@@ -133,6 +134,15 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
+	// Media events: route to uploader user. Subject: orbit.media.<userId>.ready
+	if event.Event == EventMediaReady || event.Event == EventMediaUploadProgress {
+		userID := extractUserIDFromMediaSubject(msg.Subject)
+		if userID != "" {
+			s.hub.SendToUser(userID, envelope)
+		}
+		return
+	}
+
 	// For user status events, fetch contacts from messaging service
 	// and only send to users who share a chat (not all online users)
 	if event.Event == EventUserStatus {
@@ -146,6 +156,15 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 			}
 		}
 	}
+}
+
+// extractUserIDFromMediaSubject parses user ID from NATS subject like "orbit.media.<userId>.ready"
+func extractUserIDFromMediaSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) >= 3 && parts[0] == "orbit" && parts[1] == "media" {
+		return parts[2]
+	}
+	return ""
 }
 
 // extractChatIDFromSubject parses chat ID from NATS subject like "orbit.chat.<uuid>.message.new"

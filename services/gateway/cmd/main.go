@@ -30,6 +30,7 @@ func main() {
 	slog.Info("resolved NATS URL", "url", natsURL, "raw_orbit", os.Getenv("ORBIT_NATS_URL"), "raw_nats", os.Getenv("NATS_URL"))
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
+	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
 	frontendURL := config.EnvOr("WEB_URL", config.EnvOr("FRONTEND_URL", "http://localhost:3000"))
 
 	// Redis
@@ -67,6 +68,7 @@ func main() {
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
+		BodyLimit:    55 * 1024 * 1024, // 55MB — media uploads up to 50MB, chunked chunks up to 10MB
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
@@ -113,6 +115,15 @@ func main() {
 	})
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
 
+	// Public media endpoints (no JWT) — presigned R2 URLs are self-authenticating.
+	// Used by <img src>, <video src>, <a href> which cannot send Authorization headers.
+	mediaRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 200, KeyPrefix: "media_pub",
+	})
+	app.Get("/api/v1/media/:id", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
+	app.Get("/api/v1/media/:id/thumbnail", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
+	app.Get("/api/v1/media/:id/info", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
+
 	// API group with JWT + rate limiting
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
 
@@ -120,6 +131,7 @@ func main() {
 	handler.SetupProxy(app, authGroup, apiGroup, handler.ProxyConfig{
 		AuthServiceURL:      authServiceURL,
 		MessagingServiceURL: messagingServiceURL,
+		MediaServiceURL:     mediaServiceURL,
 		FrontendURL:         frontendURL,
 	})
 

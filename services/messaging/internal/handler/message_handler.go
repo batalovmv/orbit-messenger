@@ -30,6 +30,7 @@ func (h *MessageHandler) Register(app fiber.Router) {
 	app.Post("/chats/:id/messages", h.SendMessage)
 
 	// Pin endpoints
+	app.Get("/chats/:id/media", h.ListSharedMedia)
 	app.Get("/chats/:id/pinned", h.ListPinned)
 	app.Post("/chats/:id/pin/:messageId", h.PinMessage)
 	app.Delete("/chats/:id/pin/:messageId", h.UnpinMessage)
@@ -69,7 +70,33 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	// Batch-load media attachments for messages that have media type
+	h.svc.EnrichMessagesMedia(c.Context(), msgs)
+
 	return response.Paginated(c, msgs, nextCursor, hasMore)
+}
+
+func (h *MessageHandler) ListSharedMedia(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	mediaType := c.Query("type") // photo, video, file, voice, etc. Empty = all
+	cursor := c.Query("cursor")
+	limit := c.QueryInt("limit", 20)
+
+	items, nextCursor, hasMore, err := h.svc.ListSharedMedia(c.Context(), chatID, uid, mediaType, cursor, limit)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.Paginated(c, items, nextCursor, hasMore)
 }
 
 func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
@@ -101,6 +128,7 @@ func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	h.svc.EnrichMessagesMedia(c.Context(), msgs)
 	return response.Paginated(c, msgs, nextCursor, hasMore)
 }
 
@@ -120,13 +148,16 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		Entities  json.RawMessage `json:"entities"`
 		ReplyToID *string         `json:"reply_to_id"`
 		Type      string          `json:"type"`
+		MediaIDs  []string        `json:"media_ids"`
+		IsSpoiler bool            `json:"is_spoiler"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
-	if req.Content == "" {
-		return response.Error(c, apperror.BadRequest("Content is required"))
+	// Content is required unless media_ids are provided
+	if req.Content == "" && len(req.MediaIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("Content or media_ids is required"))
 	}
 
 	var replyTo *uuid.UUID
@@ -136,6 +167,30 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 			return response.Error(c, apperror.BadRequest("Invalid reply_to_id"))
 		}
 		replyTo = &id
+	}
+
+	// Route to media or text message
+	if len(req.MediaIDs) > 10 {
+		return response.Error(c, apperror.BadRequest("Too many media attachments (max 10)"))
+	}
+
+	if len(req.MediaIDs) > 0 {
+		var mediaUUIDs []uuid.UUID
+		for _, idStr := range req.MediaIDs {
+			id, err := uuid.Parse(idStr)
+			if err != nil {
+				return response.Error(c, apperror.BadRequest("Invalid media_id: "+idStr))
+			}
+			mediaUUIDs = append(mediaUUIDs, id)
+		}
+
+		msg, err := h.svc.SendMediaMessage(c.Context(), chatID, uid,
+			req.Content, req.Entities, replyTo, req.Type,
+			mediaUUIDs, req.IsSpoiler)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.JSON(c, fiber.StatusCreated, msg)
 	}
 
 	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type)
@@ -314,6 +369,7 @@ func (h *MessageHandler) ListPinned(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	h.svc.EnrichMessagesMedia(c.Context(), msgs)
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"messages": msgs})
 }
 

@@ -62,6 +62,23 @@ services:
       timeout: 3s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # coturn — раскомментировать при Phase 6 (Calls)
   # coturn:
   #   image: coturn/coturn:4.6
@@ -90,6 +107,7 @@ services:
       ORBIT_NATS_URL: nats://nats:4222
       AUTH_SERVICE_URL: http://auth:8081
       MESSAGING_SERVICE_URL: http://messaging:8082
+      MEDIA_SERVICE_URL: http://media:8083
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
@@ -97,6 +115,7 @@ services:
       nats: { condition: service_healthy }
       auth: { condition: service_started }
       messaging: { condition: service_started }
+      media: { condition: service_started }
 
   auth:
     build:
@@ -134,6 +153,28 @@ services:
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }
 
+  media:
+    build:
+      context: .
+      dockerfile: services/media/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      PORT: "8083"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ORBIT_NATS_URL: nats://nats:4222
+      R2_ENDPOINT: http://minio:9000
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
+      R2_BUCKET: ${R2_BUCKET:-orbit-media}
+      R2_PUBLIC_ENDPOINT: ${R2_PUBLIC_ENDPOINT:-http://localhost:9000}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      nats: { condition: service_healthy }
+      minio: { condition: service_healthy }
+
   web:
     build:
       context: ./web
@@ -150,3 +191,4 @@ volumes:
   postgres_data:
   redis_data:
   meili_data:
+  minio_data:

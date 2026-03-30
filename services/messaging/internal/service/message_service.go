@@ -408,6 +408,162 @@ func (s *MessageService) ListPinned(ctx context.Context, chatID, userID uuid.UUI
 	return s.messages.ListPinned(ctx, chatID)
 }
 
+// SendMediaMessage creates a message with media attachments.
+func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID uuid.UUID,
+	content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string,
+	mediaIDs []uuid.UUID, isSpoiler bool) (*model.Message, error) {
+
+	chat, err := s.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get chat: %w", err)
+	}
+	if chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	member, err := s.chats.GetMember(ctx, chatID, senderID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMedia) {
+		return nil, apperror.Forbidden("You don't have permission to send media")
+	}
+
+	// Slow mode check
+	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
+		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
+		exists, _ := s.redis.Exists(ctx, redisKey).Result()
+		if exists > 0 {
+			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
+			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))
+		}
+	}
+
+	// Auto-detect message type from first media if not provided
+	if msgType == "" && len(mediaIDs) > 0 {
+		msgType = "photo" // will be overridden by frontend typically
+	}
+	if msgType == "" {
+		msgType = "text"
+	}
+
+	msg := &model.Message{
+		ChatID:    chatID,
+		SenderID:  &senderID,
+		Type:      msgType,
+		Content:   strPtrOrNil(content),
+		Entities:  entities,
+		ReplyToID: replyToID,
+	}
+
+	if err := s.messages.CreateWithMedia(ctx, msg, mediaIDs, isSpoiler); err != nil {
+		return nil, fmt.Errorf("create media message: %w", err)
+	}
+
+	// Fetch full message with sender info + media
+	full, err := s.messages.GetByID(ctx, msg.ID)
+	if err != nil {
+		return msg, nil
+	}
+
+	// Enrich with media attachments
+	s.enrichMessageMedia(ctx, full)
+
+	// Slow mode cooldown
+	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
+		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
+		s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second)
+	}
+
+	// Publish to NATS
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
+	}
+	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
+	if chat.Type == "channel" && !chat.IsSignatures {
+		anonMsg := *full
+		anonMsg.SenderID = nil
+		anonMsg.SenderName = ""
+		anonMsg.SenderAvatarURL = nil
+		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs, senderID.String())
+	} else {
+		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
+	}
+
+	return full, nil
+}
+
+// enrichMessageMedia loads media attachments for a single message.
+func (s *MessageService) enrichMessageMedia(ctx context.Context, msg *model.Message) {
+	if msg == nil {
+		return
+	}
+	mediaMap, err := s.messages.GetMediaByMessageIDs(ctx, []uuid.UUID{msg.ID})
+	if err != nil {
+		slog.Error("failed to load media for message", "msg_id", msg.ID, "error", err)
+		return
+	}
+	if atts, ok := mediaMap[msg.ID]; ok {
+		msg.MediaAttachments = atts
+	}
+}
+
+// EnrichMessagesMedia loads media attachments for a batch of messages. Avoids N+1.
+func (s *MessageService) EnrichMessagesMedia(ctx context.Context, msgs []model.Message) {
+	if len(msgs) == 0 {
+		return
+	}
+
+	// Collect IDs of messages that might have media
+	var mediaMessageIDs []uuid.UUID
+	for i := range msgs {
+		switch msgs[i].Type {
+		case "photo", "video", "file", "voice", "videonote", "gif":
+			mediaMessageIDs = append(mediaMessageIDs, msgs[i].ID)
+		}
+	}
+	if len(mediaMessageIDs) == 0 {
+		return
+	}
+
+	mediaMap, err := s.messages.GetMediaByMessageIDs(ctx, mediaMessageIDs)
+	if err != nil {
+		slog.Error("failed to batch-load media", "error", err)
+		return
+	}
+
+	for i := range msgs {
+		if atts, ok := mediaMap[msgs[i].ID]; ok {
+			msgs[i].MediaAttachments = atts
+		}
+	}
+}
+
+// ListSharedMedia returns media in a chat, optionally filtered by type.
+func (s *MessageService) ListSharedMedia(ctx context.Context, chatID, userID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error) {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, "", false, apperror.Forbidden("Not a member of this chat")
+	}
+
+	return s.messages.ListSharedMedia(ctx, chatID, mediaType, cursor, limit)
+}
+
+func strPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 func (s *MessageService) MarkRead(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {
