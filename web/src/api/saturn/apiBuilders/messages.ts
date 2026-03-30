@@ -54,6 +54,11 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   // Map media_attachments to TG Web A content fields
   if (msg.media_attachments?.length) {
     buildMediaContent(content, msg.media_attachments);
+    // TG Web A requires content.text to exist when media is present,
+    // otherwise it shows "This message is not supported"
+    if (!content.text) {
+      content.text = { text: '', entities: [] };
+    }
   }
 
   return {
