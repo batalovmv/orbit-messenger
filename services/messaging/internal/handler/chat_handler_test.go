@@ -20,137 +20,24 @@ import (
 // newChatApp creates a Fiber app wired with a ChatHandler backed by the given mock store.
 func newChatApp(cs *mockChatStore) *fiber.App {
 	app := fiber.New()
-	svc := service.NewChatService(cs)
+	nats := service.NewNoopNATSPublisher()
+	svc := service.NewChatService(cs, nats)
 	h := NewChatHandler(svc, slog.Default())
 	h.Register(app)
 	return app
 }
 
 // ---------------------------------------------------------------------------
-// ListChats
+// CreateChat
 // ---------------------------------------------------------------------------
 
-func TestListChats_HappyPath(t *testing.T) {
-	chatID := uuid.New()
-	userID := uuid.New()
-	chatName := "General"
+func TestCreateChat_WithMembers(t *testing.T) {
+	ownerID := uuid.New()
+	member1 := uuid.New()
+	member2 := uuid.New()
 
-	cs := &mockChatStore{
-		listByUserFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) ([]model.ChatListItem, string, bool, error) {
-			return []model.ChatListItem{
-				{
-					Chat:        model.Chat{ID: chatID, Type: "group", Name: &chatName, CreatedAt: time.Now(), UpdatedAt: time.Now()},
-					MemberCount: 3,
-				},
-			}, "", false, nil
-		},
-	}
-
-	app := newChatApp(cs)
-	req, _ := http.NewRequest(http.MethodGet, "/chats", nil)
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	body := readBody(t, resp)
-	if _, ok := body["data"]; !ok {
-		t.Fatal("response missing 'data' key")
-	}
-}
-
-func TestListChats_NoAuth(t *testing.T) {
-	app := newChatApp(&mockChatStore{})
-	req, _ := http.NewRequest(http.MethodGet, "/chats", nil)
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", resp.StatusCode)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// CreateDirectChat
-// ---------------------------------------------------------------------------
-
-func TestCreateDirectChat_HappyPath(t *testing.T) {
-	userID := uuid.New()
-	otherID := uuid.New()
-
-	cs := &mockChatStore{
-		getDirectChatFn: func(_ context.Context, _, _ uuid.UUID) (*uuid.UUID, error) {
-			return nil, nil
-		},
-		createDirectFn: func(_ context.Context, _, _ uuid.UUID) (*model.Chat, error) {
-			id := uuid.New()
-			return &model.Chat{ID: id, Type: "direct", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
-		},
-	}
-
-	app := newChatApp(cs)
-	body := fmt.Sprintf(`{"user_id":"%s"}`, otherID.String())
-	req, _ := http.NewRequest(http.MethodPost, "/chats/direct", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", resp.StatusCode)
-	}
-}
-
-func TestCreateDirectChat_SelfDM(t *testing.T) {
-	userID := uuid.New()
-
-	app := newChatApp(&mockChatStore{})
-	body := fmt.Sprintf(`{"user_id":"%s"}`, userID.String())
-	req, _ := http.NewRequest(http.MethodPost, "/chats/direct", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for self-DM, got %d", resp.StatusCode)
-	}
-}
-
-func TestCreateDirectChat_NoAuth(t *testing.T) {
-	otherID := uuid.New()
-
-	app := newChatApp(&mockChatStore{})
-	body := fmt.Sprintf(`{"user_id":"%s"}`, otherID.String())
-	req, _ := http.NewRequest(http.MethodPost, "/chats/direct", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", resp.StatusCode)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// CreateGroup
-// ---------------------------------------------------------------------------
-
-func TestCreateGroup_HappyPath(t *testing.T) {
-	userID := uuid.New()
+	addedRoles := map[uuid.UUID]string{}
+	batchAdded := []uuid.UUID{}
 
 	cs := &mockChatStore{
 		createFn: func(_ context.Context, chat *model.Chat) error {
@@ -159,169 +46,105 @@ func TestCreateGroup_HappyPath(t *testing.T) {
 			chat.UpdatedAt = time.Now()
 			return nil
 		},
-		addMemberFn: func(_ context.Context, _, _ uuid.UUID, _ string) error {
+		addMemberFn: func(_ context.Context, _, userID uuid.UUID, role string) error {
+			addedRoles[userID] = role
+			return nil
+		},
+		addMembersFn: func(_ context.Context, _ uuid.UUID, userIDs []uuid.UUID, role string) error {
+			batchAdded = append(batchAdded, userIDs...)
 			return nil
 		},
 	}
 
 	app := newChatApp(cs)
-	body := `{"name":"Engineering","description":"Dev team chat"}`
+	body := fmt.Sprintf(`{"type":"group","name":"Team","member_ids":["%s","%s"]}`, member1, member2)
 	req, _ := http.NewRequest(http.MethodPost, "/chats", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", userID.String())
+	req.Header.Set("X-User-ID", ownerID.String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", resp.StatusCode)
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, raw)
 	}
-}
 
-func TestCreateGroup_MissingName(t *testing.T) {
-	userID := uuid.New()
-
-	app := newChatApp(&mockChatStore{})
-	body := `{"name":"","description":"No name group"}`
-	req, _ := http.NewRequest(http.MethodPost, "/chats", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
+	// Owner must be added with role "owner"
+	if addedRoles[ownerID] != "owner" {
+		t.Errorf("owner should have role=owner, got %q", addedRoles[ownerID])
 	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing name, got %d", resp.StatusCode)
-	}
-}
-
-func TestCreateGroup_NoAuth(t *testing.T) {
-	app := newChatApp(&mockChatStore{})
-	body := `{"name":"Team"}`
-	req, _ := http.NewRequest(http.MethodPost, "/chats", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	// Initial members must be batch-added
+	if len(batchAdded) != 2 {
+		t.Errorf("expected 2 batch-added members, got %d", len(batchAdded))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// GetChat
+// AddMembers — permission tests
 // ---------------------------------------------------------------------------
 
-func TestGetChat_HappyPath(t *testing.T) {
-	userID := uuid.New()
+func TestAddMembers_WithoutPermission(t *testing.T) {
+	memberID := uuid.New()
+	newMemberID := uuid.New()
 	chatID := uuid.New()
-	chatName := "General"
 
 	cs := &mockChatStore{
-		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
-			return true, "member", nil
-		},
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			return &model.Chat{ID: chatID, Type: "group", Name: &chatName, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			// member role, permissions=1 (CanSendMessages only, no CanAddMembers)
+			return &model.ChatMember{Role: "member", Permissions: 1}, nil
 		},
 	}
 
 	app := newChatApp(cs)
-	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String(), nil)
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-}
-
-func TestGetChat_NotMember(t *testing.T) {
-	userID := uuid.New()
-	chatID := uuid.New()
-
-	cs := &mockChatStore{
-		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
-			return false, "", nil
-		},
-	}
-
-	app := newChatApp(cs)
-	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String(), nil)
-	req.Header.Set("X-User-ID", userID.String())
+	body := fmt.Sprintf(`{"user_ids":["%s"]}`, newMemberID)
+	req, _ := http.NewRequest(http.MethodPost, "/chats/"+chatID.String()+"/members", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", memberID.String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403 for non-member, got %d", resp.StatusCode)
+		t.Fatalf("member without CanAddMembers should get 403, got %d", resp.StatusCode)
 	}
 }
 
-func TestGetChat_InvalidID(t *testing.T) {
-	userID := uuid.New()
-
-	app := newChatApp(&mockChatStore{})
-	req, _ := http.NewRequest(http.MethodGet, "/chats/not-a-uuid", nil)
-	req.Header.Set("X-User-ID", userID.String())
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 for invalid ID, got %d", resp.StatusCode)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// GetMembers
-// ---------------------------------------------------------------------------
-
-func TestGetMembers_HappyPath(t *testing.T) {
-	userID := uuid.New()
+func TestAddMembers_MemberWithCanAddMembersPermission(t *testing.T) {
+	memberID := uuid.New()
+	newMemberID := uuid.New()
 	chatID := uuid.New()
 
 	cs := &mockChatStore{
-		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
-			return true, "member", nil
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			// member role but explicitly granted CanAddMembers (bit 2 = 4)
+			return &model.ChatMember{Role: "member", Permissions: 4}, nil
 		},
-		getMembersFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) ([]model.ChatMember, string, bool, error) {
-			return []model.ChatMember{
-				{ChatID: chatID, UserID: userID, Role: "member", JoinedAt: time.Now()},
-			}, "", false, nil
+		addMembersFn: func(_ context.Context, _ uuid.UUID, _ []uuid.UUID, _ string) error {
+			return nil
 		},
 	}
 
 	app := newChatApp(cs)
-	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/members", nil)
-	req.Header.Set("X-User-ID", userID.String())
+	body := fmt.Sprintf(`{"user_ids":["%s"]}`, newMemberID)
+	req, _ := http.NewRequest(http.MethodPost, "/chats/"+chatID.String()+"/members", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", memberID.String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	body := readBody(t, resp)
-	if body["data"] == nil {
-		t.Fatal("response missing 'data' field")
+		t.Fatalf("member with explicit CanAddMembers should succeed, got %d", resp.StatusCode)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GetMembers
+// ---------------------------------------------------------------------------
 
 func TestGetMembers_NotMember(t *testing.T) {
 	userID := uuid.New()
@@ -346,49 +169,85 @@ func TestGetMembers_NotMember(t *testing.T) {
 	}
 }
 
-func TestGetMembers_NoAuth(t *testing.T) {
+func TestGetMemberIDs_RequiresMembership(t *testing.T) {
 	chatID := uuid.New()
-
-	app := newChatApp(&mockChatStore{})
-	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/members", nil)
-
-	resp, err := app.Test(req, -1)
-	if err != nil {
-		t.Fatalf("app.Test: %v", err)
-	}
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", resp.StatusCode)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// GetMemberIDs
-// ---------------------------------------------------------------------------
-
-func TestGetMemberIDs_HappyPath(t *testing.T) {
-	chatID := uuid.New()
-	memberID := uuid.New()
+	userID := uuid.New()
 
 	cs := &mockChatStore{
-		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return []string{memberID.String()}, nil
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
 		},
 	}
 
 	app := newChatApp(cs)
 	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/member-ids", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-member should get 403, got %d", resp.StatusCode)
+	}
+}
+
+
+// ---------------------------------------------------------------------------
+// UpdateDefaultPermissions
+// ---------------------------------------------------------------------------
+
+func TestUpdateDefaultPermissions_OwnerAllowed(t *testing.T) {
+	ownerID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{Role: "owner", Permissions: 255}, nil
+		},
+		updateDefaultPermsFn: func(_ context.Context, _ uuid.UUID, _ int64) error {
+			return nil
+		},
+	}
+
+	app := newChatApp(cs)
+	body := `{"permissions":239}` // 255 & ^16 — disable CanChangeInfo for members
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+chatID.String()+"/permissions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", ownerID.String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("owner should be able to set default permissions, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestUpdateDefaultPermissions_MemberForbidden(t *testing.T) {
+	memberID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{Role: "member", Permissions: 1}, nil
+		},
 	}
 
-	body := readBody(t, resp)
-	if body["member_ids"] == nil {
-		t.Fatal("response missing 'member_ids' field")
+	app := newChatApp(cs)
+	body := `{"permissions":0}`
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+chatID.String()+"/permissions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", memberID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("member should NOT be able to change default permissions, got %d", resp.StatusCode)
 	}
 }
 

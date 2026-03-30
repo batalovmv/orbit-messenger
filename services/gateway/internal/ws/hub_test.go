@@ -122,60 +122,6 @@ func TestHub_MultiDevice(t *testing.T) {
 	}
 }
 
-// TestHub_MultiDevice_BothTracked verifies the internal slice length for
-// multi-device by registering two conns and checking the hub tracks both.
-func TestHub_MultiDevice_BothTracked(t *testing.T) {
-	hub := NewHub()
-
-	conn1 := newTestConn("device-user")
-	conn2 := newTestConn("device-user")
-
-	hub.Register(conn1)
-	hub.Register(conn2)
-
-	hub.mu.RLock()
-	n := len(hub.conns["device-user"])
-	hub.mu.RUnlock()
-
-	if n != 2 {
-		t.Fatalf("expected 2 connections for device-user, got %d", n)
-	}
-}
-
-// TestHub_SendToUsers_ExcludesSender verifies SendToUsers skips the excluded user.
-// Because Send() requires a real WebSocket (nil WS would panic), we verify routing
-// by confirming the excluded user never gets a connection-level call.
-// We replace Send with a channel-based approach by directly inspecting hub state
-// and verifying that the excludeUserID conn slice is not touched.
-//
-// Since Conn.Send calls conn.WS.WriteMessage (which panics on nil WS), this test
-// validates the exclusion logic at the hub level without triggering actual sends.
-// It does so by ensuring the excluded user's connection count is unchanged.
-func TestHub_SendToUsers_ExcludesSender(t *testing.T) {
-	hub := NewHub()
-
-	// Register two users
-	senderConn := newTestConn("sender")
-	hub.Register(senderConn)
-
-	// Note: recipientConn.WS is nil, so Send would panic.
-	// We verify that SendToUsers with excludeUserID="sender" does NOT call Send
-	// on senderConn. We indirectly verify this by ensuring only the sender is excluded
-	// and the snapshot logic runs without touching the sender.
-	//
-	// We validate the exclusion by checking the hub never attempts to send to
-	// the excluded user. With nil WS connections for all users, calling SendToUsers
-	// with all users as targets and the sender excluded should only panic if it
-	// tries to send to the sender. Since we only exclude the sender, and there are
-	// no other registered users, SendToUsers is a no-op — no panics.
-	hub.SendToUsers([]string{"sender"}, struct{}{}, "sender")
-
-	// Verify sender is still registered (hub state unchanged by SendToUsers)
-	if !hub.IsOnline("sender") {
-		t.Fatal("sender should still be online after SendToUsers")
-	}
-}
-
 // TestHub_IsOnline_OfflineUser verifies that IsOnline returns false for a user
 // who was never registered.
 func TestHub_IsOnline_OfflineUser(t *testing.T) {

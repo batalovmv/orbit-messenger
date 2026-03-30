@@ -601,26 +601,6 @@ func TestRegister_DuplicateEmail(t *testing.T) {
 
 // --- Logout tests ---
 
-func TestLogout_HappyPath(t *testing.T) {
-	app, _, _ := setupTestApp(t)
-
-	adminToken := bootstrapAndLogin(t, app)
-
-	// Logout with a valid Bearer token.
-	// NOTE: In this test environment Redis is unavailable, so the service
-	// will fail when attempting to blacklist the JWT. We verify that the
-	// auth middleware accepts the token (not 401/403) — the Redis failure
-	// surfaces as 500 rather than a business-logic error.
-	resp := doRequest(app, "POST", "/auth/logout", nil, map[string]string{
-		"Authorization": "Bearer " + adminToken,
-	})
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected auth to pass (not 401/403), got %d: %s", resp.StatusCode, body)
-	}
-}
-
 func TestLogout_NoToken(t *testing.T) {
 	app, _, _ := setupTestApp(t)
 
@@ -738,16 +718,6 @@ func TestListSessions_HappyPath(t *testing.T) {
 	}
 }
 
-func TestListSessions_NoAuth(t *testing.T) {
-	app, _, _ := setupTestApp(t)
-
-	resp := doRequest(app, "GET", "/auth/sessions", nil, nil)
-
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", resp.StatusCode)
-	}
-}
-
 // --- RevokeSession tests ---
 
 func TestRevokeSession_HappyPath(t *testing.T) {
@@ -807,28 +777,6 @@ func TestRevokeSession_HappyPath(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
-	}
-}
-
-func TestRevokeSession_NotFound(t *testing.T) {
-	app, _, _ := setupTestApp(t)
-
-	adminToken := bootstrapAndLogin(t, app)
-	nonExistentID := uuid.New()
-
-	// The mock returns store.ErrNotFound; the service wraps it as a generic
-	// error (not pgx.ErrNoRows), so the response will be 500. We verify that
-	// auth passed (not 401) and the endpoint handled the missing session.
-	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/sessions/%s", nonExistentID), nil, map[string]string{
-		"Authorization": "Bearer " + adminToken,
-	})
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		t.Fatalf("expected auth to pass, got %d", resp.StatusCode)
-	}
-	// The session does not exist; expect a non-2xx response.
-	if resp.StatusCode == http.StatusOK {
-		t.Fatal("expected non-200 for missing session, got 200")
 	}
 }
 

@@ -56,7 +56,7 @@ func TestParsePostgresURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDSN, gotPass := parsePostgresURL(tt.url)
+			gotDSN, gotPass, _ := parsePostgresURL(tt.url)
 			if gotDSN != tt.wantDSN {
 				t.Errorf("DSN:\n  got  = %s\n  want = %s", gotDSN, tt.wantDSN)
 			}
