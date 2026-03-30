@@ -31,7 +31,7 @@ func main() {
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
-	frontendURL := config.EnvOr("WEB_URL", config.EnvOr("FRONTEND_URL", "http://localhost:3000"))
+	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)
