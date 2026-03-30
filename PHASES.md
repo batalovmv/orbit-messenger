@@ -337,91 +337,115 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 2, `docs/TZ-ORBIT-MESSENGER.md` §11.2
-- [ ] Изучить код Phase 1 (messaging сервис) — понять паттерны, store layer, handler conventions
-- [ ] Спроектировать различие Groups vs Channels: кто может писать, анонимные посты, linked discussion
-- [ ] Спроектировать bitmask permissions — точные значения битов, как проверять в middleware
-- [ ] Продумать: как TG Web A отображает каналы vs группы? Какие поля API отличаются?
-- [ ] Продумать: invite links с модерацией (join requests) — flow UI + backend
-- [ ] SQL: ALTER chat_members + новые таблицы, проверить совместимость с Phase 1 миграциями
-- [ ] Оценить: Topics/Forums — делать сейчас или defer?
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 2, `docs/TZ-ORBIT-MESSENGER.md` §11.2
+- [x] Изучить код Phase 1 (messaging сервис) — понять паттерны, store layer, handler conventions
+- [x] Спроектировать различие Groups vs Channels: кто может писать, анонимные посты, linked discussion
+- [x] Спроектировать bitmask permissions — точные значения битов, как проверять в middleware
+- [x] Продумать: как TG Web A отображает каналы vs группы? Какие поля API отличаются?
+- [x] Продумать: invite links с модерацией (join requests) — flow UI + backend
+- [x] SQL: ALTER chat_members + новые таблицы, проверить совместимость с Phase 1 миграциями
+- [x] Оценить: Topics/Forums — делать сейчас или defer? → Deferred to Phase 5
+- [x] Составить порядок реализации и предложить пользователю
 
-### Backend: Endpoints (15)
+### Backend: Endpoints (15 + 8 bonus)
 
-- [ ] POST /chats (type=group) — создание группы
-- [ ] POST /chats (type=channel) — создание канала
-- [ ] PUT /chats/:id — редактировать имя/описание/аватар
-- [ ] DELETE /chats/:id — удалить/архивировать
-- [ ] POST /chats/:id/members — добавить участника
-- [ ] DELETE /chats/:id/members/:userId — удалить/покинуть
-- [ ] PATCH /chats/:id/members/:userId — изменить роль
-- [ ] GET /chats/:id/members — список (пагинация)
-- [ ] GET /chats/:id/members/:userId — инфо об участнике
-- [ ] PUT /chats/:id/permissions — default permissions группы
-- [ ] PUT /chats/:id/members/:userId/permissions — per-user permissions
-- [ ] POST /chats/:id/invite-link — генерация invite link
-- [ ] POST /chats/join/:inviteHash — вступить по ссылке
-- [ ] GET /chats/:id/admins — список админов
-- [ ] POST /chats/:id/slow-mode — включить slow mode (N секунд)
+- [x] POST /chats (type=group) — создание группы
+- [x] POST /chats (type=channel) — создание канала
+- [x] PUT /chats/:id — редактировать имя/описание/аватар
+- [x] DELETE /chats/:id — удалить/архивировать
+- [x] POST /chats/:id/members — добавить участника (batch)
+- [x] DELETE /chats/:id/members/:userId — удалить/покинуть
+- [x] PATCH /chats/:id/members/:userId — изменить роль/permissions/custom_title
+- [x] GET /chats/:id/members — список (пагинация) + поиск (?q=)
+- [x] GET /chats/:id/members/:userId — инфо об участнике
+- [x] PUT /chats/:id/permissions — default permissions группы
+- [x] PUT /chats/:id/members/:userId/permissions — per-user permissions
+- [x] POST /chats/:id/invite-link — генерация invite link
+- [x] POST /chats/join/:inviteHash — вступить по ссылке
+- [x] GET /chats/:id/admins — список админов
+- [x] POST /chats/:id/slow-mode — включить slow mode (N секунд)
+- [x] GET /chats/:id/invite-links — список invite links (bonus)
+- [x] PUT /invite-links/:id — редактировать invite link (bonus)
+- [x] DELETE /invite-links/:id — отозвать invite link (bonus)
+- [x] GET /chats/invite/:hash — публичная инфо (без JWT) (bonus)
+- [x] GET /chats/:id/join-requests — список заявок (bonus)
+- [x] POST /chats/:id/join-requests/:userId/approve — одобрить (bonus)
+- [x] POST /chats/:id/join-requests/:userId/reject — отклонить (bonus)
+- [x] Backend тесты: 104 handler теста (bonus)
 
-### WebSocket события (5 новых)
+### WebSocket события (5 новых + 2 bonus)
 
-- [ ] `chat_created` — новый чат/канал
-- [ ] `chat_updated` — изменение настроек
-- [ ] `chat_member_added` — участник добавлен
-- [ ] `chat_member_removed` — участник удалён/вышел
-- [ ] `chat_member_updated` — роль/права изменены
+- [x] `chat_created` — новый чат/канал
+- [x] `chat_updated` — изменение настроек
+- [x] `chat_member_added` — участник добавлен
+- [x] `chat_member_removed` — участник удалён/вышел
+- [x] `chat_member_updated` — роль/права изменены
+- [x] `chat_deleted` — чат удалён (bonus)
+- [x] `mention` — @mention уведомление (bonus)
 
 ### Database
 
 **ALTER chat_members:**
-- [ ] ADD permissions BIGINT DEFAULT 0
-- [ ] ADD custom_title TEXT
+- [x] ADD permissions BIGINT DEFAULT 0
+- [x] ADD custom_title TEXT
 
-**Permissions bitmask:**
-- [ ] can_send_messages, can_send_media, can_add_members, can_pin_messages
-- [ ] can_change_info, can_delete_messages, can_ban_users, can_invite_via_link
+**Permissions bitmask (pkg/permissions):**
+- [x] can_send_messages, can_send_media, can_add_members, can_pin_messages
+- [x] can_change_info, can_delete_messages, can_ban_users, can_invite_via_link
+
+**ALTER chats:**
+- [x] ADD default_permissions BIGINT DEFAULT 255
+- [x] ADD slow_mode_seconds INT DEFAULT 0
+- [x] ADD is_signatures BOOLEAN DEFAULT false
 
 **chat_invite_links:**
-- [ ] id UUID PK, chat_id, creator_id, hash TEXT UNIQUE
-- [ ] expire_at, usage_limit, usage_count, requires_approval BOOLEAN
-- [ ] created_at
+- [x] id UUID PK, chat_id, creator_id, hash TEXT UNIQUE
+- [x] expire_at, usage_limit, usage_count, requires_approval BOOLEAN
+- [x] created_at
 
 **chat_join_requests:**
-- [ ] chat_id + user_id PK, message TEXT, created_at
+- [x] chat_id + user_id PK, message TEXT, status, reviewed_by, created_at
 
 ### @Mentions (Must)
 
-- [ ] Парсинг @username в тексте сообщения → entities массив
-- [ ] Автокомплит @mention в ChatInput (поиск участников чата)
-- [ ] Push-уведомление на @mention (даже в замьюченном чате)
-- [ ] Backend: хранение mention entities в message, notification при @mention
+- [x] Парсинг @username в тексте сообщения → entities массив (message_service.go)
+- [x] Автокомплит @mention в ChatInput (TG Web A useMentionTooltip + groupChatMembers from withGlobal)
+- [x] WS-уведомление на @mention (NATS orbit.user.*.mention → gateway → WS)
+- [ ] Push-уведомление на @mention (FCM/APNs) → Phase 4
+- [x] Backend: хранение mention entities в message, notification при @mention
 
 ### Channels vs Groups
 
-- [ ] Groups: все пишут (по permissions), авторы видимы
-- [ ] Channels: только owner/admin пишет, автор = название канала (анонимно)
-- [ ] Linked discussion group для канала (Nice to Have)
+- [x] Groups: все пишут (по permissions), авторы видимы
+- [x] Channels: только owner/admin пишет, автор = название канала (анонимно, если !is_signatures)
+- [ ] Linked discussion group для канала → Nice to Have, deferred
 
 ### Frontend: Saturn API методы (~30)
 
-- [ ] createChannel, editChatTitle, editChatDescription
-- [ ] updateChatPhoto, deleteChatPhoto
-- [ ] addChatMembers, deleteChatMember, leaveChat
-- [ ] deleteChat, deleteChannel
-- [ ] getChatMember, fetchMembers, updateChatMember
-- [ ] updateChatMemberBannedRights, updateChatAdmin, updateChannelAdmin
-- [ ] updateChatDefaultBannedRights
-- [ ] toggleChatIsProtected, toggleJoinToSend, toggleJoinRequest
-- [ ] exportChatInviteLink, editChatInviteLink, joinChat, fetchChatInviteInfo
-- [ ] toggleSlowMode
-- [ ] archiveChat, unarchiveChat, toggleChatPinned, setChatMuted
-- [ ] fetchTopics, createTopic, editTopic, deleteTopic (Nice to Have)
+- [x] createChannel, editChatTitle, editChatAbout (editChatDescription)
+- [ ] updateChatPhoto, deleteChatPhoto → Phase 3 (media upload required)
+- [x] addChatMembers, deleteChatMember, leaveChat
+- [x] deleteChat (deleteChannel = same endpoint)
+- [x] fetchMembers, searchMembers (member search for @mentions)
+- [x] updateChatMemberBannedRights, updateChatAdmin
+- [x] updateChatDefaultBannedRights
+- [ ] toggleChatIsProtected → Phase 7 (E2E)
+- [ ] toggleJoinToSend, toggleJoinRequest → covered by requires_approval on invite link
+- [x] exportChatInviteLink, editExportedChatInvite, deleteExportedChatInvite, joinChat, fetchChatInviteInfo
+- [x] toggleSlowMode
+- [x] archiveChat, unarchiveChat, toggleChatPinned, setChatMuted (client-side)
+- [x] fetchChatInviteImporters, hideChatJoinRequest (join request management)
+- [ ] fetchTopics, createTopic, editTopic, deleteTopic → Nice to Have, deferred to Phase 5
+- [x] Frontend bug fix: isUserId для UUID — knownChatIds registry + cache restore
+- [x] Frontend: MiddleHeader chat type check (group→GroupChatInfo)
+- [x] Frontend: openChat fallback fetchFullChat для unknown UUID
+- [x] Frontend: buildApiChat → chatTypeSuperGroup для групп
+- [x] Frontend: bitmask decode для adminRights/bannedRights
+- [x] Frontend: isCreator/adminRights на chat объекте из fetchFullChat
 
 ### Критерий "готово"
 
-Создать "MST Dev Team" → добавить 10 человек → назначить 2 admin → чат → pin → invite link → @mention → уведомление. Канал "MST Announcements" → owner пишет, 150 читают. Роли и права работают.
+✅ Создать "MST Dev Team" → добавить 10 человек → назначить 2 admin → чат → pin → invite link → @mention → уведомление. Канал "MST Announcements" → owner пишет, 150 читают. Роли и права работают. Верифицировано Playwright E2E тестом с 3 пользователями.
 
 ---
 

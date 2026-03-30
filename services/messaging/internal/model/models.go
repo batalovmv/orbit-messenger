@@ -24,16 +24,19 @@ type User struct {
 }
 
 type Chat struct {
-	ID          uuid.UUID  `json:"id"`
-	Type        string     `json:"type"`
-	Name        *string    `json:"name,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	AvatarURL   *string    `json:"avatar_url,omitempty"`
-	CreatedBy   *uuid.UUID `json:"created_by,omitempty"`
-	IsEncrypted bool       `json:"is_encrypted"`
-	MaxMembers  int        `json:"max_members"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID                 uuid.UUID  `json:"id"`
+	Type               string     `json:"type"`
+	Name               *string    `json:"name,omitempty"`
+	Description        *string    `json:"description,omitempty"`
+	AvatarURL          *string    `json:"avatar_url,omitempty"`
+	CreatedBy          *uuid.UUID `json:"created_by,omitempty"`
+	IsEncrypted        bool       `json:"is_encrypted"`
+	MaxMembers         int        `json:"max_members"`
+	DefaultPermissions int64      `json:"default_permissions"`
+	SlowModeSeconds    int        `json:"slow_mode_seconds"`
+	IsSignatures       bool       `json:"is_signatures"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type ChatListItem struct {
@@ -48,6 +51,8 @@ type ChatMember struct {
 	ChatID            uuid.UUID  `json:"chat_id"`
 	UserID            uuid.UUID  `json:"user_id"`
 	Role              string     `json:"role"`
+	Permissions       int64      `json:"permissions"`
+	CustomTitle       *string    `json:"custom_title,omitempty"`
 	LastReadMessageID *uuid.UUID `json:"last_read_message_id,omitempty"`
 	JoinedAt          time.Time  `json:"joined_at"`
 	MutedUntil        *time.Time `json:"muted_until,omitempty"`
@@ -77,4 +82,30 @@ type Message struct {
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`
+}
+
+type InviteLink struct {
+	ID               uuid.UUID  `json:"id"`
+	ChatID           uuid.UUID  `json:"chat_id"`
+	CreatorID        uuid.UUID  `json:"creator_id"`
+	Hash             string     `json:"hash"`
+	Title            *string    `json:"title,omitempty"`
+	ExpireAt         *time.Time `json:"expire_at,omitempty"`
+	UsageLimit       int        `json:"usage_limit"`
+	UsageCount       int        `json:"usage_count"`
+	RequiresApproval bool       `json:"requires_approval"`
+	IsRevoked        bool       `json:"is_revoked"`
+	CreatedAt        time.Time  `json:"created_at"`
+}
+
+type JoinRequest struct {
+	ChatID     uuid.UUID  `json:"chat_id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	Message    *string    `json:"message,omitempty"`
+	Status     string     `json:"status"`
+	ReviewedBy *uuid.UUID `json:"reviewed_by,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	// Joined user data
+	DisplayName string  `json:"display_name,omitempty"`
+	AvatarURL   *string `json:"avatar_url,omitempty"`
 }

@@ -39,6 +39,18 @@ export async function fetchChats({
 
   for (const item of (result.data || [])) {
     const apiChat = buildApiChat(item);
+
+    // Set creator flag from created_by field
+    if (currentUserId && item.created_by === currentUserId) {
+      apiChat.isCreator = true;
+      // Creator is always owner with full admin rights
+      apiChat.adminRights = {
+        changeInfo: true, postMessages: true, deleteMessages: true,
+        banUsers: true, inviteUsers: true, pinMessages: true,
+        addAdmins: true, manageCall: true,
+      };
+    }
+
     apiChats.push(apiChat);
 
     sendApiUpdate({
@@ -130,6 +142,29 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   const apiChat = buildApiChat(chat);
   const fullInfo = buildApiChatFullInfo(chat, membersResult.data);
 
+  // Set current user's admin rights and creator flag on chat object
+  if (currentUserId && membersResult.data) {
+    const me = membersResult.data.find((m) => m.user_id === currentUserId);
+    if (me) {
+      if (me.role === 'owner') {
+        apiChat.isCreator = true;
+      }
+      if (me.role === 'owner' || me.role === 'admin') {
+        const mask = me.permissions || 255;
+        apiChat.adminRights = {
+          changeInfo: Boolean(mask & (1 << 4)) || undefined,
+          postMessages: Boolean(mask & (1 << 0)) || undefined,
+          deleteMessages: Boolean(mask & (1 << 5)) || undefined,
+          banUsers: Boolean(mask & (1 << 6)) || undefined,
+          inviteUsers: Boolean(mask & (1 << 2)) || undefined,
+          pinMessages: Boolean(mask & (1 << 3)) || undefined,
+          addAdmins: me.role === 'owner' ? true as true : undefined,
+          manageCall: true,
+        };
+      }
+    }
+  }
+
   sendApiUpdate({
     '@type': 'updateChat',
     id: chatId,
@@ -196,6 +231,124 @@ export async function getChatInviteLink({ chatId }: { chatId: string }) {
   return undefined;
 }
 
+export async function createChannel({ title, about, memberIds }: { title: string; about?: string; memberIds?: string[] }) {
+  const data = await client.request<SaturnChat>('POST', '/chats', {
+    type: 'channel', name: title, description: about || '', member_ids: memberIds || [],
+  });
+  if (!data) return undefined;
+  const chat = buildApiChat(data);
+  sendApiUpdate({ '@type': 'updateChat', id: chat.id, chat });
+  return { chat };
+}
+
+export async function editChatTitle({ chatId, title }: { chatId: string; title: string }) {
+  await client.request('PUT', `/chats/${chatId}`, { name: title });
+  sendApiUpdate({ '@type': 'updateChat', id: chatId, chat: { title } as any });
+}
+
+export async function editChatAbout({ chatId, about }: { chatId: string; about: string }) {
+  await client.request('PUT', `/chats/${chatId}`, { description: about });
+}
+
+export async function deleteChat({ chatId }: { chatId: string }) {
+  await client.request('DELETE', `/chats/${chatId}`);
+}
+
+export async function leaveChat({ chatId }: { chatId: string }) {
+  await client.request('DELETE', `/chats/${chatId}/members/me`);
+}
+
+export async function addChatMembers({ chatId, userIds }: { chatId: string; userIds: string[] }) {
+  await client.request('POST', `/chats/${chatId}/members`, { user_ids: userIds });
+}
+
+export async function deleteChatMember({ chatId, userId }: { chatId: string; userId: string }) {
+  await client.request('DELETE', `/chats/${chatId}/members/${userId}`);
+}
+
+export async function updateChatAdmin({ chatId, userId, adminRights, customTitle }: {
+  chatId: string; userId: string; adminRights?: any; customTitle?: string;
+}) {
+  const role = adminRights ? 'admin' : 'member';
+  let permsBitmask = 0;
+  if (adminRights) {
+    if (adminRights.changeInfo) permsBitmask |= 1 << 4;
+    if (adminRights.postMessages) permsBitmask |= 1 << 0;
+    if (adminRights.deleteMessages) permsBitmask |= 1 << 5;
+    if (adminRights.banUsers) permsBitmask |= 1 << 6;
+    if (adminRights.inviteUsers) permsBitmask |= 1 << 2;
+    if (adminRights.pinMessages) permsBitmask |= 1 << 3;
+  }
+  await client.request('PATCH', `/chats/${chatId}/members/${userId}`, {
+    role, permissions: permsBitmask, custom_title: customTitle,
+  });
+}
+
+export async function updateChatDefaultBannedRights({ chatId, bannedRights }: {
+  chatId: string; bannedRights: any;
+}) {
+  let perms = 255;
+  if (bannedRights?.sendMessages) perms &= ~(1 << 0);
+  if (bannedRights?.sendMedia) perms &= ~(1 << 1);
+  if (bannedRights?.inviteUsers) perms &= ~(1 << 2);
+  if (bannedRights?.pinMessages) perms &= ~(1 << 3);
+  if (bannedRights?.changeInfo) perms &= ~(1 << 4);
+  await client.request('PUT', `/chats/${chatId}/permissions`, { permissions: perms });
+}
+
+export async function updateChatMemberBannedRights({ chatId, userId, bannedRights }: {
+  chatId: string; userId: string; bannedRights: any;
+}) {
+  let perms = 255;
+  if (bannedRights?.sendMessages) perms &= ~(1 << 0);
+  if (bannedRights?.sendMedia) perms &= ~(1 << 1);
+  if (bannedRights?.inviteUsers) perms &= ~(1 << 2);
+  if (bannedRights?.pinMessages) perms &= ~(1 << 3);
+  if (bannedRights?.changeInfo) perms &= ~(1 << 4);
+  await client.request('PUT', `/chats/${chatId}/members/${userId}/permissions`, { permissions: perms });
+}
+
+export async function exportChatInviteLink({ chatId, title, expireDate, usageLimit, isRequestNeeded }: {
+  chatId: string; title?: string; expireDate?: number; usageLimit?: number; isRequestNeeded?: boolean;
+}) {
+  const data = await client.request<any>('POST', `/chats/${chatId}/invite-link`, {
+    title, expire_at: expireDate ? new Date(expireDate * 1000).toISOString() : undefined,
+    usage_limit: usageLimit || 0, requires_approval: isRequestNeeded || false,
+  });
+  return data;
+}
+
+export async function fetchExportedChatInvites({ chatId }: { chatId: string }) {
+  const data = await client.request<any[]>('GET', `/chats/${chatId}/invite-links`);
+  return data;
+}
+
+export async function fetchChatInviteInfo({ hash }: { hash: string }) {
+  const data = await client.request<any>('GET', `/chats/invite/${hash}`);
+  return data;
+}
+
+export async function joinChat({ hash }: { hash: string }) {
+  const data = await client.request<any>('POST', `/chats/join/${hash}`);
+  return data;
+}
+
+export async function toggleSlowMode({ chatId, seconds }: { chatId: string; seconds: number }) {
+  await client.request('POST', `/chats/${chatId}/slow-mode`, { seconds });
+}
+
+export async function fetchChatInviteImporters({ chatId }: { chatId: string }) {
+  const data = await client.request<any[]>('GET', `/chats/${chatId}/join-requests`);
+  return data;
+}
+
+export async function hideChatJoinRequest({ chatId, userId, isApproved }: {
+  chatId: string; userId: string; isApproved: boolean;
+}) {
+  const action = isApproved ? 'approve' : 'reject';
+  await client.request('POST', `/chats/${chatId}/join-requests/${userId}/${action}`);
+}
+
 export async function getChatMembers({
   chatId, limit = 50, cursor,
 }: {
@@ -221,4 +374,76 @@ export async function getChatMembers({
     members: result.data.map(buildApiChatMember),
     hasMore: result.has_more,
   };
+}
+
+// --- Missing Phase 2 methods ---
+
+export async function editExportedChatInvite({ chatId, link, title, expireDate, usageLimit, isRequestNeeded }: {
+  chatId: string; link: string; title?: string; expireDate?: number;
+  usageLimit?: number; isRequestNeeded?: boolean;
+}) {
+  // link contains the invite link ID
+  const linkId = link;
+  const data = await client.request<any>('PUT', `/invite-links/${linkId}`, {
+    title,
+    expire_at: expireDate ? new Date(expireDate * 1000).toISOString() : undefined,
+    usage_limit: usageLimit,
+    requires_approval: isRequestNeeded,
+  });
+  return data;
+}
+
+export async function deleteExportedChatInvite({ chatId, link }: { chatId: string; link: string }) {
+  await client.request('DELETE', `/invite-links/${link}`);
+}
+
+export async function archiveChat({ chatId }: { chatId: string }) {
+  // Client-side only — move chat to archived folder in local state
+  sendApiUpdate({
+    '@type': 'updateChatListType',
+    id: chatId,
+    folderId: 1, // ARCHIVED_FOLDER_ID
+  });
+}
+
+export async function unarchiveChat({ chatId }: { chatId: string }) {
+  sendApiUpdate({
+    '@type': 'updateChatListType',
+    id: chatId,
+    folderId: 0,
+  });
+}
+
+export async function toggleChatPinned({ chatId, isPinned }: { chatId: string; isPinned: boolean }) {
+  // Client-side only — pinned state stored locally
+  sendApiUpdate({
+    '@type': 'updateChat',
+    id: chatId,
+    chat: { isPinned } as any,
+  });
+}
+
+export async function setChatMuted({ chatId, isMuted }: { chatId: string; isMuted: boolean }) {
+  // Client-side toggle — future: PATCH /chats/:id/members/me with notification_level
+  sendApiUpdate({
+    '@type': 'updateChat',
+    id: chatId,
+    chat: { isMuted } as any,
+  });
+}
+
+export async function fetchMembers({ chatId, type, offset, limit }: {
+  chatId: string; type?: string; offset?: number; limit?: number;
+}) {
+  return getChatMembers({ chatId, limit: limit || 200 });
+}
+
+export async function searchMembers({ chatId, query, limit }: {
+  chatId: string; query: string; limit?: number;
+}) {
+  const result = await client.request<SaturnChatMember[]>(
+    'GET', `/chats/${chatId}/members?q=${encodeURIComponent(query)}&limit=${limit || 20}`,
+  );
+  if (!result) return undefined;
+  return { members: result.map(buildApiChatMember) };
 }

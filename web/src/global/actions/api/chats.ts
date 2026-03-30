@@ -257,6 +257,9 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
             actions.openChat({ id: result.chat.id, shouldReplaceHistory: true });
           }
         });
+      } else if (id && /^[0-9a-f]{8}-/.test(id)) {
+        // Saturn: UUID not found in users or chats — try fetching as group/channel
+        void callApi('fetchFullChat', { id });
       }
     }
   } else if (isChatOnlySummary && !chat.isMin) {

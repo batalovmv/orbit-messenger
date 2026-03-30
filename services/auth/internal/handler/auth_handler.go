@@ -149,7 +149,7 @@ func (h *AuthHandler) RegisterUser(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
-	if appErr := validator.RequireString(req.InviteCode, "invite_code", 1, 20); appErr != nil {
+	if appErr := validator.RequireString(req.InviteCode, "invite_code", 1, 32); appErr != nil {
 		return response.Error(c, appErr)
 	}
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {

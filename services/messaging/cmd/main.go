@@ -105,12 +105,14 @@ func main() {
 	chatStore := store.NewChatStore(pool)
 	messageStore := store.NewMessageStore(pool)
 	userStore := store.NewUserStore(pool)
+	inviteStore := store.NewInviteStore(pool)
 
 	// Services
-	chatSvc := service.NewChatService(chatStore)
-	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher)
+	chatSvc := service.NewChatService(chatStore, natsPublisher)
+	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher, rdb)
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
+	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 
 	// NATS subscriber: update user status + last_seen_at in DB
 	_, _ = nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
@@ -146,6 +148,7 @@ func main() {
 	chatHandler := handler.NewChatHandler(chatSvc, logger)
 	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
 	userHandler := handler.NewUserHandler(userSvc, logger)
+	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -160,6 +163,8 @@ func main() {
 	chatHandler.Register(app)
 	msgHandler.Register(app)
 	userHandler.Register(app)
+	inviteHandler.Register(app)
+	inviteHandler.RegisterPublic(app)
 
 	// Graceful shutdown
 	go func() {

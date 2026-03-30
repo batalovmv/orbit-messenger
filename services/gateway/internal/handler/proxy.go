@@ -6,13 +6,17 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
 	"github.com/valyala/fasthttp"
+
+
 )
 
 type ProxyConfig struct {
 	AuthServiceURL      string
 	MessagingServiceURL string
 	FrontendURL         string
+
 }
 
 // doProxy performs a manual reverse proxy: sends request to upstream, copies
@@ -81,6 +85,21 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	c.Response().SetBody(resp.Body())
 
 	return nil
+}
+
+// PublicInviteProxy returns a handler that proxies invite info requests without JWT.
+func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
+	client := &fasthttp.Client{ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
+	return func(c *fiber.Ctx) error {
+		url := messagingURL + "/chats/invite/" + c.Params("hash")
+		if err := doProxy(c, url, client, frontendURL); err != nil {
+			slog.Error("invite proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
 }
 
 // SetupProxy configures reverse proxy routes.

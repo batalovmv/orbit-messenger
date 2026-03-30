@@ -9,18 +9,21 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
+	"github.com/redis/go-redis/v9"
 )
 
 type MessageService struct {
 	messages store.MessageStore
 	chats    store.ChatStore
-	nats     *NATSPublisher
+	nats     Publisher
+	redis    *redis.Client
 }
 
-func NewMessageService(messages store.MessageStore, chats store.ChatStore, nats *NATSPublisher) *MessageService {
-	return &MessageService{messages: messages, chats: chats, nats: nats}
+func NewMessageService(messages store.MessageStore, chats store.ChatStore, nats Publisher, rdb *redis.Client) *MessageService {
+	return &MessageService{messages: messages, chats: chats, nats: nats, redis: rdb}
 }
 
 func (s *MessageService) ListMessages(ctx context.Context, chatID, userID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error) {
@@ -48,12 +51,34 @@ func (s *MessageService) FindByDate(ctx context.Context, chatID, userID uuid.UUI
 }
 
 func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
-	isMember, _, err := s.chats.IsMember(ctx, chatID, senderID)
+	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
+		return nil, fmt.Errorf("get chat: %w", err)
 	}
-	if !isMember {
+	if chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	member, err := s.chats.GetMember(ctx, chatID, senderID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
 		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
+		return nil, apperror.Forbidden("You don't have permission to send messages")
+	}
+
+	// Slow mode: check Redis TTL key (admin/owner bypass)
+	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
+		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
+		exists, _ := s.redis.Exists(ctx, redisKey).Result()
+		if exists > 0 {
+			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
+			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))
+		}
 	}
 
 	if msgType == "" {
@@ -78,13 +103,49 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		return msg, nil // Still return the message even if we can't get full info
 	}
 
+	// Slow mode: set cooldown after successful send
+	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
+		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
+		s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second)
+	}
+
 	// Publish to NATS
 	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
 	if err != nil {
 		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
-	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
+
+	// Channel anonymous posting: hide sender for non-signatures channels
+	if chat.Type == "channel" && !chat.IsSignatures {
+		anonMsg := *full
+		anonMsg.SenderID = nil
+		anonMsg.SenderName = ""
+		anonMsg.SenderAvatarURL = nil
+		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs, senderID.String())
+	} else {
+		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
+	}
+
+	// Parse @mention entities and notify mentioned users
+	if len(entities) > 0 {
+		var ents []struct {
+			Type   string `json:"type"`
+			UserID string `json:"user_id"`
+		}
+		if json.Unmarshal(entities, &ents) == nil {
+			for _, e := range ents {
+				if e.Type == "mention" && e.UserID != "" {
+					mentionSubject := fmt.Sprintf("orbit.user.%s.mention", e.UserID)
+					s.nats.Publish(mentionSubject, "mention", map[string]interface{}{
+						"chat_id":    chatID.String(),
+						"message_id": msg.ID.String(),
+						"sender_id":  senderID.String(),
+					}, []string{e.UserID})
+				}
+			}
+		}
+	}
 
 	return full, nil
 }
@@ -235,14 +296,20 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 }
 
 func (s *MessageService) PinMessage(ctx context.Context, chatID, msgID, userID uuid.UUID) error {
-	isMember, role, err := s.chats.IsMember(ctx, chatID, userID)
+	member, err := s.chats.GetMember(ctx, chatID, userID)
 	if err != nil {
-		return fmt.Errorf("check membership: %w", err)
+		return fmt.Errorf("get member: %w", err)
 	}
-	if !isMember {
+	if member == nil {
 		return apperror.Forbidden("Not a member of this chat")
 	}
-	if role != "owner" && role != "admin" && role != "member" {
+
+	chat, err := s.chats.GetByID(ctx, chatID)
+	if err != nil || chat == nil {
+		return apperror.NotFound("Chat not found")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanPinMessages) {
 		return apperror.Forbidden("Not enough permissions to pin")
 	}
 

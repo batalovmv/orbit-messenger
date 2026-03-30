@@ -8,6 +8,11 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// Publisher is the interface for event publishing (NATS in prod, recording in tests).
+type Publisher interface {
+	Publish(subject string, event string, data interface{}, memberIDs []string, senderID ...string)
+}
+
 type NATSPublisher struct {
 	nc *nats.Conn
 }

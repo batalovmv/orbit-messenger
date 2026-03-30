@@ -14,6 +14,13 @@ const (
 	EventStopTyping     = "stop_typing"
 	EventUserStatus     = "user_status"
 	EventPong           = "pong"
+
+	EventChatCreated       = "chat_created"
+	EventChatUpdated       = "chat_updated"
+	EventChatDeleted       = "chat_deleted"
+	EventChatMemberAdded   = "chat_member_added"
+	EventChatMemberRemoved = "chat_member_removed"
+	EventChatMemberUpdated = "chat_member_updated"
 )
 
 // Envelope is the standard WebSocket message format.

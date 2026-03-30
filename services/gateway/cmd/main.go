@@ -107,6 +107,12 @@ func main() {
 	})
 	app.Get("/api/v1/ws", wsHandler.Upgrade(authServiceURL, rdb))
 
+	// Public endpoints (no JWT) — must be registered before apiGroup
+	inviteRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 60, KeyPrefix: "invite",
+	})
+	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
+
 	// API group with JWT + rate limiting
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
 

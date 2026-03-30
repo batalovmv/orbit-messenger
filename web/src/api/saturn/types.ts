@@ -29,6 +29,9 @@ export interface SaturnChat {
   max_members: number;
   created_at: string;
   updated_at: string;
+  default_permissions: number;
+  slow_mode_seconds: number;
+  is_signatures: boolean;
 }
 
 export interface SaturnChatListItem extends SaturnChat {
@@ -72,6 +75,8 @@ export interface SaturnChatMember {
   chat_id: string;
   user_id: string;
   role: 'owner' | 'admin' | 'member' | 'readonly' | 'banned';
+  permissions: number;
+  custom_title?: string;
   last_read_message_id?: string;
   joined_at: string;
   muted_until?: string;
@@ -121,6 +126,31 @@ export interface SaturnErrorResponse {
   error: string;
   message: string;
   status: number;
+}
+
+export interface SaturnInviteLink {
+  id: string;
+  chat_id: string;
+  creator_id: string;
+  hash: string;
+  title?: string;
+  expire_at?: string;
+  usage_limit: number;
+  usage_count: number;
+  requires_approval: boolean;
+  is_revoked: boolean;
+  created_at: string;
+}
+
+export interface SaturnJoinRequest {
+  chat_id: string;
+  user_id: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by?: string;
+  created_at: string;
+  display_name: string;
+  avatar_url?: string;
 }
 
 // WebSocket message format

@@ -1,5 +1,6 @@
-import type { SaturnMessage, SaturnWsMessage } from '../types';
+import type { SaturnChat, SaturnMessage, SaturnWsMessage } from '../types';
 
+import { buildApiChat } from '../apiBuilders/chats';
 import { buildApiMessage, getMessageSeqNum } from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
 import { sendApiUpdate } from './apiUpdateEmitter';
@@ -34,7 +35,7 @@ export function setWsCurrentUserId(userId: string) {
   currentUserId = userId;
 }
 
-function handleWsMessage(msg: SaturnWsMessage) {
+async function handleWsMessage(msg: SaturnWsMessage) {
   switch (msg.type) {
     case 'new_message':
       handleNewMessage(msg.data as unknown as SaturnMessage);
@@ -61,6 +62,62 @@ function handleWsMessage(msg: SaturnWsMessage) {
     case 'user_status':
       handleUserStatus(msg.data as Record<string, unknown>);
       break;
+    case 'chat_created': {
+      const chatData = msg.data as unknown as SaturnChat;
+      sendApiUpdate({
+        '@type': 'updateChat',
+        id: chatData.id,
+        chat: buildApiChat(chatData),
+      });
+      break;
+    }
+    case 'chat_updated': {
+      const payload = msg.data as Record<string, unknown>;
+      const { fetchFullChat } = await import('../methods/chats');
+      fetchFullChat({ id: (payload.chat_id || payload.id) as string });
+      break;
+    }
+    case 'chat_deleted': {
+      const payload = msg.data as Record<string, unknown>;
+      sendApiUpdate({
+        '@type': 'updateChat',
+        id: payload.chat_id as string,
+        chat: { isRestricted: true } as any,
+      });
+      break;
+    }
+    case 'chat_member_added': {
+      const payload = msg.data as Record<string, unknown>;
+      const { fetchFullChat } = await import('../methods/chats');
+      fetchFullChat({ id: payload.chat_id as string });
+      break;
+    }
+    case 'chat_member_removed': {
+      const payload = msg.data as Record<string, unknown>;
+      if (payload.user_id === currentUserId) {
+        sendApiUpdate({
+          '@type': 'updateChat',
+          id: payload.chat_id as string,
+          chat: { isRestricted: true } as any,
+        });
+      } else {
+        const { fetchFullChat } = await import('../methods/chats');
+        fetchFullChat({ id: payload.chat_id as string });
+      }
+      break;
+    }
+    case 'chat_member_updated': {
+      const payload = msg.data as Record<string, unknown>;
+      const { fetchFullChat } = await import('../methods/chats');
+      fetchFullChat({ id: payload.chat_id as string });
+      break;
+    }
+    case 'mention': {
+      const payload = msg.data as Record<string, unknown>;
+      const { fetchFullChat } = await import('../methods/chats');
+      fetchFullChat({ id: payload.chat_id as string });
+      break;
+    }
     default:
       break;
   }

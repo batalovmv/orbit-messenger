@@ -276,7 +276,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
           onTouchStart={handleLongPressTouchStart}
           onTouchEnd={handleLongPressTouchEnd}
         >
-          {isUserId(displayChatId) ? (
+          {(chat?.type === 'chatTypePrivate' || (!chat && isUserId(displayChatId))) ? (
             <PrivateChatInfo
               key={userIdForInfo}
               userId={userIdForInfo}

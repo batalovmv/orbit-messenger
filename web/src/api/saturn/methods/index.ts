@@ -213,9 +213,7 @@ export function fetchCommonChats() {
   return Promise.resolve(undefined);
 }
 
-export function fetchMembers() {
-  return Promise.resolve(undefined);
-}
+// fetchMembers re-exported from ./chats
 
 export function saveDraft() {
   return Promise.resolve(undefined);
@@ -331,7 +329,15 @@ export {
 } from './users';
 
 export {
-  createDirectChat, createGroupChat, fetchChats, fetchFullChat, getChatInviteLink, getChatMembers,
+  createDirectChat, createGroupChat, createChannel, fetchChats, fetchFullChat,
+  getChatInviteLink, getChatMembers, editChatTitle, editChatAbout,
+  deleteChat, leaveChat, addChatMembers, deleteChatMember,
+  updateChatAdmin, updateChatDefaultBannedRights, updateChatMemberBannedRights,
+  exportChatInviteLink, fetchExportedChatInvites, editExportedChatInvite,
+  deleteExportedChatInvite, fetchChatInviteInfo,
+  joinChat, toggleSlowMode, fetchChatInviteImporters, hideChatJoinRequest,
+  archiveChat, unarchiveChat, toggleChatPinned, setChatMuted,
+  fetchMembers, searchMembers,
 } from './chats';
 
 export {

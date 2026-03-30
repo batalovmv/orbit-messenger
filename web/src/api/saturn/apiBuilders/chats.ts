@@ -1,7 +1,44 @@
 import type { ApiChat, ApiChatFullInfo, ApiChatMember } from '../../types';
 import type { SaturnChat, SaturnChatListItem, SaturnChatMember } from '../types';
+import { registerChatId } from '../../../util/entities/ids';
+
+const PERM = {
+  sendMessages: 1 << 0,
+  sendMedia: 1 << 1,
+  addMembers: 1 << 2,
+  pinMessages: 1 << 3,
+  changeInfo: 1 << 4,
+  deleteMessages: 1 << 5,
+  banUsers: 1 << 6,
+  inviteViaLink: 1 << 7,
+};
+
+function decodeAdminRights(mask: number, isOwner: boolean): any {
+  return {
+    changeInfo: Boolean(mask & PERM.changeInfo) || undefined,
+    postMessages: Boolean(mask & PERM.sendMessages) || undefined,
+    deleteMessages: Boolean(mask & PERM.deleteMessages) || undefined,
+    banUsers: Boolean(mask & PERM.banUsers) || undefined,
+    inviteUsers: Boolean(mask & PERM.addMembers) || undefined,
+    pinMessages: Boolean(mask & PERM.pinMessages) || undefined,
+    addAdmins: isOwner ? true as true : undefined,
+    manageCall: true,
+  };
+}
+
+function decodeBannedRights(defaultPerms: number): any {
+  return {
+    sendMessages: !(defaultPerms & PERM.sendMessages) || undefined,
+    sendMedia: !(defaultPerms & PERM.sendMedia) || undefined,
+    inviteUsers: !(defaultPerms & PERM.addMembers) || undefined,
+    pinMessages: !(defaultPerms & PERM.pinMessages) || undefined,
+    changeInfo: !(defaultPerms & PERM.changeInfo) || undefined,
+  };
+}
 
 export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
+  if (chat.type !== 'direct') registerChatId(chat.id);
+
   let title = chat.name || '';
   if (chat.type === 'direct' && !title && 'other_user' in chat && chat.other_user) {
     title = chat.other_user.display_name;
@@ -14,10 +51,12 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     id: chat.id,
     type: chat.type === 'direct' ? 'chatTypePrivate'
       : chat.type === 'channel' ? 'chatTypeChannel'
-        : 'chatTypeBasicGroup',
+        : 'chatTypeSuperGroup',
     title,
     creationDate: Math.floor(new Date(chat.created_at).getTime() / 1000),
     isMin: false,
+    areSignaturesShown: chat.type === 'channel' ? (chat as SaturnChat).is_signatures : undefined,
+    defaultBannedRights: chat.type !== 'direct' ? decodeBannedRights((chat as SaturnChat).default_permissions ?? 255) : undefined,
   };
 
   if ('member_count' in chat) {
@@ -25,7 +64,7 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
   }
 
   if ('unread_count' in chat) {
-    apiChat.unreadCount = chat.unread_count;
+    (apiChat as any).unreadCount = chat.unread_count;
   }
 
   return apiChat;
@@ -39,28 +78,25 @@ export function buildApiChatFullInfo(
     about: chat.description || undefined,
     members: members?.map(buildApiChatMember),
     canViewMembers: true,
+    slowMode: chat.slow_mode_seconds ? { seconds: chat.slow_mode_seconds } : undefined,
   };
 }
 
 export function buildApiChatMember(member: SaturnChatMember): ApiChatMember {
+  const isOwner = member.role === 'owner';
+  const isAdmin = isOwner || member.role === 'admin';
+  const permMask = member.permissions || 255; // default all permissions
+
   return {
     userId: member.user_id,
     inviterId: undefined,
     joinedDate: Math.floor(new Date(member.joined_at).getTime() / 1000),
     kickedByUserId: undefined,
     promotedByUserId: undefined,
-    bannedRights: undefined,
-    adminRights: member.role === 'owner' || member.role === 'admin' ? {
-      changeInfo: true,
-      deleteMessages: true,
-      banUsers: true,
-      inviteUsers: true,
-      pinMessages: true,
-      manageCall: true,
-      addAdmins: member.role === 'owner' ? true as true : undefined,
-    } : undefined,
-    customTitle: undefined,
-    isOwner: member.role === 'owner' ? true as true : undefined,
-    isAdmin: (member.role === 'owner' || member.role === 'admin') ? true as true : undefined,
+    bannedRights: !isAdmin && member.permissions ? decodeBannedRights(member.permissions) : undefined,
+    adminRights: isAdmin ? decodeAdminRights(permMask, isOwner) : undefined,
+    customTitle: member.custom_title || undefined,
+    isOwner: isOwner ? true as true : undefined,
+    isAdmin: isAdmin ? true as true : undefined,
   };
 }

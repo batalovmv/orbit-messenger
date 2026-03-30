@@ -41,6 +41,9 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.messages.read",
 		"orbit.chat.*.typing",
 		"orbit.user.*.status",
+		"orbit.chat.*.lifecycle",
+		"orbit.chat.*.member.*",
+		"orbit.user.*.mention",
 	}
 
 	for _, subj := range subjects {
@@ -116,6 +119,16 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 			}
 			json.Unmarshal(event.Data, &userData)
 			s.hub.SendToUsers(memberIDs, envelope, userData.UserID)
+		}
+		return
+	}
+
+	// For mention events, send to the mentioned user
+	if event.Event == "mention" {
+		if len(event.MemberIDs) > 0 {
+			for _, uid := range event.MemberIDs {
+				s.hub.SendToUser(uid, envelope)
+			}
 		}
 		return
 	}

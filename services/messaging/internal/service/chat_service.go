@@ -3,19 +3,22 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
 type ChatService struct {
 	chats store.ChatStore
+	nats  Publisher
 }
 
-func NewChatService(chats store.ChatStore) *ChatService {
-	return &ChatService{chats: chats}
+func NewChatService(chats store.ChatStore, nats Publisher) *ChatService {
+	return &ChatService{chats: chats, nats: nats}
 }
 
 func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
@@ -54,7 +57,6 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 		return nil, apperror.BadRequest("Cannot create DM with yourself")
 	}
 
-	// Check if DM already exists
 	existing, err := s.chats.GetDirectChat(ctx, userID, otherUserID)
 	if err != nil {
 		return nil, fmt.Errorf("check existing DM: %w", err)
@@ -74,27 +76,386 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 	return chat, nil
 }
 
-func (s *ChatService) CreateGroup(ctx context.Context, userID uuid.UUID, name, description string) (*model.Chat, error) {
+// CreateChat creates a group or channel. memberIDs are added after creation (owner is always added).
+func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType, name, description string, memberIDs []uuid.UUID) (*model.Chat, error) {
 	if name == "" {
-		return nil, apperror.BadRequest("Group name is required")
+		return nil, apperror.BadRequest("Chat name is required")
+	}
+	if chatType != "group" && chatType != "channel" {
+		return nil, apperror.BadRequest("Invalid chat type")
 	}
 
 	chat := &model.Chat{
-		Type:        "group",
+		Type:        chatType,
 		Name:        &name,
 		Description: &description,
 		CreatedBy:   &userID,
 	}
-	if err := s.chats.Create(ctx, chat); err != nil {
-		return nil, fmt.Errorf("create group: %w", err)
+	if chatType == "channel" {
+		chat.DefaultPermissions = 0
+	} else {
+		chat.DefaultPermissions = 255
 	}
 
-	// Add creator as owner
+	if err := s.chats.Create(ctx, chat); err != nil {
+		return nil, fmt.Errorf("create %s: %w", chatType, err)
+	}
+
 	if err := s.chats.AddMember(ctx, chat.ID, userID, "owner"); err != nil {
 		return nil, fmt.Errorf("add owner: %w", err)
 	}
 
+	if len(memberIDs) > 0 {
+		if err := s.chats.AddMembers(ctx, chat.ID, memberIDs, "member"); err != nil {
+			slog.Error("add initial members failed", "chatID", chat.ID, "err", err)
+		}
+	}
+
+	allMemberIDs, err := s.chats.GetMemberIDs(ctx, chat.ID)
+	if err != nil {
+		slog.Error("get member IDs after create", "chatID", chat.ID, "err", err)
+	}
+
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chat.ID),
+		"chat_created",
+		chat,
+		allMemberIDs,
+		userID.String(),
+	)
+
 	return chat, nil
+}
+
+func (s *ChatService) UpdateChat(ctx context.Context, chatID, userID uuid.UUID, name, description, avatarURL *string) (*model.Chat, error) {
+	member, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	chat, err := s.chats.GetByID(ctx, chatID)
+	if err != nil || chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanChangeInfo) {
+		return nil, apperror.Forbidden("No permission to edit chat info")
+	}
+
+	if err := s.chats.UpdateChat(ctx, chatID, name, description, avatarURL); err != nil {
+		return nil, fmt.Errorf("update chat: %w", err)
+	}
+
+	chat, err = s.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get updated chat: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_updated",
+		chat,
+		memberIDs,
+		userID.String(),
+	)
+
+	return chat, nil
+}
+
+func (s *ChatService) DeleteChat(ctx context.Context, chatID, userID uuid.UUID) error {
+	_, role, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("check membership: %w", err)
+	}
+	if role != "owner" {
+		return apperror.Forbidden("Only the owner can delete the chat")
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+
+	if err := s.chats.DeleteChat(ctx, chatID); err != nil {
+		return fmt.Errorf("delete chat: %w", err)
+	}
+
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_deleted",
+		map[string]string{"chat_id": chatID.String()},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) AddMembers(ctx context.Context, chatID, userID uuid.UUID, newMemberIDs []uuid.UUID) error {
+	member, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.IsAdminOrOwner(member.Role) && !permissions.Has(member.Permissions, permissions.CanAddMembers) {
+		return apperror.Forbidden("No permission to add members")
+	}
+
+	if err := s.chats.AddMembers(ctx, chatID, newMemberIDs, "member"); err != nil {
+		return fmt.Errorf("add members: %w", err)
+	}
+
+	allMemberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+
+	for _, id := range newMemberIDs {
+		s.nats.Publish(
+			fmt.Sprintf("orbit.chat.%s.member.added", chatID),
+			"chat_member_added",
+			map[string]string{"chat_id": chatID.String(), "user_id": id.String()},
+			allMemberIDs,
+			userID.String(),
+		)
+	}
+
+	return nil
+}
+
+func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID uuid.UUID) error {
+	// Self-leave is always allowed
+	if userID == targetID {
+		memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+		if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
+			return fmt.Errorf("leave chat: %w", err)
+		}
+		s.nats.Publish(
+			fmt.Sprintf("orbit.chat.%s.member.removed", chatID),
+			"chat_member_removed",
+			map[string]string{"chat_id": chatID.String(), "user_id": targetID.String()},
+			memberIDs,
+			userID.String(),
+		)
+		return nil
+	}
+
+	actor, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil || actor == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	target, err := s.chats.GetMember(ctx, chatID, targetID)
+	if err != nil || target == nil {
+		return apperror.NotFound("Target user is not a member")
+	}
+
+	if target.Role == "owner" {
+		return apperror.Forbidden("Cannot remove the owner")
+	}
+	if target.Role == "admin" && actor.Role != "owner" {
+		return apperror.Forbidden("Only the owner can remove admins")
+	}
+	if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+		return apperror.Forbidden("No permission to remove members")
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+
+	if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
+		return fmt.Errorf("remove member: %w", err)
+	}
+
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.member.removed", chatID),
+		"chat_member_removed",
+		map[string]string{"chat_id": chatID.String(), "user_id": targetID.String()},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) UpdateMemberRole(ctx context.Context, chatID, userID, targetID uuid.UUID, newRole string, newPerms int64, customTitle *string) error {
+	actor, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil || actor == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	target, err := s.chats.GetMember(ctx, chatID, targetID)
+	if err != nil || target == nil {
+		return apperror.NotFound("Target user is not a member")
+	}
+
+	if target.Role == "owner" {
+		return apperror.Forbidden("Cannot change the owner's role")
+	}
+
+	// Promote to admin or demote from admin: owner only
+	if newRole == "admin" || target.Role == "admin" {
+		if actor.Role != "owner" {
+			return apperror.Forbidden("Only the owner can promote or demote admins")
+		}
+	} else {
+		if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+			return apperror.Forbidden("No permission to change member roles")
+		}
+	}
+
+	if err := s.chats.UpdateMemberRole(ctx, chatID, targetID, newRole, newPerms, customTitle); err != nil {
+		return fmt.Errorf("update member role: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.member.updated", chatID),
+		"chat_member_updated",
+		map[string]string{"chat_id": chatID.String(), "user_id": targetID.String(), "role": newRole},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) UpdateDefaultPermissions(ctx context.Context, chatID, userID uuid.UUID, perms int64) error {
+	actor, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil || actor == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+		return apperror.Forbidden("No permission to change default permissions")
+	}
+
+	if err := s.chats.UpdateDefaultPermissions(ctx, chatID, perms); err != nil {
+		return fmt.Errorf("update default permissions: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_updated",
+		map[string]interface{}{"chat_id": chatID.String(), "default_permissions": perms},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) UpdateMemberPermissions(ctx context.Context, chatID, userID, targetID uuid.UUID, perms int64) error {
+	actor, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil || actor == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	target, err := s.chats.GetMember(ctx, chatID, targetID)
+	if err != nil || target == nil {
+		return apperror.NotFound("Target user is not a member")
+	}
+
+	if target.Role == "owner" {
+		return apperror.Forbidden("Cannot change the owner's permissions")
+	}
+
+	if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+		return apperror.Forbidden("No permission to change member permissions")
+	}
+
+	if err := s.chats.UpdateMemberPermissions(ctx, chatID, targetID, perms); err != nil {
+		return fmt.Errorf("update member permissions: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.member.updated", chatID),
+		"chat_member_updated",
+		map[string]interface{}{"chat_id": chatID.String(), "user_id": targetID.String(), "permissions": perms},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) SetSlowMode(ctx context.Context, chatID, userID uuid.UUID, seconds int) error {
+	actor, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil || actor == nil {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.IsAdminOrOwner(actor.Role) {
+		return apperror.Forbidden("Only admins and owners can set slow mode")
+	}
+
+	if err := s.chats.SetSlowMode(ctx, chatID, seconds); err != nil {
+		return fmt.Errorf("set slow mode: %w", err)
+	}
+
+	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_updated",
+		map[string]interface{}{"chat_id": chatID.String(), "slow_mode_seconds": seconds},
+		memberIDs,
+		userID.String(),
+	)
+
+	return nil
+}
+
+func (s *ChatService) GetAdmins(ctx context.Context, chatID, userID uuid.UUID) ([]model.ChatMember, error) {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	admins, err := s.chats.GetAdmins(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get admins: %w", err)
+	}
+	return admins, nil
+}
+
+func (s *ChatService) GetMember(ctx context.Context, chatID, userID, targetID uuid.UUID) (*model.ChatMember, error) {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	member, err := s.chats.GetMember(ctx, chatID, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.NotFound("Member not found")
+	}
+	return member, nil
+}
+
+func (s *ChatService) SearchMembers(ctx context.Context, chatID, userID uuid.UUID, query string, limit int) ([]model.ChatMember, error) {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	members, err := s.chats.SearchMembers(ctx, chatID, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search members: %w", err)
+	}
+	return members, nil
 }
 
 func (s *ChatService) GetMembers(ctx context.Context, chatID, userID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error) {

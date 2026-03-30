@@ -208,6 +208,21 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
     },
   };
 
+  // Saturn: populate knownChatIds from cached state so isUserId() works
+  // before fresh API data arrives. Store on window to avoid circular chunk deps.
+  if (newState.chats?.byId) {
+    const userIdSet = newState.users?.byId ? new Set(Object.keys(newState.users.byId)) : new Set<string>();
+    const saturnChatIds: string[] = [];
+    for (const chatId of Object.keys(newState.chats.byId)) {
+      if (/^[0-9a-f]{8}-/.test(chatId) && !userIdSet.has(chatId)) {
+        saturnChatIds.push(chatId);
+      }
+    }
+    if (saturnChatIds.length) {
+      (window as any).__SATURN_CACHED_CHAT_IDS = saturnChatIds;
+    }
+  }
+
   return newState;
 }
 

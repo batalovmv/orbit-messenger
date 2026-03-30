@@ -6,8 +6,28 @@ function isUuid(id: string) {
   return /^[0-9a-f]{8}-/.test(id);
 }
 
+// Registry for non-user (group/channel) chat IDs.
+const knownChatIds = new Set<string>();
+let cacheConsumed = false;
+
+function consumeCachedIds() {
+  if (cacheConsumed) return;
+  cacheConsumed = true;
+  const cached = (window as any).__SATURN_CACHED_CHAT_IDS as string[] | undefined;
+  if (cached) {
+    for (const id of cached) knownChatIds.add(id);
+    delete (window as any).__SATURN_CACHED_CHAT_IDS;
+  }
+}
+
+export function registerChatId(id: string) { knownChatIds.add(id); }
+export function unregisterChatId(id: string) { knownChatIds.delete(id); }
+
 export function isUserId(entityId: string) {
-  if (isUuid(entityId)) return true; // Saturn UUIDs are always user/chat IDs
+  if (isUuid(entityId)) {
+    consumeCachedIds();
+    return !knownChatIds.has(entityId);
+  }
   return !entityId.startsWith('-');
 }
 
