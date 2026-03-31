@@ -8,7 +8,7 @@ import { StoryViewerOrigin } from '../../../types';
 import { sortUserIds } from '../../../global/helpers';
 import { filterPeersByQuery } from '../../../global/helpers/peers';
 
-import { callApi } from '../../../api/gramjs';
+import { callApi } from '../../../api/saturn';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
