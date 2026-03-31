@@ -371,7 +371,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       return oldLang(isBot ? 'lng_info_bot_title' : 'lng_info_user_title');
     }
 
-    return oldLang('GroupInfo.Title');
+    return oldLang('GroupInfoTitle');
   }
 
   const PrimaryLinkMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {

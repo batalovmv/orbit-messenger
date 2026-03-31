@@ -733,6 +733,7 @@ export interface LangPair {
   'ConversationClousStorageInfoDescription2': undefined;
   'ConversationClousStorageInfoDescription3': undefined;
   'ConversationClousStorageInfoDescription4': undefined;
+  'GroupInfoTitle': undefined;
   'EmptyGroupInfoTitle': undefined;
   'EmptyGroupInfoSubtitle': undefined;
   'EmptyGroupInfoLine2': undefined;

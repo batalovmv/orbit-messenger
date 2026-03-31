@@ -849,6 +849,7 @@
 "ConversationClousStorageInfoDescription2" = "• Send media and files to store them";
 "ConversationClousStorageInfoDescription3" = "• Access this chat from any device";
 "ConversationClousStorageInfoDescription4" = "• Use search to quickly find things";
+"GroupInfoTitle" = "Group Info";
 "EmptyGroupInfoTitle" = "You created a group";
 "EmptyGroupInfoSubtitle" = "Groups can have:";
 "EmptyGroupInfoLine1" = "• Up to {count} members";

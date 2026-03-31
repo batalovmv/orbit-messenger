@@ -97,8 +97,8 @@ function renderGroup(lang: OldLangFn) {
   return (
     <div className="NoMessages">
       <div className="wrapper" dir={lang.isRtl ? 'rtl' : undefined}>
-        <h3 className="title">{lang('EmptyGroupInfo.Title')}</h3>
-        <p className="description">{lang('EmptyGroupInfo.Subtitle')}</p>
+        <h3 className="title">{lang('EmptyGroupInfoTitle')}</h3>
+        <p className="description">{lang('EmptyGroupInfoSubtitle')}</p>
         <ul className="list-checkmarks">
           <li>{lang('EmptyGroupInfo.Line1')}</li>
           <li>{lang('EmptyGroupInfo.Line2')}</li>
