@@ -124,9 +124,13 @@ export default function createConfig(
     module: {
       rules: [
         {
+          test: /rlottie-wasm\.js$/,
+          type: 'asset/resource',
+        },
+        {
           test: /\.(ts|tsx|js|mjs|cjs)$/,
           loader: 'babel-loader',
-          exclude: /node_modules/,
+          exclude: [/node_modules/, /rlottie-wasm\.js$/],
         },
         {
           test: /\.css$/,
