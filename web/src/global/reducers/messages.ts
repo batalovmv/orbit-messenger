@@ -106,6 +106,10 @@ export function updateCurrentMessageList<T extends GlobalState>(
 export function replaceChatMessages<T extends GlobalState>(
   global: T, chatId: string, newById: Record<number, ApiMessage>,
 ): T {
+  // Safety: ensure all messages have content object
+  Object.values(newById).forEach((msg) => {
+    if (!msg.content) msg.content = {};
+  });
   return updateMessageStore(global, chatId, {
     byId: newById,
   });
@@ -136,6 +140,10 @@ export function addMessages<T extends GlobalState>(
   global: T, messages: ApiMessage[],
 ): T {
   const addedByChatId = messages.reduce((messagesByChatId, message: ApiMessage) => {
+    // Safety: ensure content is always an object (Saturn messages may arrive without it)
+    if (!message.content) {
+      message.content = {};
+    }
     if (!messagesByChatId[message.chatId]) {
       messagesByChatId[message.chatId] = {};
     }
