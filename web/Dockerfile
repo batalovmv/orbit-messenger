@@ -9,16 +9,15 @@ RUN git init && git add -A && git -c user.name=build -c user.email=build@ci comm
 ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build:production && \
     cd dist && \
-    for chunk in 6805.*.js; do \
-      ref=$(grep -oP 'rlottie-wasm\.[a-f0-9]+\.js' "$chunk" 2>/dev/null | head -1); \
-      if [ -n "$ref" ] && [ ! -f "$ref" ]; then \
-        actual=$(ls rlottie-wasm.*.js 2>/dev/null | head -1); \
-        if [ -n "$actual" ]; then \
-          cp "$actual" "$ref"; \
-          echo "Fixed: copied $actual -> $ref"; \
+    actual=$(ls rlottie-wasm.*.js 2>/dev/null | head -1) && \
+    if [ -n "$actual" ]; then \
+      echo "rlottie-wasm actual: $actual" && \
+      strings -a *.js 2>/dev/null | grep -oE 'rlottie-wasm\.[a-f0-9]{16,}\.js' | sort -u | while read ref; do \
+        if [ ! -f "$ref" ]; then \
+          cp "$actual" "$ref" && echo "Fixed: $actual -> $ref"; \
         fi; \
-      fi; \
-    done
+      done; \
+    fi
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
