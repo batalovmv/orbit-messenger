@@ -112,6 +112,9 @@ func (s *MediaStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Me
 		}
 		byID[m.ID] = m
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate media rows: %w", err)
+	}
 
 	// Preserve input order
 	result := make([]*model.Media, 0, len(ids))
@@ -224,6 +227,9 @@ func (s *MediaStore) GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID
 		}
 		result[r.MessageID] = append(result[r.MessageID], r)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate message media rows: %w", err)
+	}
 	return result, nil
 }
 
@@ -269,6 +275,9 @@ func (s *MediaStore) CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]st
 		if medKey != nil {
 			keys = append(keys, *medKey)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate orphaned media rows: %w", err)
 	}
 	return keys, nil
 }

@@ -278,6 +278,15 @@ func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPasswo
 		return fmt.Errorf("revoke sessions: %w", err)
 	}
 
+	// Invalidate all existing access tokens by setting a per-user "invalid before" timestamp.
+	// ValidateAccessToken checks this and rejects tokens issued before this moment.
+	// TTL = AccessTTL so the key auto-expires when all old tokens are naturally expired.
+	invalidateKey := "user_tokens_invalid_before:" + u.ID.String()
+	if err := s.redis.Set(ctx, invalidateKey, fmt.Sprintf("%d", time.Now().Unix()), s.cfg.AccessTTL).Err(); err != nil {
+		slog.Error("failed to set token invalidation timestamp", "error", err, "user_id", u.ID)
+		return fmt.Errorf("invalidate access tokens: %w", err)
+	}
+
 	return nil
 }
 
@@ -445,6 +454,24 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) 
 	userID, err := uuid.Parse(sub)
 	if err != nil {
 		return uuid.Nil, "", apperror.Unauthorized("Invalid token subject")
+	}
+
+	// Check per-user invalidation timestamp (set by ResetAdmin to revoke all access tokens).
+	// Fail-closed: Redis error = reject token.
+	invalidateKey := "user_tokens_invalid_before:" + userID.String()
+	invalidateTS, err := s.redis.Get(ctx, invalidateKey).Result()
+	if err != nil && err != redis.Nil {
+		slog.Error("redis user token invalidation check failed, rejecting token", "error", err)
+		return uuid.Nil, "", apperror.Internal("Token validation temporarily unavailable")
+	}
+	if err == nil {
+		var threshold int64
+		if _, scanErr := fmt.Sscanf(invalidateTS, "%d", &threshold); scanErr == nil {
+			iat, _ := claims["iat"].(float64)
+			if int64(iat) <= threshold {
+				return uuid.Nil, "", apperror.Unauthorized("Token has been revoked")
+			}
+		}
 	}
 
 	role, _ := claims["role"].(string)

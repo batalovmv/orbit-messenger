@@ -39,7 +39,7 @@ func TestCreateInviteLink_HashFormat(t *testing.T) {
 		},
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Group"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15}, nil
 		},
 	}
 	is := &mockInviteStore{
@@ -317,7 +317,7 @@ func TestCreateInviteLink_MemberWithoutPermission_Forbidden(t *testing.T) {
 
 	cs := &mockChatStore{
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Group"

@@ -38,7 +38,7 @@ func defaultOwnerChatStore(chatID uuid.UUID) *mockChatStore {
 			return &model.ChatMember{Role: "owner", Permissions: 255}, nil
 		},
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			return &model.Chat{ID: chatID, Type: "group", Name: &chatName, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &chatName, DefaultPermissions: 15}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{uuid.New().String()}, nil
@@ -80,7 +80,7 @@ func TestGetInviteInfo_Public(t *testing.T) {
 
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			return &model.Chat{ID: chatID, Type: "group", Name: &chatName, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &chatName, DefaultPermissions: 15}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{uuid.New().String(), uuid.New().String()}, nil

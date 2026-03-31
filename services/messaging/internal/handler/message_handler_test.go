@@ -32,11 +32,11 @@ func defaultMemberChatStore() *mockChatStore {
 			return true, "member", nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Chat, error) {
 			name := "Test Chat"
-			return &model.Chat{ID: id, Type: "group", Name: &name, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: id, Type: "group", Name: &name, DefaultPermissions: 15}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{uuid.New().String()}, nil
@@ -155,10 +155,10 @@ func TestSendMessage_SlowModeZeroNotEnforced(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Team"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255, SlowModeSeconds: 0}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15, SlowModeSeconds: 0}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{memberID.String()}, nil

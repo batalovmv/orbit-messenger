@@ -31,18 +31,24 @@ func Set(mask, bit int64) int64 { return mask | bit }
 // Clear turns off bit in mask.
 func Clear(mask, bit int64) int64 { return mask &^ bit }
 
+// PermissionsUnset is the sentinel value meaning "no per-user override, use defaults".
+// DB column default is -1. A value of 0 means "explicitly no permissions".
+const PermissionsUnset int64 = -1
+
 // EffectivePermissions resolves the final capability set for a member.
 //   - Owner: all permissions
-//   - Admin: their personal permissions (or default admin if 0)
-//   - Member: per-user override if non-zero, else chat default_permissions
+//   - Admin: their personal permissions (or default admin if unset / -1)
+//   - Member: per-user override if set (not -1), else chat default_permissions
 //   - Channel members: 0 (only admin/owner can act)
 //   - Banned/readonly: 0
+//
+// The sentinel PermissionsUnset (-1) distinguishes "not customized" from "explicitly 0".
 func EffectivePermissions(role, chatType string, memberPerms, defaultPerms int64) int64 {
 	switch role {
 	case "owner":
 		return AllPermissions
 	case "admin":
-		if memberPerms != 0 {
+		if memberPerms != PermissionsUnset {
 			return memberPerms
 		}
 		return DefaultAdminPermissions
@@ -52,7 +58,7 @@ func EffectivePermissions(role, chatType string, memberPerms, defaultPerms int64
 		if chatType == "channel" {
 			return 0
 		}
-		if memberPerms != 0 {
+		if memberPerms != PermissionsUnset {
 			return memberPerms
 		}
 		return defaultPerms

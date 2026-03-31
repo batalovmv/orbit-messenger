@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
 
@@ -133,6 +134,10 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 				defer func() { <-s.sem }()
 				var td TypingData
 				if err := json.Unmarshal(event.Data, &td); err == nil {
+					if _, parseErr := uuid.Parse(td.ChatID); parseErr != nil {
+						slog.Warn("nats: invalid chat ID in typing data, dropping", "chat_id", td.ChatID)
+						return
+					}
 					memberIDs := s.fetchChatMemberIDs(td.ChatID)
 					var userData struct {
 						UserID string `json:"user_id"`
@@ -175,6 +180,10 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 				defer func() { <-s.sem }()
 				var sd StatusData
 				if err := json.Unmarshal(event.Data, &sd); err == nil {
+					if _, parseErr := uuid.Parse(sd.UserID); parseErr != nil {
+						slog.Warn("nats: invalid user ID in status data, dropping", "user_id", sd.UserID)
+						return
+					}
 					contactIDs := s.fetchContactIDs(sd.UserID)
 					for _, cid := range contactIDs {
 						if cid != sd.UserID {
@@ -190,18 +199,28 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 }
 
 // extractUserIDFromMediaSubject parses user ID from NATS subject like "orbit.media.<userId>.ready"
+// Returns empty string if the segment is not a valid UUID (prevents path traversal via crafted subjects).
 func extractUserIDFromMediaSubject(subject string) string {
 	parts := strings.Split(subject, ".")
 	if len(parts) >= 3 && parts[0] == "orbit" && parts[1] == "media" {
+		if _, err := uuid.Parse(parts[2]); err != nil {
+			slog.Warn("nats: invalid user ID in media subject, dropping", "subject", subject)
+			return ""
+		}
 		return parts[2]
 	}
 	return ""
 }
 
 // extractChatIDFromSubject parses chat ID from NATS subject like "orbit.chat.<uuid>.message.new"
+// Returns empty string if the segment is not a valid UUID (prevents path traversal via crafted subjects).
 func extractChatIDFromSubject(subject string) string {
 	parts := strings.Split(subject, ".")
 	if len(parts) >= 3 && parts[0] == "orbit" && parts[1] == "chat" {
+		if _, err := uuid.Parse(parts[2]); err != nil {
+			slog.Warn("nats: invalid chat ID in subject, dropping", "subject", subject)
+			return ""
+		}
 		return parts[2]
 	}
 	return ""

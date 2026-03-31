@@ -39,10 +39,10 @@ func groupChatStore(chatID uuid.UUID) *mockChatStore {
 	return &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Group"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{uuid.New().String()}, nil
@@ -65,7 +65,7 @@ func TestSendMessage_ChannelNoSignatures_AnonymousSender(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: 0, IsSignatures: false}, nil
+			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1, IsSignatures: false}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
 			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
@@ -124,7 +124,7 @@ func TestSendMessage_ChannelWithSignatures_RealSender(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: 0, IsSignatures: true}, nil
+			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1, IsSignatures: true}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
 			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
@@ -254,10 +254,10 @@ func TestSendMessage_SlowMode_SecondMessageBlocked(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Slow"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255, SlowModeSeconds: 30}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15, SlowModeSeconds: 30}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{senderID.String()}, nil
@@ -301,7 +301,7 @@ func TestSendMessage_SlowMode_AdminBypass(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Slow"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255, SlowModeSeconds: 30}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15, SlowModeSeconds: 30}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
 			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
@@ -351,10 +351,10 @@ func TestSendMessage_ChannelMember_Forbidden(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: 0}, nil
+			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: 0}, nil
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
 		},
 	}
 	ms := &mockMessageStore{}
@@ -376,7 +376,7 @@ func TestSendMessage_MemberWithoutSendPerm_Forbidden(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "Group"
-			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 255}, nil
+			return &model.Chat{ID: chatID, Type: "group", Name: &name, DefaultPermissions: 15}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
 			// Custom perms with CanSendMessages removed (254)
@@ -398,10 +398,10 @@ func TestSendMessage_OwnerCanPostInChannel(t *testing.T) {
 	cs := &mockChatStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
 			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: 0}, nil
+			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1}, nil
 		},
 		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "owner", Permissions: 0}, nil
+			return &model.ChatMember{Role: "owner", Permissions: -1}, nil
 		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{ownerID.String()}, nil

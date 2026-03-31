@@ -79,9 +79,14 @@ func main() {
 		ProxyHeader: "X-Forwarded-For",
 	}
 	// Only trust X-Forwarded-For from known proxies — prevents IP spoofing for rate limiting.
+	// SECURITY: EnableTrustedProxyCheck is ALWAYS on. Without TRUSTED_PROXIES, c.IP() falls
+	// back to the raw connection IP (safe). Without this, any client can spoof X-Forwarded-For
+	// to bypass per-IP rate limiting on auth endpoints.
+	fiberCfg.EnableTrustedProxyCheck = true
 	if proxies := config.EnvOr("TRUSTED_PROXIES", ""); proxies != "" {
-		fiberCfg.EnableTrustedProxyCheck = true
 		fiberCfg.TrustedProxies = strings.Split(proxies, ",")
+	} else {
+		slog.Warn("TRUSTED_PROXIES not set — X-Forwarded-For will be ignored, c.IP() returns raw connection IP")
 	}
 	app := fiber.New(fiberCfg)
 

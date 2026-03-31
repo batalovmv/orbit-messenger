@@ -287,7 +287,9 @@ func (s *MediaService) processGIFAsync(mediaID uuid.UUID, tmpPath string) {
 
 	var mp4Key *string
 	mp4Data, err := os.ReadFile(tmpMP4)
-	if err == nil {
+	if err != nil {
+		slog.Error("read converted mp4 failed", "error", err, "media_id", mediaID, "path", tmpMP4)
+	} else {
 		key := fmt.Sprintf("gif/%s/video.mp4", mediaID.String())
 		if err := s.r2.Upload(ctx, key, bytes.NewReader(mp4Data), "video/mp4", int64(len(mp4Data))); err != nil {
 			slog.Error("upload gif mp4 failed", "error", err)
@@ -540,17 +542,31 @@ func (s *MediaService) UploadChunk(ctx context.Context, uploadID string, uploade
 		return 0, 0, model.ErrUploadForbidden
 	}
 
+	// Validate part number against actual total chunks (#10 audit fix)
+	if partNumber > meta.TotalChunks {
+		return 0, 0, model.ErrInvalidPartNum
+	}
+
 	etag, err := s.r2.UploadPart(ctx, meta.R2Key, meta.R2UploadID, partNumber, bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return 0, 0, fmt.Errorf("upload part: %w", err)
 	}
 
-	// Atomic update via Lua script to prevent lost-update race (#1 race fix, #4 error handling)
+	// Atomic update via Lua script to prevent lost-update race (#1 race fix, #4 error handling).
+	// Deduplicates by part number so retried chunk uploads don't create duplicate entries
+	// that would cause CompleteMultipartUpload to fail (#9 audit fix).
 	appendScript := redis.NewScript(`
 		local raw = redis.call('GET', KEYS[1])
 		if not raw then return redis.error_reply('upload not found') end
 		local meta = cjson.decode(raw)
-		table.insert(meta.parts, {number = tonumber(ARGV[1]), etag = ARGV[2]})
+		local partNum = tonumber(ARGV[1])
+		for i, p in ipairs(meta.parts) do
+			if p.number == partNum then
+				table.remove(meta.parts, i)
+				break
+			end
+		end
+		table.insert(meta.parts, {number = partNum, etag = ARGV[2]})
 		local updated = cjson.encode(meta)
 		redis.call('SET', KEYS[1], updated, 'EX', tonumber(ARGV[3]))
 		return #meta.parts
