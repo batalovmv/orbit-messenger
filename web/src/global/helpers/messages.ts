@@ -68,6 +68,7 @@ export function getMessageTranscription(message: ApiMessage) {
 }
 
 export function hasMessageText(message: MediaContainer) {
+  if (!message.content) return false;
   const {
     action, text, sticker, photo, video, audio, voice, document, pollId, todo, dice,
     webPage, contact, invoice, location, game, storyData, giveaway, giveawayResults, paidMedia,
@@ -84,7 +85,7 @@ export function getMessageStatefulContent(global: GlobalState, message: ApiMessa
   const poll = selectPollFromMessage(global, message);
   const webPage = selectWebPageFromMessage(global, message);
 
-  const { peerId: storyPeerId, id: storyId } = message.content.storyData || {};
+  const { peerId: storyPeerId, id: storyId } = message.content?.storyData || {};
   const story = storyId && storyPeerId ? global.stories.byPeerId[storyPeerId]?.byId[storyId] : undefined;
 
   return groupStatefulContent({ poll, story, webPage });
@@ -115,6 +116,7 @@ export function getMessageTextWithFallback(lang: LangFn, message: MediaContainer
 }
 
 export function getMessageCustomShape(message: ApiMessage): boolean {
+  if (!message.content) return false;
   const {
     text, sticker, photo, video, audio, voice,
     document, pollId, webPage, contact, action,

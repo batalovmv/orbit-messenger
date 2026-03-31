@@ -45,7 +45,7 @@ export function renderMessageText({
   threadId?: ThreadId;
   maxTimestamp?: number;
 }) {
-  const { text, entities } = message.content.text || {};
+  const { text, entities } = message.content?.text || {};
 
   if (!text) {
     const contentNotSupportedText = getMessageTextWithFallback(getTranslationFn(), message)?.text;
@@ -79,7 +79,7 @@ export function renderMessageSummary(
   highlight?: string,
   truncateLength = TRUNCATED_SUMMARY_LENGTH,
 ): TextPart[] {
-  const { entities } = message.content.text || {};
+  const { entities } = message.content?.text || {};
 
   const global = getGlobal();
   const statefulContent = getMessageStatefulContent(global, message);
