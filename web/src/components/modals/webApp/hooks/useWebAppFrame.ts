@@ -75,9 +75,15 @@ const useWebAppFrame = (
   }, [onLoad, ref, isOpen]);
 
   const sendEvent = useCallback((event: WebAppOutboundEvent) => {
-    if (!ref.current?.contentWindow) return;
-    ref.current.contentWindow.postMessage(JSON.stringify(event), '*');
-  }, [ref]);
+    if (!ref.current?.contentWindow || !webApp?.url) return;
+    let targetOrigin: string;
+    try {
+      targetOrigin = new URL(webApp.url).origin;
+    } catch {
+      return;
+    }
+    ref.current.contentWindow.postMessage(JSON.stringify(event), targetOrigin);
+  }, [ref, webApp?.url]);
 
   const sendFullScreenChanged = useCallback((value: boolean) => {
     sendEvent({

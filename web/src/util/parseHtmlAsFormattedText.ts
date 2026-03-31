@@ -3,6 +3,7 @@ import { ApiMessageEntityTypes } from '../api/types';
 
 import { RE_LINK_TEMPLATE } from '../config';
 import { IS_EMOJI_SUPPORTED } from './browser/windowEnvironment';
+import { ensureProtocol } from './browser/url';
 
 export const ENTITY_CLASS_BY_NODE_NAME: Record<string, ApiMessageEntityTypes> = {
   B: ApiMessageEntityTypes.Bold,
@@ -136,8 +137,9 @@ function parseMarkdown(html: string) {
 
 function parseMarkdownLinks(html: string) {
   return html.replace(new RegExp(`\\[([^\\]]+?)]\\((${RE_LINK_TEMPLATE}+?)\\)`, 'g'), (_, text, link) => {
-    const url = link.includes('://') ? link : link.includes('@') ? `mailto:${link}` : `https://${link}`;
-    return `<a href="${url}">${text}</a>`;
+    const url = link.includes('@') ? `mailto:${link}` : ensureProtocol(link);
+    const safeUrl = url.replace(/"/g, '&quot;');
+    return `<a href="${safeUrl}">${text}</a>`;
   });
 }
 

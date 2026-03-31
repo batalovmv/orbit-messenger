@@ -41,7 +41,13 @@ const GameModal: FC<OwnProps & StateProps> = ({ openedGame, gameTitle, canPost }
   }, isOpen && canPost ? PLAY_GAME_ACTION_INTERVAL : undefined);
 
   const handleMessage = useCallback((event: MessageEvent<string>) => {
-    if (!chatId || !messageId) return;
+    if (!chatId || !messageId || !url) return;
+    try {
+      const expectedOrigin = new URL(url).origin;
+      if (event.origin !== expectedOrigin) return;
+    } catch {
+      return;
+    }
     try {
       const data = JSON.parse(event.data) as GameEvents;
       if (data.eventType === 'share_score') {
@@ -56,7 +62,7 @@ const GameModal: FC<OwnProps & StateProps> = ({ openedGame, gameTitle, canPost }
     } catch (e) {
       // Ignore other messages
     }
-  }, [chatId, closeGame, messageId, openForwardMenu]);
+  }, [chatId, closeGame, messageId, openForwardMenu, url]);
 
   const handleLoad = useCallback((event: React.SyntheticEvent<HTMLIFrameElement>) => {
     event.currentTarget.focus();

@@ -74,7 +74,7 @@ async function refreshToken(): Promise<void> {
     const response = await fetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     });
 
     if (!response.ok) {
@@ -109,6 +109,7 @@ export async function request<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   };
   if (accessToken && !options?.noAuth) {
     headers.Authorization = `Bearer ${accessToken}`;

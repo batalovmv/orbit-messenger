@@ -43,6 +43,14 @@ const ConfirmPayment: FC<OwnProps> = ({
   const lang = useOldLang();
 
   const handleMessage = useCallback((event: MessageEvent<string>) => {
+    if (url) {
+      try {
+        const expectedOrigin = new URL(url).origin;
+        if (event.origin !== expectedOrigin) return;
+      } catch {
+        return;
+      }
+    }
     try {
       const data = JSON.parse(event.data) as IframeCallbackEvent;
       const { eventType, eventData } = data;
@@ -66,7 +74,7 @@ const ConfirmPayment: FC<OwnProps> = ({
     } catch (err) {
       // Ignore other messages
     }
-  }, [onClose, noRedirect, openTelegramLink, onPaymentFormSubmit]);
+  }, [url, onClose, noRedirect, openTelegramLink, onPaymentFormSubmit]);
 
   useEffect(() => {
     window.addEventListener('message', handleMessage);

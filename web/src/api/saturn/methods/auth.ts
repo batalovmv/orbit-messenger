@@ -29,9 +29,23 @@ export async function registerWithInvite({
   return loginWithEmail({ email, password });
 }
 
-// Stored credentials for 2FA flow (cleared after successful login, auth restart, or 5min timeout)
-let pending2FACredentials: { email: string; password: string } | undefined;
+// Encrypted credentials for 2FA flow — plaintext never stored in module scope
+let pending2FAEncrypted: { email: string; iv: Uint8Array; ciphertext: ArrayBuffer; key: CryptoKey } | undefined;
 let pending2FATimeout: ReturnType<typeof setTimeout> | undefined;
+
+async function encryptCredentials(email: string, password: string) {
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(password));
+  return { email, iv, ciphertext, key };
+}
+
+async function decryptCredentials(): Promise<{ email: string; password: string } | undefined> {
+  if (!pending2FAEncrypted) return undefined;
+  const { email, iv, ciphertext, key } = pending2FAEncrypted;
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return { email, password: new TextDecoder().decode(decrypted) };
+}
 
 export async function loginWithEmail({
   email, password, totpCode,
@@ -49,7 +63,7 @@ export async function loginWithEmail({
     );
 
     client.setAccessToken(result.access_token, result.expires_in);
-    pending2FACredentials = undefined; // Clear on successful login
+    pending2FAEncrypted = undefined;
     if (pending2FATimeout) { clearTimeout(pending2FATimeout); pending2FATimeout = undefined; }
 
     const apiUser = buildApiUser(result.user);
@@ -80,10 +94,11 @@ export async function loginWithEmail({
   } catch (e) {
     if (e instanceof client.ApiError) {
       if (e.code === '2fa_required') {
-        pending2FACredentials = { email, password };
-        // Auto-clear after 5 minutes to limit XSS exposure window
+        encryptCredentials(email, password).then((encrypted) => {
+          pending2FAEncrypted = encrypted;
+        });
         if (pending2FATimeout) clearTimeout(pending2FATimeout);
-        pending2FATimeout = setTimeout(() => { pending2FACredentials = undefined; }, 5 * 60 * 1000);
+        pending2FATimeout = setTimeout(() => { pending2FAEncrypted = undefined; }, 5 * 60 * 1000);
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
           authorizationState: 'authorizationStateWaitPassword',
@@ -232,7 +247,7 @@ export function provideAuthPhoneNumber() {
 }
 
 export function restartAuth() {
-  pending2FACredentials = undefined;
+  pending2FAEncrypted = undefined;
   client.disconnectWs();
   client.clearAuth();
   sendApiUpdate({
@@ -247,7 +262,8 @@ export function provideAuthCode() {
 }
 
 export async function provideAuthPassword(totpCode: string) {
-  if (!pending2FACredentials) {
+  const creds = await decryptCredentials();
+  if (!creds) {
     sendApiUpdate({
       '@type': 'updateAuthorizationError',
       errorKey: { key: 'ErrorIncorrectPassword' as const },
@@ -256,8 +272,8 @@ export async function provideAuthPassword(totpCode: string) {
   }
 
   await loginWithEmail({
-    email: pending2FACredentials.email,
-    password: pending2FACredentials.password,
+    email: creds.email,
+    password: creds.password,
     totpCode,
   });
 }

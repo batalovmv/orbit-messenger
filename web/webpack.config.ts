@@ -41,13 +41,13 @@ const {
 
 const CSP = `
   default-src 'self';
-  connect-src 'self' wss://*.saturn.ac blob: http: https: ws: wss: ${APP_ENV === 'development' ? 'ipc:' : ''};
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval';
+  connect-src 'self' https://*.saturn.ac wss://*.saturn.ac blob: ${APP_ENV === 'development' ? 'http://localhost:* ws://localhost:* ipc:' : ''};
+  script-src 'self' 'wasm-unsafe-eval';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;
   media-src 'self' blob: data:;
   object-src 'none';
-  frame-src 'self' http: https:;
+  frame-src 'self' https:;
   worker-src 'self' blob:;
   base-uri 'none';
   form-action 'none';`

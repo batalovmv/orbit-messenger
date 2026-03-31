@@ -714,13 +714,16 @@ function processEntityAsHtml(
         dir="auto"
       >${renderedContent}</a>`;
     case ApiMessageEntityTypes.Url:
-    case ApiMessageEntityTypes.TextUrl:
+    case ApiMessageEntityTypes.TextUrl: {
+      const linkUrl = getLinkUrl(rawEntityText, entity);
+      const safeUrl = linkUrl.replace(/"/g, '&quot;');
       return `<a
         class="text-entity-link"
-        href=${getLinkUrl(rawEntityText, entity)}
+        href="${safeUrl}"
         data-entity-type="${entity.type}"
         dir="auto"
       >${renderedContent}</a>`;
+    }
     case ApiMessageEntityTypes.Spoiler:
       return `<span
         class="spoiler"
