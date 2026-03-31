@@ -8,6 +8,8 @@ const FALLBACK_LANG_CODE = 'en';
 const FALLBACK_VERSION = 0;
 const FALLBACK_TRANSLATE_URL = 'https://translations.telegram.org/en/weba';
 
+const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
+
 export default async function readFallbackStrings(forLocalScript?: boolean): Promise<CachedLangData> {
   let fileData;
   if (forLocalScript) {
@@ -21,15 +23,18 @@ export default async function readFallbackStrings(forLocalScript?: boolean): Pro
   const strings: LangPack['strings'] = {};
 
   Object.entries(rawStrings).forEach(([key, value]) => {
-    const [clearKey, pluralSuffix] = key.split('_');
+    const lastUnderscore = key.lastIndexOf('_');
+    const suffix = lastUnderscore === -1 ? undefined : key.slice(lastUnderscore + 1);
+    const isPlural = suffix && PLURAL_SUFFIXES.has(suffix);
 
-    if (!pluralSuffix) {
-      strings[clearKey] = value;
+    if (!isPlural) {
+      strings[key] = value;
       return;
     }
 
+    const clearKey = key.slice(0, lastUnderscore);
     const knownValue = (strings[clearKey] || {}) as LangPackStringValuePlural;
-    knownValue[pluralSuffix as keyof LangPackStringValuePlural] = value;
+    knownValue[suffix as keyof LangPackStringValuePlural] = value.replace(/\{count\}/g, '%1$d');
     strings[clearKey] = knownValue;
   });
 
