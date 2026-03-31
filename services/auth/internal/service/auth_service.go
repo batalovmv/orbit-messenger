@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -44,15 +45,8 @@ func NewAuthService(users store.UserStore, sessions store.SessionStore, invites 
 }
 
 // Bootstrap creates the first admin account. Fails if any admin already exists.
+// Uses CreateIfNoAdmins for atomic check-and-insert to prevent race conditions.
 func (s *AuthService) Bootstrap(ctx context.Context, email, password, displayName string) (*model.User, error) {
-	count, err := s.users.CountAdmins(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("count admins: %w", err)
-	}
-	if count > 0 {
-		return nil, apperror.Forbidden("Admin account already exists")
-	}
-
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -64,7 +58,10 @@ func (s *AuthService) Bootstrap(ctx context.Context, email, password, displayNam
 		DisplayName:  displayName,
 		Role:         "admin",
 	}
-	if err := s.users.Create(ctx, u); err != nil {
+	if err := s.users.CreateIfNoAdmins(ctx, u); err != nil {
+		if errors.Is(err, store.ErrAdminExists) {
+			return nil, apperror.Forbidden("Admin account already exists")
+		}
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
@@ -107,6 +104,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 }
 
 // Register creates a new user account using an invite code.
+// Atomically claims the invite slot first, then creates the user.
 func (s *AuthService) Register(ctx context.Context, code, email, password, displayName string) (*model.User, error) {
 	inv, err := s.invites.GetByCode(ctx, code)
 	if err != nil {
@@ -130,6 +128,13 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		return nil, apperror.Conflict("Email already registered")
 	}
 
+	// Atomically claim the invite slot BEFORE creating the user.
+	// UseInvite uses WHERE use_count < max_uses — if two requests race,
+	// only one will succeed; the other gets ErrNoRows.
+	if err := s.invites.UseInvite(ctx, code, uuid.Nil); err != nil {
+		return nil, apperror.BadRequest("Invalid or expired invite code")
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
@@ -144,11 +149,11 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		InviteCode:   &code,
 	}
 	if err := s.users.Create(ctx, u); err != nil {
+		// Best-effort: roll back the invite usage on user creation failure
+		if rbErr := s.invites.RollbackUsage(ctx, code); rbErr != nil {
+			slog.Error("failed to rollback invite usage", "error", rbErr, "code", code)
+		}
 		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	if err := s.invites.UseInvite(ctx, code, u.ID); err != nil {
-		slog.Error("failed to mark invite as used", "error", err, "code", code)
 	}
 
 	return u, nil
@@ -184,24 +189,20 @@ func (s *AuthService) Logout(ctx context.Context, tokenStr, refreshToken string)
 	return nil
 }
 
-// Refresh rotates the refresh token atomically.
+// Refresh rotates the refresh token atomically using DELETE ... RETURNING.
 func (s *AuthService) Refresh(ctx context.Context, refreshToken, ip, userAgent string) (*TokenPair, *model.User, error) {
 	hash := hashToken(refreshToken)
 
-	sess, err := s.sessions.GetByTokenHash(ctx, hash)
+	// Atomic: delete and return in one query — prevents replay attacks
+	sess, err := s.sessions.DeleteAndReturnByTokenHash(ctx, hash)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get session: %w", err)
+		return nil, nil, fmt.Errorf("delete session: %w", err)
 	}
 	if sess == nil {
 		return nil, nil, apperror.Unauthorized("Invalid refresh token")
 	}
 	if sess.ExpiresAt.Before(time.Now()) {
 		return nil, nil, apperror.Unauthorized("Refresh token expired")
-	}
-
-	// Delete old session (atomic rotation)
-	if err := s.sessions.DeleteByTokenHash(ctx, hash); err != nil {
-		return nil, nil, fmt.Errorf("delete old session: %w", err)
 	}
 
 	u, err := s.users.GetByID(ctx, sess.UserID)
@@ -233,7 +234,7 @@ func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User,
 
 // ResetAdmin resets an admin password using the admin reset key.
 func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPassword string) error {
-	if s.cfg.AdminResetKey == "" || resetKey != s.cfg.AdminResetKey {
+	if s.cfg.AdminResetKey == "" || subtle.ConstantTimeCompare([]byte(resetKey), []byte(s.cfg.AdminResetKey)) != 1 {
 		return apperror.Forbidden("Invalid reset key")
 	}
 
@@ -407,7 +408,12 @@ func (s *AuthService) RevokeInvite(ctx context.Context, inviteID, createdBy uuid
 // ValidateAccessToken validates a JWT access token and returns the user ID.
 func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) (uuid.UUID, string, error) {
 	hash := hashToken(tokenStr)
-	blacklisted, _ := s.redis.Exists(ctx, "jwt_blacklist:"+hash).Result()
+	blacklisted, err := s.redis.Exists(ctx, "jwt_blacklist:"+hash).Result()
+	if err != nil {
+		// Fail closed: if Redis is down, reject tokens to prevent revoked tokens from being accepted.
+		slog.Error("redis blacklist check failed, rejecting token", "error", err)
+		return uuid.Nil, "", apperror.Internal("Token validation temporarily unavailable")
+	}
 	if blacklisted > 0 {
 		return uuid.Nil, "", apperror.Unauthorized("Token has been revoked")
 	}
@@ -438,11 +444,15 @@ func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, ip,
 		"iat":  now.Unix(),
 		"exp":  now.Add(s.cfg.AccessTTL).Unix(),
 	}
-	// Fetch role for the token
+	// Fetch role for the token — fail if DB is unavailable or user deleted
 	u, err := s.users.GetByID(ctx, userID)
-	if err == nil && u != nil {
-		accessClaims["role"] = u.Role
+	if err != nil {
+		return nil, fmt.Errorf("fetch user role: %w", err)
 	}
+	if u == nil {
+		return nil, apperror.Unauthorized("User not found")
+	}
+	accessClaims["role"] = u.Role
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
 	accessStr, err := accessToken.SignedString([]byte(s.cfg.JWTSecret))

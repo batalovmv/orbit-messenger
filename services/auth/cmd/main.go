@@ -107,7 +107,8 @@ func main() {
 	sessionStore := store.NewSessionStore(pool)
 	inviteStore := store.NewInviteStore(pool)
 	authSvc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, svcCfg)
-	authHandler := handler.NewAuthHandler(authSvc, logger)
+	internalSecret := os.Getenv("INTERNAL_SECRET")
+	authHandler := handler.NewAuthHandler(authSvc, logger, internalSecret)
 
 	// Fiber
 	app := fiber.New(fiber.Config{

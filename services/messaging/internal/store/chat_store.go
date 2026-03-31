@@ -390,7 +390,8 @@ func (s *chatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]stri
 		`SELECT DISTINCT cm2.user_id
 		 FROM chat_members cm1
 		 JOIN chat_members cm2 ON cm1.chat_id = cm2.chat_id
-		 WHERE cm1.user_id = $1 AND cm2.user_id != $1`, userID,
+		 WHERE cm1.user_id = $1 AND cm2.user_id != $1
+		 LIMIT 5000`, userID,
 	)
 	if err != nil {
 		return nil, err

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"log/slog"
 	"os"
 	"strings"
@@ -29,12 +30,13 @@ func makeRefreshCookie(value string, maxAge int) *fiber.Cookie {
 }
 
 type AuthHandler struct {
-	svc    *service.AuthService
-	logger *slog.Logger
+	svc            *service.AuthService
+	logger         *slog.Logger
+	internalSecret string
 }
 
-func NewAuthHandler(svc *service.AuthService, logger *slog.Logger) *AuthHandler {
-	return &AuthHandler{svc: svc, logger: logger}
+func NewAuthHandler(svc *service.AuthService, logger *slog.Logger, internalSecret string) *AuthHandler {
+	return &AuthHandler{svc: svc, logger: logger, internalSecret: internalSecret}
 }
 
 func (h *AuthHandler) Register(app *fiber.App) {
@@ -61,12 +63,16 @@ func (h *AuthHandler) Register(app *fiber.App) {
 // --- Middleware ---
 
 func (h *AuthHandler) requireAuth(c *fiber.Ctx) error {
-	// When called via gateway, headers are set. When called directly, parse Authorization header.
-	userID := c.Get("X-User-ID")
-	if userID != "" {
-		c.Locals("user_id", userID)
-		c.Locals("user_role", c.Get("X-User-Role", "member"))
-		return c.Next()
+	// Trust X-User-ID only if the request carries a valid internal token
+	// proving it was proxied by the gateway (not sent directly by a client).
+	if internalToken := c.Get("X-Internal-Token"); internalToken != "" && h.internalSecret != "" &&
+		subtle.ConstantTimeCompare([]byte(internalToken), []byte(h.internalSecret)) == 1 {
+		userID := c.Get("X-User-ID")
+		if userID != "" {
+			c.Locals("user_id", userID)
+			c.Locals("user_role", c.Get("X-User-Role", "member"))
+			return c.Next()
+		}
 	}
 
 	token := extractBearerToken(c)
@@ -406,11 +412,11 @@ func (h *AuthHandler) ValidateInvite(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	return response.JSON(c, fiber.StatusOK, fiber.Map{
-		"valid": true,
-		"email": inv.Email,
-		"role":  inv.Role,
-	})
+	result := fiber.Map{
+		"valid":    true,
+		"has_email": inv.Email != nil,
+	}
+	return response.JSON(c, fiber.StatusOK, result)
 }
 
 func (h *AuthHandler) CreateInvite(c *fiber.Ctx) error {

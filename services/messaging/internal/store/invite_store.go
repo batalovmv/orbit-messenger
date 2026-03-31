@@ -116,16 +116,27 @@ func (s *inviteStore) Revoke(ctx context.Context, linkID uuid.UUID) error {
 }
 
 func (s *inviteStore) IncrementUsage(ctx context.Context, linkID uuid.UUID) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE chat_invite_links SET usage_count = usage_count + 1 WHERE id = $1`, linkID,
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE chat_invite_links
+		 SET usage_count = usage_count + 1
+		 WHERE id = $1
+		   AND is_revoked = false
+		   AND (usage_limit = 0 OR usage_count < usage_limit)`, linkID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("invite link usage limit reached or link invalid")
+	}
+	return nil
 }
 
 func (s *inviteStore) CreateJoinRequest(ctx context.Context, req *model.JoinRequest) error {
 	return s.pool.QueryRow(ctx,
 		`INSERT INTO chat_join_requests (chat_id, user_id, message)
 		 VALUES ($1, $2, $3)
+		 ON CONFLICT (chat_id, user_id) DO NOTHING
 		 RETURNING created_at`,
 		req.ChatID, req.UserID, req.Message,
 	).Scan(&req.CreatedAt)

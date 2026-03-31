@@ -588,6 +588,9 @@ func TestRemoveMember_SelfLeave_AlwaysAllowed(t *testing.T) {
 	removed := false
 
 	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{memberID.String()}, nil
 		},

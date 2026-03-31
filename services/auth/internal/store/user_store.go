@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -9,8 +11,12 @@ import (
 	"github.com/mst-corp/orbit/services/auth/internal/model"
 )
 
+// ErrAdminExists is returned by CreateIfNoAdmins when an admin account already exists.
+var ErrAdminExists = errors.New("admin account already exists")
+
 type UserStore interface {
 	Create(ctx context.Context, u *model.User) error
+	CreateIfNoAdmins(ctx context.Context, u *model.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
 	Update(ctx context.Context, u *model.User) error
@@ -81,6 +87,25 @@ func (s *userStore) Update(ctx context.Context, u *model.User) error {
 		u.CustomStatus, u.CustomStatusEmoji, u.ID,
 	)
 	return err
+}
+
+// CreateIfNoAdmins atomically checks that no admin exists and inserts the user.
+// Returns ErrAdminExists if an admin already exists (race-safe).
+func (s *userStore) CreateIfNoAdmins(ctx context.Context, u *model.User) error {
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, display_name, role, invited_by, invite_code)
+		 SELECT $1, $2, $3, $4, $5, $6
+		 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')
+		 RETURNING id, status, totp_enabled, created_at, updated_at`,
+		u.Email, u.PasswordHash, u.DisplayName, u.Role, u.InvitedBy, u.InviteCode,
+	).Scan(&u.ID, &u.Status, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrAdminExists
+		}
+		return fmt.Errorf("create admin: %w", err)
+	}
+	return nil
 }
 
 func (s *userStore) CountAdmins(ctx context.Context) (int, error) {

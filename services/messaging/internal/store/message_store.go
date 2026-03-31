@@ -265,7 +265,8 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 		 FROM messages m
 		 LEFT JOIN users u ON u.id = m.sender_id
 		 WHERE m.chat_id = $1 AND m.is_pinned = true AND m.is_deleted = false
-		 ORDER BY m.created_at DESC`, chatID,
+		 ORDER BY m.created_at DESC
+		 LIMIT 200`, chatID,
 	)
 	if err != nil {
 		return nil, err

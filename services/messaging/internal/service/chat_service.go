@@ -264,12 +264,19 @@ func (s *ChatService) AddMembers(ctx context.Context, chatID, userID uuid.UUID, 
 }
 
 func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID uuid.UUID) error {
-	// Self-leave is always allowed
+	// Self-leave is allowed only for actual members
 	if userID == targetID {
-		memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+		isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+		if err != nil {
+			return fmt.Errorf("check membership: %w", err)
+		}
+		if !isMember {
+			return apperror.Forbidden("Not a member of this chat")
+		}
 		if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
 			return fmt.Errorf("leave chat: %w", err)
 		}
+		memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
 		s.nats.Publish(
 			fmt.Sprintf("orbit.chat.%s.member.removed", chatID),
 			"chat_member_removed",
@@ -371,7 +378,7 @@ func (s *ChatService) UpdateDefaultPermissions(ctx context.Context, chatID, user
 		return apperror.Forbidden("Not a member of this chat")
 	}
 
-	if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+	if !permissions.IsAdminOrOwner(actor.Role) {
 		return apperror.Forbidden("No permission to change default permissions")
 	}
 
@@ -406,7 +413,7 @@ func (s *ChatService) UpdateMemberPermissions(ctx context.Context, chatID, userI
 		return apperror.Forbidden("Cannot change the owner's permissions")
 	}
 
-	if !permissions.IsAdminOrOwner(actor.Role) && !permissions.Has(actor.Permissions, permissions.CanBanUsers) {
+	if !permissions.IsAdminOrOwner(actor.Role) {
 		return apperror.Forbidden("No permission to change member permissions")
 	}
 

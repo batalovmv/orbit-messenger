@@ -74,7 +74,11 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	// Slow mode: check Redis TTL key (admin/owner bypass)
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		exists, _ := s.redis.Exists(ctx, redisKey).Result()
+		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		if err != nil {
+			slog.Error("redis slow mode check failed", "error", err)
+			return nil, apperror.Internal("Slow mode check temporarily unavailable")
+		}
 		if exists > 0 {
 			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
 			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))
@@ -436,7 +440,11 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	// Slow mode check
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		exists, _ := s.redis.Exists(ctx, redisKey).Result()
+		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		if err != nil {
+			slog.Error("redis slow mode check failed", "error", err)
+			return nil, apperror.Internal("Slow mode check temporarily unavailable")
+		}
 		if exists > 0 {
 			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
 			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))

@@ -53,8 +53,8 @@ func TestCreateInviteLink_HashFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateInviteLink: %v", err)
 	}
-	if len(link.Hash) != 12 {
-		t.Fatalf("hash should be 12 hex chars, got %d: %q", len(link.Hash), link.Hash)
+	if len(link.Hash) != 32 {
+		t.Fatalf("hash should be 32 hex chars (16 bytes), got %d: %q", len(link.Hash), link.Hash)
 	}
 }
 

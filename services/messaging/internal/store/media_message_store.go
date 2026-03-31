@@ -131,7 +131,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			att.ThumbnailURL = "/media/" + mediaIDStr + "/thumbnail"
 		}
 		if mediumKey != nil {
-			att.MediumURL = "/media/" + mediaIDStr + "/thumbnail"
+			att.MediumURL = "/media/" + mediaIDStr + "/medium"
 		}
 		if filename != nil {
 			att.OriginalFilename = *filename

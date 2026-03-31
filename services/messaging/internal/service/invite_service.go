@@ -30,7 +30,7 @@ func NewInviteService(invites store.InviteStore, chats store.ChatStore, nats Pub
 }
 
 func generateInviteHash() (string, error) {
-	b := make([]byte, 6)
+	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("generate invite hash: %w", err)
 	}
@@ -241,12 +241,13 @@ func (s *InviteService) JoinByInvite(ctx context.Context, hash string, userID uu
 		return map[string]interface{}{"status": "pending"}, nil
 	}
 
-	if err := s.chats.AddMember(ctx, link.ChatID, userID, "member"); err != nil {
-		return nil, fmt.Errorf("add member: %w", err)
+	if err := s.invites.IncrementUsage(ctx, link.ID); err != nil {
+		return nil, apperror.BadRequest("Invite link usage limit reached")
 	}
 
-	if err := s.invites.IncrementUsage(ctx, link.ID); err != nil {
-		slog.WarnContext(ctx, "failed to increment invite usage", "link_id", link.ID, "error", err)
+	if err := s.chats.AddMember(ctx, link.ChatID, userID, "member"); err != nil {
+		slog.WarnContext(ctx, "slot consumed but add member failed", "link_id", link.ID, "chat_id", link.ChatID, "user_id", userID, "error", err)
+		return nil, fmt.Errorf("add member: %w", err)
 	}
 
 	memberIDs, err := s.chats.GetMemberIDs(ctx, link.ChatID)
@@ -254,7 +255,7 @@ func (s *InviteService) JoinByInvite(ctx context.Context, hash string, userID uu
 		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", link.ChatID, "error", err)
 	} else {
 		s.nats.Publish(
-			fmt.Sprintf("chat.%s.events", link.ChatID),
+			fmt.Sprintf("orbit.chat.%s.member.added", link.ChatID),
 			"chat_member_added",
 			map[string]interface{}{
 				"chat_id": link.ChatID,
@@ -310,7 +311,7 @@ func (s *InviteService) ApproveJoinRequest(ctx context.Context, chatID, callerID
 		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	} else {
 		s.nats.Publish(
-			fmt.Sprintf("chat.%s.events", chatID),
+			fmt.Sprintf("orbit.chat.%s.member.added", chatID),
 			"chat_member_added",
 			map[string]interface{}{
 				"chat_id": chatID,

@@ -15,6 +15,8 @@ type InviteStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Invite, error)
 	ListAll(ctx context.Context) ([]model.Invite, error)
 	UseInvite(ctx context.Context, code string, userID uuid.UUID) error
+	// RollbackUsage decrements use_count for a failed registration (best-effort).
+	RollbackUsage(ctx context.Context, code string) error
 	Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.UUID) error
 }
 
@@ -106,6 +108,13 @@ func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UU
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+func (s *inviteStore) RollbackUsage(ctx context.Context, code string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE invites SET use_count = use_count - 1 WHERE code = $1 AND use_count > 0`, code,
+	)
+	return err
 }
 
 func (s *inviteStore) Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.UUID) error {

@@ -20,6 +20,9 @@ type SessionStore interface {
 	DeleteByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 	GetByTokenHash(ctx context.Context, hash string) (*model.Session, error)
 	DeleteByTokenHash(ctx context.Context, hash string) error
+	// DeleteAndReturnByTokenHash atomically deletes a session and returns it.
+	// Returns (nil, nil) if no session matched.
+	DeleteAndReturnByTokenHash(ctx context.Context, hash string) (*model.Session, error)
 	DeleteAllByUser(ctx context.Context, userID uuid.UUID) error
 }
 
@@ -104,6 +107,19 @@ func (s *sessionStore) GetByTokenHash(ctx context.Context, hash string) (*model.
 func (s *sessionStore) DeleteByTokenHash(ctx context.Context, hash string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, hash)
 	return err
+}
+
+func (s *sessionStore) DeleteAndReturnByTokenHash(ctx context.Context, hash string) (*model.Session, error) {
+	sess := &model.Session{}
+	err := s.pool.QueryRow(ctx,
+		`DELETE FROM sessions WHERE token_hash = $1
+		 RETURNING id, user_id, device_id, token_hash, ip_address::TEXT, user_agent, expires_at, created_at`, hash,
+	).Scan(&sess.ID, &sess.UserID, &sess.DeviceID, &sess.TokenHash,
+		&sess.IPAddress, &sess.UserAgent, &sess.ExpiresAt, &sess.CreatedAt)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	return sess, err
 }
 
 func (s *sessionStore) DeleteAllByUser(ctx context.Context, userID uuid.UUID) error {

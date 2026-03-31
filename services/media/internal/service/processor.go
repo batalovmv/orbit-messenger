@@ -191,16 +191,28 @@ func ExtractWaveform(inputPath string) (*AudioResult, error) {
 		return &AudioResult{WaveformPeaks: peaks, Duration: duration}, nil
 	}
 
-	// Convert to raw PCM s16le mono 8kHz
+	// Convert to raw PCM s16le mono 8kHz — write to temp file to avoid OOM
+	pcmFile, err := os.CreateTemp("", "orbit-pcm-*.raw")
+	if err != nil {
+		peaks := make([]byte, 100)
+		for i := range peaks {
+			peaks[i] = 15
+		}
+		return &AudioResult{WaveformPeaks: peaks, Duration: duration}, nil
+	}
+	pcmPath := pcmFile.Name()
+	pcmFile.Close()
+	defer os.Remove(pcmPath)
+
 	cmd := exec.Command("ffmpeg",
 		"-i", inputPath,
 		"-ac", "1",
 		"-ar", "8000",
 		"-f", "s16le",
-		"pipe:1",
+		pcmPath,
+		"-y",
 	)
-	var out bytes.Buffer
-	cmd.Stdout = &out
+	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
 		peaks := make([]byte, 100)
@@ -210,8 +222,12 @@ func ExtractWaveform(inputPath string) (*AudioResult, error) {
 		return &AudioResult{WaveformPeaks: peaks, Duration: duration}, nil
 	}
 
-	samples := out.Bytes()
-	numSamples := len(samples) / 2 // 16-bit = 2 bytes
+	fi, err := os.Stat(pcmPath)
+	if err != nil || fi.Size() == 0 {
+		return &AudioResult{WaveformPeaks: make([]byte, 100), Duration: duration}, nil
+	}
+
+	numSamples := int(fi.Size()) / 2 // 16-bit = 2 bytes
 	if numSamples == 0 {
 		return &AudioResult{WaveformPeaks: make([]byte, 100), Duration: duration}, nil
 	}
@@ -226,28 +242,41 @@ func ExtractWaveform(inputPath string) (*AudioResult, error) {
 	maxPeak := 0.0
 	rawPeaks := make([]float64, numPeaks)
 
-	for i := 0; i < numPeaks; i++ {
-		start := i * samplesPerPeak
-		end := start + samplesPerPeak
-		if end*2 > len(samples) {
-			end = len(samples) / 2
-		}
+	pcmReader, err := os.Open(pcmPath)
+	if err != nil {
+		return &AudioResult{WaveformPeaks: peaks, Duration: duration}, nil
+	}
+	defer pcmReader.Close()
 
-		peak := 0.0
-		for j := start; j < end; j++ {
-			offset := j * 2
-			if offset+1 >= len(samples) {
+	const chunkBytes = 64 * 1024 // 64 KB read buffer
+	buf := make([]byte, chunkBytes)
+	byteOffset := 0 // absolute byte position in PCM stream
+
+	for {
+		n, readErr := pcmReader.Read(buf)
+		if n == 0 {
+			break
+		}
+		chunk := buf[:n]
+		// Process each 2-byte sample in this chunk
+		for k := 0; k+1 < len(chunk); k += 2 {
+			sampleIndex := (byteOffset + k) / 2
+			peakIndex := sampleIndex / samplesPerPeak
+			if peakIndex >= numPeaks {
 				break
 			}
-			sample := int16(binary.LittleEndian.Uint16(samples[offset : offset+2]))
+			sample := int16(binary.LittleEndian.Uint16(chunk[k : k+2]))
 			abs := math.Abs(float64(sample))
-			if abs > peak {
-				peak = abs
+			if abs > rawPeaks[peakIndex] {
+				rawPeaks[peakIndex] = abs
+				if abs > maxPeak {
+					maxPeak = abs
+				}
 			}
 		}
-		rawPeaks[i] = peak
-		if peak > maxPeak {
-			maxPeak = peak
+		byteOffset += n
+		if readErr != nil {
+			break
 		}
 	}
 

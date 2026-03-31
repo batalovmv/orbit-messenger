@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
@@ -63,6 +64,21 @@ func (m *mockUserStore) GetByEmail(_ context.Context, email string) (*model.User
 
 func (m *mockUserStore) Update(_ context.Context, u *model.User) error {
 	m.users[u.ID] = u
+	return nil
+}
+
+func (m *mockUserStore) CreateIfNoAdmins(_ context.Context, u *model.User) error {
+	if m.adminCount > 0 {
+		return store.ErrAdminExists
+	}
+	u.ID = uuid.New()
+	u.Status = "offline"
+	u.TOTPEnabled = false
+	u.CreatedAt = time.Now()
+	u.UpdatedAt = time.Now()
+	m.users[u.ID] = u
+	m.byEmail[u.Email] = u
+	m.adminCount++
 	return nil
 }
 
@@ -141,6 +157,16 @@ func (m *mockSessionStore) DeleteByTokenHash(_ context.Context, hash string) err
 	return nil
 }
 
+func (m *mockSessionStore) DeleteAndReturnByTokenHash(_ context.Context, hash string) (*model.Session, error) {
+	s, ok := m.byToken[hash]
+	if !ok {
+		return nil, nil
+	}
+	delete(m.sessions, s.ID)
+	delete(m.byToken, hash)
+	return s, nil
+}
+
 func (m *mockSessionStore) DeleteAllByUser(_ context.Context, userID uuid.UUID) error {
 	for id, s := range m.sessions {
 		if s.UserID == userID {
@@ -201,6 +227,14 @@ func (m *mockInviteStore) UseInvite(_ context.Context, code string, userID uuid.
 	return nil
 }
 
+func (m *mockInviteStore) RollbackUsage(_ context.Context, code string) error {
+	inv, ok := m.invites[code]
+	if ok && inv.UseCount > 0 {
+		inv.UseCount--
+	}
+	return nil
+}
+
 func (m *mockInviteStore) Revoke(_ context.Context, id uuid.UUID, createdBy uuid.UUID) error {
 	inv, ok := m.byID[id]
 	if !ok || (inv.CreatedBy != nil && *inv.CreatedBy != createdBy) {
@@ -209,12 +243,6 @@ func (m *mockInviteStore) Revoke(_ context.Context, id uuid.UUID, createdBy uuid
 	inv.IsActive = false
 	return nil
 }
-
-// --- Mock Redis (minimal) ---
-
-type miniredis struct{}
-
-// We'll use a nil redis client and handle panics in tests that don't need Redis.
 
 // --- Test Setup ---
 
@@ -234,12 +262,12 @@ func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStor
 		FrontendURL:   "http://localhost:3000",
 	}
 
-	// Create a mini Redis mock - use real client pointing to nothing, service handles errors
-	rdb := redis.NewClient(&redis.Options{Addr: "localhost:0"})
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewAuthHandler(svc, logger)
+	handler := NewAuthHandler(svc, logger, "")
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -734,10 +762,11 @@ func TestRevokeSession_HappyPath(t *testing.T) {
 		AdminResetKey: "test-reset-key",
 		FrontendURL:   "http://localhost:3000",
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: "localhost:0"})
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	h := NewAuthHandler(svc, logger)
+	h := NewAuthHandler(svc, logger, "")
 	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
 	h.Register(app)
 

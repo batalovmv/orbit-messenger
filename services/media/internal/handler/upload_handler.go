@@ -67,10 +67,13 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 		return response.Error(c, apperror.Internal("Failed to read file"))
 	}
 
-	// Detect MIME type
-	mimeType := file.Header.Get("Content-Type")
-	if mimeType == "" || mimeType == "application/octet-stream" {
-		mimeType = http.DetectContentType(data)
+	// Always detect MIME from content — never trust client Content-Type for type validation
+	mimeType := http.DetectContentType(data)
+	// For generic types, fall back to the declared Content-Type as a hint
+	if mimeType == "application/octet-stream" {
+		if declared := file.Header.Get("Content-Type"); declared != "" {
+			mimeType = declared
+		}
 	}
 
 	mediaType := c.FormValue("type", "")
@@ -151,13 +154,16 @@ func (h *UploadHandler) ChunkedUploadPart(c *fiber.Ctx) error {
 	if len(data) == 0 {
 		return response.Error(c, apperror.BadRequest("Empty chunk"))
 	}
+	if len(data) > model.ChunkSize {
+		return response.Error(c, apperror.BadRequest("Chunk exceeds maximum size"))
+	}
 
 	uploaded, total, err := h.svc.UploadChunk(c.Context(), uploadID, uid, partNumber, data)
 	if err != nil {
 		return h.mapChunkedError(c, err, "chunk upload")
 	}
 
-	return c.JSON(fiber.Map{
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"uploaded_chunks": uploaded,
 		"total_chunks":    total,
 	})
