@@ -18,6 +18,7 @@ type InviteStore interface {
 	// RollbackUsage decrements use_count for a failed registration (best-effort).
 	RollbackUsage(ctx context.Context, code string) error
 	Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.UUID) error
+	UpdateUsedBy(ctx context.Context, code string, userID uuid.UUID) error
 }
 
 type inviteStore struct {
@@ -129,4 +130,12 @@ func (s *inviteStore) Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.U
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+func (s *inviteStore) UpdateUsedBy(ctx context.Context, code string, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE invites SET used_by = $1 WHERE code = $2`,
+		userID, code,
+	)
+	return err
 }

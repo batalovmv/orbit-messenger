@@ -403,7 +403,7 @@ func (h *AuthHandler) ValidateInvite(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
-	if appErr := validator.RequireString(req.Code, "code", 1, 20); appErr != nil {
+	if appErr := validator.RequireString(req.Code, "code", 1, 64); appErr != nil {
 		return response.Error(c, appErr)
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -153,7 +154,16 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		if rbErr := s.invites.RollbackUsage(ctx, code); rbErr != nil {
 			slog.Error("failed to rollback invite usage", "error", rbErr, "code", code)
 		}
+		// Map DB unique constraint violation to 409 Conflict instead of 500
+		if isUniqueViolation(err) {
+			return nil, apperror.Conflict("Email already registered")
+		}
 		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	// Update invite used_by with the real user ID (was uuid.Nil during claim)
+	if ubErr := s.invites.UpdateUsedBy(ctx, code, u.ID); ubErr != nil {
+		slog.Error("failed to update invite used_by", "error", ubErr, "code", code, "user_id", u.ID)
 	}
 
 	return u, nil
@@ -506,6 +516,12 @@ func (s *AuthService) parseToken(tokenStr string) (jwt.MapClaims, error) {
 func hashToken(token string) string {
 	h := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(h[:])
+}
+
+// isUniqueViolation checks if the error is a PostgreSQL unique constraint violation (23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func generateInviteCode() (string, error) {

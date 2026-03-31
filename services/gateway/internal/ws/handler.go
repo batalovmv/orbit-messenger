@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 )
@@ -131,6 +133,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		go h.pingLoop(conn)
 
 		// Read loop
+		c.SetReadLimit(64 * 1024) // 64KB max WS message size — prevents memory exhaustion
 		c.SetReadDeadline(time.Now().Add(pingInterval + pongWait))
 		for {
 			_, msg, err := c.ReadMessage()
@@ -143,9 +146,22 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 }
 
 // validateToken checks JWT via auth service with Redis cache.
+// Mirrors the blacklist check from middleware/jwt.go to prevent revoked tokens from authenticating WS.
 func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (string, error) {
 	tokenHash := sha256Hash(token)
 	cacheKey := "jwt_cache:" + tokenHash
+	blacklistKey := "jwt_blacklist:" + tokenHash
+
+	// Check blacklist first — fail-closed on Redis error
+	blacklisted, blErr := rdb.Exists(ctx, blacklistKey).Result()
+	if blErr != nil {
+		slog.Error("WS blacklist check failed, rejecting token", "error", blErr)
+		return "", fmt.Errorf("blacklist check failed")
+	}
+	if blacklisted > 0 {
+		rdb.Del(ctx, cacheKey) // clean stale cache
+		return "", nil
+	}
 
 	// Check cache
 	if cached, err := rdb.Get(ctx, cacheKey).Result(); err == nil {
@@ -174,7 +190,7 @@ func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		return "", nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
 		return "", err
 	}
@@ -235,6 +251,10 @@ func (h *Handler) handleClientMessage(conn *Conn, msg []byte) {
 func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 	var td TypingData
 	if err := json.Unmarshal(data, &td); err != nil || td.ChatID == "" {
+		return
+	}
+	// Validate ChatID is a proper UUID — prevents NATS subject injection
+	if _, err := uuid.Parse(td.ChatID); err != nil {
 		return
 	}
 

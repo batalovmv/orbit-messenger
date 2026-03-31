@@ -71,6 +71,9 @@ func main() {
 	app := fiber.New(fiber.Config{
 		BodyLimit:    55 * 1024 * 1024, // 55MB — media uploads up to 50MB, chunked chunks up to 10MB
 		ErrorHandler: response.FiberErrorHandler,
+		// Trust X-Forwarded-For from Saturn.ac ingress — required for correct per-IP rate limiting.
+		// Without this, c.IP() returns the ingress IP and all clients share one rate-limit bucket.
+		ProxyHeader: "X-Forwarded-For",
 	})
 
 	// Global middleware

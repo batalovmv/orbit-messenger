@@ -404,6 +404,10 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 }
 
 func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
+
 	rawURL := c.Query("url")
 	if rawURL == "" {
 		return response.Error(c, apperror.BadRequest("url query parameter is required"))

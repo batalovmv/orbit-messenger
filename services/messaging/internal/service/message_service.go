@@ -110,7 +110,9 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	// Slow mode: set cooldown after successful send
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second)
+		if err := s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second).Err(); err != nil {
+			slog.Error("redis slow mode set failed", "error", err, "chat_id", chatID, "user_id", senderID)
+		}
 	}
 
 	// Publish to NATS
@@ -484,7 +486,9 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	// Slow mode cooldown
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second)
+		if err := s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second).Err(); err != nil {
+			slog.Error("redis slow mode set failed", "error", err, "chat_id", chatID, "user_id", senderID)
+		}
 	}
 
 	// Publish to NATS

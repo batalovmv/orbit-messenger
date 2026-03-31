@@ -429,9 +429,19 @@ func (s *MediaService) Delete(ctx context.Context, id, userID uuid.UUID) error {
 // --- Chunked Upload (fixes #1 ownership, #4 Redis errors) ---
 
 // InitChunkedUpload starts a multipart upload.
+// validMediaTypes is the set of allowed media_type values for R2 key prefixes.
+var validMediaTypes = map[string]bool{
+	"photo": true, "video": true, "file": true,
+	"voice": true, "videonote": true, "gif": true,
+}
+
 func (s *MediaService) InitChunkedUpload(ctx context.Context, uploaderID uuid.UUID, filename, mimeType, mediaType string, totalSize int64) (*model.ChunkedUploadMeta, error) {
 	if mediaType == "" {
 		mediaType = model.DetectMediaType(mimeType)
+	}
+	// Validate mediaType against enum to prevent R2 key injection (e.g. "../../admin")
+	if !validMediaTypes[mediaType] {
+		return nil, model.ErrMIMENotAllowed
 	}
 	if !model.AllowedMIME(mediaType, mimeType) {
 		return nil, model.ErrMIMENotAllowed
@@ -557,11 +567,6 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		return nil, fmt.Errorf("complete multipart: %w", err)
 	}
 
-	// Cleanup Redis (#4 — handle error)
-	if err := s.rdb.Del(ctx, chunkedKeyPrefix+uploadID).Err(); err != nil {
-		slog.Warn("failed to delete chunked upload key from Redis", "upload_id", uploadID, "error", err)
-	}
-
 	m := &model.Media{
 		ID:               uuid.MustParse(meta.ID),
 		UploaderID:       uploaderID,
@@ -580,6 +585,11 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 			slog.Error("failed to cleanup orphaned R2 object", "key", meta.R2Key, "error", delErr)
 		}
 		return nil, fmt.Errorf("create media record: %w", err)
+	}
+
+	// Cleanup Redis AFTER successful DB insert — prevents orphaned R2 objects without recovery path
+	if err := s.rdb.Del(ctx, chunkedKeyPrefix+uploadID).Err(); err != nil {
+		slog.Warn("failed to delete chunked upload key from Redis", "upload_id", uploadID, "error", err)
 	}
 
 	s.publishMediaReady(m.ID)

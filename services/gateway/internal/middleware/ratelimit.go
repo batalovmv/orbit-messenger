@@ -24,11 +24,10 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 	window := 60 * time.Second
 
 	return func(c *fiber.Ctx) error {
-		// Use IP for rate limiting — X-User-ID is not trustworthy at this point
-		// because it comes from the raw request before JWT middleware validates it.
+		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
+		// X-User-ID header (after stripping client-supplied value), so we use that.
 		identifier := c.IP()
-		// If JWT middleware has already set a verified user ID (via c.Locals), use it.
-		if uid, ok := c.Locals("user_id").(string); ok && uid != "" {
+		if uid := c.Get("X-User-ID"); uid != "" {
 			identifier = uid
 		}
 

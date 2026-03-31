@@ -88,7 +88,7 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 			return response.Error(c, apperror.Unauthorized("Invalid or expired token"))
 		}
 
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if err != nil {
 			return response.Error(c, apperror.Internal("auth response read error"))
 		}

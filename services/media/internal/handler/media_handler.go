@@ -51,6 +51,11 @@ func (h *MediaHandler) GetMedium(c *fiber.Ctx) error {
 
 // streamVariant fetches a media variant (original/thumbnail/medium) from S3 and streams it.
 func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
+	// Require authentication — prevent unauthenticated media download
+	if c.Get("X-User-ID") == "" {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
@@ -85,6 +90,10 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 
 // GetInfo returns media metadata as JSON.
 func (h *MediaHandler) GetInfo(c *fiber.Ctx) error {
+	if c.Get("X-User-ID") == "" {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))

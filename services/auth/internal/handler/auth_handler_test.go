@@ -244,6 +244,13 @@ func (m *mockInviteStore) Revoke(_ context.Context, id uuid.UUID, createdBy uuid
 	return nil
 }
 
+func (m *mockInviteStore) UpdateUsedBy(_ context.Context, code string, userID uuid.UUID) error {
+	if inv, ok := m.invites[code]; ok {
+		inv.UsedBy = &userID
+	}
+	return nil
+}
+
 // --- Test Setup ---
 
 func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStore) {

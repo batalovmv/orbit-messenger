@@ -29,8 +29,9 @@ export async function registerWithInvite({
   return loginWithEmail({ email, password });
 }
 
-// Stored credentials for 2FA flow (cleared after successful login or auth restart)
+// Stored credentials for 2FA flow (cleared after successful login, auth restart, or 5min timeout)
 let pending2FACredentials: { email: string; password: string } | undefined;
+let pending2FATimeout: ReturnType<typeof setTimeout> | undefined;
 
 export async function loginWithEmail({
   email, password, totpCode,
@@ -49,6 +50,7 @@ export async function loginWithEmail({
 
     client.setAccessToken(result.access_token, result.expires_in);
     pending2FACredentials = undefined; // Clear on successful login
+    if (pending2FATimeout) { clearTimeout(pending2FATimeout); pending2FATimeout = undefined; }
 
     const apiUser = buildApiUser(result.user);
     apiUser.isSelf = true;
@@ -79,6 +81,9 @@ export async function loginWithEmail({
     if (e instanceof client.ApiError) {
       if (e.code === '2fa_required') {
         pending2FACredentials = { email, password };
+        // Auto-clear after 5 minutes to limit XSS exposure window
+        if (pending2FATimeout) clearTimeout(pending2FATimeout);
+        pending2FATimeout = setTimeout(() => { pending2FACredentials = undefined; }, 5 * 60 * 1000);
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
           authorizationState: 'authorizationStateWaitPassword',
