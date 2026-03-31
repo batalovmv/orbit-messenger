@@ -65,6 +65,9 @@ migrations/local_dump.sql
 /web/public/build-stats.json
 /web/public/statoscope-report.html
 
+# === Test HTML files (manual E2E tests with hardcoded creds) ===
+test_*.html
+
 # === Claude Code ===
 .claude/
 
