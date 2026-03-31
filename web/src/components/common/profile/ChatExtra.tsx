@@ -396,7 +396,7 @@ const ChatExtra = ({
         <div className={styles.personalChannel} style={createVtnStyle('personalChannel')}>
           <h3 className={styles.personalChannelTitle}>{oldLang('ProfileChannel')}</h3>
           <span className={styles.personalChannelSubscribers}>
-            {oldLang('Subscribers', personalChannel.membersCount, 'i')}
+            {lang('Subscribers', { count: personalChannel.membersCount ?? 0 }, { pluralValue: personalChannel.membersCount ?? 0 })}
           </span>
           <Chat
             chatId={personalChannel.id}

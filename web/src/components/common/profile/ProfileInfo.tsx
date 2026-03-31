@@ -472,8 +472,8 @@ const ProfileInfo = ({
       >
         {
           isChatChannel(chat!)
-            ? oldLang('Subscribers', chat!.membersCount ?? 0, 'i')
-            : oldLang('Members', chat!.membersCount ?? 0, 'i')
+            ? lang('Subscribers', { count: chat!.membersCount ?? 0 }, { pluralValue: chat!.membersCount ?? 0 })
+            : lang('NMembers', { count: chat!.membersCount ?? 0 }, { pluralValue: chat!.membersCount ?? 0 })
         }
       </span>
     );
