@@ -8,15 +8,12 @@ COPY . .
 RUN git init && git add -A && git -c user.name=build -c user.email=build@ci commit -m "build" --quiet 2>/dev/null || true
 ENV NODE_OPTIONS="--max-old-space-size=1024"
 RUN npm run build:production && \
-    cd dist && \
+    cd dist && ls -la rlottie* || true && \
     actual=$(ls rlottie-wasm.*.js 2>/dev/null | head -1) && \
     if [ -n "$actual" ]; then \
-      echo "rlottie-wasm actual: $actual" && \
-      strings -a *.js 2>/dev/null | grep -oE 'rlottie-wasm\.[a-f0-9]{16,}\.js' | sort -u | while read ref; do \
-        if [ ! -f "$ref" ]; then \
-          cp "$actual" "$ref" && echo "Fixed: $actual -> $ref"; \
-        fi; \
-      done; \
+      grep -roh 'rlottie-wasm\.[a-f0-9]\{16,\}\.js' *.js 2>/dev/null | sort -u | while read ref; do \
+        [ ! -f "$ref" ] && [ "$ref" != "$actual" ] && cp "$actual" "$ref" && echo "Patched: $actual -> $ref"; \
+      done; true; \
     fi
 
 FROM nginx:alpine
