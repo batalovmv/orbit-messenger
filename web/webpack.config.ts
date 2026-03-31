@@ -266,16 +266,15 @@ export default function createConfig(
         stringArray: true,
         stringArrayThreshold: 0.75,
         stringArrayEncoding: ['base64'],
-        splitStrings: true,
-        splitStringsChunkLength: 10,
+        splitStrings: false,
         identifierNamesGenerator: 'hexadecimal',
         renameGlobals: false,
-        selfDefending: true,
+        selfDefending: false,
         debugProtection: false,
         disableConsoleOutput: true,
-        transformObjectKeys: true,
+        transformObjectKeys: false,
         unicodeEscapeSequence: false,
-      }, ['**/vendor/**', '**/node_modules/**', '**/rlottie/**'])] : []),
+      }, ['**/vendor/**', '**/node_modules/**', '**/rlottie/**', '**/worker*'])] : []),
       new WatchFilePlugin({
         rules: [
           {
