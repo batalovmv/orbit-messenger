@@ -64,6 +64,9 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 	if len(messageIDs) == 0 {
 		return nil, nil
 	}
+	if len(messageIDs) > 200 {
+		messageIDs = messageIDs[:200]
+	}
 
 	query := `
 		SELECT mm.message_id, mm.position, mm.is_spoiler,

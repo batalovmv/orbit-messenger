@@ -2,15 +2,30 @@ package handler
 
 import (
 	"log/slog"
+	"path"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-
 	"github.com/valyala/fasthttp"
 
-
+	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/response"
 )
+
+// validInviteHash matches alphanumeric invite hashes (8-64 chars).
+var validInviteHash = regexp.MustCompile(`^[a-zA-Z0-9_-]{8,64}$`)
+
+// sanitizeProxyPath strips the API prefix and cleans the path to prevent traversal.
+func sanitizeProxyPath(rawPath string) string {
+	p := strings.TrimPrefix(rawPath, "/api/v1")
+	p = path.Clean(p)
+	if p == "." || p == "" {
+		return "/"
+	}
+	return p
+}
 
 type ProxyConfig struct {
 	AuthServiceURL      string
@@ -93,7 +108,11 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 	client := &fasthttp.Client{ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}
 	return func(c *fiber.Ctx) error {
-		url := messagingURL + "/chats/invite/" + c.Params("hash")
+		hash := c.Params("hash")
+		if !validInviteHash.MatchString(hash) {
+			return response.Error(c, apperror.BadRequest("Invalid invite hash"))
+		}
+		url := messagingURL + "/chats/invite/" + hash
 		if err := doProxy(c, url, client, frontendURL); err != nil {
 			slog.Error("invite proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
@@ -113,8 +132,7 @@ func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
 		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB
 	}
 	return func(c *fiber.Ctx) error {
-		path := strings.TrimPrefix(c.Path(), "/api/v1")
-		url := mediaURL + path
+		url := mediaURL + sanitizeProxyPath(c.Path())
 		if err := doProxy(c, url, client, frontendURL); err != nil {
 			slog.Error("media public proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
@@ -138,12 +156,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 
 	// Auth routes: proxy without JWT validation
 	authGroup.All("/*", func(c *fiber.Ctx) error {
-		// Strip /api/v1 prefix — auth service listens on /auth/*
-		path := strings.TrimPrefix(c.Path(), "/api/v1")
-		if path == "" {
-			path = "/"
-		}
-		url := cfg.AuthServiceURL + path
+		url := cfg.AuthServiceURL + sanitizeProxyPath(c.Path())
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -163,11 +176,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB response (for large file info etc)
 	}
 	apiGroup.All("/media/*", func(c *fiber.Ctx) error {
-		path := strings.TrimPrefix(c.Path(), "/api/v1")
-		if path == "" {
-			path = "/"
-		}
-		url := cfg.MediaServiceURL + path
+		url := cfg.MediaServiceURL + sanitizeProxyPath(c.Path())
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -182,12 +191,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 
 	// Messaging routes: proxy with JWT already validated by middleware
 	apiGroup.All("/*", func(c *fiber.Ctx) error {
-		// Strip /api/v1 prefix for downstream
-		path := strings.TrimPrefix(c.Path(), "/api/v1")
-		if path == "" {
-			path = "/"
-		}
-		url := cfg.MessagingServiceURL + path
+		url := cfg.MessagingServiceURL + sanitizeProxyPath(c.Path())
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}

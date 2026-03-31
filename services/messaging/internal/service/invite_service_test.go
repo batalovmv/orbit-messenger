@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -139,7 +140,11 @@ func TestJoinByInvite_RequiresApproval_CreatesPendingRequest(t *testing.T) {
 
 func TestJoinByInvite_UsageLimitReached(t *testing.T) {
 	rec := &RecordingPublisher{}
-	cs := &mockChatStore{}
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
 	is := &mockInviteStore{
 		getByHashFn: func(_ context.Context, _ string) (*model.InviteLink, error) {
 			return &model.InviteLink{
@@ -151,11 +156,17 @@ func TestJoinByInvite_UsageLimitReached(t *testing.T) {
 				IsRevoked:  false,
 			}, nil
 		},
+		// Simulate SQL atomic rejection: WHERE usage_count < usage_limit fails
+		incrementUsageFn: func(_ context.Context, _ uuid.UUID) error {
+			return fmt.Errorf("no rows affected")
+		},
 	}
 
 	svc := NewInviteService(is, cs, rec)
 	_, err := svc.JoinByInvite(context.Background(), "abc123def456", uuid.New())
-	invAssertAppError(t, err, 400)
+	if err == nil {
+		t.Fatal("expected error when usage limit reached, got nil")
+	}
 }
 
 // ---------------------------------------------------------------------------

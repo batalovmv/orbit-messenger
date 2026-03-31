@@ -8,6 +8,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
@@ -81,6 +82,29 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if vErr := validator.RequireString(req.DisplayName, "display_name", 1, 64); vErr != nil {
+		return response.Error(c, vErr)
+	}
+	if req.Bio != nil {
+		if vErr := validator.RequireString(*req.Bio, "bio", 0, 500); vErr != nil {
+			return response.Error(c, vErr)
+		}
+	}
+	if req.CustomStatus != nil {
+		if vErr := validator.RequireString(*req.CustomStatus, "custom_status", 0, 128); vErr != nil {
+			return response.Error(c, vErr)
+		}
+	}
+	if req.CustomStatusEmoji != nil {
+		if vErr := validator.RequireString(*req.CustomStatusEmoji, "custom_status_emoji", 0, 32); vErr != nil {
+			return response.Error(c, vErr)
+		}
+	}
+
+	if req.AvatarURL != nil && *req.AvatarURL != "" && !isValidAvatarURL(*req.AvatarURL) {
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be http(s)"))
 	}
 
 	u, err := h.svc.UpdateProfile(c.Context(), uid, req.DisplayName,

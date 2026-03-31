@@ -23,7 +23,7 @@ import (
 
 const (
 	presignTTL       = 1 * time.Hour
-	chunkedUploadTTL = 24 * time.Hour
+	chunkedUploadTTL = 1 * time.Hour
 	chunkedKeyPrefix = "chunked:"
 )
 
@@ -419,21 +419,28 @@ func (s *MediaService) GetInfo(ctx context.Context, id uuid.UUID) (*model.Media,
 }
 
 // Delete removes a media file (only uploader can delete).
+// Uses atomic SQL to prevent TOCTOU race between ownership check and deletion.
 func (s *MediaService) Delete(ctx context.Context, id, userID uuid.UUID) error {
-	m, err := s.store.GetByID(ctx, id)
+	r2Key, thumbKey, medKey, err := s.store.DeleteByUploader(ctx, id, userID)
 	if err != nil {
 		return err
 	}
-	if m == nil {
-		return model.ErrMediaNotFound
-	}
-	if m.UploaderID != userID {
-		return model.ErrNotUploader
-	}
 
-	// Delete from R2 (best effort)
-	s.cleanupR2Keys(ctx, m)
-	return s.store.Delete(ctx, id)
+	// Best-effort R2 cleanup after successful DB delete
+	if err := s.r2.Delete(ctx, r2Key); err != nil {
+		slog.Warn("cleanup R2 key failed", "key", r2Key, "error", err)
+	}
+	if thumbKey != nil {
+		if err := s.r2.Delete(ctx, *thumbKey); err != nil {
+			slog.Warn("cleanup thumbnail R2 key failed", "key", *thumbKey, "error", err)
+		}
+	}
+	if medKey != nil {
+		if err := s.r2.Delete(ctx, *medKey); err != nil {
+			slog.Warn("cleanup medium R2 key failed", "key", *medKey, "error", err)
+		}
+	}
+	return nil
 }
 
 // --- Chunked Upload (fixes #1 ownership, #4 Redis errors) ---
@@ -560,21 +567,38 @@ func (s *MediaService) UploadChunk(ctx context.Context, uploadID string, uploade
 	return uploadedCount, meta.TotalChunks, nil
 }
 
+// completeChunkedScript atomically verifies ownership and deletes the key.
+// Returns the raw JSON if owner matches, or an error string if not.
+// This prevents GetDel from destroying metadata before ownership is verified.
+var completeChunkedScript = redis.NewScript(`
+	local raw = redis.call('GET', KEYS[1])
+	if not raw then return redis.error_reply('not_found') end
+	local meta = cjson.decode(raw)
+	if meta.uploader_id ~= ARGV[1] then return redis.error_reply('forbidden') end
+	redis.call('DEL', KEYS[1])
+	return raw
+`)
+
 // CompleteChunkedUpload finishes the multipart upload.
 func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID string, uploaderID uuid.UUID, isOneTime bool) (*model.Media, error) {
-	// Atomic GETDEL: read and delete in one call to prevent double-complete race
-	raw, err := s.rdb.GetDel(ctx, chunkedKeyPrefix+uploadID).Bytes()
+	// Lua script: atomically GET + verify owner + DEL — prevents destroying
+	// metadata before ownership check (if wrong user, key stays intact).
+	key := chunkedKeyPrefix + uploadID
+	rawStr, err := completeChunkedScript.Run(ctx, s.rdb, []string{key}, uploaderID.String()).Text()
 	if err != nil {
-		return nil, model.ErrUploadNotFound
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not_found") {
+			return nil, model.ErrUploadNotFound
+		}
+		if strings.Contains(errMsg, "forbidden") {
+			return nil, model.ErrUploadForbidden
+		}
+		return nil, fmt.Errorf("complete chunked script: %w", err)
 	}
 
 	var meta model.ChunkedUploadMeta
-	if err := json.Unmarshal(raw, &meta); err != nil {
+	if err := json.Unmarshal([]byte(rawStr), &meta); err != nil {
 		return nil, fmt.Errorf("parse chunked meta: %w", err)
-	}
-
-	if meta.UploaderID != uploaderID.String() {
-		return nil, model.ErrUploadForbidden
 	}
 
 	// Complete S3 multipart
@@ -631,7 +655,7 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		return nil, fmt.Errorf("create media record: %w", err)
 	}
 
-	// Redis key already deleted atomically via GetDel above
+	// Redis key already deleted atomically via Lua script above
 
 	s.publishMediaReady(m.ID)
 	return m, nil

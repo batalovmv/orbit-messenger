@@ -96,6 +96,9 @@ func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Messag
 }
 
 func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error) {
+	if len(ids) > 200 {
+		ids = ids[:200]
+	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,

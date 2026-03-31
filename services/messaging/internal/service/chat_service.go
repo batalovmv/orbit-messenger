@@ -81,6 +81,12 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 	if name == "" {
 		return nil, apperror.BadRequest("Chat name is required")
 	}
+	if len(name) > 255 {
+		return nil, apperror.BadRequest("Chat name too long (max 255 characters)")
+	}
+	if len(description) > 2048 {
+		return nil, apperror.BadRequest("Description too long (max 2048 characters)")
+	}
 	if chatType != "group" && chatType != "channel" {
 		return nil, apperror.BadRequest("Invalid chat type")
 	}
@@ -128,6 +134,13 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 }
 
 func (s *ChatService) UpdateChat(ctx context.Context, chatID, userID uuid.UUID, name, description, avatarURL *string) (*model.Chat, error) {
+	if name != nil && len(*name) > 255 {
+		return nil, apperror.BadRequest("Chat name too long (max 255 characters)")
+	}
+	if description != nil && len(*description) > 2048 {
+		return nil, apperror.BadRequest("Description too long (max 2048 characters)")
+	}
+
 	member, err := s.chats.GetMember(ctx, chatID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get member: %w", err)
@@ -154,7 +167,10 @@ func (s *ChatService) UpdateChat(ctx context.Context, chatID, userID uuid.UUID, 
 		return nil, fmt.Errorf("get updated chat: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
 		"chat_updated",
@@ -193,7 +209,10 @@ func (s *ChatService) ClearChatPhoto(ctx context.Context, chatID, userID uuid.UU
 		return nil, fmt.Errorf("get updated chat: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
 		"chat_updated",
@@ -214,7 +233,10 @@ func (s *ChatService) DeleteChat(ctx context.Context, chatID, userID uuid.UUID) 
 		return apperror.Forbidden("Only the owner can delete the chat")
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 
 	if err := s.chats.DeleteChat(ctx, chatID); err != nil {
 		return fmt.Errorf("delete chat: %w", err)
@@ -248,7 +270,10 @@ func (s *ChatService) AddMembers(ctx context.Context, chatID, userID uuid.UUID, 
 		return fmt.Errorf("add members: %w", err)
 	}
 
-	allMemberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	allMemberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 
 	for _, id := range newMemberIDs {
 		s.nats.Publish(
@@ -276,7 +301,10 @@ func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID
 		if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
 			return fmt.Errorf("leave chat: %w", err)
 		}
-		memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+		memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+		if mErr != nil {
+			slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+		}
 		s.nats.Publish(
 			fmt.Sprintf("orbit.chat.%s.member.removed", chatID),
 			"chat_member_removed",
@@ -307,7 +335,10 @@ func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID
 		return apperror.Forbidden("No permission to remove members")
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 
 	if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
 		return fmt.Errorf("remove member: %w", err)
@@ -360,7 +391,10 @@ func (s *ChatService) UpdateMemberRole(ctx context.Context, chatID, userID, targ
 		return fmt.Errorf("update member role: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.member.updated", chatID),
 		"chat_member_updated",
@@ -386,7 +420,10 @@ func (s *ChatService) UpdateDefaultPermissions(ctx context.Context, chatID, user
 		return fmt.Errorf("update default permissions: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
 		"chat_updated",
@@ -421,7 +458,10 @@ func (s *ChatService) UpdateMemberPermissions(ctx context.Context, chatID, userI
 		return fmt.Errorf("update member permissions: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.member.updated", chatID),
 		"chat_member_updated",
@@ -434,6 +474,10 @@ func (s *ChatService) UpdateMemberPermissions(ctx context.Context, chatID, userI
 }
 
 func (s *ChatService) SetSlowMode(ctx context.Context, chatID, userID uuid.UUID, seconds int) error {
+	if seconds < 0 || seconds > 86400 {
+		return apperror.BadRequest("Slow mode seconds must be between 0 and 86400 (24 hours)")
+	}
+
 	actor, err := s.chats.GetMember(ctx, chatID, userID)
 	if err != nil || actor == nil {
 		return apperror.Forbidden("Not a member of this chat")
@@ -447,7 +491,10 @@ func (s *ChatService) SetSlowMode(ctx context.Context, chatID, userID uuid.UUID,
 		return fmt.Errorf("set slow mode: %w", err)
 	}
 
-	memberIDs, _ := s.chats.GetMemberIDs(ctx, chatID)
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
 	s.nats.Publish(
 		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
 		"chat_updated",

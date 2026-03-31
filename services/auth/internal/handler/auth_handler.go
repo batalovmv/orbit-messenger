@@ -129,7 +129,7 @@ func (h *AuthHandler) Bootstrap(c *fiber.Ctx) error {
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
 		return response.Error(c, appErr)
 	}
-	if appErr := validator.RequireString(req.Password, "password", 8, 128); appErr != nil {
+	if appErr := validator.RequireString(req.Password, "password", 8, 72); appErr != nil {
 		return response.Error(c, appErr)
 	}
 	if appErr := validator.RequireString(req.DisplayName, "display_name", 1, 100); appErr != nil {
@@ -161,7 +161,7 @@ func (h *AuthHandler) RegisterUser(c *fiber.Ctx) error {
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
 		return response.Error(c, appErr)
 	}
-	if appErr := validator.RequireString(req.Password, "password", 8, 128); appErr != nil {
+	if appErr := validator.RequireString(req.Password, "password", 8, 72); appErr != nil {
 		return response.Error(c, appErr)
 	}
 	if appErr := validator.RequireString(req.DisplayName, "display_name", 1, 100); appErr != nil {
@@ -189,7 +189,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
 		return response.Error(c, appErr)
 	}
-	if appErr := validator.RequireString(req.Password, "password", 1, 128); appErr != nil {
+	if appErr := validator.RequireString(req.Password, "password", 1, 72); appErr != nil {
 		return response.Error(c, appErr)
 	}
 
@@ -290,7 +290,7 @@ func (h *AuthHandler) ResetAdmin(c *fiber.Ctx) error {
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
 		return response.Error(c, appErr)
 	}
-	if appErr := validator.RequireString(req.NewPassword, "new_password", 8, 128); appErr != nil {
+	if appErr := validator.RequireString(req.NewPassword, "new_password", 8, 72); appErr != nil {
 		return response.Error(c, appErr)
 	}
 
@@ -385,7 +385,7 @@ func (h *AuthHandler) Disable2FA(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
-	if appErr := validator.RequireString(req.Password, "password", 1, 128); appErr != nil {
+	if appErr := validator.RequireString(req.Password, "password", 1, 72); appErr != nil {
 		return response.Error(c, appErr)
 	}
 

@@ -14,14 +14,26 @@ import (
 )
 
 type RateLimitConfig struct {
-	Redis      *redis.Client
-	MaxPerMin  int
-	KeyPrefix  string
+	Redis     *redis.Client
+	MaxPerMin int
+	KeyPrefix string
 }
+
+// rateLimitScript atomically increments the counter and sets TTL on first hit.
+// Returns [count, ttl_seconds]. This prevents the race where INCR succeeds but
+// EXPIRE fails, leaving a key with no TTL (permanent rate-limit lock).
+var rateLimitScript = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {count, ttl}
+`)
 
 // RateLimitMiddleware implements a Redis-backed sliding window rate limiter.
 func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
-	window := 60 * time.Second
+	windowSec := 60
 
 	return func(c *fiber.Ctx) error {
 		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
@@ -34,30 +46,32 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)
 		ctx := c.Context()
 
-		// INCR creates the key if absent; only set TTL on first request (count==1)
-		// to avoid resetting the window on every hit (sliding window bug).
-		count, err := cfg.Redis.Incr(ctx, key).Result()
+		// Atomic INCR + EXPIRE via Lua — prevents race where key gets no TTL.
+		result, err := rateLimitScript.Run(ctx, cfg.Redis, []string{key}, windowSec).Int64Slice()
 		if err != nil {
 			slog.Error("rate limiter Redis error, rejecting request", "error", err)
 			return response.Error(c, apperror.Internal("Rate limiting unavailable"))
 		}
-		if count == 1 {
-			if err := cfg.Redis.Expire(ctx, key, window).Err(); err != nil {
-				slog.Error("rate limiter Expire failed", "error", err)
-			}
-		}
+
+		count := int(result[0])
+		ttlSec := int(result[1])
 
 		// Set rate limit headers
 		c.Set("X-RateLimit-Limit", strconv.Itoa(cfg.MaxPerMin))
-		remaining := cfg.MaxPerMin - int(count)
+		remaining := cfg.MaxPerMin - count
 		if remaining < 0 {
 			remaining = 0
 		}
 		c.Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 
-		if int(count) > cfg.MaxPerMin {
-			ttl, _ := cfg.Redis.TTL(ctx, key).Result()
-			c.Set("Retry-After", strconv.Itoa(int(ttl.Seconds())))
+		if count > cfg.MaxPerMin {
+			if ttlSec > 0 {
+				c.Set("Retry-After", strconv.Itoa(ttlSec))
+			} else {
+				// Safety: key has no TTL (shouldn't happen with Lua), set a sane default
+				c.Set("Retry-After", strconv.Itoa(windowSec))
+				cfg.Redis.Expire(ctx, key, time.Duration(windowSec)*time.Second)
+			}
 			return response.Error(c, apperror.TooManyRequests("Rate limit exceeded"))
 		}
 

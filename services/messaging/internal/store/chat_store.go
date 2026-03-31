@@ -342,7 +342,7 @@ func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor str
 
 func (s *chatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT user_id FROM chat_members WHERE chat_id = $1`, chatID,
+		`SELECT user_id FROM chat_members WHERE chat_id = $1 LIMIT 10000`, chatID,
 	)
 	if err != nil {
 		return nil, err
@@ -518,24 +518,37 @@ func (s *chatStore) AddMembers(ctx context.Context, chatID uuid.UUID, userIDs []
 	if len(userIDs) == 0 {
 		return nil
 	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 
-	for _, uid := range userIDs {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO chat_members (chat_id, user_id, role)
-			 VALUES ($1, $2, $3)
-			 ON CONFLICT (chat_id, user_id) DO NOTHING`,
-			chatID, uid, role,
+	// Batch insert in chunks of 100 to avoid oversized queries
+	const batchSize = 100
+	for i := 0; i < len(userIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(userIDs) {
+			end = len(userIDs)
+		}
+		chunk := userIDs[i:end]
+
+		// Build batch VALUES clause: ($1, $2, $3), ($1, $4, $3), ...
+		args := []interface{}{chatID, role}
+		values := ""
+		for j, uid := range chunk {
+			if j > 0 {
+				values += ", "
+			}
+			paramIdx := len(args) + 1
+			values += fmt.Sprintf("($1, $%d, $2)", paramIdx)
+			args = append(args, uid)
+		}
+
+		query := fmt.Sprintf(
+			`INSERT INTO chat_members (chat_id, user_id, role) VALUES %s ON CONFLICT (chat_id, user_id) DO NOTHING`,
+			values,
 		)
-		if err != nil {
-			return fmt.Errorf("add member %s: %w", uid, err)
+		if _, err := s.pool.Exec(ctx, query, args...); err != nil {
+			return fmt.Errorf("add members batch: %w", err)
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *chatStore) RemoveMember(ctx context.Context, chatID, userID uuid.UUID) error {

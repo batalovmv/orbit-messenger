@@ -104,7 +104,8 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 			return response.Error(c, apperror.Internal("auth response parse error"))
 		}
 
-		// Cache result
+		// Cache result (fail-open: if Redis write fails, the next request will re-validate via auth service.
+		// This is safe because blacklist checks above are fail-closed.)
 		cu := cachedUser{ID: user.ID, Role: user.Role}
 		cuJSON, _ := json.Marshal(cu)
 		if err := cfg.Redis.Set(c.Context(), cacheKey, string(cuJSON), cfg.CacheTTL).Err(); err != nil {

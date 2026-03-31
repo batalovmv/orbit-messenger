@@ -2,8 +2,10 @@ package main
 
 import (
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,7 +29,7 @@ func main() {
 	port := config.EnvOr("PORT", "8080")
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
-	slog.Info("resolved NATS URL", "url", natsURL, "raw_orbit", os.Getenv("ORBIT_NATS_URL"), "raw_nats", os.Getenv("NATS_URL"))
+	slog.Info("resolved NATS URL", "url", redactURL(natsURL))
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
@@ -52,7 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
-	slog.Info("NATS connected", "url", natsURL)
+	slog.Info("NATS connected", "url", redactURL(natsURL))
 
 	// WebSocket Hub
 	hub := ws.NewHub()
@@ -68,15 +70,22 @@ func main() {
 	defer subscriber.Stop()
 
 	// Fiber app
-	app := fiber.New(fiber.Config{
+	fiberCfg := fiber.Config{
 		BodyLimit:    55 * 1024 * 1024, // 55MB — media uploads up to 50MB, chunked chunks up to 10MB
 		ErrorHandler: response.FiberErrorHandler,
 		// Trust X-Forwarded-For from Saturn.ac ingress — required for correct per-IP rate limiting.
 		// Without this, c.IP() returns the ingress IP and all clients share one rate-limit bucket.
 		ProxyHeader: "X-Forwarded-For",
-	})
+	}
+	// Only trust X-Forwarded-For from known proxies — prevents IP spoofing for rate limiting.
+	if proxies := config.EnvOr("TRUSTED_PROXIES", ""); proxies != "" {
+		fiberCfg.EnableTrustedProxyCheck = true
+		fiberCfg.TrustedProxies = strings.Split(proxies, ",")
+	}
+	app := fiber.New(fiberCfg)
 
 	// Global middleware
+	app.Use(middleware.SecurityHeadersMiddleware())
 	app.Use(middleware.LoggingMiddleware())
 	app.Use(middleware.CORSMiddleware(frontendURL))
 
@@ -158,4 +167,13 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
+}
+
+// redactURL strips credentials from a URL for safe logging.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "***"
+	}
+	return u.Redacted()
 }

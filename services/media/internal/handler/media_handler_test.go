@@ -225,6 +225,21 @@ func (m *mockMediaStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (m *mockMediaStore) DeleteByUploader(ctx context.Context, id, uploaderID uuid.UUID) (string, *string, *string, error) {
+	media, ok := m.media[id]
+	if !ok {
+		return "", nil, nil, model.ErrMediaNotFound
+	}
+	if media.UploaderID != uploaderID {
+		return "", nil, nil, model.ErrNotUploader
+	}
+	r2Key := media.R2Key
+	thumbKey := media.ThumbnailR2Key
+	medKey := media.MediumR2Key
+	delete(m.media, id)
+	return r2Key, thumbKey, medKey, nil
+}
+
 func (m *mockMediaStore) UpdateProcessingStatus(ctx context.Context, id uuid.UUID, status string) error {
 	if media, ok := m.media[id]; ok {
 		media.ProcessingStatus = status

@@ -17,6 +17,9 @@ type Store interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Media, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Media, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	// DeleteByUploader atomically deletes a media record only if the given user is the uploader.
+	// Returns the R2 keys for cleanup, or ErrMediaNotFound / ErrNotUploader.
+	DeleteByUploader(ctx context.Context, id, uploaderID uuid.UUID) (r2Key string, thumbKey, medKey *string, err error)
 	UpdateProcessingStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateProcessingResult(ctx context.Context, id uuid.UUID, thumbnailKey, mediumKey *string, width, height *int, duration *float64, waveform []byte) error
 	GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]*MessageMediaRow, error)
@@ -42,14 +45,14 @@ func (s *MediaStore) Create(ctx context.Context, m *model.Media) error {
 			width, height, duration_seconds, waveform_data,
 			is_one_time, processing_status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-		RETURNING created_at`
+		RETURNING created_at, updated_at`
 
 	return s.pool.QueryRow(ctx, query,
 		m.ID, m.UploaderID, m.Type, m.MimeType, m.OriginalFilename,
 		m.SizeBytes, m.R2Key, m.ThumbnailR2Key, m.MediumR2Key,
 		m.Width, m.Height, m.DurationSeconds, m.WaveformData,
 		m.IsOneTime, m.ProcessingStatus,
-	).Scan(&m.CreatedAt)
+	).Scan(&m.CreatedAt, &m.UpdatedAt)
 }
 
 // GetByID retrieves a media record by ID.
@@ -58,7 +61,7 @@ func (s *MediaStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Media, e
 		SELECT id, uploader_id, type, mime_type, original_filename,
 			size_bytes, r2_key, thumbnail_r2_key, medium_r2_key,
 			width, height, duration_seconds, waveform_data,
-			is_one_time, processing_status, created_at
+			is_one_time, processing_status, created_at, updated_at
 		FROM media WHERE id = $1`
 
 	m := &model.Media{}
@@ -66,7 +69,7 @@ func (s *MediaStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Media, e
 		&m.ID, &m.UploaderID, &m.Type, &m.MimeType, &m.OriginalFilename,
 		&m.SizeBytes, &m.R2Key, &m.ThumbnailR2Key, &m.MediumR2Key,
 		&m.Width, &m.Height, &m.DurationSeconds, &m.WaveformData,
-		&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt,
+		&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -87,7 +90,7 @@ func (s *MediaStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Me
 		SELECT id, uploader_id, type, mime_type, original_filename,
 			size_bytes, r2_key, thumbnail_r2_key, medium_r2_key,
 			width, height, duration_seconds, waveform_data,
-			is_one_time, processing_status, created_at
+			is_one_time, processing_status, created_at, updated_at
 		FROM media WHERE id = ANY($1)`
 
 	rows, err := s.pool.Query(ctx, query, ids)
@@ -103,7 +106,7 @@ func (s *MediaStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Me
 			&m.ID, &m.UploaderID, &m.Type, &m.MimeType, &m.OriginalFilename,
 			&m.SizeBytes, &m.R2Key, &m.ThumbnailR2Key, &m.MediumR2Key,
 			&m.Width, &m.Height, &m.DurationSeconds, &m.WaveformData,
-			&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt,
+			&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan media: %w", err)
 		}
@@ -130,6 +133,30 @@ func (s *MediaStore) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("media %s not found", id)
 	}
 	return nil
+}
+
+// DeleteByUploader atomically verifies ownership and deletes in one query (prevents TOCTOU).
+func (s *MediaStore) DeleteByUploader(ctx context.Context, id, uploaderID uuid.UUID) (string, *string, *string, error) {
+	var r2Key string
+	var thumbKey, medKey *string
+	err := s.pool.QueryRow(ctx,
+		`DELETE FROM media WHERE id = $1 AND uploader_id = $2
+		 RETURNING r2_key, thumbnail_r2_key, medium_r2_key`,
+		id, uploaderID,
+	).Scan(&r2Key, &thumbKey, &medKey)
+	if err == pgx.ErrNoRows {
+		// Distinguish "not found" from "not uploader"
+		var exists bool
+		_ = s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media WHERE id = $1)`, id).Scan(&exists)
+		if exists {
+			return "", nil, nil, model.ErrNotUploader
+		}
+		return "", nil, nil, model.ErrMediaNotFound
+	}
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("delete media %s: %w", id, err)
+	}
+	return r2Key, thumbKey, medKey, nil
 }
 
 // UpdateProcessingStatus updates the processing_status field.

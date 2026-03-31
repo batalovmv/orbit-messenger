@@ -90,6 +90,9 @@ func (h *MessageHandler) ListSharedMedia(c *fiber.Ctx) error {
 	mediaType := c.Query("type") // photo, video, file, voice, etc. Empty = all
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 20)
+	if limit > 50 {
+		limit = 50
+	}
 
 	items, nextCursor, hasMore, err := h.svc.ListSharedMedia(c.Context(), chatID, uid, mediaType, cursor, limit)
 	if err != nil {
@@ -160,6 +163,23 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Content or media_ids is required"))
 	}
 
+	// Input length limits
+	if len(req.Content) > 4096 {
+		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
+	}
+	if len(req.Entities) > 65536 {
+		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
+	}
+
+	// Validate message type
+	validTypes := map[string]bool{
+		"": true, "text": true, "photo": true, "video": true, "file": true,
+		"voice": true, "video_note": true, "sticker": true, "gif": true, "system": true,
+	}
+	if !validTypes[req.Type] {
+		return response.Error(c, apperror.BadRequest("Invalid message type"))
+	}
+
 	var replyTo *uuid.UUID
 	if req.ReplyToID != nil && *req.ReplyToID != "" {
 		id, err := uuid.Parse(*req.ReplyToID)
@@ -221,6 +241,12 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 	}
 	if req.Content == "" {
 		return response.Error(c, apperror.BadRequest("Content is required"))
+	}
+	if len(req.Content) > 4096 {
+		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
+	}
+	if len(req.Entities) > 65536 {
+		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
 	}
 
 	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content, req.Entities)

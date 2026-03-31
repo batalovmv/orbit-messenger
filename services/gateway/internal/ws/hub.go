@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/gofiber/contrib/websocket"
 )
+
+const writeTimeout = 10 * time.Second
 
 // Conn represents a single WebSocket connection.
 type Conn struct {
@@ -14,6 +17,10 @@ type Conn struct {
 	UserID string
 	mu     sync.Mutex
 	done   chan struct{}
+
+	// Per-connection typing rate limit fields (protected by mu)
+	lastTyping  time.Time
+	typingBurst int
 }
 
 // Send sends a JSON message to the client, thread-safe.
@@ -24,6 +31,7 @@ func (c *Conn) Send(msg interface{}) error {
 	if err != nil {
 		return err
 	}
+	c.WS.SetWriteDeadline(time.Now().Add(writeTimeout))
 	return c.WS.WriteMessage(websocket.TextMessage, data)
 }
 

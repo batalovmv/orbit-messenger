@@ -90,14 +90,16 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 	}
 	defer body.Close()
 
-	data, err := io.ReadAll(body)
-	if err != nil {
-		return h.mapError(c, err, "read "+variant)
-	}
-
 	c.Set("Content-Type", contentType)
 	c.Set("Cache-Control", "public, max-age=31536000, immutable")
-	return c.Send(data)
+
+	// Stream directly from S3 to response — never buffer entire file in memory.
+	// Files can be up to 2 GB; io.ReadAll would OOM on concurrent large downloads.
+	c.Status(fiber.StatusOK)
+	if _, err := io.Copy(c.Response().BodyWriter(), body); err != nil {
+		return h.mapError(c, err, "stream copy "+variant)
+	}
+	return nil
 }
 
 // GetInfo returns media metadata as JSON.

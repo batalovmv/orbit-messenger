@@ -80,14 +80,11 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 		return response.Error(c, apperror.Internal("Failed to read file"))
 	}
 
-	// Always detect MIME from content — never trust client Content-Type for type validation
+	// Always detect MIME from content — never trust client Content-Type.
+	// If DetectContentType returns application/octet-stream (unrecognized magic bytes),
+	// treat as generic file — do NOT fall back to client-supplied Content-Type
+	// as that would allow bypassing AllowedMIME() validation.
 	mimeType := http.DetectContentType(data)
-	// For generic types, fall back to the declared Content-Type as a hint
-	if mimeType == "application/octet-stream" {
-		if declared := file.Header.Get("Content-Type"); declared != "" {
-			mimeType = declared
-		}
-	}
 
 	mediaType := c.FormValue("type", "")
 	isOneTime := c.FormValue("is_one_time", "false") == "true"
@@ -98,7 +95,7 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 	}
 
 	resp := h.svc.BuildMediaResponse(c.Context(), media)
-	return c.Status(fiber.StatusCreated).JSON(resp)
+	return response.JSON(c, fiber.StatusCreated, resp)
 }
 
 // ChunkedInit starts a chunked upload.
@@ -127,7 +124,7 @@ func (h *UploadHandler) ChunkedInit(c *fiber.Ctx) error {
 		return h.mapChunkedError(c, err, "chunked init")
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+	return response.JSON(c, fiber.StatusCreated, fiber.Map{
 		"upload_id":    meta.ID,
 		"chunk_size":   meta.ChunkSize,
 		"total_chunks": meta.TotalChunks,
@@ -197,7 +194,7 @@ func (h *UploadHandler) ChunkedComplete(c *fiber.Ctx) error {
 	}
 
 	resp := h.svc.BuildMediaResponse(c.Context(), media)
-	return c.Status(fiber.StatusCreated).JSON(resp)
+	return response.JSON(c, fiber.StatusCreated, resp)
 }
 
 // mapChunkedError converts service errors to HTTP responses.

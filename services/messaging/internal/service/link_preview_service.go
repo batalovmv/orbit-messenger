@@ -199,15 +199,26 @@ func parseOGTags(r io.Reader, rawURL string, parsed *url.URL) (*LinkPreview, err
 				case "og:image":
 					if imgURL, err := url.Parse(content); err == nil &&
 						(imgURL.Scheme == "http" || imgURL.Scheme == "https") {
-						preview.ImageURL = content
+						// Block private/internal hostnames in og:image to prevent internal IP probing
+						imgHost := strings.ToLower(imgURL.Hostname())
+						ip := net.ParseIP(imgHost)
+						blocked := imgHost == "localhost" || imgHost == "0.0.0.0" ||
+							(ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast()))
+						if !blocked {
+							preview.ImageURL = content
+						}
 					}
 				case "og:site_name":
 					preview.SiteName = content
 				case "og:type":
 					preview.Type = content
 				case "og:url":
+					// Validate og:url to prevent URL spoofing / phishing
 					if content != "" {
-						preview.URL = content
+						if ogURL, err := url.Parse(content); err == nil &&
+							(ogURL.Scheme == "http" || ogURL.Scheme == "https") {
+							preview.URL = content
+						}
 					}
 				}
 
@@ -264,27 +275,3 @@ func linkPreviewCacheKey(rawURL string) string {
 	return fmt.Sprintf("linkpreview:%x", h[:8])
 }
 
-func isPrivateHost(host string) bool {
-	lower := strings.ToLower(host)
-	if lower == "localhost" || lower == "0.0.0.0" {
-		return true
-	}
-
-	// Resolve hostname to IP addresses and check each one
-	ips, err := net.LookupHost(host)
-	if err != nil {
-		// If resolution fails, block to be safe
-		return true
-	}
-	for _, ipStr := range ips {
-		ip := net.ParseIP(ipStr)
-		if ip == nil {
-			return true
-		}
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-			ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-			return true
-		}
-	}
-	return false
-}

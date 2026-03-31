@@ -70,6 +70,7 @@ type Media struct {
 	IsOneTime        bool      `json:"is_one_time"`
 	ProcessingStatus string    `json:"processing_status"`
 	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // MediaResponse is the JSON response for API endpoints.

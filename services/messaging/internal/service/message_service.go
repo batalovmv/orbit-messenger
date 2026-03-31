@@ -80,8 +80,12 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 			return nil, apperror.Internal("Slow mode check temporarily unavailable")
 		}
 		if exists > 0 {
-			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
-			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))
+			ttl, ttlErr := s.redis.TTL(ctx, redisKey).Result()
+			waitSec := int(ttl.Seconds())
+			if ttlErr != nil || waitSec <= 0 {
+				waitSec = chat.SlowModeSeconds
+			}
+			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", waitSec))
 		}
 	}
 
@@ -142,6 +146,10 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		if json.Unmarshal(entities, &ents) == nil {
 			for _, e := range ents {
 				if e.Type == "mention" && e.UserID != "" {
+					// Validate user_id is a proper UUID to prevent NATS subject injection
+					if _, err := uuid.Parse(e.UserID); err != nil {
+						continue
+					}
 					mentionSubject := fmt.Sprintf("orbit.user.%s.mention", e.UserID)
 					s.nats.Publish(mentionSubject, "mention", map[string]interface{}{
 						"chat_id":    chatID.String(),
@@ -448,8 +456,12 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 			return nil, apperror.Internal("Slow mode check temporarily unavailable")
 		}
 		if exists > 0 {
-			ttl, _ := s.redis.TTL(ctx, redisKey).Result()
-			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", int(ttl.Seconds())))
+			ttl, ttlErr := s.redis.TTL(ctx, redisKey).Result()
+			waitSec := int(ttl.Seconds())
+			if ttlErr != nil || waitSec <= 0 {
+				waitSec = chat.SlowModeSeconds
+			}
+			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", waitSec))
 		}
 	}
 

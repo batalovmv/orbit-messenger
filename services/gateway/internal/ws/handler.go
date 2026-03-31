@@ -56,13 +56,13 @@ func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
 
 // Close stops the typingCleanupLoop goroutine and cancels all pending typing timers.
 func (h *Handler) Close() {
-	h.typingMu.Lock()
-	for _, t := range h.typingTimers {
-		t.Stop()
-	}
-	h.typingTimers = nil
-	h.typingMu.Unlock()
 	close(h.done)
+	h.typingMu.Lock()
+	for k, t := range h.typingTimers {
+		t.Stop()
+		delete(h.typingTimers, k)
+	}
+	h.typingMu.Unlock()
 }
 
 // Upgrade returns a Fiber handler that upgrades to WebSocket.
@@ -102,8 +102,9 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		c.SetReadDeadline(time.Time{})
 
 		// Step 2: Validate token via auth service (with Redis cache)
-		// Use a dedicated context with timeout instead of context.Background()
-		// so the HTTP call is cancelled if the client disconnects.
+		// Bounded to authTimeout (10s). Note: context.Background() does not cancel on
+		// client disconnect — Fiber's WebSocket handler doesn't expose a request context.
+		// The timeout bounds the worst-case resource waste per stalled auth attempt.
 		authCtx, authCancel := context.WithTimeout(context.Background(), authTimeout)
 		uid, err := validateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
 		authCancel()
@@ -218,8 +219,10 @@ func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 	}
 
 	// Cache
-	cuJSON, _ := json.Marshal(user)
-	if err := rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL).Err(); err != nil {
+	cuJSON, err := json.Marshal(user)
+	if err != nil {
+		slog.Error("WS JWT cache marshal failed", "error", err)
+	} else if err := rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL).Err(); err != nil {
 		slog.Error("WS JWT cache write failed", "error", err)
 	}
 
@@ -239,6 +242,7 @@ func (h *Handler) pingLoop(conn *Conn) {
 		select {
 		case <-ticker.C:
 			conn.mu.Lock()
+			conn.WS.SetWriteDeadline(time.Now().Add(writeTimeout))
 			err := conn.WS.WriteMessage(websocket.PingMessage, nil)
 			conn.mu.Unlock()
 			if err != nil {
@@ -274,11 +278,25 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 		return
 	}
 
+	// Global per-connection rate limit: max 10 typing events per second across all chats
+	conn.mu.Lock()
+	now := time.Now()
+	if now.Sub(conn.lastTyping) < 100*time.Millisecond {
+		conn.typingBurst++
+		if conn.typingBurst > 10 {
+			conn.mu.Unlock()
+			return
+		}
+	} else {
+		conn.typingBurst = 0
+	}
+	conn.lastTyping = now
+	conn.mu.Unlock()
+
 	// Debounce: max 1 broadcast per 3s per user per chat
 	key := td.ChatID + ":" + conn.UserID
 	h.typingMu.Lock()
 	last, exists := h.typingDebounce[key]
-	now := time.Now()
 	if exists && now.Sub(last) < 3*time.Second {
 		h.typingMu.Unlock()
 		return
@@ -310,6 +328,13 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 	chatID := td.ChatID
 	userID := conn.UserID
 	h.typingTimers[key] = time.AfterFunc(typingExpire, func() {
+		// Check if handler is closing to prevent nil-map panic
+		select {
+		case <-h.done:
+			return
+		default:
+		}
+
 		stopData, _ := json.Marshal(map[string]string{
 			"chat_id": chatID,
 			"user_id": userID,
@@ -326,7 +351,9 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 		}
 
 		h.typingMu.Lock()
-		delete(h.typingTimers, chatID+":"+userID)
+		if h.typingTimers != nil {
+			delete(h.typingTimers, chatID+":"+userID)
+		}
 		h.typingMu.Unlock()
 	})
 	h.typingMu.Unlock()
@@ -354,6 +381,11 @@ func (h *Handler) typingCleanupLoop() {
 }
 
 func (h *Handler) publishStatusChange(userID, status string) {
+	// Defense-in-depth: validate userID format to prevent NATS subject injection
+	if _, err := uuid.Parse(userID); err != nil {
+		slog.Error("invalid userID for status change", "user_id", userID)
+		return
+	}
 	sd := StatusData{
 		UserID: userID,
 		Status: status,

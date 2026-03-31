@@ -217,9 +217,8 @@ func (s *InviteService) JoinByInvite(ctx context.Context, hash string, userID uu
 	if link.ExpireAt != nil && time.Now().After(*link.ExpireAt) {
 		return nil, apperror.NotFound("invite link has expired")
 	}
-	if link.UsageLimit > 0 && link.UsageCount >= link.UsageLimit {
-		return nil, apperror.BadRequest("invite link usage limit reached")
-	}
+	// Usage limit is enforced atomically by IncrementUsage SQL below (WHERE usage_count < usage_limit).
+	// No Go-level early-return here to avoid TOCTOU race on concurrent requests.
 
 	isMember, _, err := s.chats.IsMember(ctx, link.ChatID, userID)
 	if err != nil {
@@ -307,6 +306,11 @@ func (s *InviteService) ApproveJoinRequest(ctx context.Context, chatID, callerID
 	}
 
 	if err := s.chats.AddMember(ctx, chatID, targetUserID, "member"); err != nil {
+		// Rollback: revert status to "pending" so the user can be re-approved.
+		if rbErr := s.invites.UpdateJoinRequestStatus(ctx, chatID, targetUserID, "pending", callerID); rbErr != nil {
+			slog.WarnContext(ctx, "failed to rollback join request status after AddMember failure",
+				"chat_id", chatID, "user_id", targetUserID, "error", rbErr)
+		}
 		return fmt.Errorf("add member: %w", err)
 	}
 

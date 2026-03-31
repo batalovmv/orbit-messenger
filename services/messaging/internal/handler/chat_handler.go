@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,12 +13,26 @@ import (
 )
 
 type ChatHandler struct {
-	svc    *service.ChatService
-	logger *slog.Logger
+	svc            *service.ChatService
+	logger         *slog.Logger
+	internalSecret string
 }
 
-func NewChatHandler(svc *service.ChatService, logger *slog.Logger) *ChatHandler {
-	return &ChatHandler{svc: svc, logger: logger}
+func NewChatHandler(svc *service.ChatService, logger *slog.Logger, internalSecret ...string) *ChatHandler {
+	h := &ChatHandler{svc: svc, logger: logger}
+	if len(internalSecret) > 0 {
+		h.internalSecret = internalSecret[0]
+	}
+	return h
+}
+
+// isInternalRequest checks if the request carries a valid X-Internal-Token header.
+func (h *ChatHandler) isInternalRequest(c *fiber.Ctx) bool {
+	if h.internalSecret == "" {
+		return false
+	}
+	token := c.Get("X-Internal-Token")
+	return token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) == 1
 }
 
 func (h *ChatHandler) Register(app fiber.Router) {
@@ -104,6 +119,10 @@ func (h *ChatHandler) CreateChat(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	if len(req.MemberIDs) > 200 {
+		return response.Error(c, apperror.BadRequest("Too many members (max 200)"))
+	}
+
 	memberIDs := make([]uuid.UUID, 0, len(req.MemberIDs))
 	for _, s := range req.MemberIDs {
 		id, err := uuid.Parse(s)
@@ -139,6 +158,10 @@ func (h *ChatHandler) UpdateChat(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if req.AvatarURL != nil && !isValidAvatarURL(*req.AvatarURL) {
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
 	}
 
 	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, req.Name, req.Description, req.AvatarURL)
@@ -183,6 +206,10 @@ func (h *ChatHandler) AddMembers(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if len(req.UserIDs) > 200 {
+		return response.Error(c, apperror.BadRequest("Too many members (max 200)"))
 	}
 
 	newMemberIDs := make([]uuid.UUID, 0, len(req.UserIDs))
@@ -437,23 +464,24 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 
 // GetMemberIDs returns just the user IDs of a chat (internal, for gateway typing fanout).
 func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
-	callerID, err := getUserID(c)
-	if err != nil {
-		return response.Error(c, err)
-	}
-
 	chatID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
 	}
 
-	// Verify caller is a member of this chat
-	isMember, err := h.svc.IsMember(c.Context(), chatID, callerID)
-	if err != nil {
-		return response.Error(c, err)
-	}
-	if !isMember {
-		return response.Error(c, apperror.Forbidden("Not a member of this chat"))
+	// Internal service-to-service calls (with valid X-Internal-Token) skip membership check
+	if !h.isInternalRequest(c) {
+		callerID, err := getUserID(c)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		isMember, err := h.svc.IsMember(c.Context(), chatID, callerID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		if !isMember {
+			return response.Error(c, apperror.Forbidden("Not a member of this chat"))
+		}
 	}
 
 	ids, err := h.svc.GetMemberIDs(c.Context(), chatID)
@@ -484,6 +512,9 @@ func (h *ChatHandler) UpdateChatPhoto(c *fiber.Ctx) error {
 	if req.AvatarURL == "" {
 		return response.Error(c, apperror.BadRequest("avatar_url is required"))
 	}
+	if !isValidAvatarURL(req.AvatarURL) {
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
+	}
 
 	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, nil, nil, &req.AvatarURL)
 	if err != nil {
@@ -510,6 +541,14 @@ func (h *ChatHandler) DeleteChatPhoto(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, chat)
+}
+
+// isValidAvatarURL checks that a URL is safe for use as an avatar (https only, no data/javascript URIs).
+func isValidAvatarURL(raw string) bool {
+	if len(raw) > 2048 {
+		return false
+	}
+	return len(raw) > 8 && (raw[:8] == "https://" || raw[:7] == "http://")
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {

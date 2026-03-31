@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+const maxConcurrentFetches = 50 // Bound goroutines spawned for fallback member-ID fetches
+
 // Subscriber listens for NATS events and routes them to WebSocket clients.
 type Subscriber struct {
 	hub                 *Hub
@@ -20,6 +23,7 @@ type Subscriber struct {
 	messagingServiceURL string
 	internalSecret      string
 	httpClient          *http.Client
+	sem                 chan struct{} // semaphore to bound concurrent goroutines
 }
 
 func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string) *Subscriber {
@@ -29,6 +33,7 @@ func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret 
 		messagingServiceURL: messagingServiceURL,
 		internalSecret:      internalSecret,
 		httpClient:          &http.Client{Timeout: 5 * time.Second},
+		sem:                 make(chan struct{}, maxConcurrentFetches),
 	}
 }
 
@@ -101,32 +106,44 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		event.Event == EventMessagePinned || event.Event == EventMessageUnpinned {
 		chatID := extractChatIDFromSubject(msg.Subject)
 		if chatID != "" {
-			go func() {
-				slog.Warn("nats: member_ids empty, fetching from messaging service",
+			select {
+			case s.sem <- struct{}{}:
+				go func() {
+					defer func() { <-s.sem }()
+					slog.Warn("nats: member_ids empty, fetching from messaging service",
+						"event", event.Event, "chat_id", chatID)
+					memberIDs := s.fetchChatMemberIDs(chatID)
+					if len(memberIDs) > 0 {
+						s.hub.SendToUsers(memberIDs, envelope, "")
+					}
+				}()
+			default:
+				slog.Warn("nats: goroutine limit reached, dropping fallback fetch",
 					"event", event.Event, "chat_id", chatID)
-				memberIDs := s.fetchChatMemberIDs(chatID)
-				if len(memberIDs) > 0 {
-					s.hub.SendToUsers(memberIDs, envelope, "")
-				}
-			}()
+			}
 		}
 		return
 	}
 
 	// For typing/stop_typing events, fetch chat member IDs and broadcast
 	if event.Event == EventTyping || event.Event == EventStopTyping {
-		go func() {
-			var td TypingData
-			if err := json.Unmarshal(event.Data, &td); err == nil {
-				memberIDs := s.fetchChatMemberIDs(td.ChatID)
-				// Extract user_id from data to exclude sender
-				var userData struct {
-					UserID string `json:"user_id"`
+		select {
+		case s.sem <- struct{}{}:
+			go func() {
+				defer func() { <-s.sem }()
+				var td TypingData
+				if err := json.Unmarshal(event.Data, &td); err == nil {
+					memberIDs := s.fetchChatMemberIDs(td.ChatID)
+					var userData struct {
+						UserID string `json:"user_id"`
+					}
+					json.Unmarshal(event.Data, &userData)
+					s.hub.SendToUsers(memberIDs, envelope, userData.UserID)
 				}
-				json.Unmarshal(event.Data, &userData)
-				s.hub.SendToUsers(memberIDs, envelope, userData.UserID)
-			}
-		}()
+			}()
+		default:
+			slog.Warn("nats: goroutine limit reached, dropping typing fetch")
+		}
 		return
 	}
 
@@ -152,17 +169,23 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	// For user status events, fetch contacts from messaging service
 	// and only send to users who share a chat (not all online users)
 	if event.Event == EventUserStatus {
-		go func() {
-			var sd StatusData
-			if err := json.Unmarshal(event.Data, &sd); err == nil {
-				contactIDs := s.fetchContactIDs(sd.UserID)
-				for _, cid := range contactIDs {
-					if cid != sd.UserID {
-						s.hub.SendToUser(cid, envelope)
+		select {
+		case s.sem <- struct{}{}:
+			go func() {
+				defer func() { <-s.sem }()
+				var sd StatusData
+				if err := json.Unmarshal(event.Data, &sd); err == nil {
+					contactIDs := s.fetchContactIDs(sd.UserID)
+					for _, cid := range contactIDs {
+						if cid != sd.UserID {
+							s.hub.SendToUser(cid, envelope)
+						}
 					}
 				}
-			}
-		}()
+			}()
+		default:
+			slog.Warn("nats: goroutine limit reached, dropping status fetch")
+		}
 	}
 }
 
@@ -186,8 +209,11 @@ func extractChatIDFromSubject(subject string) string {
 
 // fetchChatMemberIDs calls messaging service to get member IDs of a chat.
 func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	url := fmt.Sprintf("%s/chats/%s/member-ids", s.messagingServiceURL, chatID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		slog.Warn("failed to create member-ids request", "chat_id", chatID, "error", err)
 		return nil
@@ -195,6 +221,8 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 	if s.internalSecret != "" {
 		req.Header.Set("X-Internal-Token", s.internalSecret)
 	}
+	// Set a system user ID so the messaging service handler doesn't reject with 401
+	req.Header.Set("X-User-ID", "00000000-0000-0000-0000-000000000000")
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		slog.Warn("failed to fetch chat member IDs", "chat_id", chatID, "error", err)
@@ -203,6 +231,7 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("member-ids request failed", "chat_id", chatID, "status", resp.StatusCode)
 		return nil
 	}
 
@@ -222,8 +251,11 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 
 // fetchContactIDs calls messaging service to get users who share chats with userID.
 func (s *Subscriber) fetchContactIDs(userID string) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	url := fmt.Sprintf("%s/users/%s/contacts", s.messagingServiceURL, userID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		slog.Warn("failed to create contacts request", "user_id", userID, "error", err)
 		return nil
@@ -231,6 +263,7 @@ func (s *Subscriber) fetchContactIDs(userID string) []string {
 	if s.internalSecret != "" {
 		req.Header.Set("X-Internal-Token", s.internalSecret)
 	}
+	req.Header.Set("X-User-ID", userID)
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		slog.Warn("failed to fetch contact IDs", "user_id", userID, "error", err)

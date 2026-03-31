@@ -81,6 +81,8 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 		return nil, nil, fmt.Errorf("get user: %w", err)
 	}
 	if u == nil {
+		// Dummy bcrypt to prevent timing-based user enumeration
+		bcrypt.CompareHashAndPassword([]byte("$2a$12$000000000000000000000uGINKk0mFSfiitMnVEs0oOeswgyXIwHi"), []byte(password))
 		return nil, nil, apperror.Unauthorized("Invalid email or password")
 	}
 
@@ -262,9 +264,10 @@ func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPasswo
 		return fmt.Errorf("update password: %w", err)
 	}
 
-	// Revoke all sessions
+	// Revoke all sessions (fail-closed: password reset must invalidate all tokens)
 	if err := s.sessions.DeleteAllByUser(ctx, u.ID); err != nil {
-		slog.Error("failed to delete sessions on admin reset", "error", err)
+		slog.Error("failed to delete sessions on admin reset", "error", err, "user_id", u.ID)
+		return fmt.Errorf("revoke sessions: %w", err)
 	}
 
 	return nil

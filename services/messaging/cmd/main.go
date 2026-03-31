@@ -150,7 +150,8 @@ func main() {
 	defer statusSub.Unsubscribe()
 
 	// Handlers
-	chatHandler := handler.NewChatHandler(chatSvc, logger)
+	internalSecret := config.EnvOr("INTERNAL_SECRET", "")
+	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
 	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
 	userHandler := handler.NewUserHandler(userSvc, logger)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
