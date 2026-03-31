@@ -27,6 +27,13 @@ func setupRateLimitApp(t *testing.T, maxPerMin int, keyPrefix string) *fiber.App
 	})
 
 	app := fiber.New()
+	// Simulate JWT middleware setting user_id in Locals from X-User-ID header (for test convenience)
+	app.Use(func(c *fiber.Ctx) error {
+		if uid := c.Get("X-User-ID"); uid != "" {
+			c.Locals("user_id", uid)
+		}
+		return c.Next()
+	})
 	app.Use(middleware.RateLimitMiddleware(middleware.RateLimitConfig{
 		Redis:     rdb,
 		MaxPerMin: maxPerMin,

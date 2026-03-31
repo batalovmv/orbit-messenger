@@ -20,8 +20,14 @@ func CORSMiddleware(frontendURL string) fiber.Handler {
 
 	return func(c *fiber.Ctx) error {
 		origin := c.Get("Origin")
+
+		// Only set CORS headers for allowed origins
 		if !allowed[origin] {
-			origin = strings.Split(frontendURL, ",")[0]
+			// No CORS headers for disallowed origins — browser will block the response
+			if c.Method() == fiber.MethodOptions {
+				return c.SendStatus(fiber.StatusNoContent)
+			}
+			return c.Next()
 		}
 
 		c.Set("Access-Control-Allow-Origin", origin)

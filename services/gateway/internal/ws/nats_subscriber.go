@@ -18,14 +18,16 @@ type Subscriber struct {
 	nc                  *nats.Conn
 	subs                []*nats.Subscription
 	messagingServiceURL string
+	internalSecret      string
 	httpClient          *http.Client
 }
 
-func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL string) *Subscriber {
+func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string) *Subscriber {
 	return &Subscriber{
 		hub:                 hub,
 		nc:                  nc,
 		messagingServiceURL: messagingServiceURL,
+		internalSecret:      internalSecret,
 		httpClient:          &http.Client{Timeout: 5 * time.Second},
 	}
 }
@@ -99,28 +101,32 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		event.Event == EventMessagePinned || event.Event == EventMessageUnpinned {
 		chatID := extractChatIDFromSubject(msg.Subject)
 		if chatID != "" {
-			slog.Warn("nats: member_ids empty, fetching from messaging service",
-				"event", event.Event, "chat_id", chatID)
-			memberIDs := s.fetchChatMemberIDs(chatID)
-			if len(memberIDs) > 0 {
-				s.hub.SendToUsers(memberIDs, envelope, "")
-			}
+			go func() {
+				slog.Warn("nats: member_ids empty, fetching from messaging service",
+					"event", event.Event, "chat_id", chatID)
+				memberIDs := s.fetchChatMemberIDs(chatID)
+				if len(memberIDs) > 0 {
+					s.hub.SendToUsers(memberIDs, envelope, "")
+				}
+			}()
 		}
 		return
 	}
 
 	// For typing/stop_typing events, fetch chat member IDs and broadcast
 	if event.Event == EventTyping || event.Event == EventStopTyping {
-		var td TypingData
-		if err := json.Unmarshal(event.Data, &td); err == nil {
-			memberIDs := s.fetchChatMemberIDs(td.ChatID)
-			// Extract user_id from data to exclude sender
-			var userData struct {
-				UserID string `json:"user_id"`
+		go func() {
+			var td TypingData
+			if err := json.Unmarshal(event.Data, &td); err == nil {
+				memberIDs := s.fetchChatMemberIDs(td.ChatID)
+				// Extract user_id from data to exclude sender
+				var userData struct {
+					UserID string `json:"user_id"`
+				}
+				json.Unmarshal(event.Data, &userData)
+				s.hub.SendToUsers(memberIDs, envelope, userData.UserID)
 			}
-			json.Unmarshal(event.Data, &userData)
-			s.hub.SendToUsers(memberIDs, envelope, userData.UserID)
-		}
+		}()
 		return
 	}
 
@@ -146,15 +152,17 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	// For user status events, fetch contacts from messaging service
 	// and only send to users who share a chat (not all online users)
 	if event.Event == EventUserStatus {
-		var sd StatusData
-		if err := json.Unmarshal(event.Data, &sd); err == nil {
-			contactIDs := s.fetchContactIDs(sd.UserID)
-			for _, cid := range contactIDs {
-				if cid != sd.UserID {
-					s.hub.SendToUser(cid, envelope)
+		go func() {
+			var sd StatusData
+			if err := json.Unmarshal(event.Data, &sd); err == nil {
+				contactIDs := s.fetchContactIDs(sd.UserID)
+				for _, cid := range contactIDs {
+					if cid != sd.UserID {
+						s.hub.SendToUser(cid, envelope)
+					}
 				}
 			}
-		}
+		}()
 	}
 }
 
@@ -179,7 +187,15 @@ func extractChatIDFromSubject(subject string) string {
 // fetchChatMemberIDs calls messaging service to get member IDs of a chat.
 func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 	url := fmt.Sprintf("%s/chats/%s/member-ids", s.messagingServiceURL, chatID)
-	resp, err := s.httpClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Warn("failed to create member-ids request", "chat_id", chatID, "error", err)
+		return nil
+	}
+	if s.internalSecret != "" {
+		req.Header.Set("X-Internal-Token", s.internalSecret)
+	}
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		slog.Warn("failed to fetch chat member IDs", "chat_id", chatID, "error", err)
 		return nil
@@ -207,7 +223,15 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 // fetchContactIDs calls messaging service to get users who share chats with userID.
 func (s *Subscriber) fetchContactIDs(userID string) []string {
 	url := fmt.Sprintf("%s/users/%s/contacts", s.messagingServiceURL, userID)
-	resp, err := s.httpClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Warn("failed to create contacts request", "user_id", userID, "error", err)
+		return nil
+	}
+	if s.internalSecret != "" {
+		req.Header.Set("X-Internal-Token", s.internalSecret)
+	}
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		slog.Warn("failed to fetch contact IDs", "user_id", userID, "error", err)
 		return nil

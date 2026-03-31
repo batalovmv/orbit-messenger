@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -23,10 +24,12 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 	window := 60 * time.Second
 
 	return func(c *fiber.Ctx) error {
-		// Use user ID if available, otherwise use IP
-		identifier := c.Get("X-User-ID")
-		if identifier == "" {
-			identifier = c.IP()
+		// Use IP for rate limiting — X-User-ID is not trustworthy at this point
+		// because it comes from the raw request before JWT middleware validates it.
+		identifier := c.IP()
+		// If JWT middleware has already set a verified user ID (via c.Locals), use it.
+		if uid, ok := c.Locals("user_id").(string); ok && uid != "" {
+			identifier = uid
 		}
 
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)
@@ -38,8 +41,9 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 		pipe.Expire(ctx, key, window)
 		_, err := pipe.Exec(ctx)
 		if err != nil {
-			// If Redis is down, allow the request
-			return c.Next()
+			// Fail-closed: reject requests when Redis is unavailable
+			slog.Error("rate limiter Redis error, rejecting request", "error", err)
+			return response.Error(c, apperror.Internal("Rate limiting unavailable"))
 		}
 		count := incrCmd.Val()
 
