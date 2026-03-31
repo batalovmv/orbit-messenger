@@ -125,7 +125,7 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 	// UseInvite uses WHERE use_count < max_uses — if two requests race,
 	// only one will succeed; the other gets ErrNoRows.
 	// Skipping pre-check GetByEmail to avoid TOCTOU race — DB unique constraint handles it.
-	if err := s.invites.UseInvite(ctx, code, uuid.Nil); err != nil {
+	if err := s.invites.UseInvite(ctx, code, uuid.Nil, email); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperror.BadRequest("Invalid or expired invite code")
 		}
@@ -189,6 +189,7 @@ func (s *AuthService) Logout(ctx context.Context, tokenStr, refreshToken string)
 		refreshHash := hashToken(refreshToken)
 		if err := s.sessions.DeleteByTokenHash(ctx, refreshHash); err != nil {
 			slog.Error("failed to delete refresh session on logout", "error", err)
+			return fmt.Errorf("failed to delete refresh session: %w", err)
 		}
 	}
 

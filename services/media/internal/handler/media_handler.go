@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"errors"
 	"io"
 	"log/slog"
@@ -16,22 +17,38 @@ import (
 
 // MediaHandler handles download, info, and delete endpoints.
 type MediaHandler struct {
-	svc    *service.MediaService
-	logger *slog.Logger
+	svc            *service.MediaService
+	logger         *slog.Logger
+	internalSecret string
 }
 
 // NewMediaHandler creates a media handler.
-func NewMediaHandler(svc *service.MediaService, logger *slog.Logger) *MediaHandler {
-	return &MediaHandler{svc: svc, logger: logger}
+func NewMediaHandler(svc *service.MediaService, logger *slog.Logger, internalSecret string) *MediaHandler {
+	return &MediaHandler{svc: svc, logger: logger, internalSecret: internalSecret}
+}
+
+// requireInternalToken validates that X-User-ID is only trusted with a valid X-Internal-Token.
+func (h *MediaHandler) requireInternalToken(c *fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+	token := c.Get("X-Internal-Token")
+	if h.internalSecret == "" || token == "" ||
+		subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) != 1 {
+		return response.Error(c, apperror.Unauthorized("Invalid internal token"))
+	}
+	return c.Next()
 }
 
 // Register sets up media routes.
 func (h *MediaHandler) Register(app *fiber.App) {
-	app.Get("/media/:id", h.Get)
-	app.Get("/media/:id/thumbnail", h.GetThumbnail)
-	app.Get("/media/:id/medium", h.GetMedium)
-	app.Get("/media/:id/info", h.GetInfo)
-	app.Delete("/media/:id", h.Delete)
+	media := app.Group("", h.requireInternalToken)
+	media.Get("/media/:id", h.Get)
+	media.Get("/media/:id/thumbnail", h.GetThumbnail)
+	media.Get("/media/:id/medium", h.GetMedium)
+	media.Get("/media/:id/info", h.GetInfo)
+	media.Delete("/media/:id", h.Delete)
 }
 
 // Get streams the original file from S3 storage.
@@ -51,11 +68,6 @@ func (h *MediaHandler) GetMedium(c *fiber.Ctx) error {
 
 // streamVariant fetches a media variant (original/thumbnail/medium) from S3 and streams it.
 func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
-	// Require authentication — prevent unauthenticated media download
-	if c.Get("X-User-ID") == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user context"))
-	}
-
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
@@ -90,10 +102,6 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 
 // GetInfo returns media metadata as JSON.
 func (h *MediaHandler) GetInfo(c *fiber.Ctx) error {
-	if c.Get("X-User-ID") == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user context"))
-	}
-
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
@@ -110,11 +118,7 @@ func (h *MediaHandler) GetInfo(c *fiber.Ctx) error {
 
 // Delete removes a media file. Only the uploader can delete.
 func (h *MediaHandler) Delete(c *fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user ID"))
-	}
-	uid, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}

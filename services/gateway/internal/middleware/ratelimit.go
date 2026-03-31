@@ -25,26 +25,27 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 
 	return func(c *fiber.Ctx) error {
 		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
-		// X-User-ID header (after stripping client-supplied value), so we use that.
+		// a Fiber local (not a header) so clients cannot spoof another user's bucket.
 		identifier := c.IP()
-		if uid := c.Get("X-User-ID"); uid != "" {
+		if uid, ok := c.Locals("userID").(string); ok && uid != "" {
 			identifier = uid
 		}
 
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)
 		ctx := c.Context()
 
-		// Use pipeline to make INCR+EXPIRE atomic (avoids orphan keys without TTL)
-		pipe := cfg.Redis.Pipeline()
-		incrCmd := pipe.Incr(ctx, key)
-		pipe.Expire(ctx, key, window)
-		_, err := pipe.Exec(ctx)
+		// INCR creates the key if absent; only set TTL on first request (count==1)
+		// to avoid resetting the window on every hit (sliding window bug).
+		count, err := cfg.Redis.Incr(ctx, key).Result()
 		if err != nil {
-			// Fail-closed: reject requests when Redis is unavailable
 			slog.Error("rate limiter Redis error, rejecting request", "error", err)
 			return response.Error(c, apperror.Internal("Rate limiting unavailable"))
 		}
-		count := incrCmd.Val()
+		if count == 1 {
+			if err := cfg.Redis.Expire(ctx, key, window).Err(); err != nil {
+				slog.Error("rate limiter Expire failed", "error", err)
+			}
+		}
 
 		// Set rate limit headers
 		c.Set("X-RateLimit-Limit", strconv.Itoa(cfg.MaxPerMin))

@@ -266,6 +266,9 @@ func (h *MessageHandler) ForwardMessages(c *fiber.Ctx) error {
 	if len(req.MessageIDs) == 0 {
 		return response.Error(c, apperror.BadRequest("message_ids is required"))
 	}
+	if len(req.MessageIDs) > 100 {
+		return response.Error(c, apperror.BadRequest("Cannot forward more than 100 messages at once"))
+	}
 
 	toChatID, err := uuid.Parse(req.ToChatID)
 	if err != nil {

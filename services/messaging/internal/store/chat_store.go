@@ -493,7 +493,8 @@ func (s *chatStore) GetAdmins(ctx context.Context, chatID uuid.UUID) ([]model.Ch
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
 		 WHERE cm.chat_id = $1 AND cm.role IN ('owner', 'admin')
-		 ORDER BY cm.role, u.display_name`, chatID,
+		 ORDER BY cm.role, u.display_name
+		 LIMIT 200`, chatID,
 	)
 	if err != nil {
 		return nil, err

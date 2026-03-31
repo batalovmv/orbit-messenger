@@ -39,16 +39,18 @@ func NewHub() *Hub {
 	}
 }
 
-// Register adds a connection to the hub.
-func (h *Hub) Register(conn *Conn) {
+// Register adds a connection to the hub. Returns true if this is the first connection for the user.
+func (h *Hub) Register(conn *Conn) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	isFirst := len(h.conns[conn.UserID]) == 0
 	h.conns[conn.UserID] = append(h.conns[conn.UserID], conn)
 	slog.Info("ws: user connected", "user_id", conn.UserID, "total", len(h.conns[conn.UserID]))
+	return isFirst
 }
 
-// Unregister removes a connection from the hub.
-func (h *Hub) Unregister(conn *Conn) {
+// Unregister removes a connection from the hub. Returns true if this was the last connection for the user.
+func (h *Hub) Unregister(conn *Conn) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	conns := h.conns[conn.UserID]
@@ -58,10 +60,12 @@ func (h *Hub) Unregister(conn *Conn) {
 			break
 		}
 	}
-	if len(h.conns[conn.UserID]) == 0 {
+	isLast := len(h.conns[conn.UserID]) == 0
+	if isLast {
 		delete(h.conns, conn.UserID)
 	}
 	slog.Info("ws: user disconnected", "user_id", conn.UserID)
+	return isLast
 }
 
 // IsOnline checks if a user has any active connections.

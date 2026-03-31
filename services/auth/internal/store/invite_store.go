@@ -14,7 +14,7 @@ type InviteStore interface {
 	GetByCode(ctx context.Context, code string) (*model.Invite, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Invite, error)
 	ListAll(ctx context.Context) ([]model.Invite, error)
-	UseInvite(ctx context.Context, code string, userID uuid.UUID) error
+	UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) error
 	// RollbackUsage decrements use_count for a failed registration (best-effort).
 	RollbackUsage(ctx context.Context, code string) error
 	Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.UUID) error
@@ -95,14 +95,15 @@ func (s *inviteStore) ListAll(ctx context.Context) ([]model.Invite, error) {
 	return invites, rows.Err()
 }
 
-func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UUID) error {
+func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) error {
 	// Don't write used_by here — it will be set by UpdateUsedBy after user creation.
 	// This avoids stomping used_by with uuid.Nil on multi-use invites.
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE invites SET use_count = use_count + 1, used_at = now()
 		 WHERE code = $1 AND is_active = true AND use_count < max_uses
-		 AND (expires_at IS NULL OR expires_at > now())`,
-		code,
+		 AND (expires_at IS NULL OR expires_at > now())
+		 AND (email IS NULL OR email = $2)`,
+		code, email,
 	)
 	if err != nil {
 		return err

@@ -353,6 +353,9 @@ func (m *mockInviteStore) IncrementUsage(ctx context.Context, linkID uuid.UUID) 
 	}
 	return nil
 }
+func (m *mockInviteStore) DecrementUsage(ctx context.Context, linkID uuid.UUID) error {
+	return nil
+}
 func (m *mockInviteStore) CreateJoinRequest(ctx context.Context, req *model.JoinRequest) error {
 	if m.createJoinRequestFn != nil {
 		return m.createJoinRequestFn(ctx, req)

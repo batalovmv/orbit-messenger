@@ -23,7 +23,7 @@ func LoggingMiddleware() fiber.Handler {
 			"path", c.Path(),
 			"status", c.Response().StatusCode(),
 			"duration_ms", time.Since(start).Milliseconds(),
-			"user_id", c.Get("X-User-ID"),
+			"user_id", c.Locals("userID"),
 			"ip", c.IP(),
 		)
 

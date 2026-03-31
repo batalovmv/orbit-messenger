@@ -19,6 +19,7 @@ type InviteStore interface {
 	Update(ctx context.Context, linkID uuid.UUID, title *string, expireAt *time.Time, usageLimit *int, requiresApproval *bool) error
 	Revoke(ctx context.Context, linkID uuid.UUID) error
 	IncrementUsage(ctx context.Context, linkID uuid.UUID) error
+	DecrementUsage(ctx context.Context, linkID uuid.UUID) error
 	CreateJoinRequest(ctx context.Context, req *model.JoinRequest) error
 	ListJoinRequests(ctx context.Context, chatID uuid.UUID) ([]model.JoinRequest, error)
 	UpdateJoinRequestStatus(ctx context.Context, chatID, userID uuid.UUID, status string, reviewedBy uuid.UUID) error
@@ -76,7 +77,8 @@ func (s *inviteStore) ListByChatID(ctx context.Context, chatID uuid.UUID) ([]mod
 		        usage_count, requires_approval, is_revoked, created_at
 		 FROM chat_invite_links
 		 WHERE chat_id = $1
-		 ORDER BY created_at DESC`, chatID,
+		 ORDER BY created_at DESC
+		 LIMIT 200`, chatID,
 	)
 	if err != nil {
 		return nil, err
@@ -132,14 +134,27 @@ func (s *inviteStore) IncrementUsage(ctx context.Context, linkID uuid.UUID) erro
 	return nil
 }
 
+func (s *inviteStore) DecrementUsage(ctx context.Context, linkID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE chat_invite_links SET usage_count = usage_count - 1
+		 WHERE id = $1 AND usage_count > 0`, linkID,
+	)
+	return err
+}
+
 func (s *inviteStore) CreateJoinRequest(ctx context.Context, req *model.JoinRequest) error {
-	return s.pool.QueryRow(ctx,
+	err := s.pool.QueryRow(ctx,
 		`INSERT INTO chat_join_requests (chat_id, user_id, message)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (chat_id, user_id) DO NOTHING
 		 RETURNING created_at`,
 		req.ChatID, req.UserID, req.Message,
 	).Scan(&req.CreatedAt)
+	// ON CONFLICT DO NOTHING returns no rows → pgx.ErrNoRows means request already exists (idempotent)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	return err
 }
 
 func (s *inviteStore) ListJoinRequests(ctx context.Context, chatID uuid.UUID) ([]model.JoinRequest, error) {
@@ -149,7 +164,8 @@ func (s *inviteStore) ListJoinRequests(ctx context.Context, chatID uuid.UUID) ([
 		 FROM chat_join_requests jr
 		 JOIN users u ON u.id = jr.user_id
 		 WHERE jr.chat_id = $1 AND jr.status = 'pending'
-		 ORDER BY jr.created_at`, chatID,
+		 ORDER BY jr.created_at
+		 LIMIT 200`, chatID,
 	)
 	if err != nil {
 		return nil, err

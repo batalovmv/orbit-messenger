@@ -3,6 +3,7 @@ package validator
 import (
 	"net/mail"
 	"regexp"
+	"unicode/utf8"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 )
@@ -10,9 +11,13 @@ import (
 var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // IsValidEmail checks if the string is a valid email address.
+// Rejects RFC 5322 display-name format like "Name <user@example.com>".
 func IsValidEmail(email string) bool {
-	_, err := mail.ParseAddress(email)
-	return err == nil
+	addr, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+	return addr.Address == email
 }
 
 // IsValidUUID checks if the string is a valid UUID v4 format.
@@ -36,10 +41,11 @@ func RequireString(val, field string, minLen, maxLen int) *apperror.AppError {
 	if val == "" {
 		return apperror.BadRequest(field + " is required")
 	}
-	if len(val) < minLen {
+	runes := utf8.RuneCountInString(val)
+	if runes < minLen {
 		return apperror.BadRequest(field + " is too short")
 	}
-	if maxLen > 0 && len(val) > maxLen {
+	if maxLen > 0 && runes > maxLen {
 		return apperror.BadRequest(field + " is too long")
 	}
 	return nil

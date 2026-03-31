@@ -93,9 +93,18 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 }
 
 func (h *UserHandler) GetContactIDs(c *fiber.Ctx) error {
+	callerID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
 	targetID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	if callerID != targetID {
+		return response.Error(c, apperror.Forbidden("Cannot access another user's contacts"))
 	}
 
 	ids, err := h.svc.GetContactIDs(c.Context(), targetID)

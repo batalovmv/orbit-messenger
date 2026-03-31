@@ -59,7 +59,7 @@ func (s *sessionStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Sessio
 func (s *sessionStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.Session, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, user_id, device_id, token_hash, ip_address::TEXT, user_agent, expires_at, created_at
-		 FROM sessions WHERE user_id = $1 ORDER BY created_at DESC`, userID,
+		 FROM sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`, userID,
 	)
 	if err != nil {
 		return nil, err

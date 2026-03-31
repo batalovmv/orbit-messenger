@@ -37,6 +37,7 @@ func main() {
 	r2SecretKey := config.MustEnv("R2_SECRET_ACCESS_KEY")
 	r2Bucket := config.EnvOr("R2_BUCKET", "orbit-media")
 	r2PublicEndpoint := config.EnvOr("R2_PUBLIC_ENDPOINT", "") // Browser-accessible S3 endpoint for presigned URLs
+	internalSecret := config.MustEnv("INTERNAL_SECRET")
 
 	// PostgreSQL
 	ctx := context.Background()
@@ -121,8 +122,8 @@ func main() {
 	mediaSvc.StartCleanupLoop(appCtx, 6*time.Hour)
 
 	// Handlers
-	uploadHandler := handler.NewUploadHandler(mediaSvc, logger)
-	mediaHandler := handler.NewMediaHandler(mediaSvc, logger)
+	uploadHandler := handler.NewUploadHandler(mediaSvc, logger, internalSecret)
+	mediaHandler := handler.NewMediaHandler(mediaSvc, logger, internalSecret)
 
 	// Fiber
 	app := fiber.New(fiber.Config{

@@ -115,7 +115,7 @@ func main() {
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 
 	// NATS subscriber: update user status + last_seen_at in DB
-	_, _ = nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
+	statusSub, subErr := nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
 		var event struct {
 			Event string          `json:"event"`
 			Data  json.RawMessage `json:"data"`
@@ -143,6 +143,11 @@ func main() {
 			slog.Error("failed to update user status", "user_id", sd.UserID, "error", err)
 		}
 	})
+	if subErr != nil {
+		slog.Error("failed to subscribe to user status events", "error", subErr)
+		os.Exit(1)
+	}
+	defer statusSub.Unsubscribe()
 
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger)

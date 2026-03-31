@@ -107,14 +107,16 @@ func parsePostgresURL(raw string) (dsn string, password string, rawPassword stri
 		pass = decoded
 	}
 
-	// Parse host:port/dbname from hostpath
+	// Parse host:port/dbname?params from hostpath
 	host := hostpath
 	dbname := ""
+	queryStr := ""
 	if slashIdx := strings.Index(host, "/"); slashIdx >= 0 {
 		dbname = host[slashIdx+1:]
 		host = host[:slashIdx]
 	}
 	if qIdx := strings.Index(dbname, "?"); qIdx >= 0 {
+		queryStr = dbname[qIdx+1:]
 		dbname = dbname[:qIdx]
 	}
 
@@ -124,7 +126,17 @@ func parsePostgresURL(raw string) (dsn string, password string, rawPassword stri
 		host = host[:colonIdx]
 	}
 
-	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable", host, port, user, dbname)
+	// Parse sslmode from query params, default to "disable"
+	sslmode := "disable"
+	if queryStr != "" {
+		if q, qErr := url.ParseQuery(queryStr); qErr == nil {
+			if v := q.Get("sslmode"); v != "" {
+				sslmode = v
+			}
+		}
+	}
+
+	dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s", host, port, user, dbname, sslmode)
 	return dsn, pass, rawPass
 }
 
@@ -136,7 +148,13 @@ func NatsURL() string {
 	raw = strings.Replace(raw, "https://", "nats://", 1)
 	raw = strings.Replace(raw, "http://", "nats://", 1)
 	// Fix Saturn default port 80 → NATS port 4222
-	raw = strings.Replace(raw, ":80", ":4222", 1)
+	// Only replace :80 when it is the actual port (before "/" or end-of-string),
+	// not a substring like ":8080" which would be corrupted to ":42228".
+	if strings.Contains(raw, ":80/") {
+		raw = strings.Replace(raw, ":80/", ":4222/", 1)
+	} else if strings.HasSuffix(raw, ":80") {
+		raw = raw[:len(raw)-3] + ":4222"
+	}
 	// Ensure nats:// prefix
 	if !strings.HasPrefix(raw, "nats://") {
 		raw = "nats://" + raw

@@ -307,6 +307,10 @@ func (s *MediaService) processGIFAsync(mediaID uuid.UUID, tmpPath string) {
 
 	if err := s.store.UpdateProcessingResult(ctx, mediaID, thumbKey, mp4Key, nil, nil, nil, nil); err != nil {
 		slog.Error("update gif processing result failed", "error", err)
+		if statusErr := s.store.UpdateProcessingStatus(ctx, mediaID, model.ProcessingFailed); statusErr != nil {
+			slog.Error("failed to mark gif as failed", "error", statusErr)
+		}
+		return
 	}
 	s.publishMediaReady(mediaID)
 }
@@ -602,8 +606,13 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		}
 	}
 
+	mediaID, err := uuid.Parse(meta.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid upload ID in metadata: %w", err)
+	}
+
 	m := &model.Media{
-		ID:               uuid.MustParse(meta.ID),
+		ID:               mediaID,
 		UploaderID:       uploaderID,
 		Type:             meta.MediaType,
 		MimeType:         meta.MimeType,
@@ -675,7 +684,11 @@ func (s *MediaService) publishMediaReady(mediaID uuid.UUID) {
 			"processing_status": m.ProcessingStatus,
 		},
 	}
-	data, _ := json.Marshal(event)
+	data, err := json.Marshal(event)
+	if err != nil {
+		slog.Error("failed to marshal media_ready event", "error", err)
+		return
+	}
 	subject := fmt.Sprintf("orbit.media.%s.ready", m.UploaderID.String())
 	if err := s.nc.Publish(subject, data); err != nil {
 		slog.Error("publish media_ready failed", "error", err)

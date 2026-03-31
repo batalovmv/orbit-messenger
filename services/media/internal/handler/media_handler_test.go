@@ -46,7 +46,7 @@ func newMemR2() *memR2 {
 
 // testApp creates a Fiber app with real handlers but mock dependencies.
 // This validates HTTP parsing, auth checks, validation — not R2 uploads.
-func testApp(t *testing.T, mediaStore *store.MediaStore) *fiber.App {
+func testApp(t *testing.T, mediaStore store.Store) *fiber.App {
 	t.Helper()
 	// We can't construct a full MediaService without R2/Redis/NATS.
 	// For handler tests, we test the HTTP layer directly.

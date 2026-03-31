@@ -3,6 +3,7 @@ package response
 import (
 	"errors"
 	"log/slog"
+	"net/http"
 	"reflect"
 
 	"github.com/gofiber/fiber/v2"
@@ -49,9 +50,14 @@ func FiberErrorHandler(c *fiber.Ctx, err error) error {
 
 	var fiberErr *fiber.Error
 	if errors.As(err, &fiberErr) {
+		// Normalize message to prevent leaking internal Fiber details (paths, parser errors)
+		safe := http.StatusText(fiberErr.Code)
+		if safe == "" {
+			safe = "Request error"
+		}
 		return c.Status(fiberErr.Code).JSON(apperror.AppError{
 			Code:    "error",
-			Message: fiberErr.Message,
+			Message: safe,
 			Status:  fiberErr.Code,
 		})
 	}

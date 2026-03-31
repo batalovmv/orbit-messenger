@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"errors"
 	"io"
 	"log/slog"
@@ -18,30 +19,42 @@ import (
 
 // UploadHandler handles media upload endpoints.
 type UploadHandler struct {
-	svc    *service.MediaService
-	logger *slog.Logger
+	svc            *service.MediaService
+	logger         *slog.Logger
+	internalSecret string
 }
 
 // NewUploadHandler creates upload handler.
-func NewUploadHandler(svc *service.MediaService, logger *slog.Logger) *UploadHandler {
-	return &UploadHandler{svc: svc, logger: logger}
+func NewUploadHandler(svc *service.MediaService, logger *slog.Logger, internalSecret string) *UploadHandler {
+	return &UploadHandler{svc: svc, logger: logger, internalSecret: internalSecret}
+}
+
+// requireInternalToken validates that X-User-ID is only trusted with a valid X-Internal-Token.
+func (h *UploadHandler) requireInternalToken(c *fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+	token := c.Get("X-Internal-Token")
+	if h.internalSecret == "" || token == "" ||
+		subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) != 1 {
+		return response.Error(c, apperror.Unauthorized("Invalid internal token"))
+	}
+	return c.Next()
 }
 
 // Register sets up upload routes.
 func (h *UploadHandler) Register(app *fiber.App) {
-	app.Post("/media/upload", h.Upload)
-	app.Post("/media/upload/chunked/init", h.ChunkedInit)
-	app.Post("/media/upload/chunked/:uploadId", h.ChunkedUploadPart)
-	app.Post("/media/upload/chunked/:uploadId/complete", h.ChunkedComplete)
+	upload := app.Group("", h.requireInternalToken)
+	upload.Post("/media/upload", h.Upload)
+	upload.Post("/media/upload/chunked/init", h.ChunkedInit)
+	upload.Post("/media/upload/chunked/:uploadId", h.ChunkedUploadPart)
+	upload.Post("/media/upload/chunked/:uploadId/complete", h.ChunkedComplete)
 }
 
 // Upload handles simple file upload via multipart/form-data.
 func (h *UploadHandler) Upload(c *fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user ID"))
-	}
-	uid, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
@@ -90,11 +103,7 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 
 // ChunkedInit starts a chunked upload.
 func (h *UploadHandler) ChunkedInit(c *fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user ID"))
-	}
-	uid, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
@@ -127,11 +136,7 @@ func (h *UploadHandler) ChunkedInit(c *fiber.Ctx) error {
 
 // ChunkedUploadPart uploads a single chunk.
 func (h *UploadHandler) ChunkedUploadPart(c *fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user ID"))
-	}
-	uid, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
@@ -171,11 +176,7 @@ func (h *UploadHandler) ChunkedUploadPart(c *fiber.Ctx) error {
 
 // ChunkedComplete finishes a chunked upload.
 func (h *UploadHandler) ChunkedComplete(c *fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
-		return response.Error(c, apperror.Unauthorized("Missing user ID"))
-	}
-	uid, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}

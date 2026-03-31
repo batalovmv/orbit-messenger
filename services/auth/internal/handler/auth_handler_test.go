@@ -16,6 +16,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
 
@@ -41,6 +42,10 @@ func newMockUserStore() *mockUserStore {
 }
 
 func (m *mockUserStore) Create(_ context.Context, u *model.User) error {
+	// Simulate DB unique constraint on email (code 23505)
+	if _, exists := m.byEmail[u.Email]; exists {
+		return &pgconn.PgError{Code: "23505", Message: "duplicate key value violates unique constraint"}
+	}
 	u.ID = uuid.New()
 	u.Status = "offline"
 	u.TOTPEnabled = false
@@ -215,7 +220,7 @@ func (m *mockInviteStore) ListAll(_ context.Context) ([]model.Invite, error) {
 	return result, nil
 }
 
-func (m *mockInviteStore) UseInvite(_ context.Context, code string, userID uuid.UUID) error {
+func (m *mockInviteStore) UseInvite(_ context.Context, code string, userID uuid.UUID, email string) error {
 	inv, ok := m.invites[code]
 	if !ok || !inv.IsActive || inv.UseCount >= inv.MaxUses {
 		return store.ErrNotFound

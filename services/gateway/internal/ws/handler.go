@@ -97,8 +97,16 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 			return
 		}
 
+		// Clear the auth-frame read deadline before the HTTP call to auth service,
+		// so a slow auth response doesn't kill the WS connection.
+		c.SetReadDeadline(time.Time{})
+
 		// Step 2: Validate token via auth service (with Redis cache)
-		uid, err := validateToken(context.Background(), authClient, rdb, authServiceURL, authData.Token)
+		// Use a dedicated context with timeout instead of context.Background()
+		// so the HTTP call is cancelled if the client disconnects.
+		authCtx, authCancel := context.WithTimeout(context.Background(), authTimeout)
+		uid, err := validateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
+		authCancel()
 		if err != nil || uid == "" {
 			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"invalid token"}`)})
 			c.Close()
@@ -313,7 +321,9 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 		}
 		stopJSON, _ := json.Marshal(stopEvt)
 		stopSubject := "orbit.chat." + chatID + ".typing"
-		h.NATS.Publish(stopSubject, stopJSON)
+		if err := h.NATS.Publish(stopSubject, stopJSON); err != nil {
+			slog.Error("failed to publish stop_typing", "error", err)
+		}
 
 		h.typingMu.Lock()
 		delete(h.typingTimers, chatID+":"+userID)
