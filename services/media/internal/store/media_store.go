@@ -11,13 +11,26 @@ import (
 	"github.com/mst-corp/orbit/services/media/internal/model"
 )
 
+// Store defines the media store interface for testability.
+type Store interface {
+	Create(ctx context.Context, m *model.Media) error
+	GetByID(ctx context.Context, id uuid.UUID) (*model.Media, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Media, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateProcessingStatus(ctx context.Context, id uuid.UUID, status string) error
+	UpdateProcessingResult(ctx context.Context, id uuid.UUID, thumbnailKey, mediumKey *string, width, height *int, duration *float64, waveform []byte) error
+	GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]*MessageMediaRow, error)
+	LinkToMessage(ctx context.Context, messageID, mediaID uuid.UUID, position int, isSpoiler bool) error
+	CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]string, error)
+}
+
 // MediaStore handles PostgreSQL operations for media.
 type MediaStore struct {
 	pool *pgxpool.Pool
 }
 
 // NewMediaStore creates a new media store.
-func NewMediaStore(pool *pgxpool.Pool) *MediaStore {
+func NewMediaStore(pool *pgxpool.Pool) Store {
 	return &MediaStore{pool: pool}
 }
 
@@ -203,6 +216,7 @@ func (s *MediaStore) CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]st
 			LEFT JOIN message_media mm ON mm.media_id = m.id
 			WHERE mm.media_id IS NULL
 			  AND m.created_at < now() - make_interval(hours => $1)
+			LIMIT 500
 		)
 		RETURNING r2_key, thumbnail_r2_key, medium_r2_key`
 

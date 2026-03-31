@@ -121,19 +121,15 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		return nil, apperror.BadRequest("This invite is locked to a different email")
 	}
 
-	existing, err := s.users.GetByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("check existing: %w", err)
-	}
-	if existing != nil {
-		return nil, apperror.Conflict("Email already registered")
-	}
-
 	// Atomically claim the invite slot BEFORE creating the user.
 	// UseInvite uses WHERE use_count < max_uses — if two requests race,
 	// only one will succeed; the other gets ErrNoRows.
+	// Skipping pre-check GetByEmail to avoid TOCTOU race — DB unique constraint handles it.
 	if err := s.invites.UseInvite(ctx, code, uuid.Nil); err != nil {
-		return nil, apperror.BadRequest("Invalid or expired invite code")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, apperror.BadRequest("Invalid or expired invite code")
+		}
+		return nil, fmt.Errorf("use invite: %w", err)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)

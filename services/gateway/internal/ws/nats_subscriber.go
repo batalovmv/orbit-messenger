@@ -206,7 +206,7 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 		return nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return nil
 	}
@@ -242,7 +242,7 @@ func (s *Subscriber) fetchContactIDs(userID string) []string {
 		return nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		return nil
 	}

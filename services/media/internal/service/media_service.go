@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -28,15 +29,15 @@ const (
 
 // MediaService orchestrates upload, processing, download, and deletion.
 type MediaService struct {
-	store *store.MediaStore
+	store store.Store
 	r2    *storage.R2Client
 	rdb   *redis.Client
 	nc    *nats.Conn
 }
 
 // NewMediaService creates the service.
-func NewMediaService(store *store.MediaStore, r2 *storage.R2Client, rdb *redis.Client, nc *nats.Conn) *MediaService {
-	return &MediaService{store: store, r2: r2, rdb: rdb, nc: nc}
+func NewMediaService(st store.Store, r2 *storage.R2Client, rdb *redis.Client, nc *nats.Conn) *MediaService {
+	return &MediaService{store: st, r2: r2, rdb: rdb, nc: nc}
 }
 
 // Upload handles a simple (non-chunked) file upload.
@@ -134,7 +135,9 @@ func (s *MediaService) uploadWithAsyncProcessing(ctx context.Context, mediaID, u
 
 	if err := s.store.Create(ctx, m); err != nil {
 		os.Remove(tmpPath)
-		s.r2.Delete(ctx, r2Key)
+		if delErr := s.r2.Delete(ctx, r2Key); delErr != nil {
+			slog.Warn("cleanup R2 key after DB failure", "key", r2Key, "error", delErr)
+		}
 		return nil, fmt.Errorf("create media record: %w", err)
 	}
 
@@ -282,11 +285,14 @@ func (s *MediaService) processGIFAsync(mediaID uuid.UUID, tmpPath string) {
 		return
 	}
 
+	var mp4Key *string
 	mp4Data, err := os.ReadFile(tmpMP4)
 	if err == nil {
 		key := fmt.Sprintf("gif/%s/video.mp4", mediaID.String())
 		if err := s.r2.Upload(ctx, key, bytes.NewReader(mp4Data), "video/mp4", int64(len(mp4Data))); err != nil {
 			slog.Error("upload gif mp4 failed", "error", err)
+		} else {
+			mp4Key = &key
 		}
 	}
 
@@ -299,7 +305,7 @@ func (s *MediaService) processGIFAsync(mediaID uuid.UUID, tmpPath string) {
 		}
 	}
 
-	if err := s.store.UpdateProcessingResult(ctx, mediaID, thumbKey, nil, nil, nil, nil, nil); err != nil {
+	if err := s.store.UpdateProcessingResult(ctx, mediaID, thumbKey, mp4Key, nil, nil, nil, nil); err != nil {
 		slog.Error("update gif processing result failed", "error", err)
 	}
 	s.publishMediaReady(mediaID)
@@ -479,9 +485,17 @@ func (s *MediaService) InitChunkedUpload(ctx context.Context, uploaderID uuid.UU
 		Parts:       []model.Part{},
 	}
 
-	data, _ := json.Marshal(meta)
+	data, err := json.Marshal(meta)
+	if err != nil {
+		if abortErr := s.r2.AbortMultipartUpload(ctx, r2Key, r2UploadID); abortErr != nil {
+			slog.Warn("abort multipart upload failed after marshal error", "key", r2Key, "error", abortErr)
+		}
+		return nil, fmt.Errorf("marshal chunked meta: %w", err)
+	}
 	if err := s.rdb.Set(ctx, chunkedKeyPrefix+uploadID, data, chunkedUploadTTL).Err(); err != nil {
-		s.r2.AbortMultipartUpload(ctx, r2Key, r2UploadID)
+		if abortErr := s.r2.AbortMultipartUpload(ctx, r2Key, r2UploadID); abortErr != nil {
+			slog.Warn("abort multipart upload failed after redis error", "key", r2Key, "error", abortErr)
+		}
 		return nil, fmt.Errorf("save chunked meta: %w", err)
 	}
 
@@ -544,7 +558,8 @@ func (s *MediaService) UploadChunk(ctx context.Context, uploadID string, uploade
 
 // CompleteChunkedUpload finishes the multipart upload.
 func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID string, uploaderID uuid.UUID, isOneTime bool) (*model.Media, error) {
-	raw, err := s.rdb.Get(ctx, chunkedKeyPrefix+uploadID).Bytes()
+	// Atomic GETDEL: read and delete in one call to prevent double-complete race
+	raw, err := s.rdb.GetDel(ctx, chunkedKeyPrefix+uploadID).Bytes()
 	if err != nil {
 		return nil, model.ErrUploadNotFound
 	}
@@ -567,6 +582,26 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		return nil, fmt.Errorf("complete multipart: %w", err)
 	}
 
+	// Content sniff: verify declared MIME matches actual file content.
+	// Chunked init only checks client-supplied mime_type; we must verify after assembly.
+	body, _, err := s.r2.GetObject(ctx, meta.R2Key)
+	if err == nil {
+		sniffBuf := make([]byte, 512)
+		n, _ := io.ReadAtLeast(body, sniffBuf, 1)
+		body.Close()
+		if n > 0 {
+			detectedMIME := http.DetectContentType(sniffBuf[:n])
+			// Only reject if detected type is concrete (not application/octet-stream)
+			// and doesn't match the allowed list for this media type
+			if detectedMIME != "application/octet-stream" && !model.AllowedMIME(meta.MediaType, detectedMIME) {
+				if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
+					slog.Error("cleanup R2 after MIME mismatch", "key", meta.R2Key, "error", delErr)
+				}
+				return nil, model.ErrMIMENotAllowed
+			}
+		}
+	}
+
 	m := &model.Media{
 		ID:               uuid.MustParse(meta.ID),
 		UploaderID:       uploaderID,
@@ -587,10 +622,7 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		return nil, fmt.Errorf("create media record: %w", err)
 	}
 
-	// Cleanup Redis AFTER successful DB insert — prevents orphaned R2 objects without recovery path
-	if err := s.rdb.Del(ctx, chunkedKeyPrefix+uploadID).Err(); err != nil {
-		slog.Warn("failed to delete chunked upload key from Redis", "upload_id", uploadID, "error", err)
-	}
+	// Redis key already deleted atomically via GetDel above
 
 	s.publishMediaReady(m.ID)
 	return m, nil
@@ -704,7 +736,7 @@ func strPtr(s string) *string {
 }
 
 // GetStore returns the underlying media store (for messaging service to use shared DB).
-func (s *MediaService) GetStore() *store.MediaStore {
+func (s *MediaService) GetStore() store.Store {
 	return s.store
 }
 

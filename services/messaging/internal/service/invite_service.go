@@ -241,13 +241,14 @@ func (s *InviteService) JoinByInvite(ctx context.Context, hash string, userID uu
 		return map[string]interface{}{"status": "pending"}, nil
 	}
 
-	if err := s.invites.IncrementUsage(ctx, link.ID); err != nil {
-		return nil, apperror.BadRequest("Invite link usage limit reached")
+	// Add member FIRST, then increment usage — prevents slot leak if AddMember fails.
+	if err := s.chats.AddMember(ctx, link.ChatID, userID, "member"); err != nil {
+		return nil, fmt.Errorf("add member: %w", err)
 	}
 
-	if err := s.chats.AddMember(ctx, link.ChatID, userID, "member"); err != nil {
-		slog.WarnContext(ctx, "slot consumed but add member failed", "link_id", link.ID, "chat_id", link.ChatID, "user_id", userID, "error", err)
-		return nil, fmt.Errorf("add member: %w", err)
+	if err := s.invites.IncrementUsage(ctx, link.ID); err != nil {
+		slog.WarnContext(ctx, "member added but usage increment failed", "link_id", link.ID, "chat_id", link.ChatID, "user_id", userID, "error", err)
+		// Member is already added — log and continue rather than failing the join
 	}
 
 	memberIDs, err := s.chats.GetMemberIDs(ctx, link.ChatID)

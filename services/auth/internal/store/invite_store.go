@@ -74,7 +74,7 @@ func (s *inviteStore) ListAll(ctx context.Context) ([]model.Invite, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, code, created_by, email, role, max_uses, use_count,
 		        used_by, used_at, expires_at, is_active, created_at
-		 FROM invites ORDER BY created_at DESC`,
+		 FROM invites ORDER BY created_at DESC LIMIT 500`,
 	)
 	if err != nil {
 		return nil, err
@@ -96,11 +96,13 @@ func (s *inviteStore) ListAll(ctx context.Context) ([]model.Invite, error) {
 }
 
 func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UUID) error {
+	// Don't write used_by here — it will be set by UpdateUsedBy after user creation.
+	// This avoids stomping used_by with uuid.Nil on multi-use invites.
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE invites SET use_count = use_count + 1, used_by = $1, used_at = now()
-		 WHERE code = $2 AND is_active = true AND use_count < max_uses
+		`UPDATE invites SET use_count = use_count + 1, used_at = now()
+		 WHERE code = $1 AND is_active = true AND use_count < max_uses
 		 AND (expires_at IS NULL OR expires_at > now())`,
-		userID, code,
+		code,
 	)
 	if err != nil {
 		return err
@@ -112,8 +114,11 @@ func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UU
 }
 
 func (s *inviteStore) RollbackUsage(ctx context.Context, code string) error {
+	// Atomic decrement with active guard to prevent underflow.
+	// Only rolls back if the invite is still active and has uses to decrement.
 	_, err := s.pool.Exec(ctx,
-		`UPDATE invites SET use_count = use_count - 1 WHERE code = $1 AND use_count > 0`, code,
+		`UPDATE invites SET use_count = use_count - 1
+		 WHERE code = $1 AND use_count > 0 AND is_active = true`, code,
 	)
 	return err
 }

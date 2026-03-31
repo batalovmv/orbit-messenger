@@ -54,7 +54,9 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 			return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
 		}
 		if blacklisted > 0 {
-			cfg.Redis.Del(c.Context(), cacheKey) // clean stale cache
+			if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+				slog.Error("JWT cache del failed after blacklist hit", "error", err)
+			}
 			return response.Error(c, apperror.Unauthorized("Token revoked"))
 		}
 
@@ -63,6 +65,7 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 		if err == nil {
 			var u cachedUser
 			if json.Unmarshal([]byte(cached), &u) == nil {
+				c.Locals("userID", u.ID) // for rate limiter — cannot be spoofed by client
 				c.Request().Header.Set("X-User-ID", u.ID)
 				c.Request().Header.Set("X-User-Role", u.Role)
 				return c.Next()
@@ -104,8 +107,11 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 		// Cache result
 		cu := cachedUser{ID: user.ID, Role: user.Role}
 		cuJSON, _ := json.Marshal(cu)
-		cfg.Redis.Set(c.Context(), cacheKey, string(cuJSON), cfg.CacheTTL)
+		if err := cfg.Redis.Set(c.Context(), cacheKey, string(cuJSON), cfg.CacheTTL).Err(); err != nil {
+			slog.Error("JWT cache write failed", "error", err)
+		}
 
+		c.Locals("userID", user.ID) // for rate limiter — cannot be spoofed by client
 		c.Request().Header.Set("X-User-ID", user.ID)
 		c.Request().Header.Set("X-User-Role", user.Role)
 		return c.Next()

@@ -54,8 +54,14 @@ func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
 	return h
 }
 
-// Close stops the typingCleanupLoop goroutine.
+// Close stops the typingCleanupLoop goroutine and cancels all pending typing timers.
 func (h *Handler) Close() {
+	h.typingMu.Lock()
+	for _, t := range h.typingTimers {
+		t.Stop()
+	}
+	h.typingTimers = nil
+	h.typingMu.Unlock()
 	close(h.done)
 }
 
@@ -108,18 +114,16 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 			done:   make(chan struct{}),
 		}
 
-		isFirstConnection := !h.Hub.IsOnline(uid)
-		h.Hub.Register(conn)
+		// Atomic check-and-register to prevent duplicate "online" events on multi-device race
+		isFirstConnection := h.Hub.Register(conn)
 		defer func() {
-			h.Hub.Unregister(conn)
+			isLastConnection := h.Hub.Unregister(conn)
 			close(conn.done)
-			// Only publish "offline" if this was the last connection for this user
-			if !h.Hub.IsOnline(uid) {
+			if isLastConnection {
 				h.publishStatusChange(uid, "offline")
 			}
 		}()
 
-		// Only publish "online" if this is the first connection for this user
 		if isFirstConnection {
 			h.publishStatusChange(uid, "online")
 		}
@@ -159,7 +163,9 @@ func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		return "", fmt.Errorf("blacklist check failed")
 	}
 	if blacklisted > 0 {
-		rdb.Del(ctx, cacheKey) // clean stale cache
+		if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+			slog.Error("WS JWT cache del failed after blacklist hit", "error", err)
+		}
 		return "", nil
 	}
 
@@ -205,7 +211,9 @@ func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 
 	// Cache
 	cuJSON, _ := json.Marshal(user)
-	rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL)
+	if err := rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL).Err(); err != nil {
+		slog.Error("WS JWT cache write failed", "error", err)
+	}
 
 	return user.ID, nil
 }
