@@ -775,17 +775,13 @@ addActionHandler('createChannel', async (global, actions, payload): Promise<void
   setGlobal(global);
 
   let createdChannel: ApiChat | undefined;
-  let missingInvitedUsers: ApiMissingInvitedUser[] | undefined;
   try {
     const result = await callApi('createChannel', {
       title,
       about,
-      users,
-      isBroadcast: isChannel,
-      isMegagroup: isSuperGroup,
+      memberIds,
     });
-    createdChannel = result?.channel;
-    missingInvitedUsers = result?.missingUsers;
+    createdChannel = result?.chat;
   } catch (error) {
     global = getGlobal();
 
@@ -828,14 +824,8 @@ addActionHandler('createChannel', async (global, actions, payload): Promise<void
   }
   actions.openChat({ id: channelId, shouldReplaceHistory: true, tabId });
 
-  if (missingInvitedUsers) {
-    global = getGlobal();
-    global = updateMissingInvitedUsers(global, channelId, missingInvitedUsers, tabId);
-    setGlobal(global);
-  }
-
-  if (channelId && accessHash && photo) {
-    await callApi('editChatPhoto', { chatId: channelId, accessHash, photo });
+  if (channelId && photo) {
+    await callApi('editChatPhoto', { chatId: channelId, photo });
   }
 });
 
