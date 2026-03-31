@@ -17,13 +17,14 @@ type ProxyConfig struct {
 	MessagingServiceURL string
 	MediaServiceURL     string
 	FrontendURL         string
+	InternalSecret      string
 }
 
 // doProxy performs a manual reverse proxy: sends request to upstream, copies
 // status + body + safe headers back, then sets CORS headers from gateway config.
 // This avoids proxy.DoRedirects which overwrites the entire fasthttp raw response
 // buffer, making it impossible to reliably set CORS headers afterwards.
-func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL string) error {
+func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL string, internalSecret ...string) error {
 	// Build upstream request
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
@@ -51,6 +52,10 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	if role := c.Get("X-User-Role"); role != "" {
 		req.Header.Set("X-User-Role", role)
 	}
+	// Sign the request so downstream services can verify it came from the gateway
+	if len(internalSecret) > 0 && internalSecret[0] != "" {
+		req.Header.Set("X-Internal-Token", internalSecret[0])
+	}
 	// Forward request body
 	if body := c.Body(); len(body) > 0 {
 		req.SetBody(body)
@@ -76,10 +81,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		// Skip CORS headers from upstream — gateway owns CORS
 	})
 
-	// Set CORS headers from gateway config
-	c.Set("Access-Control-Allow-Origin", frontendURL)
-	c.Set("Access-Control-Allow-Credentials", "true")
-	c.Set("Vary", "Origin")
+	// CORS headers are handled by CORSMiddleware — do not override here
 
 	// Copy response body
 	c.Response().SetBody(resp.Body())
@@ -103,9 +105,13 @@ func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 }
 
 // PublicMediaProxy returns a handler that proxies media GET requests without JWT.
-// Used for <img src>, <video src> — presigned R2 URLs are self-authenticating.
+// Media service streams files directly from S3 (no redirects), so standard proxy works.
 func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
-	client := &fasthttp.Client{ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
+	client := &fasthttp.Client{
+		ReadTimeout:         120 * time.Second,
+		WriteTimeout:        120 * time.Second,
+		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB
+	}
 	return func(c *fiber.Ctx) error {
 		path := strings.TrimPrefix(c.Path(), "/api/v1")
 		url := mediaURL + path
@@ -141,7 +147,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
-		if err := doProxy(c, url, authClient, cfg.FrontendURL); err != nil {
+		if err := doProxy(c, url, authClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
 			slog.Error("auth proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
@@ -165,7 +171,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
-		if err := doProxy(c, url, mediaClient, cfg.FrontendURL); err != nil {
+		if err := doProxy(c, url, mediaClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
 			slog.Error("media proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Media service unavailable", "status": 502,
@@ -185,7 +191,7 @@ func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, c
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
-		if err := doProxy(c, url, msgClient, cfg.FrontendURL); err != nil {
+		if err := doProxy(c, url, msgClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
 			slog.Error("messaging proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,

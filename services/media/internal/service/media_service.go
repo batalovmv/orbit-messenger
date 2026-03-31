@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -198,7 +199,8 @@ func (s *MediaService) processPhotoSync(ctx context.Context, m *model.Media, dat
 // processVideoAsync extracts thumbnail and metadata. Runs in goroutine.
 // tmpPath is cleaned up by the caller goroutine.
 func (s *MediaService) processVideoAsync(mediaID uuid.UUID, tmpPath string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	duration, width, height, err := GetVideoMetadata(tmpPath)
 	if err != nil {
@@ -265,7 +267,8 @@ func (s *MediaService) processVoiceSync(ctx context.Context, m *model.Media, dat
 
 // processGIFAsync converts GIF to MP4. Runs in goroutine.
 func (s *MediaService) processGIFAsync(mediaID uuid.UUID, tmpPath string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	tmpMP4 := tmpPath + ".mp4"
 	defer os.Remove(tmpMP4)
@@ -321,6 +324,36 @@ func (s *MediaService) cleanupR2Keys(ctx context.Context, m *model.Media) {
 
 // --- Download / Info / Delete (sentinel errors: #8) ---
 
+// StreamFile returns the file body and content type for a given media ID and R2 key.
+func (s *MediaService) StreamFile(ctx context.Context, r2Key string) (io.ReadCloser, string, error) {
+	return s.r2.GetObject(ctx, r2Key)
+}
+
+// GetR2Key returns the R2 key for the given media and variant.
+func (s *MediaService) GetR2Key(ctx context.Context, id uuid.UUID, variant string) (string, error) {
+	m, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if m == nil {
+		return "", model.ErrMediaNotFound
+	}
+	switch variant {
+	case "thumbnail":
+		if m.ThumbnailR2Key == nil {
+			return "", model.ErrNoThumbnail
+		}
+		return *m.ThumbnailR2Key, nil
+	case "medium":
+		if m.MediumR2Key == nil {
+			return "", model.ErrNoMedium
+		}
+		return *m.MediumR2Key, nil
+	default:
+		return m.R2Key, nil
+	}
+}
+
 // GetPresignedURL returns a presigned download URL for a media file.
 func (s *MediaService) GetPresignedURL(ctx context.Context, id uuid.UUID) (string, error) {
 	m, err := s.store.GetByID(ctx, id)
@@ -346,6 +379,21 @@ func (s *MediaService) GetThumbnailURL(ctx context.Context, id uuid.UUID) (strin
 		return "", model.ErrNoThumbnail
 	}
 	return s.r2.PresignedGetURL(ctx, *m.ThumbnailR2Key, presignTTL)
+}
+
+// GetMediumURL returns a presigned URL for the medium-resolution variant.
+func (s *MediaService) GetMediumURL(ctx context.Context, id uuid.UUID) (string, error) {
+	m, err := s.store.GetByID(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if m == nil {
+		return "", model.ErrMediaNotFound
+	}
+	if m.MediumR2Key == nil {
+		return "", model.ErrNoMedium
+	}
+	return s.r2.PresignedGetURL(ctx, *m.MediumR2Key, presignTTL)
 }
 
 // GetInfo returns media metadata.
@@ -384,6 +432,9 @@ func (s *MediaService) Delete(ctx context.Context, id, userID uuid.UUID) error {
 func (s *MediaService) InitChunkedUpload(ctx context.Context, uploaderID uuid.UUID, filename, mimeType, mediaType string, totalSize int64) (*model.ChunkedUploadMeta, error) {
 	if mediaType == "" {
 		mediaType = model.DetectMediaType(mimeType)
+	}
+	if !model.AllowedMIME(mediaType, mimeType) {
+		return nil, model.ErrMIMENotAllowed
 	}
 	if totalSize > model.SizeLimit(mediaType) {
 		return nil, model.ErrFileTooLarge
@@ -524,6 +575,10 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 	}
 
 	if err := s.store.Create(ctx, m); err != nil {
+		// Best-effort R2 cleanup to prevent orphaned objects
+		if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
+			slog.Error("failed to cleanup orphaned R2 object", "key", meta.R2Key, "error", delErr)
+		}
 		return nil, fmt.Errorf("create media record: %w", err)
 	}
 
@@ -616,7 +671,16 @@ func extensionFromMIME(mime string) string {
 	default:
 		parts := strings.Split(mime, "/")
 		if len(parts) == 2 {
-			return "." + parts[1]
+			// Sanitize subtype to prevent path traversal in R2 keys
+			sub := strings.Map(func(r rune) rune {
+				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '+' || r == '.' || r == '-' {
+					return r
+				}
+				return -1
+			}, parts[1])
+			if sub != "" {
+				return "." + sub
+			}
 		}
 		return ".bin"
 	}

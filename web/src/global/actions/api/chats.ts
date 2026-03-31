@@ -1026,10 +1026,6 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
   const {
     title, memberIds, photo, tabId = getCurrentTabId(),
   } = payload;
-  const users = (memberIds)
-    .map((id) => selectUser(global, id))
-    .filter(Boolean);
-
   global = updateTabState(global, {
     chatCreation: {
       progress: ChatCreationProgress.InProgress,
@@ -1038,14 +1034,23 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
   setGlobal(global);
 
   try {
-    const { chat: createdChat, missingUsers } = await callApi('createGroupChat', {
-      title,
-      users,
-    }) ?? {};
+    const result = await callApi('createGroupChat', {
+      name: title,
+      memberIds: memberIds,
+    });
 
-    if (!createdChat) {
+    if (!result) {
+      global = getGlobal();
+      global = updateTabState(global, {
+        chatCreation: {
+          progress: ChatCreationProgress.Error,
+        },
+      }, tabId);
+      setGlobal(global);
       return;
     }
+
+    const { chat: createdChat } = result;
 
     const { id: chatId } = createdChat;
 
@@ -1054,7 +1059,7 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
     global = updateTabState(global, {
       chatCreation: {
         ...selectTabState(global, tabId).chatCreation,
-        progress: createdChat ? ChatCreationProgress.Complete : ChatCreationProgress.Error,
+        progress: ChatCreationProgress.Complete,
       },
     }, tabId);
     setGlobal(global);
@@ -1064,12 +1069,6 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
       tabId,
     });
 
-    if (missingUsers) {
-      global = getGlobal();
-      global = updateMissingInvitedUsers(global, chatId, missingUsers, tabId);
-      setGlobal(global);
-    }
-
     if (chatId && photo) {
       await callApi('editChatPhoto', {
         chatId,
@@ -1077,17 +1076,15 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
       });
     }
   } catch (err) {
-    if ((err as ApiError).message === 'USERS_TOO_FEW') {
-      global = getGlobal();
-      global = updateTabState(global, {
-        chatCreation: {
-          ...selectTabState(global, tabId).chatCreation,
-          progress: ChatCreationProgress.Error,
-          error: 'CreateGroupError',
-        },
-      }, tabId);
-      setGlobal(global);
-    }
+    global = getGlobal();
+    global = updateTabState(global, {
+      chatCreation: {
+        ...selectTabState(global, tabId).chatCreation,
+        progress: ChatCreationProgress.Error,
+        error: (err as ApiError).message === 'USERS_TOO_FEW' ? 'CreateGroupError' : undefined,
+      },
+    }, tabId);
+    setGlobal(global);
   }
 });
 

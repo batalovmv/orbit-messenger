@@ -204,13 +204,15 @@ export async function createDirectChat({ userId }: { userId: string }) {
 }
 
 export async function createGroupChat({
-  name, description,
+  name, description, memberIds,
 }: {
   name: string;
   description?: string;
+  memberIds?: string[];
 }) {
-  const body: Record<string, unknown> = { name };
+  const body: Record<string, unknown> = { type: 'group', name };
   if (description) body.description = description;
+  if (memberIds?.length) body.member_ids = memberIds;
 
   const chat = await client.request<SaturnChat>('POST', '/chats', body);
   const apiChat = buildApiChat(chat);

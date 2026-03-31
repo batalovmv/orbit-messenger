@@ -59,7 +59,8 @@ func main() {
 	wsHandler := ws.NewHandler(hub, nc)
 
 	// NATS Subscriber
-	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL)
+	internalSecret := config.MustEnv("INTERNAL_SECRET")
+	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret)
 	if err := subscriber.Start(); err != nil {
 		slog.Error("failed to start NATS subscriber", "error", err)
 		os.Exit(1)
@@ -82,7 +83,7 @@ func main() {
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")
 	authRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 20, KeyPrefix: "auth",
+		Redis: rdb, MaxPerMin: 5, KeyPrefix: "auth",
 	})
 	authGroup.Use(authRateLimit)
 
@@ -122,6 +123,7 @@ func main() {
 	})
 	app.Get("/api/v1/media/:id", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
 	app.Get("/api/v1/media/:id/thumbnail", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
+	app.Get("/api/v1/media/:id/medium", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
 	app.Get("/api/v1/media/:id/info", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
 
 	// API group with JWT + rate limiting
@@ -133,6 +135,7 @@ func main() {
 		MessagingServiceURL: messagingServiceURL,
 		MediaServiceURL:     mediaServiceURL,
 		FrontendURL:         frontendURL,
+		InternalSecret:      internalSecret,
 	})
 
 	// Graceful shutdown

@@ -32,8 +32,47 @@ export function requestChannelDifference() {
   return Promise.resolve(undefined);
 }
 
-export function downloadMedia() {
-  return Promise.resolve(undefined);
+export async function downloadMedia(
+  { url, mediaFormat }: { url: string; mediaFormat?: number; isHtmlAllowed?: boolean },
+  onProgress?: (progress: number) => void,
+) {
+  // url is a mediaHash like "photo<mediaId>?size=x" or "document<mediaId>"
+  const match = url.match(/^(?:photo|video|document)([a-f0-9-]+)/);
+  if (!match) return undefined;
+
+  const mediaId = match[1];
+  // Determine which variant to fetch based on size parameter
+  const sizeMatch = url.match(/[?&]size=(\w)/);
+  const size = sizeMatch ? sizeMatch[1] : 'y';
+
+  let endpoint: string;
+  if (size === 'm' || size === 's' || size === 'a') {
+    endpoint = `/media/${mediaId}/thumbnail`;
+  } else {
+    endpoint = `/media/${mediaId}`;
+  }
+
+  try {
+    const { getBaseUrl, getAccessToken } = await import('../client');
+    const fullUrl = `${getBaseUrl()}${endpoint}`;
+    const headers: Record<string, string> = {};
+    const token = getAccessToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(fullUrl, { headers, redirect: 'follow' });
+    if (!response.ok) return undefined;
+
+    if (onProgress) onProgress(1);
+
+    const dataBlob = await response.blob();
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+
+    return { dataBlob, mimeType };
+  } catch {
+    return undefined;
+  }
 }
 
 export function repairFileReference() {

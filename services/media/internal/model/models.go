@@ -12,6 +12,7 @@ var (
 	ErrMediaNotFound    = errors.New("media not found")
 	ErrNotUploader      = errors.New("forbidden: not the uploader")
 	ErrNoThumbnail      = errors.New("no thumbnail available")
+	ErrNoMedium         = errors.New("no medium resolution available")
 	ErrUploadNotFound   = errors.New("chunked upload not found or expired")
 	ErrUploadForbidden  = errors.New("forbidden: not the upload owner")
 	ErrFileTooLarge     = errors.New("file too large")

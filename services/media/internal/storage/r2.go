@@ -93,6 +93,22 @@ func (r *R2Client) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// GetObject returns the object body and content type from S3.
+func (r *R2Client) GetObject(ctx context.Context, key string) (io.ReadCloser, string, error) {
+	out, err := r.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &r.bucket,
+		Key:    &key,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("r2 get %s: %w", key, err)
+	}
+	contentType := "application/octet-stream"
+	if out.ContentType != nil {
+		contentType = *out.ContentType
+	}
+	return out.Body, contentType, nil
+}
+
 // PresignedGetURL generates a temporary download URL.
 func (r *R2Client) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	out, err := r.presigner.PresignGetObject(ctx, &s3.GetObjectInput{

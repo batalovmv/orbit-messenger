@@ -363,6 +363,7 @@
 "DescriptionInfo" = "You can provide an optional description for your channel.";
 "GroupInfoParticipantCount_one" = "1 member";
 "GroupInfoParticipantCount_other" = "{count} members";
+"CreateGroupPeersTitleLastDelimeter" = " and ";
 "ChannelIntroCreateChannel" = "Create Channel";
 "NewMessageTitle" = "New Message";
 "ChatListSearchNoResults" = "No Results";

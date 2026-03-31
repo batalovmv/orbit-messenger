@@ -96,11 +96,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         mediaType: 'photo',
         id: first.media_id,
         date: 0,
-        thumbnail: first.thumbnail_url ? {
-          width: first.width || 320,
-          height: first.height || 320,
-          dataUri: fullMediaUrl(first.thumbnail_url),
-        } : undefined,
+        thumbnail: undefined,
         sizes: [
           {
             width: first.width || 320,
@@ -113,7 +109,6 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
             type: 'y' as const,
           },
         ],
-        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
         isSpoiler: first.is_spoiler || undefined,
       };
       break;
@@ -130,12 +125,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         fileName: first.original_filename || 'video.mp4',
         size: first.size_bytes,
         isRound: first.type === 'videonote' || undefined,
-        thumbnail: first.thumbnail_url ? {
-          width: first.width || 320,
-          height: first.height || 320,
-          dataUri: fullMediaUrl(first.thumbnail_url),
-        } : undefined,
-        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
+        thumbnail: undefined,
         isSpoiler: first.is_spoiler || undefined,
       };
       break;
@@ -161,12 +151,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         fileName: 'animation.mp4',
         size: first.size_bytes,
         isGif: true,
-        thumbnail: first.thumbnail_url ? {
-          width: first.width || 320,
-          height: first.height || 320,
-          dataUri: fullMediaUrl(first.thumbnail_url),
-        } : undefined,
-        blobUrl: first.url ? fullMediaUrl(first.url) : undefined,
+        thumbnail: undefined,
       };
       break;
     }

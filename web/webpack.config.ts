@@ -73,6 +73,7 @@ export default function createConfig(
 
   return {
     mode,
+    cache: mode === 'development' ? false : undefined,
     entry: './src/index.tsx',
     target: 'web',
 

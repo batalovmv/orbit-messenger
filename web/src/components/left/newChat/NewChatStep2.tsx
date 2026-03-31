@@ -81,8 +81,11 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
     const memberFirstNames = [global.currentUserId!, ...memberIds]
       .map((userId) => getUserFirstOrLastName(usersById[userId]))
       .filter(Boolean);
+    const delimiter = lang('CreateGroupPeersTitleLastDelimeter');
+    // If lang key isn't loaded yet, fall back to " and "
+    const lastDelimiter = delimiter === 'CreateGroupPeersTitleLastDelimeter' ? ' and ' : delimiter;
     const generatedChatName = memberFirstNames.slice(0, -1).join(', ')
-      + lang('CreateGroup.PeersTitleLastDelimeter')
+      + lastDelimiter
       + memberFirstNames[memberFirstNames.length - 1];
     setTitle(generatedChatName);
   }, [isChannel, memberIds, lang]);
@@ -188,7 +191,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
 
         {memberIds.length > 0 && (
           <>
-            <h3 className="chat-members-heading">{lang('GroupInfo.ParticipantCount', memberIds.length, 'i')}</h3>
+            <h3 className="chat-members-heading">{lang('GroupInfoParticipantCount', memberIds.length, 'i')}</h3>
 
             <div className="chat-members-list custom-scroll">
               {memberIds.map((id) => (

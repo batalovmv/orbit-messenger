@@ -317,6 +317,7 @@ export interface LangPair {
   'GroupName': undefined;
   'DescriptionOptionalPlaceholder': undefined;
   'DescriptionInfo': undefined;
+  'CreateGroupPeersTitleLastDelimeter': undefined;
   'ChannelIntroCreateChannel': undefined;
   'NewMessageTitle': undefined;
   'ChatListSearchNoResults': undefined;

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -28,41 +29,58 @@ func NewMediaHandler(svc *service.MediaService, logger *slog.Logger) *MediaHandl
 func (h *MediaHandler) Register(app *fiber.App) {
 	app.Get("/media/:id", h.Get)
 	app.Get("/media/:id/thumbnail", h.GetThumbnail)
+	app.Get("/media/:id/medium", h.GetMedium)
 	app.Get("/media/:id/info", h.GetInfo)
 	app.Delete("/media/:id", h.Delete)
 }
 
-// Get redirects to presigned R2 URL for the original file.
+// Get streams the original file from S3 storage.
 func (h *MediaHandler) Get(c *fiber.Ctx) error {
-	id, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return response.Error(c, apperror.BadRequest("Invalid media ID"))
-	}
-
-	url, err := h.svc.GetPresignedURL(c.Context(), id)
-	if err != nil {
-		return h.mapError(c, err, "get presigned URL")
-	}
-
-	return c.Redirect(url, fiber.StatusFound)
+	return h.streamVariant(c, "original")
 }
 
-// GetThumbnail redirects to presigned thumbnail URL.
+// GetThumbnail streams the thumbnail from S3 storage.
 func (h *MediaHandler) GetThumbnail(c *fiber.Ctx) error {
+	return h.streamVariant(c, "thumbnail")
+}
+
+// GetMedium streams the medium-resolution variant from S3 storage.
+func (h *MediaHandler) GetMedium(c *fiber.Ctx) error {
+	return h.streamVariant(c, "medium")
+}
+
+// streamVariant fetches a media variant (original/thumbnail/medium) from S3 and streams it.
+func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
 	}
 
-	url, err := h.svc.GetThumbnailURL(c.Context(), id)
+	r2Key, err := h.svc.GetR2Key(c.Context(), id, variant)
 	if err != nil {
 		if errors.Is(err, model.ErrNoThumbnail) {
 			return response.Error(c, apperror.NotFound("Thumbnail not available"))
 		}
-		return h.mapError(c, err, "get thumbnail URL")
+		if errors.Is(err, model.ErrNoMedium) {
+			return response.Error(c, apperror.NotFound("Medium resolution not available"))
+		}
+		return h.mapError(c, err, "get r2 key for "+variant)
 	}
 
-	return c.Redirect(url, fiber.StatusFound)
+	body, contentType, err := h.svc.StreamFile(c.Context(), r2Key)
+	if err != nil {
+		return h.mapError(c, err, "stream "+variant)
+	}
+	defer body.Close()
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return h.mapError(c, err, "read "+variant)
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	return c.Send(data)
 }
 
 // GetInfo returns media metadata as JSON.
@@ -78,7 +96,7 @@ func (h *MediaHandler) GetInfo(c *fiber.Ctx) error {
 	}
 
 	resp := h.svc.BuildMediaResponse(c.Context(), media)
-	return c.JSON(resp)
+	return response.JSON(c, fiber.StatusOK, resp)
 }
 
 // Delete removes a media file. Only the uploader can delete.

@@ -59,9 +59,10 @@ export function clearAuth() {
 }
 
 async function ensureToken() {
-  if (!accessToken) return;
-  if (Date.now() < tokenExpiresAt - TOKEN_REFRESH_MARGIN_MS) return;
+  // If token exists and is not near expiry, nothing to do
+  if (accessToken && Date.now() < tokenExpiresAt - TOKEN_REFRESH_MARGIN_MS) return;
 
+  // Token missing or near expiry — try to refresh
   if (!refreshPromise) {
     refreshPromise = refreshToken();
   }
