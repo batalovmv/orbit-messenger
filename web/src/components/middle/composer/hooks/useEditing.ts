@@ -56,7 +56,7 @@ const useEditing = (
       return;
     }
 
-    const text = !prevEditedMessage && editingDraft?.text.length ? editingDraft : editedMessage.content.text;
+    const text = !prevEditedMessage && editingDraft?.text.length ? editingDraft : editedMessage.content?.text;
     const html = getTextWithEntitiesAsHtml(text);
 
     setHtml(html);
@@ -76,7 +76,7 @@ const useEditing = (
     }
 
     const shouldSetNoWebPage = !('webPage' in editedMessage.content)
-      && editedMessage.content.text?.entities?.some((entity) => URL_ENTITIES.has(entity.type));
+      && editedMessage.content?.text?.entities?.some((entity) => URL_ENTITIES.has(entity.type));
 
     toggleMessageWebPage({
       chatId,
@@ -102,7 +102,7 @@ const useEditing = (
 
     const edited = parseHtmlAsFormattedText(getHtml());
     return !('webPage' in editedMessage.content)
-      && editedMessage.content.text?.entities?.some((entity) => URL_ENTITIES.has(entity.type))
+      && editedMessage.content?.text?.entities?.some((entity) => URL_ENTITIES.has(entity.type))
       && !(edited.entities?.some((entity) => URL_ENTITIES.has(entity.type)));
   }, [editedMessage, getHtml], DEBOUNCE_MS, true);
 

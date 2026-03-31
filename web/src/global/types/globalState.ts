@@ -95,6 +95,7 @@ export type GlobalState = {
   isCacheApiSupported?: boolean;
   connectionState?: ApiUpdateConnectionStateType;
   currentUserId?: string;
+  saturnRole?: 'admin' | 'member';
   isSyncing?: boolean;
   isAppConfigLoaded?: boolean;
   isAppUpdateAvailable?: boolean;

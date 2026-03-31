@@ -309,11 +309,12 @@ function onUpdateServerTimeOffset(update: ApiUpdateServerTimeOffset) {
 }
 
 function onUpdateCurrentUser<T extends GlobalState>(global: T, update: ApiUpdateCurrentUser) {
-  const { currentUser, currentUserFullInfo } = update;
+  const { currentUser, currentUserFullInfo, saturnRole } = update;
 
   global = {
     ...updateUser(global, currentUser.id, currentUser),
     currentUserId: currentUser.id,
+    saturnRole: saturnRole || global.saturnRole,
   };
   global = updateUserFullInfo(global, currentUser.id, currentUserFullInfo);
   setGlobal(global);

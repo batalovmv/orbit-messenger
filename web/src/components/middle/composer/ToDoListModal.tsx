@@ -75,7 +75,7 @@ const ToDoListModal = ({
   // Treat "Add task" as edit mode for own checklists
   const isAddTaskMode = renderingModal?.forNewTask && !editingMessage?.isOutgoing;
 
-  const editingTodo = editingMessage?.content.todo?.todo;
+  const editingTodo = editingMessage?.content?.todo?.todo;
 
   const frozenTasks = useMemo(() => {
     if (!isAddTaskMode || !editingTodo) {

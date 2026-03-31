@@ -206,8 +206,8 @@ const SponsoredMessage: FC<OwnProps & StateProps> = ({
           <div className="text-content with-meta" dir="auto" ref={contentRef}>
             <span className="text-content-inner" dir="auto">
               {renderTextWithEntities({
-                text: message.content.text.text,
-                entities: message.content.text.entities,
+                text: message.content?.text?.text,
+                entities: message.content?.text?.entities,
               })}
             </span>
           </div>

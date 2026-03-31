@@ -222,7 +222,7 @@ export default memo(withGlobal<OwnProps>(
     const message = messageInputInvoice
       ? selectChatMessage(global, messageInputInvoice.chatId, messageInputInvoice.messageId) : undefined;
     const chat = messageInputInvoice ? selectChat(global, messageInputInvoice.chatId) : undefined;
-    const isPaidMedia = message?.content.paidMedia;
+    const isPaidMedia = message?.content?.paidMedia;
 
     return {
       bot,

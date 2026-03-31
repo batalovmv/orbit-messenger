@@ -940,7 +940,7 @@ addActionHandler('initDraftFromSuggestedMessage', (global, actions, payload): Ac
   actions.saveDraft({
     chatId,
     threadId,
-    text: message.content.text,
+    text: message.content?.text,
   });
 });
 
@@ -1386,7 +1386,7 @@ addActionHandler('toggleTodoCompleted', (global, actions, payload): ActionReturn
   const message = selectChatMessage(global, chatId, messageId);
   const currentUserId = global.currentUserId;
 
-  const currentTodo = message?.content.todo;
+  const currentTodo = message?.content?.todo;
   if (!currentTodo || !currentUserId || !chat) {
     return;
   }
@@ -1707,8 +1707,8 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
   }
 
   for (const message of serviceMessages) {
-    const { text, entities } = message.content.text || {};
-    const { sticker } = message.content;
+    const { text, entities } = message.content?.text || {};
+    const { sticker } = message.content || {};
 
     const replyInfo = selectMessageReplyInfo(global, toChat.id, toThreadId);
 

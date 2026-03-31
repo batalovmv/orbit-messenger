@@ -14,6 +14,7 @@ export async function fetchCurrentUser() {
     '@type': 'updateCurrentUser',
     currentUser: apiUser,
     currentUserFullInfo: buildApiUserFullInfo(user),
+    saturnRole: user.role,
   });
 
   sendApiUpdate({
@@ -193,6 +194,7 @@ export async function updateProfile({
     '@type': 'updateCurrentUser',
     currentUser: apiUser,
     currentUserFullInfo: buildApiUserFullInfo(user),
+    saturnRole: user.role,
   });
 
   return { user: apiUser };

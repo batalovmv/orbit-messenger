@@ -56,7 +56,7 @@ export function hasMessageMedia(message: MediaContainer) {
 export function canEditMedia(message: MediaContainer) {
   const {
     photo, video, audio, document, text, webPage, ...otherMedia
-  } = message.content;
+  } = message.content || {};
 
   return !video?.isRound && !Object.keys(otherMedia).length;
 }
@@ -78,7 +78,7 @@ export function getMessageVideo(message: MediaContainer) {
 }
 
 export function getMessageRoundVideo(message: MediaContainer) {
-  const { video } = message.content;
+  const { video } = message.content || {};
 
   return video?.isRound ? video : undefined;
 }
@@ -592,7 +592,7 @@ export function getMessageMediaHash(
 ) {
   const {
     video, sticker, audio, voice, document,
-  } = message.content;
+  } = message.content || {};
   const { webPage } = statefulMedia;
 
   const messagePhoto = getMessagePhoto(message) || getWebPagePhoto(webPage);

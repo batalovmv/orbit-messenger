@@ -65,7 +65,7 @@ const Giveaway = ({
   const [giveawayInfo, setGiveawayInfo] = useState<ApiGiveawayInfo | undefined>();
 
   const lang = useOldLang();
-  const { giveaway, giveawayResults } = message.content;
+  const { giveaway, giveawayResults } = message.content || {};
   const isResults = Boolean(giveawayResults);
   const {
     months, untilDate, prizeDescription, stars,
@@ -358,7 +358,7 @@ const Giveaway = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { message }): Complete<StateProps> => {
-    const { giveaway } = message.content;
+    const { giveaway } = message.content || {};
     const chat = selectChat(global, message.chatId)!;
     const sender = (giveaway?.channelIds[0] ? selectChat(global, giveaway.channelIds[0]) : undefined)
       || selectForwardedSender(global, message) || chat;

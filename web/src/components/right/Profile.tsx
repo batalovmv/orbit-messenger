@@ -941,7 +941,7 @@ const Profile = ({
               onPlay={handlePlayAudio}
               onDateClick={handleMessageFocus}
               canDownload={!isChatProtected && !messagesById[id].isProtected}
-              isDownloading={getIsDownloading(activeDownloads, messagesById[id].content.audio!)}
+              isDownloading={getIsDownloading(activeDownloads, messagesById[id].content?.audio)}
             />
           ))
         ) : resultType === 'voice' ? (

@@ -94,7 +94,7 @@ function StoryMention({
 }
 
 export default memo(withGlobal<OwnProps>((global, { message }): Complete<StateProps> => {
-  const { id, peerId } = message.content.storyData!;
+  const { id, peerId } = message.content?.storyData || {};
   const lastReadId = selectPeerStories(global, peerId)?.lastReadId;
 
   return {

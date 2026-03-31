@@ -219,11 +219,11 @@ export function isReplyToMessage(message: ApiMessage) {
 }
 
 export function isForwardedMessage(message: ApiMessage) {
-  return Boolean(message.forwardInfo || message.content.storyData);
+  return Boolean(message.forwardInfo || message.content?.storyData);
 }
 
 export function isActionMessage(message: ApiMessage) {
-  return Boolean(message.content.action);
+  return Boolean(message.content?.action);
 }
 
 export function isServiceNotificationMessage(message: ApiMessage) {
@@ -251,7 +251,7 @@ export function isMessageFailed(message: ApiMessage) {
 }
 
 export function isHistoryClearMessage(message: ApiMessage) {
-  return message.content.action && message.content.action.type === 'historyClear';
+  return message.content?.action && message.content?.action.type === 'historyClear';
 }
 
 export function isGeoLiveExpired(message: ApiMessage) {
@@ -261,7 +261,7 @@ export function isGeoLiveExpired(message: ApiMessage) {
 }
 
 export function isMessageTranslatable(message: ApiMessage, allowOutgoing?: boolean) {
-  const { text, game } = message.content;
+  const { text, game } = message.content || {};
 
   const isLocal = isMessageLocal(message);
   const isServiceNotification = isServiceNotificationMessage(message);
@@ -319,7 +319,7 @@ export function mergeIdRanges(ranges: number[][], idsUpdate: number[]): number[]
 }
 
 export function extractMessageText(message: ApiMessage | ApiStory, inChatList = false) {
-  const contentText = message.content.text;
+  const contentText = message.content?.text;
   if (!contentText) return undefined;
 
   const { text } = contentText;

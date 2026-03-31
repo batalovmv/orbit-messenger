@@ -2051,7 +2051,7 @@ export default memo(withGlobal<OwnProps>(
     const isReplyPrivate = !isSystemBotChat && !isAnonymousForwards && replyMessageChat
       && !isChatPublic(replyMessageChat)
       && (replyMessageChat.isNotJoined || selectIsChatRestricted(global, replyMessageChat.id));
-    const isReplyToTopicStart = replyMessage?.content.action?.type === 'topicCreate';
+    const isReplyToTopicStart = replyMessage?.content?.action?.type === 'topicCreate';
     const replyStory = storyReplyId && storyReplyPeerId
       ? selectPeerStory(global, storyReplyPeerId, storyReplyId)
       : undefined;

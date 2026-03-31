@@ -81,7 +81,7 @@ export default function useChatListEntry({
   const lang = useLang();
   const ref = useRef<HTMLDivElement>();
 
-  const storyData = lastMessage?.content.storyData;
+  const storyData = lastMessage?.content?.storyData;
   const shouldTryLoadingStory = statefulMediaContent && !statefulMediaContent.story;
 
   useEnsureStory(shouldTryLoadingStory ? storyData?.peerId : undefined, storyData?.id, statefulMediaContent?.story);

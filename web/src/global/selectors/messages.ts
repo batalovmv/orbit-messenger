@@ -636,8 +636,8 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
 
   const canEdit = !isLocal && !isAction && isMessageEditable && hasMessageEditRight;
 
-  const hasSticker = Boolean(message.content.sticker);
-  const hasFavoriteSticker = hasSticker && selectIsStickerFavorite(global, message.content.sticker!);
+  const hasSticker = Boolean(message.content?.sticker);
+  const hasFavoriteSticker = hasSticker && selectIsStickerFavorite(global, message.content?.sticker);
   const canFaveSticker = !isAction && hasSticker && !hasFavoriteSticker;
   const canUnfaveSticker = !isAction && hasFavoriteSticker;
   const canCopy = !isAction;
@@ -1273,7 +1273,7 @@ export function selectCanScheduleUntilOnline<T extends GlobalState>(global: T, i
 }
 
 export function selectCustomEmojis(message: ApiMessage) {
-  const entities = message.content.text?.entities;
+  const entities = message.content?.text?.entities;
   return entities?.filter((entity): entity is ApiMessageEntityCustomEmoji => (
     entity.type === ApiMessageEntityTypes.CustomEmoji
   ));
@@ -1387,15 +1387,15 @@ export function selectForwardsCanBeSentToChat<T extends GlobalState>(
   return !messageIds!.some((messageId) => сheckMessageSendingDenied(chatMessages[messageId], options));
 }
 function сheckMessageSendingDenied(message: ApiMessage, options: IAllowedAttachmentOptions) {
-  const isVoice = message.content.voice;
-  const isRoundVideo = message.content.video?.isRound;
-  const isPhoto = message.content.photo;
-  const isGif = message.content.video?.isGif;
-  const isVideo = message.content.video && !isRoundVideo && !isGif;
-  const isAudio = message.content.audio;
-  const isDocument = message.content.document;
-  const isSticker = message.content.sticker;
-  const isPlainText = message.content.text
+  const isVoice = message.content?.voice;
+  const isRoundVideo = message.content?.video?.isRound;
+  const isPhoto = message.content?.photo;
+  const isGif = message.content?.video?.isGif;
+  const isVideo = message.content?.video && !isRoundVideo && !isGif;
+  const isAudio = message.content?.audio;
+  const isDocument = message.content?.document;
+  const isSticker = message.content?.sticker;
+  const isPlainText = message.content?.text
     && !isVoice && !isRoundVideo && !isSticker && !isDocument && !isAudio && !isVideo && !isPhoto && !isGif;
 
   return (isVoice && !options.canSendVoices)

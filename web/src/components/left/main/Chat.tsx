@@ -569,7 +569,7 @@ export default memo(withGlobal<OwnProps>(
 
     const topicsInfo = selectTopicsInfo(global, chatId);
 
-    const storyData = lastMessage?.content.storyData;
+    const storyData = lastMessage?.content?.storyData;
     const lastMessageStory = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
 

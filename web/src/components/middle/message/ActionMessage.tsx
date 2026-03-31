@@ -164,7 +164,8 @@ const ActionMessage = ({
   const ref = useRef<HTMLDivElement>();
 
   const { id, chatId } = message;
-  const action = message.content.action!;
+  const action = message.content?.action;
+  if (!action) return undefined;
   const isLocal = isLocalMessageId(id);
 
   const isTextHidden = HIDDEN_TEXT_ACTIONS.has(action.type);

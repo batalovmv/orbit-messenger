@@ -76,7 +76,7 @@ export function getMessageSummaryEmoji(message: ApiMessage) {
     pollId,
     paidMedia,
     todo,
-  } = message.content;
+  } = message.content || {};
 
   if (message.groupedId || photo || paidMedia) {
     return '🖼';

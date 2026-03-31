@@ -57,6 +57,7 @@ export async function loginWithEmail({
       '@type': 'updateCurrentUser',
       currentUser: apiUser,
       currentUserFullInfo: buildApiUserFullInfo(result.user),
+      saturnRole: result.user.role,
     });
 
     sendApiUpdate({
@@ -117,6 +118,7 @@ export async function checkAuth() {
         '@type': 'updateCurrentUser',
         currentUser: apiUser,
         currentUserFullInfo: buildApiUserFullInfo(result.user),
+        saturnRole: result.user.role,
       });
 
       sendApiUpdate({
@@ -145,6 +147,7 @@ export async function checkAuth() {
       '@type': 'updateCurrentUser',
       currentUser: apiUser,
       currentUserFullInfo: buildApiUserFullInfo(user),
+      saturnRole: user.role,
     });
 
     sendApiUpdate({
@@ -171,6 +174,7 @@ export async function checkAuth() {
         '@type': 'updateCurrentUser',
         currentUser: apiUser,
         currentUserFullInfo: buildApiUserFullInfo(user),
+        saturnRole: user.role,
       });
 
       sendApiUpdate({

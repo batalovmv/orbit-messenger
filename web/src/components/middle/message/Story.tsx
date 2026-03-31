@@ -34,7 +34,7 @@ function Story({
 }
 
 export default memo(withGlobal<OwnProps>((global, { message }): Complete<StateProps> => {
-  const { id, peerId } = message.content.storyData!;
+  const { id, peerId } = message.content?.storyData || {};
 
   return {
     story: selectPeerStory(global, peerId, id),

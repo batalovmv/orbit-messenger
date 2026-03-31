@@ -39,6 +39,7 @@ type StateProps = {
   isGiveawayAvailable?: boolean;
   starsBalance?: ApiStarsAmount;
   tonBalance?: ApiTonAmount;
+  isSaturnAdmin?: boolean;
 };
 
 const SettingsMain: FC<OwnProps & StateProps> = ({
@@ -49,6 +50,7 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
   isGiveawayAvailable,
   starsBalance,
   tonBalance,
+  isSaturnAdmin,
   onReset,
 }) => {
   const {
@@ -235,15 +237,17 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           </ListItem>
         )}
       </div>
-      <div className="settings-main-menu">
-        <ListItem
-          icon="link"
-          narrow
-          onClick={handleCreateInvite}
-        >
-          {lang('AdminCreateInvite')}
-        </ListItem>
-      </div>
+      {isSaturnAdmin && (
+        <div className="settings-main-menu">
+          <ListItem
+            icon="link"
+            narrow
+            onClick={handleCreateInvite}
+          >
+            {lang('AdminCreateInvite')}
+          </ListItem>
+        </div>
+      )}
       <div className="settings-main-menu">
         <ListItem
           icon="ask-support"
@@ -295,6 +299,7 @@ export default memo(withGlobal<OwnProps>(
       isGiveawayAvailable,
       starsBalance,
       tonBalance,
+      isSaturnAdmin: global.saturnRole === 'admin',
     };
   },
 )(SettingsMain));

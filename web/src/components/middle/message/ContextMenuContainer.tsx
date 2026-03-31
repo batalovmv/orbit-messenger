@@ -384,10 +384,10 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
 
     const selectionText = getSelectionAsFormattedText(selectionRange);
 
-    const messageText = message.content.text!.text.replace(/\u00A0/g, ' ');
+    const messageText = message.content?.text?.text.replace(/\u00A0/g, ' ');
 
     const canQuote = selectionText.text.trim().length > 0
-      && messageText.includes(selectionText.text);
+      && Boolean(messageText?.includes(selectionText.text));
     if (!canQuote) {
       setSelectionQuoteOffset(UNQUOTABLE_OFFSET);
       return;

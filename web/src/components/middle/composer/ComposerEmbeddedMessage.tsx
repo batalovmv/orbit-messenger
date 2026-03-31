@@ -116,7 +116,7 @@ const ComposerEmbeddedMessage = (props: OwnProps & StateProps) => {
   const lang = useLang();
   const { isMobile } = useAppLayout();
 
-  const isReplyToTopicStart = message?.content.action?.type === 'topicCreate';
+  const isReplyToTopicStart = message?.content?.action?.type === 'topicCreate';
   const isShowingSuggestedPost = Boolean(suggestedPostInfo) && !shouldForceShowEditing;
   const isForwarding = Boolean(forwardedMessagesCount);
 
@@ -538,11 +538,11 @@ export default memo(withGlobal<OwnProps>(
     const isSenderChannel = chat && isChatChannel(chat);
 
     const forwardsHaveCaptions = forwardedMessages?.some((forward) => (
-      forward?.content.text && Object.keys(forward.content).length > 1
+      forward?.content?.text && Object.keys(forward.content).length > 1
     ));
 
     const isContextMenuDisabled = isForwarding && forwardMessageIds!.length === 1
-      && Boolean(message?.content.storyData);
+      && Boolean(message?.content?.storyData);
 
     const isReplyToDiscussion = replyInfo?.replyToMsgId === threadId && !replyInfo.replyToPeerId;
 

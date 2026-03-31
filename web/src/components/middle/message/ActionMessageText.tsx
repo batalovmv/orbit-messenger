@@ -86,7 +86,7 @@ const ActionMessageText = ({
     openUrl,
   } = getActions();
   const { chatId, isOutgoing } = message;
-  const action = message.content.action!;
+  const action = message.content?.action;
 
   const lang = useLang();
   const oldLang = useOldLang();
@@ -153,7 +153,7 @@ const ActionMessageText = ({
       case 'gameScore': {
         const { score } = action;
 
-        const gameTitle = replyMessage?.content.game?.title;
+        const gameTitle = replyMessage?.content?.game?.title;
         const gameLink = gameTitle && renderMessageLink(replyMessage, renderText(gameTitle), asPreview);
 
         if (gameLink) {

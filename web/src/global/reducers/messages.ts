@@ -212,7 +212,7 @@ export function updateChatMessage<T extends GlobalState>(
   }
 
   if (message && messageUpdate.isMediaUnread === false && hasMessageTtl(message)) {
-    if (message.content.voice) {
+    if (message.content?.voice) {
       messageUpdate.content = {
         action: {
           mediaType: 'action',
@@ -220,7 +220,7 @@ export function updateChatMessage<T extends GlobalState>(
           isVoice: true,
         },
       };
-    } else if (message.content.video?.isRound) {
+    } else if (message.content?.video?.isRound) {
       messageUpdate.content = {
         action: {
           mediaType: 'action',
