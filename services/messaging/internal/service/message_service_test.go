@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -520,19 +521,14 @@ func TestDeleteMessage_AdminCanDelete(t *testing.T) {
 	rec := &RecordingPublisher{}
 
 	cs := &mockChatStore{
-		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
-			return true, "admin", nil
-		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{adminID.String(), authorID.String()}, nil
 		},
 	}
 	ms := &mockMessageStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
-			content := "to delete"
-			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &authorID, Content: &content}, nil
+		softDeleteAuthorizedFn: func(_ context.Context, mid, uid uuid.UUID) (uuid.UUID, int, error) {
+			return chatID, 1, nil
 		},
-		softDeleteFn: func(_ context.Context, _ uuid.UUID) error { return nil },
 	}
 
 	svc := newTestMessageService(ms, cs, rec, nil)
@@ -543,21 +539,14 @@ func TestDeleteMessage_AdminCanDelete(t *testing.T) {
 }
 
 func TestDeleteMessage_MemberCannotDeleteOthers(t *testing.T) {
-	authorID := uuid.New()
 	memberID := uuid.New()
-	chatID := uuid.New()
 	msgID := uuid.New()
 	rec := &RecordingPublisher{}
 
-	cs := &mockChatStore{
-		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
-			return true, "member", nil
-		},
-	}
+	cs := &mockChatStore{}
 	ms := &mockMessageStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
-			content := "someone's msg"
-			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &authorID, Content: &content}, nil
+		softDeleteAuthorizedFn: func(_ context.Context, _, _ uuid.UUID) (uuid.UUID, int, error) {
+			return uuid.Nil, 0, fmt.Errorf("forbidden")
 		},
 	}
 

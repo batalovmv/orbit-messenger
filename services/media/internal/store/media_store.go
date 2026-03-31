@@ -145,9 +145,11 @@ func (s *MediaStore) DeleteByUploader(ctx context.Context, id, uploaderID uuid.U
 		id, uploaderID,
 	).Scan(&r2Key, &thumbKey, &medKey)
 	if err == pgx.ErrNoRows {
-		// Distinguish "not found" from "not uploader"
+		// Distinguish "not found" from "not uploader" — single atomic check
 		var exists bool
-		_ = s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media WHERE id = $1)`, id).Scan(&exists)
+		if scanErr := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM media WHERE id = $1)`, id).Scan(&exists); scanErr != nil {
+			return "", nil, nil, fmt.Errorf("check media existence %s: %w", id, scanErr)
+		}
 		if exists {
 			return "", nil, nil, model.ErrNotUploader
 		}

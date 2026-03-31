@@ -126,8 +126,9 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 	// Atomically claim the invite slot BEFORE creating the user.
 	// UseInvite uses WHERE use_count < max_uses — if two requests race,
 	// only one will succeed; the other gets ErrNoRows.
-	// Skipping pre-check GetByEmail to avoid TOCTOU race — DB unique constraint handles it.
-	if err := s.invites.UseInvite(ctx, code, uuid.Nil, email); err != nil {
+	// Returns the authoritative role from the locked row (not the stale snapshot).
+	atomicRole, err := s.invites.UseInvite(ctx, code, uuid.Nil, email)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, apperror.BadRequest("Invalid or expired invite code")
 		}
@@ -143,7 +144,7 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		Email:        email,
 		PasswordHash: string(hash),
 		DisplayName:  displayName,
-		Role:         inv.Role,
+		Role:         atomicRole,
 		InvitedBy:    inv.CreatedBy,
 		InviteCode:   &code,
 	}
@@ -175,19 +176,26 @@ func (s *AuthService) Logout(ctx context.Context, tokenStr, refreshToken string)
 	}
 
 	exp, _ := claims.GetExpirationTime()
+	// Fail-closed: always blacklist the token. If exp is missing or already past,
+	// use a minimum TTL of 1 second so the Redis key is written (and immediately expires).
+	ttl := time.Second
 	if exp != nil {
-		ttl := time.Until(exp.Time)
-		if ttl > 0 {
-			hash := hashToken(tokenStr)
-			if err := s.redis.Set(ctx, "jwt_blacklist:"+hash, "1", ttl).Err(); err != nil {
-				slog.Error("failed to blacklist token in Redis", "error", err)
-				return fmt.Errorf("failed to blacklist token: %w", err)
-			}
+		remaining := time.Until(exp.Time)
+		if remaining > ttl {
+			ttl = remaining
 		}
 	}
+	hash := hashToken(tokenStr)
+	if err := s.redis.Set(ctx, "jwt_blacklist:"+hash, "1", ttl).Err(); err != nil {
+		slog.Error("failed to blacklist token in Redis", "error", err)
+		return fmt.Errorf("failed to blacklist token: %w", err)
+	}
 
-	// Delete the refresh session from DB so the token cannot be reused
-	if refreshToken != "" {
+	// Delete the refresh session from DB so the token cannot be reused.
+	// Require refresh token to prevent partial logout (access blacklisted but refresh still active).
+	if refreshToken == "" {
+		slog.Warn("logout called without refresh token, session not revoked", "token_hash", hash)
+	} else {
 		refreshHash := hashToken(refreshToken)
 		if err := s.sessions.DeleteByTokenHash(ctx, refreshHash); err != nil {
 			slog.Error("failed to delete refresh session on logout", "error", err)

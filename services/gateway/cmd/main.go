@@ -59,6 +59,7 @@ func main() {
 	// WebSocket Hub
 	hub := ws.NewHub()
 	wsHandler := ws.NewHandler(hub, nc)
+	defer wsHandler.Close()
 
 	// NATS Subscriber
 	internalSecret := config.MustEnv("INTERNAL_SECRET")

@@ -81,6 +81,22 @@ func NewLinkPreviewService(rdb *redis.Client, logger *slog.Logger) *LinkPreviewS
 	}
 }
 
+// CheckRateLimit enforces a per-user rate limit for link previews (30 req/min).
+// Returns true if the request is allowed, false if rate limited.
+func (s *LinkPreviewService) CheckRateLimit(ctx context.Context, userID string) bool {
+	key := fmt.Sprintf("ratelimit:linkpreview:%s", userID)
+	count, err := s.redis.Incr(ctx, key).Result()
+	if err != nil {
+		// Fail-closed: deny on Redis error
+		s.logger.Error("link preview rate limit Redis error", "error", err)
+		return false
+	}
+	if count == 1 {
+		s.redis.Expire(ctx, key, 60*time.Second)
+	}
+	return count <= 30
+}
+
 func (s *LinkPreviewService) FetchPreview(ctx context.Context, rawURL string) (*LinkPreview, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

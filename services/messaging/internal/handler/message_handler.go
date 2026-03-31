@@ -433,8 +433,13 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 }
 
 func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {
-	if _, err := getUserID(c); err != nil {
+	uid, err := getUserID(c)
+	if err != nil {
 		return response.Error(c, err)
+	}
+
+	if !h.linkPreviewSvc.CheckRateLimit(c.Context(), uid.String()) {
+		return response.Error(c, apperror.TooManyRequests("Link preview rate limit exceeded"))
 	}
 
 	rawURL := c.Query("url")

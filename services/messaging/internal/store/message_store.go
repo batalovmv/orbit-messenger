@@ -22,6 +22,9 @@ type MessageStore interface {
 	FindByChatAndDate(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
 	Update(ctx context.Context, msg *model.Message) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
+	// SoftDeleteAuthorized atomically checks author/admin permission and soft-deletes.
+	// Returns (chatID, sequenceNumber, error). Uses apperror for not-found/forbidden.
+	SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error)
 	ListPinned(ctx context.Context, chatID uuid.UUID) ([]model.Message, error)
 	Pin(ctx context.Context, chatID, msgID uuid.UUID) error
 	Unpin(ctx context.Context, chatID, msgID uuid.UUID) error
@@ -256,6 +259,45 @@ func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		`UPDATE messages SET is_deleted = true, content = NULL, entities = NULL WHERE id = $1`, id,
 	)
 	return err
+}
+
+// SoftDeleteAuthorized atomically verifies the user is either the message author
+// or an admin/owner of the chat, then soft-deletes the message in a single query.
+func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error) {
+	var chatID uuid.UUID
+	var seqNum int
+	err := s.pool.QueryRow(ctx,
+		`UPDATE messages m SET is_deleted = true, content = NULL, entities = NULL
+		 WHERE m.id = $1 AND m.is_deleted = false
+		 AND (
+		     m.sender_id = $2
+		     OR EXISTS (
+		         SELECT 1 FROM chat_members cm
+		         WHERE cm.chat_id = m.chat_id AND cm.user_id = $2
+		         AND cm.role IN ('owner', 'admin')
+		     )
+		 )
+		 RETURNING m.chat_id, m.sequence_number`,
+		msgID, userID,
+	).Scan(&chatID, &seqNum)
+	if err == pgx.ErrNoRows {
+		// Distinguish "not found" from "forbidden"
+		var exists bool
+		if scanErr := s.pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1 AND is_deleted = false)`, msgID,
+		).Scan(&exists); scanErr != nil {
+			return uuid.Nil, 0, fmt.Errorf("check message existence: %w", scanErr)
+		}
+		if !exists {
+			return uuid.Nil, 0, pgx.ErrNoRows // message not found or already deleted
+		}
+		// Message exists but user has no permission
+		return uuid.Nil, 0, fmt.Errorf("forbidden")
+	}
+	if err != nil {
+		return uuid.Nil, 0, fmt.Errorf("soft delete authorized: %w", err)
+	}
+	return chatID, seqNum, nil
 }
 
 func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]model.Message, error) {

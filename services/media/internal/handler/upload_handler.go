@@ -186,7 +186,9 @@ func (h *UploadHandler) ChunkedComplete(c *fiber.Ctx) error {
 	var req struct {
 		IsOneTime bool `json:"is_one_time"`
 	}
-	c.BodyParser(&req) // optional body
+	if err := c.BodyParser(&req); err != nil && len(c.Body()) > 0 {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
 
 	media, err := h.svc.CompleteChunkedUpload(c.Context(), uploadID, uid, req.IsOneTime)
 	if err != nil {

@@ -521,10 +521,13 @@ func (s *MediaService) UploadChunk(ctx context.Context, uploadID string, uploade
 
 	key := chunkedKeyPrefix + uploadID
 
-	// Read meta
+	// Read meta — fail-closed: Redis errors must not be treated as "not found"
 	raw, err := s.rdb.Get(ctx, key).Bytes()
-	if err != nil {
+	if err == redis.Nil {
 		return 0, 0, model.ErrUploadNotFound
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("redis get chunked meta: %w", err)
 	}
 
 	var meta model.ChunkedUploadMeta

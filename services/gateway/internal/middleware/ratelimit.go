@@ -70,7 +70,9 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 			} else {
 				// Safety: key has no TTL (shouldn't happen with Lua), set a sane default
 				c.Set("Retry-After", strconv.Itoa(windowSec))
-				cfg.Redis.Expire(ctx, key, time.Duration(windowSec)*time.Second)
+				if expErr := cfg.Redis.Expire(ctx, key, time.Duration(windowSec)*time.Second).Err(); expErr != nil {
+					slog.Error("rate limiter: failed to set TTL, key may persist indefinitely", "key", key, "error", expErr)
+				}
 			}
 			return response.Error(c, apperror.TooManyRequests("Rate limit exceeded"))
 		}

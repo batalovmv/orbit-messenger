@@ -14,7 +14,7 @@ type InviteStore interface {
 	GetByCode(ctx context.Context, code string) (*model.Invite, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Invite, error)
 	ListAll(ctx context.Context) ([]model.Invite, error)
-	UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) error
+	UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) (string, error)
 	// RollbackUsage decrements use_count for a failed registration (best-effort).
 	RollbackUsage(ctx context.Context, code string) error
 	Revoke(ctx context.Context, id uuid.UUID, createdBy uuid.UUID) error
@@ -95,23 +95,27 @@ func (s *inviteStore) ListAll(ctx context.Context) ([]model.Invite, error) {
 	return invites, rows.Err()
 }
 
-func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) error {
+func (s *inviteStore) UseInvite(ctx context.Context, code string, userID uuid.UUID, email string) (string, error) {
 	// Don't write used_by here — it will be set by UpdateUsedBy after user creation.
 	// This avoids stomping used_by with uuid.Nil on multi-use invites.
-	tag, err := s.pool.Exec(ctx,
+	// RETURNING role ensures we use the authoritative role from the locked row,
+	// not a stale snapshot from a prior GetByCode read.
+	var role string
+	err := s.pool.QueryRow(ctx,
 		`UPDATE invites SET use_count = use_count + 1, used_at = now()
 		 WHERE code = $1 AND is_active = true AND use_count < max_uses
 		 AND (expires_at IS NULL OR expires_at > now())
-		 AND (email IS NULL OR email = $2)`,
+		 AND (email IS NULL OR email = $2)
+		 RETURNING role`,
 		code, email,
-	)
+	).Scan(&role)
+	if err == pgx.ErrNoRows {
+		return "", pgx.ErrNoRows
+	}
 	if err != nil {
-		return err
+		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return pgx.ErrNoRows
-	}
-	return nil
+	return role, nil
 }
 
 func (s *inviteStore) RollbackUsage(ctx context.Context, code string) error {

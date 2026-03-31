@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
@@ -129,6 +130,17 @@ func main() {
 			LastSeen string `json:"last_seen,omitempty"`
 		}
 		if err := json.Unmarshal(event.Data, &sd); err != nil {
+			return
+		}
+		// Validate user_id is a valid UUID
+		if _, err := uuid.Parse(sd.UserID); err != nil {
+			slog.Warn("invalid user_id in status event", "user_id", sd.UserID)
+			return
+		}
+		// Validate status against allowed enum values
+		validStatuses := map[string]bool{"online": true, "offline": true, "away": true, "dnd": true}
+		if !validStatuses[sd.Status] {
+			slog.Warn("invalid status in status event", "status", sd.Status, "user_id", sd.UserID)
 			return
 		}
 		var lastSeen *time.Time

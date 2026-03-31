@@ -98,6 +98,7 @@ func TestSearchUsers_EmptyQuery_ReturnsAllUsers(t *testing.T) {
 
 	app := newUserApp(us)
 	req, _ := http.NewRequest(http.MethodGet, "/users", nil) // no ?q= → returns all users
+	req.Header.Set("X-User-ID", uuid.New().String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {

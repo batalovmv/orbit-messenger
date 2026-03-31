@@ -188,7 +188,8 @@ type mockMessageStore struct {
 	listByChatFn       func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error)
 	findByChatAndDateFn func(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
 	updateFn           func(ctx context.Context, msg *model.Message) error
-	softDeleteFn       func(ctx context.Context, id uuid.UUID) error
+	softDeleteFn           func(ctx context.Context, id uuid.UUID) error
+	softDeleteAuthorizedFn func(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error)
 	listPinnedFn       func(ctx context.Context, chatID uuid.UUID) ([]model.Message, error)
 	pinFn              func(ctx context.Context, chatID, msgID uuid.UUID) error
 	unpinFn            func(ctx context.Context, chatID, msgID uuid.UUID) error
@@ -240,6 +241,12 @@ func (m *mockMessageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return m.softDeleteFn(ctx, id)
 	}
 	return nil
+}
+func (m *mockMessageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error) {
+	if m.softDeleteAuthorizedFn != nil {
+		return m.softDeleteAuthorizedFn(ctx, msgID, userID)
+	}
+	return uuid.Nil, 0, nil
 }
 func (m *mockMessageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]model.Message, error) {
 	if m.listPinnedFn != nil {

@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
@@ -202,42 +204,27 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 }
 
 func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.UUID) error {
-	msg, err := s.messages.GetByID(ctx, msgID)
+	// Atomic ownership check + soft delete to prevent TOCTOU race
+	chatID, seqNum, err := s.messages.SoftDeleteAuthorized(ctx, msgID, userID)
 	if err != nil {
-		return fmt.Errorf("get message: %w", err)
-	}
-	if msg == nil {
-		return apperror.NotFound("Message not found")
-	}
-
-	// Check: author or chat admin (per TZ spec)
-	isAuthor := msg.SenderID != nil && *msg.SenderID == userID
-	if !isAuthor {
-		isMember, role, err := s.chats.IsMember(ctx, msg.ChatID, userID)
-		if err != nil {
-			return fmt.Errorf("check membership: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return apperror.NotFound("Message not found")
 		}
-		if !isMember {
-			return apperror.Forbidden("Not a member of this chat")
-		}
-		if role != "owner" && role != "admin" {
+		if err.Error() == "forbidden" {
 			return apperror.Forbidden("Only the author or chat admin can delete messages")
 		}
+		return fmt.Errorf("delete message: %w", err)
 	}
 
-	if err := s.messages.SoftDelete(ctx, msgID); err != nil {
-		return fmt.Errorf("soft delete: %w", err)
-	}
-
-	memberIDs, err := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
 	if err != nil {
-		slog.Error("failed to get member IDs for NATS publish", "chat_id", msg.ChatID, "error", err)
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	}
-	subject := fmt.Sprintf("orbit.chat.%s.message.deleted", msg.ChatID.String())
+	subject := fmt.Sprintf("orbit.chat.%s.message.deleted", chatID.String())
 	s.nats.Publish(subject, "message_deleted", map[string]interface{}{
 		"id":              msgID.String(),
-		"chat_id":         msg.ChatID.String(),
-		"sequence_number": msg.SequenceNumber,
+		"chat_id":         chatID.String(),
+		"sequence_number": seqNum,
 	}, memberIDs)
 
 	return nil

@@ -220,16 +220,16 @@ func (m *mockInviteStore) ListAll(_ context.Context) ([]model.Invite, error) {
 	return result, nil
 }
 
-func (m *mockInviteStore) UseInvite(_ context.Context, code string, userID uuid.UUID, email string) error {
+func (m *mockInviteStore) UseInvite(_ context.Context, code string, userID uuid.UUID, email string) (string, error) {
 	inv, ok := m.invites[code]
 	if !ok || !inv.IsActive || inv.UseCount >= inv.MaxUses {
-		return store.ErrNotFound
+		return "", store.ErrNotFound
 	}
 	inv.UseCount++
 	inv.UsedBy = &userID
 	now := time.Now()
 	inv.UsedAt = &now
-	return nil
+	return inv.Role, nil
 }
 
 func (m *mockInviteStore) RollbackUsage(_ context.Context, code string) error {
