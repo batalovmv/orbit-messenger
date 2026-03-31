@@ -208,6 +208,17 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
     },
   };
 
+  // Saturn: ensure all cached messages have content object (prevents TG Web A crashes)
+  if (newState.messages?.byChatId) {
+    for (const chatMessages of Object.values(newState.messages.byChatId)) {
+      if (chatMessages?.byId) {
+        for (const msg of Object.values(chatMessages.byId)) {
+          if (msg && !msg.content) msg.content = {};
+        }
+      }
+    }
+  }
+
   // Saturn: populate knownChatIds from cached state so isUserId() works
   // before fresh API data arrives. Store on window to avoid circular chunk deps.
   if (newState.chats?.byId) {
@@ -804,6 +815,7 @@ function omitLocalPaidReactions(message: ApiMessage): ApiMessage {
 }
 
 function omitLocalMedia(message: ApiMessage): ApiMessage {
+  if (!message.content) message.content = {};
   const {
     photo, video, document, sticker,
   } = message.content;

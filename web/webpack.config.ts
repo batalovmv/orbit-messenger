@@ -41,15 +41,14 @@ const {
 
 const CSP = `
   default-src 'self';
-  connect-src 'self' wss://*.web.telegram.org wss://*.saturn.ac blob: http: https: ws: wss: ${APP_ENV === 'development' ? 'ipc:' : ''};
-  script-src 'self' 'wasm-unsafe-eval' https://t.me/_websync_ https://telegram.me/_websync_;
+  connect-src 'self' wss://*.saturn.ac blob: http: https: ws: wss: ${APP_ENV === 'development' ? 'ipc:' : ''};
+  script-src 'self' 'wasm-unsafe-eval';
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://ss3.4sqi.net/img/categories_v2/;
+  img-src 'self' data: blob:;
   media-src 'self' blob: data:;
   object-src 'none';
-  frame-src http: https:
-    bitkeep: bnc: bybitapp: echooo: imtokenv2: mytonwallet-tc:
-    nicegram-tc: safepal-tc: tonkeeper-pro-tc: tonkeeper-tc:;
+  frame-src 'self' http: https:;
+  worker-src 'self' blob:;
   base-uri 'none';
   form-action 'none';`
   .replace(/\s+/g, ' ').trim();
