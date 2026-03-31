@@ -224,6 +224,12 @@ function getPluralOption(amount: number) {
 
 function processTemplate(template: string, value: any) {
   value = Array.isArray(value) ? value : [value];
+
+  // Support {count} placeholders from fallback.strings (new lang format)
+  if (template.includes('{count}')) {
+    return template.replace(/\{count\}/g, String(value[0] ?? ''));
+  }
+
   const translationSlices = template.split(SUBSTITUTION_REGEX);
   const initialValue = translationSlices.shift();
 

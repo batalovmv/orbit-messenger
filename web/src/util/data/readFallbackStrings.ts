@@ -34,7 +34,7 @@ export default async function readFallbackStrings(forLocalScript?: boolean): Pro
 
     const clearKey = key.slice(0, lastUnderscore);
     const knownValue = (strings[clearKey] || {}) as LangPackStringValuePlural;
-    knownValue[suffix as keyof LangPackStringValuePlural] = value.replace(/\{count\}/g, '%1$d');
+    knownValue[suffix as keyof LangPackStringValuePlural] = value;
     strings[clearKey] = knownValue;
   });
 
