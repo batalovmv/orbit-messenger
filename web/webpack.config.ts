@@ -261,20 +261,8 @@ export default function createConfig(
         open: false,
         extensions: [new WebpackContextExtension()],
       }),
-      ...(mode === 'production' ? [new WebpackObfuscator({
-        rotateStringArray: true,
-        stringArray: true,
-        stringArrayThreshold: 0.75,
-        stringArrayEncoding: ['base64'],
-        splitStrings: false,
-        identifierNamesGenerator: 'hexadecimal',
-        renameGlobals: false,
-        selfDefending: false,
-        debugProtection: false,
-        disableConsoleOutput: true,
-        transformObjectKeys: false,
-        unicodeEscapeSequence: false,
-      }, ['**/vendor/**', '**/node_modules/**', '**/rlottie/**', '**/worker*'])] : []),
+      // WebpackObfuscator disabled — causes rlottie-wasm worker hash mismatches
+      // and is unnecessary for a corporate messenger
       new WatchFilePlugin({
         rules: [
           {
