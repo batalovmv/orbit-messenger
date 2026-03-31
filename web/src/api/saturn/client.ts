@@ -248,9 +248,11 @@ function scheduleReconnect() {
   if (wsReconnectTimeout) return;
   // Add ±25% jitter to avoid thundering herd on reconnect
   const jitter = wsReconnectDelay * (0.75 + Math.random() * 0.5);
-  wsReconnectTimeout = setTimeout(() => {
+  wsReconnectTimeout = setTimeout(async () => {
     wsReconnectTimeout = undefined;
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX_MS);
+    // Ensure token is valid before attempting WS reconnect
+    await ensureToken();
     connectWs();
   }, jitter);
 }

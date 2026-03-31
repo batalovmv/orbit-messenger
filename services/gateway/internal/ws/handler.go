@@ -35,6 +35,8 @@ type Handler struct {
 	typingMu       sync.Mutex
 	typingDebounce map[string]time.Time   // key: chatID+userID -> last broadcast
 	typingTimers   map[string]*time.Timer // key: chatID+userID -> auto stop_typing timer
+
+	done chan struct{}
 }
 
 func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
@@ -43,10 +45,16 @@ func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
 		NATS:           nc,
 		typingDebounce: make(map[string]time.Time),
 		typingTimers:   make(map[string]*time.Timer),
+		done:           make(chan struct{}),
 	}
 	// Periodically clean stale typing entries (#13 memory leak fix)
 	go h.typingCleanupLoop()
 	return h
+}
+
+// Close stops the typingCleanupLoop goroutine.
+func (h *Handler) Close() {
+	close(h.done)
 }
 
 // Upgrade returns a Fiber handler that upgrades to WebSocket.
@@ -98,14 +106,21 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 			done:   make(chan struct{}),
 		}
 
+		isFirstConnection := !h.Hub.IsOnline(uid)
 		h.Hub.Register(conn)
 		defer func() {
 			h.Hub.Unregister(conn)
 			close(conn.done)
-			h.publishStatusChange(uid, "offline")
+			// Only publish "offline" if this was the last connection for this user
+			if !h.Hub.IsOnline(uid) {
+				h.publishStatusChange(uid, "offline")
+			}
 		}()
 
-		h.publishStatusChange(uid, "online")
+		// Only publish "online" if this is the first connection for this user
+		if isFirstConnection {
+			h.publishStatusChange(uid, "online")
+		}
 
 		// Set pong handler
 		c.SetPongHandler(func(string) error {
@@ -283,15 +298,20 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 func (h *Handler) typingCleanupLoop() {
 	ticker := time.NewTicker(typingCleanup)
 	defer ticker.Stop()
-	for range ticker.C {
-		h.typingMu.Lock()
-		now := time.Now()
-		for k, v := range h.typingDebounce {
-			if now.Sub(v) > typingCleanup {
-				delete(h.typingDebounce, k)
+	for {
+		select {
+		case <-ticker.C:
+			h.typingMu.Lock()
+			now := time.Now()
+			for k, v := range h.typingDebounce {
+				if now.Sub(v) > typingCleanup {
+					delete(h.typingDebounce, k)
+				}
 			}
+			h.typingMu.Unlock()
+		case <-h.done:
+			return
 		}
-		h.typingMu.Unlock()
 	}
 }
 
