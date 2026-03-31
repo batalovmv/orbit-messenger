@@ -131,14 +131,6 @@ function createLangFn() {
     // (fallback.strings uses "LastSeenJustNow" but code uses "LastSeen.JustNow")
     const langString = langPack?.[key] || (key.includes('.') ? langPack?.[key.replace(/\./g, '')] : undefined);
     if (!langString) {
-      // DEBUG: log missing keys to identify translation gaps
-      if (key === 'GroupInfoTitle' || key === 'Channel.TitleInfo') {
-        // eslint-disable-next-line no-console
-        console.warn('[oldLangProvider] key NOT FOUND:', key, {
-          langPackLoaded: !!langPack,
-          langPackSize: langPack ? Object.keys(langPack).length : 0,
-        });
-      }
       return key;
     }
 
@@ -184,16 +176,6 @@ export async function oldSetLanguage(langCode: LangCode, callback?: NoneToVoidFu
 
   currentLangCode = langCode;
   langPack = newLangPack;
-
-  // DEBUG: verify langPack loaded correctly
-  // eslint-disable-next-line no-console
-  console.log('[oldLangProvider] langPack loaded', {
-    langCode,
-    keyCount: Object.keys(newLangPack).length,
-    hasGroupInfoTitle: 'GroupInfoTitle' in newLangPack,
-    groupInfoTitleValue: newLangPack.GroupInfoTitle,
-    sampleKeys: Object.keys(newLangPack).slice(0, 10),
-  });
   document.documentElement.lang = langCode;
 
   const global = getGlobal();
@@ -245,9 +227,10 @@ function getPluralOption(amount: number) {
 function processTemplate(template: string, value: any) {
   value = Array.isArray(value) ? value : [value];
 
-  // Support {count} placeholders from fallback.strings (new lang format)
-  if (template.includes('{count}')) {
-    return template.replace(/\{count\}/g, String(value[0] ?? ''));
+  // Support named {placeholder} tokens from fallback.strings (e.g. {count}, {time}, {date})
+  if (/\{[a-z]+\}/i.test(template)) {
+    let i = 0;
+    return template.replace(/\{[a-z]+\}/gi, () => String(value[i++] ?? ''));
   }
 
   const translationSlices = template.split(SUBSTITUTION_REGEX);
