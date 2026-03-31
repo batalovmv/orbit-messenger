@@ -275,7 +275,7 @@ export default function createConfig(
         disableConsoleOutput: true,
         transformObjectKeys: true,
         unicodeEscapeSequence: false,
-      }, ['**/vendor/**', '**/node_modules/**'])] : []),
+      }, ['**/vendor/**', '**/node_modules/**', '**/rlottie/**'])] : []),
       new WatchFilePlugin({
         rules: [
           {
