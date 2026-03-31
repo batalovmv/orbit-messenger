@@ -90,6 +90,16 @@ export interface SaturnMediaAttachment {
   processing_status: string;
 }
 
+export interface SaturnSharedMediaItem {
+  message_id: string;
+  sequence_number: number;
+  chat_id: string;
+  sender_id: string;
+  content?: string;
+  created_at: string;
+  attachment: SaturnMediaAttachment;
+}
+
 export interface SaturnChatMember {
   chat_id: string;
   user_id: string;

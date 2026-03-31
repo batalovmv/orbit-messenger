@@ -382,7 +382,7 @@ export {
 export {
   deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
   fetchPinnedMessages, forwardMessages, markMessageListRead,
-  pinMessage, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
+  pinMessage, searchMessagesInChat, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
 } from './messages';
 
 export { fetchDifference } from './sync';

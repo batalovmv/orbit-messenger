@@ -30,7 +30,7 @@ type MessageStore interface {
 	CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error)
 	// Media
 	GetMediaByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.MediaAttachment, error)
-	ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error)
+	ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error)
 }
 
 type messageStore struct {

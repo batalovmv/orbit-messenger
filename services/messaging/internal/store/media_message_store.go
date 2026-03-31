@@ -142,7 +142,8 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 }
 
 // ListSharedMedia returns media from a specific chat, optionally filtered by type.
-func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error) {
+// Each item includes the parent message context so the frontend can build full ApiMessage objects.
+func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 20
 	}
@@ -163,12 +164,14 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 		SELECT m.id, m.type, m.mime_type, m.original_filename,
 			m.size_bytes, m.r2_key, m.thumbnail_r2_key, m.medium_r2_key,
 			m.width, m.height, m.duration_seconds, m.waveform_data,
-			m.processing_status, m.created_at
+			m.processing_status, m.created_at,
+			msg.id, msg.sequence_number, msg.sender_id, msg.chat_id, msg.content
 		FROM media m
 		JOIN message_media mm ON mm.media_id = m.id
 		JOIN messages msg ON msg.id = mm.message_id
 		WHERE msg.chat_id = $1 AND msg.is_deleted = false
-		  AND ($2::text IS NULL OR $2 = '' OR m.type = $2)
+		  AND ($2::text IS NULL OR $2 = '' OR m.type = $2
+		       OR ($2 = 'media' AND m.type IN ('photo', 'video')))
 		  AND ($3::timestamptz IS NULL OR m.created_at < $3)
 		ORDER BY m.created_at DESC
 		LIMIT $4`
@@ -179,7 +182,7 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 	}
 	defer rows.Close()
 
-	var items []model.MediaAttachment
+	var items []model.SharedMediaItem
 	var timestamps []time.Time
 	for rows.Next() {
 		var (
@@ -197,12 +200,18 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 			waveform    []byte
 			procStatus  string
 			createdAt   time.Time
+			msgID       uuid.UUID
+			seqNum      int64
+			senderID    uuid.UUID
+			msgChatID   uuid.UUID
+			msgContent  *string
 		)
 		if err := rows.Scan(
 			&mediaID, &mType, &mimeType, &filename,
 			&sizeBytes, &r2Key, &thumbKey, &mediumKey,
 			&width, &height, &duration, &waveform,
 			&procStatus, &createdAt,
+			&msgID, &seqNum, &senderID, &msgChatID, &msgContent,
 		); err != nil {
 			return nil, "", false, fmt.Errorf("scan shared media: %w", err)
 		}
@@ -221,7 +230,19 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 		if filename != nil {
 			att.OriginalFilename = *filename
 		}
-		items = append(items, att)
+		content := ""
+		if msgContent != nil {
+			content = *msgContent
+		}
+		items = append(items, model.SharedMediaItem{
+			MessageID:      msgID.String(),
+			SequenceNumber: seqNum,
+			ChatID:         msgChatID.String(),
+			SenderID:       senderID.String(),
+			Content:        content,
+			CreatedAt:      createdAt,
+			Attachment:     att,
+		})
 		timestamps = append(timestamps, createdAt)
 	}
 

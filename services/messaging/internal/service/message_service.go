@@ -553,7 +553,7 @@ func (s *MessageService) EnrichMessagesMedia(ctx context.Context, msgs []model.M
 }
 
 // ListSharedMedia returns media in a chat, optionally filtered by type.
-func (s *MessageService) ListSharedMedia(ctx context.Context, chatID, userID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error) {
+func (s *MessageService) ListSharedMedia(ctx context.Context, chatID, userID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {
 		return nil, "", false, fmt.Errorf("check membership: %w", err)

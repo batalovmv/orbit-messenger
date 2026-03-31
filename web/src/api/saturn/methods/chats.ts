@@ -339,16 +339,25 @@ export async function toggleSlowMode({ chatId, seconds }: { chatId: string; seco
   await client.request('POST', `/chats/${chatId}/slow-mode`, { seconds });
 }
 
-export async function fetchChatInviteImporters({ chatId }: { chatId: string }) {
-  const data = await client.request<any[]>('GET', `/chats/${chatId}/join-requests`);
-  return data;
+export async function fetchChatInviteImporters({ peer }: {
+  peer: ApiChat; link?: string; offsetDate?: number; offsetUser?: ApiUser; limit?: number; isRequested?: boolean;
+}) {
+  const data = await client.request<any[]>('GET', `/chats/${peer.id}/join-requests`);
+  return {
+    importers: (data || []).map((item: any) => ({
+      userId: item.userId || item.user_id,
+      date: item.date,
+      about: item.about,
+    })),
+  };
 }
 
-export async function hideChatJoinRequest({ chatId, userId, isApproved }: {
-  chatId: string; userId: string; isApproved: boolean;
+export async function hideChatJoinRequest({ peer, user, isApproved }: {
+  peer: ApiChat; user: ApiUser; isApproved: boolean;
 }) {
   const action = isApproved ? 'approve' : 'reject';
-  await client.request('POST', `/chats/${chatId}/join-requests/${userId}/${action}`);
+  await client.request('POST', `/chats/${peer.id}/join-requests/${user.id}/${action}`);
+  return true;
 }
 
 export async function getChatMembers({

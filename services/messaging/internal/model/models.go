@@ -105,6 +105,18 @@ type MediaAttachment struct {
 	ProcessingStatus string   `json:"processing_status"`
 }
 
+// SharedMediaItem wraps a MediaAttachment with the parent message context,
+// so the frontend can build full ApiMessage objects for the shared media gallery.
+type SharedMediaItem struct {
+	MessageID       string          `json:"message_id"`
+	SequenceNumber  int64           `json:"sequence_number"`
+	ChatID          string          `json:"chat_id"`
+	SenderID        string          `json:"sender_id"`
+	Content         string          `json:"content,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	Attachment      MediaAttachment `json:"attachment"`
+}
+
 type InviteLink struct {
 	ID               uuid.UUID  `json:"id"`
 	ChatID           uuid.UUID  `json:"chat_id"`

@@ -288,7 +288,7 @@ func (m *mockMessageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs 
 	return nil, nil
 }
 
-func (m *mockMessageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.MediaAttachment, string, bool, error) {
+func (m *mockMessageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {
 	return nil, "", false, nil
 }
 

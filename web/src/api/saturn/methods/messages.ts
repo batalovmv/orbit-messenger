@@ -1,5 +1,5 @@
-import type { ApiAttachment, ApiMessage, ApiMessageEntity, ApiSendMessageAction } from '../../types';
-import type { SaturnMessage, SaturnPaginatedResponse } from '../types';
+import type { ApiAttachment, ApiMessage, ApiMessageEntity, ApiPeer, ApiSendMessageAction } from '../../types';
+import type { SaturnMessage, SaturnPaginatedResponse, SaturnSharedMediaItem } from '../types';
 
 import { buildApiMessage, buildSaturnEntities, getMessageUuid } from '../apiBuilders/messages';
 import * as client from '../client';
@@ -507,4 +507,100 @@ export function sendMessageAction({
   } else {
     client.sendWsMessage('typing', { chat_id: peer.id });
   }
+}
+
+// Map TG Web A shared media types to Saturn backend media types
+const SHARED_MEDIA_TYPE_MAP: Record<string, string> = {
+  media: 'media', // backend handles photo+video combo
+  documents: 'file',
+  voice: 'voice',
+  gif: 'gif',
+};
+
+// Store backend cursors keyed by chatId+type+offsetId so we can map
+// the numeric offsetId back to the opaque backend cursor string.
+const sharedMediaCursors = new Map<string, string>();
+
+export async function searchMessagesInChat({
+  peer, type, limit, offsetId,
+}: {
+  peer: ApiPeer;
+  type?: string;
+  limit: number;
+  threadId?: number;
+  offsetId?: number;
+  isSavedDialog?: boolean;
+}) {
+  const chatId = peer.id;
+  const saturnType = type ? SHARED_MEDIA_TYPE_MAP[type] : undefined;
+
+  // 'links' and 'audio' not supported by backend yet
+  if (type && !saturnType) {
+    return {
+      messages: [] as ApiMessage[],
+      totalCount: 0,
+      nextOffsetId: undefined,
+      userStatusesById: {},
+    };
+  }
+
+  const params = new URLSearchParams();
+  params.set('limit', String(limit));
+  if (saturnType) params.set('type', saturnType);
+
+  // Retrieve stored backend cursor for pagination
+  if (offsetId) {
+    const cursorKey = `${chatId}:${type || ''}:${offsetId}`;
+    const cursor = sharedMediaCursors.get(cursorKey);
+    if (cursor) params.set('cursor', cursor);
+  }
+
+  const result = await client.request<SaturnPaginatedResponse<SaturnSharedMediaItem>>(
+    'GET', `/chats/${chatId}/media?${params.toString()}`,
+  );
+
+  if (!result?.data) {
+    return undefined;
+  }
+
+  const messages: ApiMessage[] = result.data.map((item) => {
+    // Build a synthetic SaturnMessage so we can reuse buildApiMessage
+    const syntheticMsg: SaturnMessage = {
+      id: item.message_id,
+      chat_id: item.chat_id,
+      sender_id: item.sender_id,
+      type: 'text',
+      content: item.content,
+      is_edited: false,
+      is_deleted: false,
+      is_pinned: false,
+      is_forwarded: false,
+      sequence_number: item.sequence_number,
+      created_at: item.created_at,
+      sender_name: '',
+      media_attachments: [item.attachment],
+    };
+
+    const apiMsg = buildApiMessage(syntheticMsg);
+    if (currentUserId) {
+      apiMsg.isOutgoing = item.sender_id === currentUserId;
+    }
+    return apiMsg;
+  });
+
+  // Store the backend cursor for next page, keyed by the last message's sequence_number
+  let nextOffsetId: number | undefined;
+  if (result.has_more && result.data.length > 0 && result.cursor) {
+    const lastItem = result.data[result.data.length - 1];
+    nextOffsetId = lastItem.sequence_number;
+    const cursorKey = `${chatId}:${type || ''}:${nextOffsetId}`;
+    sharedMediaCursors.set(cursorKey, result.cursor);
+  }
+
+  return {
+    messages,
+    totalCount: messages.length + (result.has_more ? limit : 0),
+    nextOffsetId,
+    userStatusesById: {} as Record<string, any>,
+  };
 }
