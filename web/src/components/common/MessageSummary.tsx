@@ -122,7 +122,7 @@ export default memo(withGlobal<OwnProps>(
   (global, { message }): Complete<StateProps> => {
     const poll = selectPollFromMessage(global, message);
     const webPage = selectWebPageFromMessage(global, message);
-    const storyData = message.content.storyData;
+    const storyData = message.content?.storyData;
     const story = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
 
     return {

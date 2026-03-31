@@ -56,7 +56,7 @@ export async function preloadDocumentMedia(mediaContainer: ApiMessage) {
 
   let global = getGlobal();
   const message = selectChatMessage(global, mediaContainer.chatId, mediaContainer.id);
-  if (!message || !message.content.document) return;
+  if (!message || !message.content?.document) return;
   global = updateChatMessage(global, mediaContainer.chatId, mediaContainer.id, {
     content: {
       ...message.content,

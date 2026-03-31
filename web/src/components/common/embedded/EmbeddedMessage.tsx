@@ -216,7 +216,7 @@ const EmbeddedMessage = ({
   }
 
   function renderMediaContentType(media?: MediaContainer) {
-    if (!media || media.content.text) return NBSP;
+    if (!media || !media.content || media.content.text) return NBSP;
     const description = getMediaContentTypeDescription(lang, media.content, {});
     if (!description) return NBSP;
     return (
