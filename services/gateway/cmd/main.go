@@ -86,7 +86,7 @@ func main() {
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")
 	authRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 5, KeyPrefix: "auth",
+		Redis: rdb, MaxPerMin: 10, KeyPrefix: "auth",
 	})
 	authGroup.Use(authRateLimit)
 
@@ -97,13 +97,13 @@ func main() {
 		CacheTTL:       30 * time.Second,
 	})
 	apiRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 100, KeyPrefix: "api",
+		Redis: rdb, MaxPerMin: 600, KeyPrefix: "api",
 	})
 
 	// WebSocket endpoint — auth happens via first "auth" frame after connection,
 	// NOT via query param (tokens must not appear in URLs per TZ §8.1)
 	wsRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 60, KeyPrefix: "ws",
+		Redis: rdb, MaxPerMin: 10, KeyPrefix: "ws",
 	})
 	app.Use("/api/v1/ws", wsRateLimit, func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
@@ -115,14 +115,14 @@ func main() {
 
 	// Public endpoints (no JWT) — must be registered before apiGroup
 	inviteRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 60, KeyPrefix: "invite",
+		Redis: rdb, MaxPerMin: 20, KeyPrefix: "invite",
 	})
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
 
 	// Public media endpoints (no JWT) — presigned R2 URLs are self-authenticating.
 	// Used by <img src>, <video src>, <a href> which cannot send Authorization headers.
 	mediaRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 200, KeyPrefix: "media_pub",
+		Redis: rdb, MaxPerMin: 600, KeyPrefix: "media_pub",
 	})
 	app.Get("/api/v1/media/:id", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
 	app.Get("/api/v1/media/:id/thumbnail", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))

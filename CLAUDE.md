@@ -426,8 +426,11 @@ GET    /api/v1/users/me               # текущий пользователь 
 
 | Endpoint group | Лимит |
 |---------------|-------|
-| General API | 100 req/min/user |
-| Auth (login/register) | 5 req/min/IP |
+| General API | 600 req/min/user |
+| Auth (login/register) | 10 req/min/IP |
+| Media public (download) | 600 req/min/IP |
+| WebSocket upgrade | 10 req/min/IP |
+| Invite pages | 20 req/min/IP |
 | AI endpoints | 20 req/min/user |
 
 ## WebSocket конвенции
