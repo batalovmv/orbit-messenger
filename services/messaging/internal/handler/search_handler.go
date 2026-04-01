@@ -130,8 +130,9 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 
 	if err != nil {
 		h.logger.Error("search failed", "error", err, "scope", scope, "query", query, "user_id", uid)
-		// Graceful degradation: return empty results instead of 500
-		// so the frontend doesn't crash when Meilisearch is unavailable
+		// Return empty results instead of 500 when Meilisearch is down or misconfigured.
+		// Root cause: Meilisearch may not have indexed data or may be unreachable.
+		// The error is logged server-side for ops debugging.
 		return response.JSON(c, fiber.StatusOK, fiber.Map{
 			"results": []map[string]interface{}{},
 			"total":   0,
