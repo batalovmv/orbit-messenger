@@ -65,10 +65,10 @@ func (s *SearchService) SearchMessages(
 
 	if chatID != nil {
 		// Extra scoping: only show messages from this specific chat (must still be in ACL list).
-		filters = append(filters, fmt.Sprintf("chat_id = %q", chatID.String()))
+		filters = append(filters, fmt.Sprintf("chat_id = '%s'", chatID.String()))
 	}
 	if fromUserID != nil {
-		filters = append(filters, fmt.Sprintf("sender_id = %q", fromUserID.String()))
+		filters = append(filters, fmt.Sprintf("sender_id = '%s'", fromUserID.String()))
 	}
 	if dateFrom != nil {
 		filters = append(filters, fmt.Sprintf("created_at_ts >= %d", dateFrom.Unix()))
@@ -77,7 +77,7 @@ func (s *SearchService) SearchMessages(
 		filters = append(filters, fmt.Sprintf("created_at_ts <= %d", dateTo.Unix()))
 	}
 	if msgType != nil {
-		filters = append(filters, fmt.Sprintf("type = %q", *msgType))
+		filters = append(filters, fmt.Sprintf("type = '%s'", *msgType))
 	}
 	if hasMedia != nil {
 		if *hasMedia {
@@ -178,7 +178,7 @@ func (s *SearchService) userChatIDs(ctx context.Context, userID uuid.UUID) ([]st
 			return nil, err
 		}
 		for _, c := range chats {
-			ids = append(ids, fmt.Sprintf("%q", c.ID.String()))
+			ids = append(ids, fmt.Sprintf("'%s'", c.ID.String()))
 		}
 		if !hasMore || len(ids) >= maxChats {
 			break
