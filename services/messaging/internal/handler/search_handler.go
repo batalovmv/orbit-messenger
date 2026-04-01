@@ -35,8 +35,8 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 	}
 
 	query := c.Query("q")
-	if len(query) < 2 {
-		return response.Error(c, apperror.BadRequest("query must be at least 2 characters"))
+	if len([]rune(query)) < 1 {
+		return response.Error(c, apperror.BadRequest("query must not be empty"))
 	}
 
 	scope := c.Query("scope", "messages")
