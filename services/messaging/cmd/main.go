@@ -111,12 +111,13 @@ func main() {
 	if meiliKey != "" {
 		mc, err := search.NewMeilisearchClient(meiliURL, meiliKey)
 		if err != nil {
-			slog.Error("failed to init meilisearch", "error", err)
-			os.Exit(1)
+			slog.Error("meilisearch init failed, search disabled", "error", err)
+			searchClient = search.NewNoopSearchClient()
+		} else {
+			meiliClient = mc
+			searchClient = mc
+			slog.Info("meilisearch connected", "url", meiliURL)
 		}
-		meiliClient = mc
-		searchClient = mc
-		slog.Info("meilisearch connected", "url", meiliURL)
 	} else {
 		searchClient = search.NewNoopSearchClient()
 		slog.Warn("meilisearch not configured, search will return empty results")

@@ -58,6 +58,13 @@ components:
       dockerfile: services/integrations/Dockerfile
     port: 8087
 
+  meilisearch:
+    resource: orbit-meilisearch
+    path: services/meilisearch/**
+    build:
+      dockerfile: services/meilisearch/Dockerfile
+    port: 7700
+
   web:
     resource: orbit-web
     path: web/**
