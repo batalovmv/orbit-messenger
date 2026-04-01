@@ -176,18 +176,6 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           {lang('MenuStickers')}
         </ListItem>
       </div>
-      <div className="settings-main-menu">
-        {canBuyPremium && (
-          <ListItem
-            icon="star"
-            narrow
-
-            onClick={() => openPremiumModal()}
-          >
-            {lang('TelegramPremium')}
-          </ListItem>
-        )}
-      </div>
       {isSaturnAdmin && (
         <div className="settings-main-menu">
           <ListItem
@@ -199,31 +187,6 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           </ListItem>
         </div>
       )}
-      <div className="settings-main-menu">
-        <ListItem
-          icon="ask-support"
-          narrow
-          onClick={openSupportDialog}
-        >
-          {lang('AskAQuestion')}
-        </ListItem>
-        <ListItem
-          icon="help"
-          narrow
-
-          onClick={() => openUrl({ url: FAQ_URL })}
-        >
-          {lang('MenuTelegramFaq')}
-        </ListItem>
-        <ListItem
-          icon="privacy-policy"
-          narrow
-
-          onClick={() => openUrl({ url: PRIVACY_URL })}
-        >
-          {lang('MenuPrivacyPolicy')}
-        </ListItem>
-      </div>
       <ConfirmDialog
         isOpen={isSupportDialogOpen}
         confirmLabel={lang('OK')}
