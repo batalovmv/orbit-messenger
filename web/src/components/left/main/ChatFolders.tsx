@@ -17,7 +17,6 @@ import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { captureEvents, SwipeDirection } from '../../../util/captureEvents';
 import { resolveTransitionName } from '../../../util/resolveTransitionName';
 
-import useDerivedState from '../../../hooks/useDerivedState';
 import useFolderTabs from '../../../hooks/useFolderTabs';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -25,7 +24,6 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useScrolledState from '../../../hooks/useScrolledState';
 import useShowTransition from '../../../hooks/useShowTransition';
 
-import StoryRibbon from '../../story/StoryRibbon';
 import TabList from '../../ui/TabList';
 import Transition from '../../ui/Transition';
 import ChatList from './ChatList';
@@ -49,9 +47,7 @@ type StateProps = {
   maxChatLists: number;
   maxFolderInvites: number;
   hasArchivedChats?: boolean;
-  hasArchivedStories?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
-  isStoryRibbonShown?: boolean;
 };
 
 const SAVED_MESSAGES_HOTKEY = '0';
@@ -72,9 +68,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   folderInvitesById,
   maxFolderInvites,
   hasArchivedChats,
-  hasArchivedStories,
   archiveSettings,
-  isStoryRibbonShown,
   isFoldersSidebarShown,
 }) => {
   const {
@@ -98,19 +92,8 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
     updateScrollState(activeList ?? undefined);
   }, [activeChatFolder, updateScrollState]);
 
-  const {
-    ref,
-    shouldRender: shouldRenderStoryRibbon,
-    getIsClosing: getIsStoryRibbonClosing,
-  } = useShowTransition({
-    isOpen: isStoryRibbonShown,
-    className: false,
-    withShouldRender: true,
-  });
-  const isStoryRibbonClosing = useDerivedState(getIsStoryRibbonClosing);
-
   const scrollToTop = useLastCallback(() => {
-    const activeList = ref.current?.querySelector<HTMLElement>('#LeftColumn .chat-list.Transition_slide-active');
+    const activeList = document.querySelector<HTMLElement>('#LeftColumn .chat-list.Transition_slide-active');
     activeList?.scrollTo({
       top: 0,
       behavior: 'smooth',
@@ -234,10 +217,9 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
         isForumPanelOpen={isForumPanelOpen}
         foldersDispatch={foldersDispatch}
         isMainList
-        canDisplayArchive={(hasArchivedChats || hasArchivedStories) && !archiveSettings.isHidden}
+        canDisplayArchive={hasArchivedChats && !archiveSettings.isHidden}
         archiveSettings={archiveSettings}
         isFoldersSidebarShown={isFoldersSidebarShown}
-        isStoryRibbonShown={isStoryRibbonShown}
         withTags
         onScroll={handleScroll}
       />
@@ -249,15 +231,12 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
   return (
     <div
-      ref={ref}
       className={buildClassName(
         'ChatFolders',
         shouldRenderFolders && shouldHideFolderTabs && 'ChatFolders--tabs-hidden',
-        shouldRenderStoryRibbon && 'with-story-ribbon',
         isFoldersSidebarShown && 'ChatFolders--tabs-sidebar-shown',
       )}
     >
-      {shouldRenderStoryRibbon && <StoryRibbon isClosing={isStoryRibbonClosing} />}
       {shouldRenderFolders ? (
         <TabList
           contextRootElementSelector="#LeftColumn"
@@ -294,17 +273,11 @@ export default memo(withGlobal<OwnProps>(
           archived,
         },
       },
-      stories: {
-        orderedPeerIds: {
-          archived: archivedStories,
-        },
-      },
       currentUserId,
       archiveSettings,
     } = global;
     const { animationLevel } = selectSharedSettings(global);
     const { shouldSkipHistoryAnimations, activeChatFolder } = selectTabState(global);
-    const { storyViewer: { isRibbonShown: isStoryRibbonShown } } = selectTabState(global);
 
     return {
       chatFoldersById,
@@ -315,12 +288,10 @@ export default memo(withGlobal<OwnProps>(
       animationLevel,
       shouldSkipHistoryAnimations,
       hasArchivedChats: Boolean(archived?.length),
-      hasArchivedStories: Boolean(archivedStories?.length),
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
       maxFolderInvites: selectCurrentLimit(global, 'chatlistInvites'),
       maxChatLists: selectCurrentLimit(global, 'chatlistJoined'),
       archiveSettings,
-      isStoryRibbonShown,
     };
   },
 )(ChatFolders));

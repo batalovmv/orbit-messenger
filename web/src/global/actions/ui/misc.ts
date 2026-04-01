@@ -193,7 +193,6 @@ addActionHandler('toggleStatistics', (global, actions, payload): ActionReturnTyp
     statistics: {
       ...tabState.statistics,
       currentMessageId: undefined,
-      currentStoryId: undefined,
     },
   }, tabId);
 });
@@ -205,24 +204,10 @@ addActionHandler('toggleMessageStatistics', (global, actions, payload): ActionRe
       ...selectTabState(global, tabId).statistics,
       currentMessageId: messageId,
       currentMessage: undefined,
-      currentStoryId: undefined,
-      currentStory: undefined,
     },
   }, tabId);
 });
 
-addActionHandler('toggleStoryStatistics', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId(), storyId } = payload || {};
-  return updateTabState(global, {
-    statistics: {
-      ...selectTabState(global, tabId).statistics,
-      currentStoryId: storyId,
-      currentMessageId: undefined,
-      currentMessage: undefined,
-      currentStory: undefined,
-    },
-  }, tabId);
-});
 
 addActionHandler('toggleLeftColumn', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};

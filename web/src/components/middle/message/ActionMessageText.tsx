@@ -113,6 +113,7 @@ const ActionMessageText = ({
     const senderLink = renderPeerLink(sender?.id, senderTitle || userFallbackText, asPreview);
     const chatLink = renderPeerLink(chat?.id, chatTitle || chatFallbackText, asPreview);
 
+    if (!action) return undefined;
     switch (action.type) {
       case 'pinMessage': {
         if (replyMessage) {

@@ -8,8 +8,6 @@ import type {
   ApiChatMember,
   ApiMessage,
   ApiProfileTab,
-  ApiSavedStarGift,
-  ApiStarGiftCollection,
   ApiStoryAlbum,
   ApiTypeStory,
   ApiUser,
@@ -38,7 +36,6 @@ import {
   isUserBot,
   isUserRightBanned,
 } from '../../global/helpers';
-import { getSavedGiftKey } from '../../global/helpers/stars';
 import {
   selectActiveDownloads,
   selectCanUpdateMainTab,
@@ -50,7 +47,7 @@ import {
   selectIsCurrentUserPremium,
   selectIsRightColumnShown,
   selectMonoforumChannel,
-  selectPeerStories,
+
   selectPerformanceSettingsValue,
   selectSimilarBotsIds,
   selectSimilarChannelIds,
@@ -63,7 +60,7 @@ import {
 import { selectPremiumLimit } from '../../global/selectors/limits';
 import { selectMessageDownloadableMedia } from '../../global/selectors/media';
 import { selectSharedSettings } from '../../global/selectors/sharedState';
-import { selectActiveStoriesCollectionId } from '../../global/selectors/stories';
+// import { selectActiveStoriesCollectionId } from '../../global/selectors/stories'; // stories removed
 import {
   VTT_PROFILE_GIFTS,
   VTT_RIGHT_PROFILE_COLLAPSE,
@@ -100,7 +97,6 @@ import useTransitionFixes from './hooks/useTransitionFixes';
 import AnimatedIconWithPreview from '../common/AnimatedIconWithPreview';
 import Audio from '../common/Audio';
 import Document from '../common/Document';
-import SavedGift from '../common/gift/SavedGift';
 import GroupChatInfo from '../common/GroupChatInfo';
 import Media from '../common/Media';
 import NothingFound from '../common/NothingFound';
@@ -110,7 +106,7 @@ import ChatExtra from '../common/profile/ChatExtra';
 import ProfileInfo from '../common/profile/ProfileInfo.tsx';
 import WebLink from '../common/WebLink';
 import ChatList from '../left/main/ChatList';
-import MediaStory from '../story/MediaStory';
+// import MediaStory from '../story/MediaStory'; // stories removed
 import Button from '../ui/Button';
 import FloatingActionButton from '../ui/FloatingActionButton';
 import InfiniteScroll from '../ui/InfiniteScroll';
@@ -120,8 +116,7 @@ import Spinner from '../ui/Spinner';
 import TabList, { type TabWithProperties } from '../ui/TabList';
 import Transition from '../ui/Transition';
 import DeleteMemberModal from './DeleteMemberModal';
-import StarGiftCollectionList from './gifts/StarGiftCollectionList';
-import StoryAlbumList from './stories/StoryAlbumList';
+// import StoryAlbumList from './stories/StoryAlbumList'; // stories removed
 
 import './Profile.scss';
 
@@ -148,9 +143,7 @@ type StateProps = {
   hasMembersTab?: boolean;
   hasPreviewMediaTab?: boolean;
   hasGiftsTab?: boolean;
-  gifts?: ApiSavedStarGift[];
   storyAlbums?: ApiStoryAlbum[];
-  giftCollections?: ApiStarGiftCollection[];
   areMembersHidden?: boolean;
   canAddMembers?: boolean;
   canDeleteMembers?: boolean;
@@ -163,7 +156,6 @@ type StateProps = {
   storyByIds?: Record<number, ApiTypeStory>;
   selectedStoryAlbumId: ProfileCollectionKey;
   activeCollectionId: ProfileCollectionKey;
-  giftsFilter?: any;
   chatsById: Record<string, ApiChat>;
   usersById: Record<string, ApiUser>;
   userStatusesById: Record<string, ApiUserStatus>;
@@ -238,16 +230,13 @@ const Profile = ({
   storyByIds,
   selectedStoryAlbumId,
   activeCollectionId,
-  giftsFilter,
   mediaSearchType,
   hasCommonChatsTab,
   hasStoriesTab,
   hasMembersTab,
   hasPreviewMediaTab,
   hasGiftsTab,
-  gifts,
   storyAlbums,
-  giftCollections,
   botPreviewMedia,
   areMembersHidden,
   canAddMembers,
@@ -288,17 +277,11 @@ const Profile = ({
     openAudioPlayer,
     focusMessage,
     setNewChatMembersDialogState,
-    loadPeerProfileStories,
-    loadStoriesArchive,
     openPremiumModal,
     loadChannelRecommendations,
     loadBotRecommendations,
     loadPreviewMedias,
     loadPeerSavedGifts,
-    resetGiftProfileFilter,
-    loadStarGiftCollections,
-    loadStoryAlbums,
-    resetSelectedStoryAlbum,
     changeProfileTab,
     setMainProfileTab,
   } = getActions();
@@ -312,7 +295,6 @@ const Profile = ({
   const lang = useLang();
 
   const [deletingUserId, setDeletingUserId] = useState<string | undefined>();
-  const [isGiftTransitionEnabled, enableGiftTransition, disableGiftTransition] = useFlag();
 
   const isClosed = !chatInfo.isOpen;
   const { profileTab, forceScrollProfileTab, isOwnProfile } = chatInfo;
@@ -458,30 +440,10 @@ const Profile = ({
     }
   }, [chatId, isBot, similarBots, isSynced]);
 
-  useEffect(() => {
-    resetSelectedStoryAlbum();
-  }, [chatId]);
+  // resetSelectedStoryAlbum and loadStoryAlbums removed — stories feature removed
 
-  useSyncEffect(() => {
-    enableGiftTransition();
-  }, [giftsFilter]);
-
-  useSyncEffect(() => {
-    disableGiftTransition();
-  }, [gifts]);
-
-  useEffect(() => {
-    if (hasGiftsTab && isSynced) {
-      loadStarGiftCollections({ peerId: chatId });
-      loadStoryAlbums({ peerId: chatId });
-    }
-  }, [chatId, hasGiftsTab, isSynced]);
-
-  const [renderingGifts, setRenderingGifts] = useState(gifts);
   const { startViewTransition } = useViewTransition();
   const { createVtnStyle } = useVtn();
-
-  const giftIds = useMemo(() => renderingGifts?.map((gift) => getSavedGiftKey(gift)), [renderingGifts]);
 
   const activeTabIndex = useMemo(() => {
     const index = tabs.findIndex(({ type }) => type === profileTab);
@@ -503,12 +465,7 @@ const Profile = ({
   const handleLoadCommonChats = useCallback(() => {
     loadCommonChats({ userId: chatId });
   }, [chatId]);
-  const handleLoadPeerStories = useCallback(({ offsetId }: { offsetId: number }) => {
-    loadPeerProfileStories({ peerId: chatId, offsetId });
-  }, [chatId]);
-  const handleLoadStoriesArchive = useCallback(({ offsetId }: { offsetId: number }) => {
-    loadStoriesArchive({ peerId: chatId, offsetId });
-  }, [chatId]);
+  // handleLoadPeerStories, handleLoadStoriesArchive removed — stories feature removed
   const handleLoadGifts = useCallback(() => {
     loadPeerSavedGifts({ peerId: chatId });
   }, [chatId]);
@@ -517,34 +474,11 @@ const Profile = ({
     loadMoreMembers({ chatId });
   }, [chatId, loadMoreMembers]);
 
-  useEffectWithPrevDeps(([prevGifts]) => {
-    if (areDeepEqual(gifts, prevGifts)) {
-      return;
-    }
-
-    if (!gifts || !prevGifts || !isGiftTransitionEnabled) {
-      setRenderingGifts(gifts);
-      return;
-    }
-
-    const prevGiftIds = prevGifts.map((gift) => getSavedGiftKey(gift));
-    const newGiftIds = gifts.map((gift) => getSavedGiftKey(gift));
-    const hasOrderChanged = prevGiftIds.some((id, index) => id !== newGiftIds[index]);
-
-    if (hasOrderChanged) {
-      startViewTransition(VTT_PROFILE_GIFTS, () => {
-        setRenderingGifts(gifts);
-      });
-    } else {
-      setRenderingGifts(gifts);
-    }
-  }, [gifts, startViewTransition, isGiftTransitionEnabled]);
-
   const [resultType, viewportIds, getMore, noProfileInfo] = useProfileViewportIds({
     loadMoreMembers: handleLoadMoreMembers,
     searchMessages: searchSharedMediaMessages,
-    loadStories: handleLoadPeerStories,
-    loadStoriesArchive: handleLoadStoriesArchive,
+    loadStories: () => {},
+    loadStoriesArchive: () => {},
     loadMoreGifts: handleLoadGifts,
     loadCommonChats: handleLoadCommonChats,
     tabType,
@@ -558,7 +492,6 @@ const Profile = ({
     foundIds,
     threadId,
     storyIds,
-    giftIds,
     pinnedStoryIds,
     archiveStoryIds,
     similarChannels,
@@ -570,24 +503,13 @@ const Profile = ({
   const isFirstTab = tabs[0].type === resultType;
   const activeKey = tabs.findIndex(({ type }) => type === resultType);
 
-  const [isGiftCollectionsShowed, markGiftCollectionsShowed, unmarkGiftCollectionsShowed] = useFlag(false);
   const [isStoryAlbumsShowed, markStoryAlbumsShowed, unmarkStoryAlbums] = useFlag(false);
 
-  const hasGiftsCollections = giftCollections && giftCollections.length > 0;
   const hasStoryAlbums = storyAlbums && storyAlbums.length > 0;
-  const isGiftsResult = resultType === 'gifts';
   const isStoriesResult = resultType === 'stories';
-  const shouldShowContentPanel = (isGiftsResult && hasGiftsCollections) || (isStoriesResult && hasStoryAlbums);
+  const shouldShowContentPanel = isStoriesResult && hasStoryAlbums;
 
   useEffect(() => {
-    if (hasGiftsCollections) {
-      setTimeout(() => {
-        markGiftCollectionsShowed();
-      }, CONTENT_PANEL_SHOW_DELAY);
-    } else {
-      unmarkGiftCollectionsShowed();
-    }
-
     if (hasStoryAlbums) {
       setTimeout(() => {
         markStoryAlbumsShowed();
@@ -595,7 +517,7 @@ const Profile = ({
     } else {
       unmarkStoryAlbums();
     }
-  }, [hasGiftsCollections, hasStoryAlbums, markGiftCollectionsShowed, markStoryAlbumsShowed]);
+  }, [hasStoryAlbums, markStoryAlbumsShowed]);
 
   usePeerStoriesPolling(resultType === 'members' ? viewportIds as string[] : undefined);
 
@@ -674,10 +596,6 @@ const Profile = ({
     setDeletingUserId(undefined);
   });
 
-  const handleResetGiftsFilter = useLastCallback(() => {
-    resetGiftProfileFilter({ peerId: chatId });
-  });
-
   useTopOverscroll({
     containerRef,
     onOverscroll: handleExpandProfile,
@@ -714,7 +632,7 @@ const Profile = ({
   if (isFirstTab) {
     renderingDelay = !isRightColumnShown ? HIDDEN_RENDER_DELAY : 0;
     // @optimization Used to delay first render of secondary tabs while animating
-  } else if ((!viewportIds && !botPreviewMedia) || (!gifts?.length && resultType === 'gifts')) {
+  } else if (!viewportIds && !botPreviewMedia) {
     renderingDelay = SLIDE_TRANSITION_DURATION;
   }
 
@@ -729,28 +647,6 @@ const Profile = ({
         setDeletingUserId(memberId);
       },
     }];
-  }
-
-  function renderNothingFoundGiftsWithFilter() {
-    return (
-      <div className="nothing-found-gifts">
-        <AnimatedIconWithPreview
-          size={160}
-          tgsUrl={LOCAL_TGS_URLS.SearchingDuck}
-          nonInteractive
-          noLoop
-        />
-        <div className="description">
-          {lang('GiftSearchEmpty')}
-        </div>
-        <Link
-          className="date"
-          onClick={handleResetGiftsFilter}
-        >
-          {lang('GiftSearchReset')}
-        </Link>
-      </div>
-    );
   }
 
   function renderContent() {
@@ -772,35 +668,7 @@ const Profile = ({
   }
 
   function renderCategories() {
-    if (resultType === 'gifts') {
-      return (
-        <div
-          className={buildClassName(
-            'contentCategoriesPanel',
-            !shouldShowContentPanel && 'hiddenPanel',
-            isGiftCollectionsShowed && 'noTransition',
-          )}
-        >
-          <StarGiftCollectionList peerId={chatId} />
-        </div>
-      );
-    }
-
-    if (resultType === 'stories') {
-      return (
-        <div
-          className={buildClassName(
-            'contentCategoriesPanel',
-            !shouldShowContentPanel && 'hiddenPanel',
-            isStoryAlbumsShowed && 'noTransition',
-          )}
-        >
-          <StoryAlbumList peerId={chatId} />
-        </div>
-      );
-    }
-
-    return undefined;
+    return undefined; // Stories removed
   }
 
   function renderSpinnerOrContentBase(noContent: boolean, noSpinner: boolean) {
@@ -818,10 +686,6 @@ const Profile = ({
     }
 
     const isViewportIdsEmpty = viewportIds && !viewportIds?.length;
-
-    if (isViewportIdsEmpty && resultType === 'gifts') {
-      return renderNothingFoundGiftsWithFilter();
-    }
 
     if (isViewportIdsEmpty) {
       let text: string;
@@ -870,8 +734,7 @@ const Profile = ({
       return;
     }
 
-    const noTransition = resultType === 'gifts' ? isGiftCollectionsShowed
-      : resultType === 'stories' ? isStoryAlbumsShowed : false;
+    const noTransition = resultType === 'stories' ? isStoryAlbumsShowed : false;
     return (
       <div
         className={buildClassName(
@@ -891,15 +754,6 @@ const Profile = ({
               canAutoPlay={canAutoPlayGifs}
               observeIntersection={observeIntersectionForMedia}
               onClick={handleSelectMedia}
-            />
-          ))
-        ) : (resultType === 'stories' || resultType === 'storiesArchive') ? (
-          (viewportIds as number[]).map((id, i) => storyByIds?.[id] && (
-            <MediaStory
-              teactOrderKey={i}
-              key={`${resultType}_${id}`}
-              story={storyByIds[id]}
-              isArchive={resultType === 'storiesArchive'}
             />
           ))
         ) : resultType === 'documents' ? (
@@ -941,7 +795,7 @@ const Profile = ({
               onPlay={handlePlayAudio}
               onDateClick={handleMessageFocus}
               canDownload={!isChatProtected && !messagesById[id].isProtected}
-              isDownloading={getIsDownloading(activeDownloads, messagesById[id].content?.audio)}
+              isDownloading={getIsDownloading(activeDownloads, messagesById[id].content?.audio!)}
             />
           ))
         ) : resultType === 'voice' ? (
@@ -977,7 +831,7 @@ const Profile = ({
               onClick={() => handleMemberClick(id)}
               contextActions={getMemberContextAction(id)}
             >
-              <PrivateChatInfo userId={id} adminMember={adminMembersById?.[id]} forceShowSelf withStory />
+              <PrivateChatInfo userId={id} adminMember={adminMembersById?.[id]} forceShowSelf />
             </ListItem>
           ))
         ) : resultType === 'commonChats' ? (
@@ -1069,31 +923,15 @@ const Profile = ({
               </>
             )}
           </div>
-        ) : resultType === 'gifts' ? (
-          (renderingGifts?.map((gift) => {
-            return (
-              <SavedGift
-                peerId={chatId}
-                key={getSavedGiftKey(gift)}
-                className="saved-gift"
-                style={createVtnStyle(getSavedGiftKey(gift))}
-                gift={gift}
-                observeIntersection={observeIntersectionForMedia}
-              />
-            );
-          }))
         ) : undefined}
       </div>
     );
   }
 
-  const shouldUseTransitionForContent = resultType === 'stories' || resultType === 'gifts';
+  const shouldUseTransitionForContent = resultType === 'stories';
   const contentTransitionKey = (() => {
     if (resultType === 'stories') {
       return selectedStoryAlbumId === 'all' ? 0 : selectedStoryAlbumId;
-    }
-    if (resultType === 'gifts') {
-      return activeCollectionId === 'all' ? 0 : activeCollectionId;
     }
     return 0;
   })();
@@ -1248,7 +1086,7 @@ export default memo(withGlobal<OwnProps>(
     const messagesById = selectChatMessages(global, chatId);
 
     const tabState = selectTabState(global);
-    const { chatInfo, savedGifts } = tabState;
+    const { chatInfo } = tabState;
     const { isOwnProfile } = chatInfo;
 
     const { animationLevel, shouldWarnAboutFiles } = selectSharedSettings(global);
@@ -1291,23 +1129,17 @@ export default memo(withGlobal<OwnProps>(
     const hasPreviewMediaTab = userFullInfo?.botInfo?.hasPreviewMedia;
     const botPreviewMedia = global.users.previewMediaByBotId[chatId];
 
-    const hasStoriesTab = peer && (user?.isSelf || (!peer.areStoriesHidden && peerFullInfo?.hasPinnedStories))
-      && !isSavedMessages;
-    const peerStories = hasStoriesTab ? selectPeerStories(global, peer.id) : undefined;
-    const selectedStoryAlbumId = selectActiveStoriesCollectionId(global);
-    const storyIds = selectedStoryAlbumId !== 'all'
-      ? peerStories?.idsByAlbumId?.[selectedStoryAlbumId]?.ids
-      : peerStories?.profileIds;
-    const pinnedStoryIds = peerStories?.pinnedIds;
-    const storyByIds = peerStories?.byId;
-    const archiveStoryIds = peerStories?.archiveIds;
+    const hasStoriesTab = false;
+    const storyIds = undefined;
+    const pinnedStoryIds = undefined;
+    const storyByIds = undefined;
+    const archiveStoryIds = undefined;
 
     const hasGiftsTab = Boolean(peerFullInfo?.starGiftCount) && !isSavedMessages;
     const activeCollectionId = selectActiveGiftsCollectionId(global, chatId);
-    const peerGifts = savedGifts.collectionsByPeerId[chatId]?.[activeCollectionId];
 
-    const storyAlbums = global.stories.albumsByPeerId?.[chatId];
-    const giftCollections = global.starGiftCollections?.byPeerId?.[chatId];
+    const storyAlbums = undefined;
+    const selectedStoryAlbumId: 'all' = 'all';
 
     const monoforumChannel = selectMonoforumChannel(global, chatId);
     const isRestricted = chat && selectIsChatRestricted(global, chat.id);
@@ -1338,15 +1170,12 @@ export default memo(withGlobal<OwnProps>(
       chatsById,
       storyIds,
       hasGiftsTab,
-      gifts: peerGifts?.gifts,
       storyAlbums,
-      giftCollections,
       pinnedStoryIds,
       archiveStoryIds,
       storyByIds,
       selectedStoryAlbumId,
       activeCollectionId,
-      giftsFilter: savedGifts.filter,
       isChatProtected: chat?.isProtected,
       chatInfo,
       animationLevel,

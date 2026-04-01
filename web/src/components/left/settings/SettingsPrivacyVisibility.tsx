@@ -19,7 +19,6 @@ import RadioGroup from '../../ui/RadioGroup';
 import Switcher from '../../ui/Switcher';
 import PremiumStatusItem from './PremiumStatusItem';
 import PrivacyLockedOption from './PrivacyLockedOption';
-import SettingsAcceptedGift from './SettingsAcceptedGift';
 import SettingsPrivacyLastSeen from './SettingsPrivacyLastSeen';
 import SettingsPrivacyPublicProfilePhoto from './SettingsPrivacyPublicProfilePhoto';
 
@@ -129,9 +128,6 @@ const SettingsPrivacyVisibility: FC<OwnProps & StateProps> = ({
       )}
       {screen === SettingsScreens.PrivacyLastSeen && (
         <SettingsPrivacyLastSeen visibility={primaryPrivacy?.visibility} />
-      )}
-      {screen === SettingsScreens.PrivacyGifts && (
-        <SettingsAcceptedGift />
       )}
       {Boolean(secondaryScreen) && (
         <PrivacySubsection

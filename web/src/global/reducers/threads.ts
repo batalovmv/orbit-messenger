@@ -100,7 +100,7 @@ export function updateThreadReadState<T extends GlobalState>(
         ...currentThread,
         readState: updated,
       },
-    },
+    } as Record<ThreadId, Thread>,
   });
 }
 

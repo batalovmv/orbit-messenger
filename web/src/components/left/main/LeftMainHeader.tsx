@@ -33,7 +33,6 @@ import useOldLang from '../../../hooks/useOldLang';
 import Icon from '../../common/icons/Icon';
 import MainMenuDropdown from '../../common/MainMenuDropdown';
 import PeerChip from '../../common/PeerChip';
-import StoryToggler from '../../story/StoryToggler';
 import Button from '../../ui/Button';
 import SearchInput from '../../ui/SearchInput';
 import ShowTransition from '../../ui/ShowTransition';
@@ -214,8 +213,6 @@ const LeftMainHeader = ({
     ? lang('SearchFriends')
     : lang('Search');
 
-  const withStoryToggler = !isSearchFocused && !selectedSearchDate && !globalSearchChatId && !areContactsVisible;
-
   const searchContent = useMemo(() => {
     return (
       <>
@@ -283,9 +280,6 @@ const LeftMainHeader = ({
           onEnter={handleSearchEnter}
         >
           {searchContent}
-          <StoryToggler
-            canShow={withStoryToggler}
-          />
         </SearchInput>
         {isCurrentUserPremium && <StatusButton />}
         {hasPasscode && (

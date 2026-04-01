@@ -12,7 +12,7 @@ import { selectTimestampableMedia } from '../../selectors/media';
 
 addActionHandler('openMediaViewer', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, threadId = MAIN_THREAD_ID, messageId, timestamp, mediaIndex, isAvatarView, isSponsoredMessage, origin,
+    chatId, threadId = MAIN_THREAD_ID, messageId, timestamp, mediaIndex, isAvatarView, origin,
     withDynamicLoading, standaloneMedia, tabId = getCurrentTabId(),
   } = payload;
 
@@ -26,7 +26,6 @@ addActionHandler('openMediaViewer', (global, actions, payload): ActionReturnType
       messageId,
       mediaIndex: mediaIndex || 0,
       isAvatarView,
-      isSponsoredMessage,
       origin,
       standaloneMedia,
       isHidden: false,

@@ -4,7 +4,7 @@ import type { ApiChatType, ApiFormattedText, LinkContext } from '../api/types';
 import type { DeepLinkMethod } from './deepLinkParser';
 import { LeftColumnContent, SettingsScreens } from '../types';
 
-import { API_CHAT_TYPES, RE_TG_LINK, TON_CURRENCY_CODE } from '../config';
+import { API_CHAT_TYPES, RE_TG_LINK } from '../config';
 import { IS_BAD_URL_PARSER } from './browser/globalEnvironment';
 import { tryParseDeepLink } from './deepLinkParser';
 
@@ -108,12 +108,6 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
             break;
         }
         return true;
-      case 'stars':
-        actions.openStarsBalanceModal({});
-        break;
-      case 'ton':
-        actions.openStarsBalanceModal({ currency: TON_CURRENCY_CODE });
-        break;
       default:
         break;
     }
@@ -143,9 +137,8 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
     openInvoice,
     openChatWithDraft,
     checkChatlistInvite,
-    openStoryViewerByUsername,
+
     checkGiftCode,
-    openStarsBalanceModal,
   } = actions;
 
   switch (method) {
@@ -178,8 +171,6 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
             attach,
             text,
           });
-        } else if (story) {
-          openStoryViewerByUsername({ username: domain, storyId: Number(story) });
         } else {
           openChatByUsername({
             username: domain,
@@ -238,15 +229,6 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
     case 'invoice': {
       const { slug } = params;
       openInvoice({ type: 'slug', slug });
-      break;
-    }
-
-    case 'stars_topup': {
-      const { balance, purpose } = params;
-      const balanceNeeded = Number(balance);
-      if (!balanceNeeded || balanceNeeded < 0) return true;
-
-      openStarsBalanceModal({ topup: { balanceNeeded, purpose } });
       break;
     }
 

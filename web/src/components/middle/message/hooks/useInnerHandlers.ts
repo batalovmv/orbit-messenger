@@ -57,7 +57,7 @@ export default function useInnerHandlers({
   const {
     openChat, openChatWithDraft, showNotification, focusMessage, openMediaViewer, openAudioPlayer,
     markMessagesRead, cancelUploadMedia, sendPollVote, openForwardMenu,
-    openChatLanguageModal, openThread, openStoryViewer, searchChatMediaMessages,
+    openChatLanguageModal, openThread, searchChatMediaMessages,
   } = getActions();
 
   const {
@@ -282,12 +282,7 @@ export default function useInnerHandlers({
   });
 
   const handleStoryClick = useLastCallback(() => {
-    if (!story) return;
-    openStoryViewer({
-      peerId: story.peerId,
-      storyId: story.id,
-      isSingleStory: true,
-    });
+    // Story viewer removed
   });
 
   return {

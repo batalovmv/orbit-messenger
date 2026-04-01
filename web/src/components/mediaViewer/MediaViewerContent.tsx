@@ -3,7 +3,7 @@ import { memo } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type {
-  ApiDimensions, ApiMessage, ApiSponsoredMessage,
+  ApiDimensions, ApiMessage,
 } from '../../api/types';
 import type { MediaViewerOrigin, ThreadId } from '../../types';
 import type { MediaViewerItem, ViewableMedia } from './helpers/getViewableMedia';
@@ -42,12 +42,11 @@ type OwnProps = {
   isMoving?: boolean;
   onClose: () => void;
   onFooterClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleSponsoredClick: () => void;
 };
 
 type StateProps = {
   viewableMedia?: ViewableMedia;
-  textMessage?: ApiMessage | ApiSponsoredMessage;
+  textMessage?: ApiMessage;
   origin?: MediaViewerOrigin;
   isProtected?: boolean;
   volume: number;
@@ -81,14 +80,12 @@ const MediaViewerContent = ({
   maxTimestamp,
   onClose,
   onFooterClick,
-  handleSponsoredClick,
 }: OwnProps & StateProps) => {
   const { updateLastPlaybackTimestamp } = getActions();
 
   const lang = useOldLang();
 
   const isAvatar = item.type === 'avatar';
-  const isSponsoredMessage = item.type === 'sponsoredMessage';
   const { media } = viewableMedia || {};
 
   const {
@@ -164,8 +161,6 @@ const MediaViewerContent = ({
             volume={0}
             isClickDisabled={isMoving}
             playbackRate={1}
-            isSponsoredMessage={isSponsoredMessage}
-            handleSponsoredClick={handleSponsoredClick}
           />
         </div>
       );
@@ -179,7 +174,8 @@ const MediaViewerContent = ({
       : renderMessageText({
         message: textMessage, maxTimestamp, threadId, forcePlayback: true, isForMediaViewer: true,
       }));
-  const buttonText = textMessage && 'buttonText' in textMessage ? textMessage.buttonText : undefined;
+  const buttonText = textMessage && 'buttonText' in textMessage
+    ? (textMessage.buttonText as string | undefined) : undefined;
   const hasFooter = Boolean(textParts);
   const posterSize = calculateMediaViewerDimensions(dimensions!, hasFooter, isVideo);
   const isForceMobileVersion = isMobile || shouldForceMobileVersion(posterSize);
@@ -220,8 +216,6 @@ const MediaViewerContent = ({
           volume={volume}
           isClickDisabled={isMoving}
           playbackRate={playbackRate}
-          isSponsoredMessage={isSponsoredMessage}
-          handleSponsoredClick={handleSponsoredClick}
           timestamp={timestamp}
         />
       ))}
@@ -233,7 +227,6 @@ const MediaViewerContent = ({
           isProtected={isProtected}
           isForceMobileVersion={isForceMobileVersion}
           isForVideo={isVideo && !isGif}
-          handleSponsoredClick={handleSponsoredClick}
         />
       )}
     </div>
@@ -252,8 +245,7 @@ export default memo(withGlobal<OwnProps>(
       threadId,
     } = selectTabState(global).mediaViewer;
     const message = item.type === 'message' ? item.message : undefined;
-    const sponsoredMessage = item.type === 'sponsoredMessage' ? item.message : undefined;
-    const textMessage = message || sponsoredMessage;
+    const textMessage = message;
     const viewableMedia = selectViewableMedia(global, origin, item);
 
     const maxTimestamp = message && selectMessageTimestampableDuration(global, message, true);

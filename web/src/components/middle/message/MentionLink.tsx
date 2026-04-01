@@ -27,7 +27,6 @@ const MentionLink = ({
   const {
     openChat,
     openChatByUsername,
-    closeStoryViewer,
     setShouldCloseRightColumn,
   } = getActions();
 
@@ -43,7 +42,6 @@ const MentionLink = ({
     if (userOrChat) {
       openChat({ id: userOrChat.id });
     } else if (username) {
-      closeStoryViewer();
       openChatByUsername({ username: username.substring(1) });
     }
   };

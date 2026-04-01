@@ -1258,18 +1258,15 @@ export default memo(withGlobal<OwnProps>(
     const currentUser = global.currentUserId ? selectUser(global, global.currentUserId) : undefined;
     const theme = selectTheme(global);
     const { isPaymentModalOpen, status: regularPaymentStatus } = selectTabState(global).payment;
-    const { status: starsPaymentStatus, inputInvoice: starsInputInvoice } = selectTabState(global).starsPayment;
     const botAppPermissions = bot ? selectBotAppPermissions(global, bot.id) : undefined;
-
-    const paymentStatus = starsPaymentStatus || regularPaymentStatus;
 
     return {
       attachBot,
       bot,
       currentUser,
       theme,
-      isPaymentModalOpen: isPaymentModalOpen || Boolean(starsInputInvoice),
-      paymentStatus,
+      isPaymentModalOpen,
+      paymentStatus: regularPaymentStatus,
       modalState,
       botAppPermissions,
       botAppSettings,

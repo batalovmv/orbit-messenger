@@ -1,9 +1,6 @@
 import type {
   ApiAttachBot,
   ApiBirthday,
-  ApiBoost,
-  ApiBoostsStatus,
-  ApiChannelMonetizationStatistics,
   ApiChannelStatistics,
   ApiChatInviteInfo,
   ApiChatlistInvite,
@@ -21,12 +18,10 @@ import type {
   ApiLimitTypeWithModal,
   ApiMessage,
   ApiMissingInvitedUser,
-  ApiMyBoost,
   ApiNewMediaTodo,
   ApiNewPoll,
   ApiNotification,
   ApiPaymentFormRegular,
-  ApiPaymentFormStars,
   ApiPaymentStatus,
   ApiPhoneCall,
   ApiPostStatistics,
@@ -39,7 +34,6 @@ import type {
   ApiSavedGifts,
   ApiSavedStarGift,
   ApiSearchPostsFlood,
-  ApiSponsoredPeer,
   ApiStarGift,
   ApiStarGiftAttribute,
   ApiStarGiftAttributeCounter,
@@ -47,15 +41,9 @@ import type {
   ApiStarGiftAuctionAcquiredGift,
   ApiStarGiftUnique,
   ApiStarGiftUpgradePrice,
-  ApiStarGiveawayOption,
-  ApiStarsSubscription,
-  ApiStarsTransaction,
-  ApiStarTopupOption,
   ApiSticker,
   ApiThumbnail,
   ApiTypeCurrencyAmount,
-  ApiTypePrepaidGiveaway,
-  ApiTypeStoryView,
   ApiUniqueStarGiftValueInfo,
   ApiUser,
   ApiVideo,
@@ -91,8 +79,6 @@ import type {
   SettingsScreens,
   SharedMediaType,
   ShippingOption,
-  StarGiftInfo,
-  StoryViewerOrigin,
   TabThread,
   ThreadId,
 } from '../../types';
@@ -202,18 +188,9 @@ export type TabState = {
     messageId: number;
   };
 
-  aboutAdsModal?: {
-    randomId: string;
-    canReport?: boolean;
-    sponsorInfo?: string;
-    additionalInfo?: string;
-  };
-
   reactionPicker?: {
     chatId?: string;
     messageId?: number;
-    storyPeerId?: string;
-    storyId?: number;
     position?: IAnchorPosition;
     sendAsMessage?: boolean;
     isForEffects?: boolean;
@@ -260,7 +237,6 @@ export type TabState = {
     currentContent?: GlobalSearchContent;
     chatId?: string;
     foundTopicIds?: number[];
-    sponsoredPeer?: ApiSponsoredPeer;
     searchFlood?: ApiSearchPostsFlood;
     fetchingStatus?: {
       chats?: boolean;
@@ -324,40 +300,6 @@ export type TabState = {
 
   isPaymentMessageConfirmDialogOpen: boolean;
 
-  storyViewer: {
-    isRibbonShown?: boolean;
-    isArchivedRibbonShown?: boolean;
-    peerId?: string;
-    storyId?: number;
-    isMuted: boolean;
-    isSinglePeer?: boolean;
-    isSingleStory?: boolean;
-    isPrivate?: boolean;
-    isArchive?: boolean;
-    // Last viewed story id in current view session.
-    // Used for better switch animation between peers.
-    lastViewedByPeerId?: Record<string, number>;
-    isPrivacyModalOpen?: boolean;
-    isPaymentConfirmDialogOpen?: boolean;
-    viewModal?: {
-      storyId: number;
-      views?: ApiTypeStoryView[];
-      nextOffset?: string;
-      isLoading?: boolean;
-    };
-    origin?: StoryViewerOrigin;
-    // Copy of story list for current view session
-    storyList?: {
-      peerIds: string[];
-      storyIdsByPeerId: Record<string, number[]>;
-    };
-  };
-  storyStealthModal?: {
-    targetPeerId: string;
-  } | Record<string, never>;
-
-  selectedStoryAlbumId?: number;
-
   mediaViewer: {
     chatId?: string;
     threadId?: ThreadId;
@@ -365,7 +307,6 @@ export type TabState = {
     withDynamicLoading?: boolean;
     mediaIndex?: number;
     isAvatarView?: boolean;
-    isSponsoredMessage?: boolean;
     standaloneMedia?: MediaViewerMedia[];
     origin?: MediaViewerOrigin;
     volume: number;
@@ -407,7 +348,6 @@ export type TabState = {
   forwardMessages: {
     fromChatId?: string;
     messageIds?: number[];
-    storyId?: number;
     toChatId?: string;
     toThreadId?: ThreadId;
     withMyScore?: boolean;
@@ -454,23 +394,6 @@ export type TabState = {
     url?: string;
     botId?: string;
   };
-  starsPayment: {
-    form?: ApiPaymentFormStars;
-    subscriptionInfo?: ApiChatInviteInfo;
-    inputInvoice?: ApiInputInvoice;
-    status?: ApiPaymentStatus;
-  };
-
-  priceConfirmModal?: {
-    originalAmount?: number;
-    newAmount?: number;
-    currency: 'TON' | 'XTR';
-    directInfo?: {
-      formId: string;
-      inputInvoice: ApiInputInvoice;
-    };
-  };
-
   chatCreation?: {
     progress: ChatCreationProgress;
     error?: string;
@@ -495,25 +418,12 @@ export type TabState = {
   openedStickerSetShortName?: string;
   openedCustomEmojiSetIds?: string[];
 
-  reportAdModal?: {
-    chatId?: string;
-    randomId: string;
-    sections: {
-      title: string;
-      subtitle?: string;
-      options: {
-        text: string;
-        option: string;
-      }[];
-    }[];
-  };
-
   reportModal?: {
     chatId?: string;
     messageIds: number[];
     description: string;
     peerId?: string;
-    subject: 'story' | 'message';
+    subject: 'message';
     sections: {
       title?: string;
       subtitle?: string;
@@ -532,9 +442,6 @@ export type TabState = {
     byChatId: Record<string, ApiChannelStatistics | ApiGroupStatistics>;
     currentMessage?: ApiPostStatistics;
     currentMessageId?: number;
-    currentStory?: ApiPostStatistics;
-    currentStoryId?: number;
-    monetization?: ApiChannelMonetizationStatistics;
   };
 
   newContact?: {
@@ -660,16 +567,6 @@ export type TabState = {
     gift?: ApiStarGift;
   };
 
-  giveawayModal?: {
-    chatId: string;
-    isOpen?: boolean;
-    gifts?: ApiPremiumGiftCodeOption[];
-    selectedMemberIds?: string[];
-    selectedChannelIds?: string[];
-    prepaidGiveaway?: ApiTypePrepaidGiveaway;
-    starOptions?: ApiStarGiveawayOption[];
-  };
-
   deleteMessageModal?: {
     chatId: string;
     messageIds: number[];
@@ -685,35 +582,12 @@ export type TabState = {
 
   isFrozenAccountModalOpen?: boolean;
 
-  starsGiftingPickerModal?: {
-    isOpen?: boolean;
-  };
-
-  starsGiftModal?: {
-    isCompleted?: boolean;
-    isOpen?: boolean;
-    forUserId?: string;
-    starsGiftOptions?: ApiStarTopupOption[];
-  };
-
-  starsTransactionModal?: {
-    transaction: ApiStarsTransaction;
-  };
-  starsSubscriptionModal?: {
-    subscription: ApiStarsSubscription;
-  };
-
   giftModal?: {
     forPeerId: string;
     gifts?: ApiPremiumGiftCodeOption[];
     selectedResaleGift?: ApiStarGift;
     selectedGift?: ApiPremiumGiftCodeOption | ApiStarGift;
   };
-  chatRefundModal?: {
-    userId: string;
-    starsToRefund: number;
-  };
-
   limitReachedModal?: {
     limit: ApiLimitTypeWithModal;
   };
@@ -748,31 +622,6 @@ export type TabState = {
     };
   };
 
-  boostModal?: {
-    chatId: string;
-    boostStatus?: ApiBoostsStatus;
-    myBoosts?: ApiMyBoost[];
-  };
-
-  boostStatistics?: {
-    chatId: string;
-    boostStatus?: ApiBoostsStatus;
-    isLoadingBoosters?: boolean;
-    nextOffset?: string;
-    boosts?: {
-      count: number;
-      list: ApiBoost[];
-    };
-    giftedBoosts?: {
-      count: number;
-      list: ApiBoost[];
-    };
-  };
-
-  monetizationStatistics?: {
-    chatId: string;
-  };
-
   giftCodeModal?: {
     slug: string;
     message?: {
@@ -790,11 +639,6 @@ export type TabState = {
 
   birthdaySetupModal?: {
     currentBirthday?: ApiBirthday;
-  };
-
-  paidReactionModal?: {
-    chatId: string;
-    messageId: number;
   };
 
   suggestMessageModal?: {
@@ -820,21 +664,6 @@ export type TabState = {
     peerId: string;
     type: 'phone' | 'username';
     collectible: string;
-  };
-
-  starsBalanceModal?: {
-    originStarsPayment?: TabState['starsPayment'];
-    originGift?: StarGiftInfo;
-    originReaction?: {
-      chatId: string;
-      messageId: number;
-      amount: number;
-    };
-    topup?: {
-      balanceNeeded: number;
-      purpose?: string;
-    };
-    currency?: ApiTypeCurrencyAmount['currency'];
   };
 
   giftInfoModal?: {
@@ -1001,12 +830,6 @@ export type TabState = {
   profileRatingModal?: {
     userId: string;
     level: number;
-  };
-
-  monetizationVerificationModal?: {
-    chatId: string;
-    isLoading?: boolean;
-    errorKey?: RegularLangFnParameters;
   };
 
   quickPreview?: {

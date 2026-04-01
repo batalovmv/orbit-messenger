@@ -46,11 +46,8 @@ type OwnProps = {
   isInSavedMessages?: boolean;
   isInStoryViewer?: boolean;
   isForEffects?: boolean;
-  isWithPaidReaction?: boolean;
   onClose?: NoneToVoidFunction;
   onToggleReaction: (reaction: ApiReaction) => void;
-  onSendPaidReaction?: NoneToVoidFunction;
-  onShowPaidReactionModal?: NoneToVoidFunction;
   onShowMore: (position: IAnchorPosition) => void;
 };
 
@@ -74,11 +71,8 @@ const ReactionSelector: FC<OwnProps> = ({
   isInStoryViewer,
   isForEffects,
   effectReactions,
-  isWithPaidReaction,
   onClose,
   onToggleReaction,
-  onSendPaidReaction,
-  onShowPaidReactionModal,
   onShowMore,
 }) => {
   const { openPremiumModal } = getActions();
@@ -116,13 +110,10 @@ const ReactionSelector: FC<OwnProps> = ({
     }).filter(Boolean) || [];
 
     const sortedReactions = sortReactions(filteredReactions, topReactions);
-    if (isWithPaidReaction) {
-      sortedReactions.unshift({ type: 'paid' });
-    }
     return sortedReactions;
   }, [
     allAvailableReactions, currentReactions, defaultTagReactions, enabledReactions, isInSavedMessages, isPrivate,
-    topReactions, isForEffects, effectReactions, shouldUseCurrentReactions, isWithPaidReaction,
+    topReactions, isForEffects, effectReactions, shouldUseCurrentReactions,
   ]);
 
   const reactionsToRender = useMemo(() => {
@@ -211,8 +202,6 @@ const ReactionSelector: FC<OwnProps> = ({
                   key={getReactionKey(reaction)}
                   isReady={isReady}
                   onToggleReaction={onToggleReaction}
-                  onSendPaidReaction={onSendPaidReaction}
-                  onShowPaidReactionModal={onShowPaidReactionModal}
                   reaction={reaction}
                   noAppearAnimation={!canPlayAnimatedEmojis}
                   chosen={userReactionIndexes.has(i)}

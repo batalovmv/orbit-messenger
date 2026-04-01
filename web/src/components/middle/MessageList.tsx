@@ -140,7 +140,6 @@ type StateProps = {
   isForum?: boolean;
   currentUserId: string;
   isAccountFrozen?: boolean;
-  areAdsEnabled?: boolean;
   channelJoinInfo?: ApiChatFullInfo['joinInfo'];
   isChatProtected?: boolean;
   hasCustomGreeting?: boolean;
@@ -233,7 +232,6 @@ const MessageList = ({
   currentUserId,
   isContactRequirePremium,
   paidMessagesStars,
-  areAdsEnabled,
   channelJoinInfo,
   isChatProtected,
   isAccountFrozen,
@@ -249,8 +247,8 @@ const MessageList = ({
   onNotchToggle,
 }: OwnProps & StateProps) => {
   const {
-    loadViewportMessages, setScrollOffset, loadSponsoredMessages, loadMessageReactions, copyMessagesByIds,
-    loadMessageViews, loadPeerStoriesByIds, loadFactChecks, requestChatTranslation,
+    loadViewportMessages, setScrollOffset, loadMessageReactions, copyMessagesByIds,
+    loadMessageViews, loadFactChecks, requestChatTranslation,
   } = getActions();
 
   const containerRef = useRef<HTMLDivElement>();
@@ -296,12 +294,6 @@ const MessageList = ({
     memoFirstUnreadIdRef.current = firstUnreadId;
   }, [firstUnreadId]);
 
-  useEffect(() => {
-    const canHaveAds = isChannelChat || isBot;
-    if (areAdsEnabled && canHaveAds && isSynced && isReady && isAppConfigLoaded) {
-      loadSponsoredMessages({ peerId: chatId });
-    }
-  }, [chatId, isSynced, isReady, isChannelChat, isBot, areAdsEnabled, isAppConfigLoaded]);
 
   // Updated only once when messages are loaded (as we want the unread divider to keep its position)
   useSyncEffect(() => {
@@ -413,27 +405,7 @@ const MessageList = ({
     loadMessageReactions({ chatId, ids });
   }, MESSAGE_REACTIONS_POLLING_INTERVAL);
 
-  useInterval(() => {
-    if (!messageIds || !messagesById || type === 'scheduled' || !isActive) {
-      return;
-    }
-    const storyDataList = messageIds.map((id) => messagesById[id]?.content.storyData).filter(Boolean);
-
-    if (!storyDataList.length) return;
-
-    const storiesByPeerIds = storyDataList.reduce((acc, storyData) => {
-      const { peerId, id } = storyData;
-      if (!acc[peerId]) {
-        acc[peerId] = [];
-      }
-      acc[peerId].push(id);
-      return acc;
-    }, {} as Record<string, number[]>);
-
-    Object.entries(storiesByPeerIds).forEach(([peerId, storyIds]) => {
-      loadPeerStoriesByIds({ peerId, storyIds });
-    });
-  }, MESSAGE_STORY_POLLING_INTERVAL);
+  // Stories removed — story polling removed
 
   useInterval(() => {
     if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled' || !isActive) {
@@ -850,7 +822,6 @@ const MessageList = ({
       />
     ) : activeKey === Content.MessageList ? (
       <MessageListContent
-        canShowAds={areAdsEnabled && isChannelChat}
         chatId={chatId}
         isComments={isComments}
         isChannelChat={isChannelChat}
@@ -952,7 +923,6 @@ export default memo(withGlobal<OwnProps>(
     const isEmptyThread = !selectThreadInfo(global, chatId, threadId)?.messagesCount;
 
     const isCurrentUserPremium = selectIsCurrentUserPremium(global);
-    const areAdsEnabled = !isCurrentUserPremium || selectUserFullInfo(global, currentUserId)?.areAdsEnabled;
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
 
     const hasCustomGreeting = Boolean(userFullInfo?.businessIntro);
@@ -976,7 +946,6 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       isActive,
-      areAdsEnabled,
       isChatLoaded: true,
       isRestricted,
       restrictionReasons,

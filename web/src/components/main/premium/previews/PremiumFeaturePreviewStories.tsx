@@ -13,7 +13,8 @@ import useScrolledState from '../../../../hooks/useScrolledState';
 import useDevicePixelRatio from '../../../../hooks/window/useDevicePixelRatio';
 
 import Avatar, { AVATAR_SIZES } from '../../../common/Avatar';
-import { drawGradientCircle } from '../../../common/AvatarStoryCircle';
+// import { drawGradientCircle } from '../../../common/AvatarStoryCircle'; // stories removed
+function drawGradientCircle(_opts: unknown) { /* no-op */ }
 import PremiumFeatureItem from '../PremiumFeatureItem';
 
 import styles from './PremiumFeaturePreviewStories.module.scss';

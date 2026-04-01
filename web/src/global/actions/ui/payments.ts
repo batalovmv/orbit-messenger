@@ -8,7 +8,6 @@ import { addActionHandler, setGlobal } from '../../index';
 import {
   clearPayment,
   updatePayment,
-  updateStarsPayment,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
 import { selectTabState } from '../../selectors';
@@ -17,14 +16,6 @@ addActionHandler('closePaymentModal', (global, actions, payload): ActionReturnTy
   const { tabId = getCurrentTabId() } = payload || {};
   const payment = selectTabState(global, tabId).payment;
   const status = payment.status || 'cancelled';
-  const starsBalanceModal = selectTabState(global, tabId).starsBalanceModal;
-
-  actions.processOriginStarsPayment({
-    originData: starsBalanceModal,
-    status,
-    tabId,
-  });
-
   global = clearPayment(global, tabId);
   global = updatePayment(global, {
     status,
@@ -37,7 +28,6 @@ addActionHandler('resetPaymentStatus', (global, actions, payload): ActionReturnT
   const { tabId = getCurrentTabId() } = payload || {};
 
   global = updatePayment(global, { status: undefined }, tabId);
-  global = updateStarsPayment(global, { status: undefined }, tabId);
   return global;
 });
 
@@ -50,14 +40,6 @@ addActionHandler('addPaymentError', (global, actions, payload): ActionReturnType
       status: 'failed',
       error,
     },
-  }, tabId);
-});
-
-addActionHandler('closeGiveawayModal', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-
-  return updateTabState(global, {
-    giveawayModal: undefined,
   }, tabId);
 });
 
@@ -164,29 +146,3 @@ addActionHandler('closePaymentMessageConfirmDialogOpen', (global, actions, paylo
   }, tabId);
 });
 
-addActionHandler('openPriceConfirmModal', (global, actions, payload): ActionReturnType => {
-  const {
-    originalAmount,
-    newAmount,
-    currency,
-    directInfo,
-    tabId = getCurrentTabId(),
-  } = payload;
-
-  return updateTabState(global, {
-    priceConfirmModal: {
-      originalAmount,
-      newAmount,
-      currency,
-      directInfo,
-    },
-  }, tabId);
-});
-
-addActionHandler('closePriceConfirmModal', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-
-  return updateTabState(global, {
-    priceConfirmModal: undefined,
-  }, tabId);
-});

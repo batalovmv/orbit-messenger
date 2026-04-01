@@ -429,7 +429,6 @@ addActionHandler('sendInlineBotApiResult', async (global, actions, payload): Pro
     allowPaidStars,
   });
 
-  if (allowPaidStars) actions.loadStarStatus();
 });
 
 addActionHandler('sendInlineBotResult', async (global, actions, payload): Promise<void> => {

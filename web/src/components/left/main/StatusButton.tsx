@@ -13,7 +13,6 @@ import useEffectWithPrevDeps from '../../../hooks/useEffectWithPrevDeps';
 import useFlag from '../../../hooks/useFlag';
 
 import CustomEmoji from '../../common/CustomEmoji';
-import GiftEffectWrapper from '../../common/gift/GiftEffectWrapper';
 import StarIcon from '../../common/icons/StarIcon';
 import CustomEmojiEffect from '../../common/reactions/CustomEmojiEffect';
 import Button from '../../ui/Button';
@@ -88,18 +87,12 @@ const StatusButton = ({ emojiStatus, collectibleStatuses, isAccountFrozen }: Sta
         onClick={handleEmojiStatusClick}
       >
         {emojiStatus ? (
-          <GiftEffectWrapper
-            withSparkles={Boolean(collectibleEmojiStatus)}
-            sparklesClassName="statusSparkles"
-            sparklesColor={collectibleEmojiStatus?.textColor}
-          >
-            <CustomEmoji
-              key={emojiStatus.documentId}
-              documentId={emojiStatus.documentId}
-              size={EMOJI_STATUS_SIZE}
-              loopLimit={EMOJI_STATUS_LOOP_LIMIT}
-            />
-          </GiftEffectWrapper>
+          <CustomEmoji
+            key={emojiStatus.documentId}
+            documentId={emojiStatus.documentId}
+            size={EMOJI_STATUS_SIZE}
+            loopLimit={EMOJI_STATUS_LOOP_LIMIT}
+          />
         ) : <StarIcon />}
       </Button>
       <StatusPickerMenu

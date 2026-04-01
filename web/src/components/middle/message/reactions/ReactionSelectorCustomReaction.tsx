@@ -26,8 +26,6 @@ type OwnProps = {
   style?: string;
   isLocked?: boolean;
   onToggleReaction: (reaction: ApiReaction) => void;
-  onSendPaidReaction?: NoneToVoidFunction;
-  onShowPaidReactionModal?: NoneToVoidFunction;
 };
 
 const ReactionSelectorCustomReaction: FC<OwnProps> = ({
@@ -38,13 +36,10 @@ const ReactionSelectorCustomReaction: FC<OwnProps> = ({
   style,
   isLocked,
   onToggleReaction,
-  onSendPaidReaction,
-  onShowPaidReactionModal,
 }) => {
   const ref = useRef<HTMLDivElement>();
   const handleClick = useLastCallback(() => {
     if (reaction.type === 'paid') {
-      onSendPaidReaction?.();
       return;
     }
 
@@ -61,12 +56,10 @@ const ReactionSelectorCustomReaction: FC<OwnProps> = ({
 
   useEffect(() => {
     if (isContextMenuOpen) {
-      onShowPaidReactionModal?.();
-
       handleContextMenuClose();
       handleContextMenuHide();
     }
-  }, [handleContextMenuClose, onShowPaidReactionModal, handleContextMenuHide, isContextMenuOpen]);
+  }, [handleContextMenuClose, handleContextMenuHide, isContextMenuOpen]);
 
   return (
     <div

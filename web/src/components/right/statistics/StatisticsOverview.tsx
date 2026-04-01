@@ -3,19 +3,16 @@ import type { FC } from '../../../lib/teact/teact';
 import { memo } from '../../../lib/teact/teact';
 
 import type {
-  ApiBoostStatistics, ApiChannelMonetizationStatistics,
+  ApiBoostStatistics,
   ApiChannelStatistics, ApiGroupStatistics, ApiPostStatistics, StatisticsOverviewItem,
 } from '../../../api/types';
 
 import buildClassName from '../../../util/buildClassName';
 import { formatFullDate } from '../../../util/dates/dateFormat';
-import { convertTonFromNanos } from '../../../util/formatCurrency';
 import { formatInteger, formatIntegerCompact } from '../../../util/textFormat';
 
 import useLang from '../../../hooks/useLang';
 import useOldLang from '../../../hooks/useOldLang';
-
-import Icon from '../../common/icons/Icon';
 
 import styles from './StatisticsOverview.module.scss';
 
@@ -99,7 +96,7 @@ const BOOST_OVERVIEW: OverviewCell[][] = [
   ],
 ];
 
-type StatisticsType = 'channel' | 'group' | 'message' | 'boost' | 'story' | 'monetization';
+type StatisticsType = 'channel' | 'group' | 'message' | 'boost' | 'story';
 
 const DEFAULT_VALUE = 0;
 
@@ -107,13 +104,11 @@ export type OwnProps = {
   type: StatisticsType;
   title?: string;
   className?: string;
-  isToncoin?: boolean;
   statistics:
     ApiChannelStatistics |
     ApiGroupStatistics |
     ApiPostStatistics |
-    ApiBoostStatistics |
-    ApiChannelMonetizationStatistics;
+    ApiBoostStatistics;
   subtitle?: ReactNode;
 };
 
@@ -121,7 +116,6 @@ const StatisticsOverview: FC<OwnProps> = ({
   title,
   type,
   statistics,
-  isToncoin,
   className,
   subtitle,
 }) => {
@@ -152,35 +146,7 @@ const StatisticsOverview: FC<OwnProps> = ({
     );
   };
 
-  const renderBalanceCell = (balance: number, usdRate: number, text: string) => {
-    const [integerTonPart, decimalTonPart] = balance.toFixed(4).split('.');
-    const [integerUsdPart, decimalUsdPart] = (balance * usdRate).toFixed(2).split('.');
-    return (
-      <div>
-        <Icon className={styles.toncoin} name="toncoin" />
-        <b className={styles.tableValue}>
-          {integerTonPart}
-          <span className={styles.decimalPart}>
-            .
-            {decimalTonPart}
-          </span>
-        </b>
-        {' '}
-        <span className={styles.tableHeading}>
-          ≈ $
-          {integerUsdPart}
-          <span className={styles.decimalUsdPart}>
-            .
-            {decimalUsdPart}
-          </span>
-        </span>
-        <h3 className={styles.tableHeading}>{oldLang(text)}</h3>
-      </div>
-    );
-  };
-
   const { period } = statistics as ApiGroupStatistics;
-  const { balances, usdRate } = statistics as ApiChannelMonetizationStatistics;
 
   const schema = getSchemaByType(type);
 
@@ -204,27 +170,7 @@ const StatisticsOverview: FC<OwnProps> = ({
       </div>
 
       <table className={styles.table}>
-        {isToncoin ? (
-          <tr>
-            <td className={styles.tableCell}>
-              {renderBalanceCell(
-                balances?.availableBalance ? convertTonFromNanos(balances.availableBalance.amount) : 0,
-                usdRate || 0,
-                'lng_channel_earn_available',
-              )}
-              {renderBalanceCell(
-                balances?.currentBalance ? convertTonFromNanos(balances.currentBalance.amount) : 0,
-                usdRate || 0,
-                'lng_channel_earn_reward',
-              )}
-              {renderBalanceCell(
-                balances?.overallRevenue ? convertTonFromNanos(balances.overallRevenue.amount) : 0,
-                usdRate || 0,
-                'lng_channel_earn_total',
-              )}
-            </td>
-          </tr>
-        ) : schema.map((row) => (
+        {schema.map((row) => (
           <tr>
             {row.map((cell: OverviewCell) => {
               const field = (statistics as any)?.[cell.name];

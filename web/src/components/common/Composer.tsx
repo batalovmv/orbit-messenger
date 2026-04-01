@@ -94,7 +94,7 @@ import {
   selectNotifyException,
   selectPeer,
   selectPeerPaidMessagesStars,
-  selectPeerStory,
+
   selectPerformanceSettingsValue,
   selectRequestedDraft,
   selectRequestedDraftFiles,
@@ -244,7 +244,6 @@ type StateProps = {
   isRightColumnShown?: boolean;
   isSelectModeActive?: boolean;
   isReactionPickerOpen?: boolean;
-  shouldDisplayGiftsButton?: boolean;
   isForwarding?: boolean;
   isReplying?: boolean;
   hasSuggestedPost?: boolean;
@@ -310,9 +309,6 @@ type StateProps = {
   shouldPaidMessageAutoApprove?: boolean;
   isSilentPosting?: boolean;
   isPaymentMessageConfirmDialogOpen: boolean;
-  starsBalance: number;
-  isStarsBalanceModalOpen: boolean;
-  disallowedGifts?: ApiDisallowedGifts;
   isAccountFrozen?: boolean;
   isAppConfigLoaded?: boolean;
   insertingPeerIdMention?: string;
@@ -372,7 +368,6 @@ const Composer = ({
   isRightColumnShown,
   isSelectModeActive,
   isReactionPickerOpen,
-  shouldDisplayGiftsButton,
   isForwarding,
   isReplying,
   hasSuggestedPost,
@@ -437,9 +432,6 @@ const Composer = ({
   maxMessageLength,
   isSilentPosting,
   isPaymentMessageConfirmDialogOpen,
-  starsBalance,
-  isStarsBalanceModalOpen,
-  disallowedGifts,
   isAccountFrozen,
   isAppConfigLoaded,
   insertingPeerIdMention,
@@ -469,10 +461,7 @@ const Composer = ({
     addRecentCustomEmoji,
     showNotification,
     showAllowedMessageTypesNotification,
-    openStoryReactionPicker,
-    openGiftModal,
     closeReactionPicker,
-    sendStoryReaction,
     editMessage,
     updateAttachmentSettings,
     saveEffectInDraft,
@@ -608,7 +597,7 @@ const Composer = ({
     shouldAutoApprove: shouldPaidMessageAutoApprove,
     setAutoApprove: setShouldPaidMessageAutoApprove,
     handleWithConfirmation: handleActionWithPaymentConfirmation,
-  } = usePaidMessageConfirmation(starsForAllMessages, isStarsBalanceModalOpen, starsBalance);
+  } = usePaidMessageConfirmation(starsForAllMessages, false, 0);
 
   const hasWebPagePreview = !hasAttachments && canAttachEmbedLinks && !noWebPage
     && webPagePreview?.webpageType === 'full';
@@ -930,14 +919,6 @@ const Composer = ({
     };
   }, [chatId, threadId, resetComposerRef, stopRecordingVoiceRef]);
 
-  const areAllGiftsDisallowed = useMemo(() => {
-    if (!disallowedGifts) {
-      return undefined;
-    }
-    return Object.values(disallowedGifts).every(Boolean);
-  }, [disallowedGifts]);
-
-  const shouldShowGiftButton = Boolean(!isChatWithSelf && shouldDisplayGiftsButton && !areAllGiftsDisallowed);
   const shouldShowSuggestedPostButton = isMonoforum && !editingMessage
     && !isForwarding && !isReplying && !draft?.suggestedPostInfo;
 
@@ -1007,11 +988,7 @@ const Composer = ({
     if (isReactionPickerOpen) return;
 
     if (storyReactionPickerAnchor) {
-      openStoryReactionPicker({
-        peerId: chatId,
-        storyId: storyId!,
-        position: storyReactionPickerAnchor,
-      });
+      // openStoryReactionPicker removed — stories feature removed
       handleStoryPickerContextMenuHide();
     }
   }, [chatId, handleStoryPickerContextMenuHide, isReactionPickerOpen, storyId, storyReactionPickerAnchor]);
@@ -1697,9 +1674,6 @@ const Composer = ({
     });
   });
 
-  const handleGiftClick = useLastCallback(() => {
-    openGiftModal({ forUserId: chatId });
-  });
   const handleSuggestPostClick = useLastCallback(() => {
     updateDraftSuggestedPostInfo({
       price: { currency: STARS_CURRENCY_CODE, amount: 0, nanos: 0 },
@@ -1930,23 +1904,12 @@ const Composer = ({
     closeReactionPicker();
   });
 
-  const handleReactionPickerOpen = useLastCallback((position: IAnchorPosition) => {
-    openStoryReactionPicker({
-      peerId: chatId,
-      storyId: storyId!,
-      position,
-      sendAsMessage: true,
-    });
+  const handleReactionPickerOpen = useLastCallback((_position: IAnchorPosition) => {
+    // openStoryReactionPicker removed — stories feature removed
   });
 
   const handleLikeStory = useLastCallback(() => {
-    const reaction = sentStoryReaction ? undefined : HEART_REACTION;
-    sendStoryReaction({
-      peerId: chatId,
-      storyId: storyId!,
-      containerId: getStoryKey(chatId, storyId!),
-      reaction,
-    });
+    // sendStoryReaction removed — stories feature removed
   });
 
   const handleSendScheduled = useLastCallback(() => {
@@ -2313,16 +2276,6 @@ const Composer = ({
                         iconName="scheduled"
                       />
                     )}
-                    {shouldShowGiftButton && (
-                      <Button
-                        round
-                        faded
-                        className="composer-action-button"
-                        color="translucent"
-                        onClick={handleGiftClick}
-                        iconName="gift"
-                      />
-                    )}
                     {shouldShowSuggestedPostButton && (
                       <Button
                         round
@@ -2606,7 +2559,7 @@ export default memo(withGlobal<OwnProps>(
     const requestedDraftFiles = selectRequestedDraftFiles(global, chatId);
 
     const tabState = selectTabState(global);
-    const isStoryViewerOpen = Boolean(tabState.storyViewer.storyId);
+    const isStoryViewerOpen = false;
 
     const currentMessageList = selectCurrentMessageList(global);
     const isForCurrentMessageList = chatId === currentMessageList?.chatId
@@ -2622,8 +2575,7 @@ export default memo(withGlobal<OwnProps>(
       ? selectEditingScheduledDraft(global, chatId)
       : selectEditingDraft(global, chatId, threadId);
 
-    const story = storyId && selectPeerStory(global, chatId, storyId);
-    const sentStoryReaction = story && 'sentReaction' in story ? story.sentReaction : undefined;
+    const sentStoryReaction = undefined;
     const draft = selectDraft(global, chatId, threadId);
     const replyToMessage = draft?.replyInfo
       ? selectChatMessage(global, chatId, draft.replyInfo.replyToMsgId)
@@ -2654,8 +2606,6 @@ export default memo(withGlobal<OwnProps>(
     const isForwarding = chatId === tabState.forwardMessages.toChatId;
     const isReplying = Boolean(draft?.replyInfo);
     const hasSuggestedPost = Boolean(draft?.suggestedPostInfo);
-    const starsBalance = global.stars?.balance.amount || 0;
-    const isStarsBalanceModalOpen = Boolean(tabState.starsBalanceModal);
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
     const isAppConfigLoaded = global.isAppConfigLoaded;
     const insertingPeerIdMention = tabState.insertingPeerIdMention;
@@ -2746,10 +2696,6 @@ export default memo(withGlobal<OwnProps>(
       shouldPaidMessageAutoApprove,
       isSilentPosting,
       isPaymentMessageConfirmDialogOpen: tabState.isPaymentMessageConfirmDialogOpen,
-      starsBalance,
-      isStarsBalanceModalOpen,
-      shouldDisplayGiftsButton: userFullInfo?.shouldDisplayGiftsButton,
-      disallowedGifts: userFullInfo?.disallowedGifts,
       isAccountFrozen,
       isAppConfigLoaded,
       insertingPeerIdMention,

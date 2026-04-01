@@ -320,9 +320,14 @@ export async function exportChatInviteLink({ chatId, title, expireDate, usageLim
   return data;
 }
 
-export async function fetchExportedChatInvites({ chatId }: { chatId: string }) {
-  const data = await client.request<any[]>('GET', `/chats/${chatId}/invite-links`);
-  return data;
+export async function fetchExportedChatInvites({
+  peer,
+}: { peer: { id: string }; admin?: unknown; limit?: number; isRevoked?: boolean }) {
+  const data = await client.request<any[]>('GET', `/chats/${peer.id}/invite-links`);
+  if (!data) return undefined;
+  return {
+    invites: data,
+  };
 }
 
 export async function fetchChatInviteInfo({ hash }: { hash: string }) {

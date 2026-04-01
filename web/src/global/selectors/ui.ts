@@ -1,4 +1,4 @@
-import type { ApiMessage, ApiPeer, ApiSponsoredMessage } from '../../api/types';
+import type { ApiMessage, ApiPeer } from '../../api/types';
 import type { CustomPeer, PerformanceTypeKey, ThemeKey } from '../../types';
 import type { GlobalState, TabArgs } from '../types';
 import { NewChatMembersProgress, RightColumnContent } from '../../types';
@@ -22,10 +22,9 @@ export function selectIsMediaViewerOpen<T extends GlobalState>(
       messageId,
       isAvatarView,
       standaloneMedia,
-      isSponsoredMessage,
     },
   } = selectTabState(global, tabId);
-  return Boolean(standaloneMedia || (chatId && (isAvatarView || messageId || isSponsoredMessage)));
+  return Boolean(standaloneMedia || (chatId && (isAvatarView || messageId)));
 }
 
 export function selectRightColumnContentKey<T extends GlobalState>(
@@ -45,14 +44,8 @@ export function selectRightColumnContentKey<T extends GlobalState>(
     RightColumnContent.Management
   ) : tabState.isStatisticsShown && tabState.statistics.currentMessageId ? (
     RightColumnContent.MessageStatistics
-  ) : tabState.isStatisticsShown && tabState.statistics.currentStoryId ? (
-    RightColumnContent.StoryStatistics
   ) : selectIsStatisticsShown(global, tabId) ? (
     RightColumnContent.Statistics
-  ) : tabState.boostStatistics ? (
-    RightColumnContent.BoostStatistics
-  ) : tabState.monetizationStatistics ? (
-    RightColumnContent.MonetizationStatistics
   ) : tabState.stickerSearch?.query !== undefined ? (
     RightColumnContent.StickerSearch
   ) : tabState.gifSearch?.query !== undefined ? (
@@ -122,7 +115,7 @@ export function selectPerformanceSettingsValue<T extends GlobalState>(
   return selectPerformanceSettings(global)[key];
 }
 
-export function selectCanAutoPlayMedia<T extends GlobalState>(global: T, message: ApiMessage | ApiSponsoredMessage) {
+export function selectCanAutoPlayMedia<T extends GlobalState>(global: T, message: ApiMessage) {
   const webPage = selectWebPageFromMessage(global, message);
   const video = getMessageVideo(message) || getWebPageVideo(webPage);
   if (!video) {

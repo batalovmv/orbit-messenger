@@ -61,7 +61,7 @@ import {
   selectIsReactionPickerOpen,
   selectMessageCustomEmojiSets,
   selectMessageTranslations,
-  selectPeerStory,
+
   selectPollFromMessage,
   selectRequestedChatTranslationLanguage,
   selectRequestedMessageTranslationLanguage,
@@ -158,7 +158,6 @@ type StateProps = {
   isInSavedMessages?: boolean;
   isChannel?: boolean;
   canReplyInChat?: boolean;
-  isWithPaidReaction?: boolean;
   userFullName?: string;
   canGift?: boolean;
   savedDialogId?: string;
@@ -227,7 +226,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   isReactionPickerOpen,
   isInSavedMessages,
   canReplyInChat,
-  isWithPaidReaction,
   userFullName,
   canGift,
   className,
@@ -268,8 +266,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     loadOutboxReadDate,
     copyMessageLink,
     openDeleteMessageModal,
-    addLocalPaidReaction,
-    openPaidReactionModal,
     reportMessages,
     openTodoListModal,
     showNotification,
@@ -621,22 +617,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
-  const handleSendPaidReaction = useLastCallback(() => {
-    addLocalPaidReaction({
-      chatId: message.chatId, messageId: message.id, count: 1,
-    });
-    closeMenu();
-  });
-
-  const handlePaidReactionModalOpen = useLastCallback(() => {
-    openPaidReactionModal({
-      chatId: message.chatId,
-      messageId: message.id,
-    });
-
-    closeMenu();
-  });
-
   const handleReactionPickerOpen = useLastCallback((position: IAnchorPosition) => {
     openMessageReactionPicker({ chatId: message.chatId, messageId: message.id, position });
   });
@@ -692,7 +672,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         availableReactions={availableReactions}
         topReactions={topReactions}
         defaultTagReactions={defaultTagReactions}
-        isWithPaidReaction={isWithPaidReaction}
         message={message}
         isPrivate={isPrivate}
         isCurrentUserPremium={isCurrentUserPremium}
@@ -765,8 +744,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onClosePoll={openClosePollDialog}
         onShowSeenBy={handleOpenSeenByModal}
         onToggleReaction={handleToggleReaction}
-        onSendPaidReaction={handleSendPaidReaction}
-        onShowPaidReactionModal={handlePaidReactionModalOpen}
         onShowReactors={handleOpenReactorListModal}
         onReactionPickerOpen={handleReactionPickerOpen}
         onTranslate={handleTranslate}
@@ -903,7 +880,7 @@ export default memo(withGlobal<OwnProps>(
     const poll = selectPollFromMessage(global, message);
     const webPage = selectWebPageFromMessage(global, message);
     const storyData = message.content.storyData;
-    const story = storyData ? selectPeerStory(global, storyData.peerId, storyData.id) : undefined;
+    const story = undefined;
 
     const canGift = selectCanGift(global, message.chatId);
 
@@ -963,7 +940,6 @@ export default memo(withGlobal<OwnProps>(
       isInSavedMessages,
       isChannel,
       canReplyInChat,
-      isWithPaidReaction: chatFullInfo?.isPaidReactionAvailable,
       poll,
       story,
       userFullName,

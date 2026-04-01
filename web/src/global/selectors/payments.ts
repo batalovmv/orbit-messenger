@@ -27,10 +27,10 @@ export function selectPaymentForm<T extends GlobalState>(
 }
 
 export function selectStarsPayment<T extends GlobalState>(
-  global: T,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
+  _global: T,
+  ...[_tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  return selectTabState(global, tabId).starsPayment;
+  return undefined;
 }
 
 export function selectPaymentRequestId<T extends GlobalState>(

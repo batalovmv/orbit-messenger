@@ -16,7 +16,7 @@ import {
   selectChat,
   selectChatFullInfo,
   selectChatMessages,
-  selectPeerStories,
+
   selectStatistics,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
@@ -29,7 +29,7 @@ import useOldLang from '../../../hooks/useOldLang';
 import Loading from '../../ui/Loading';
 import StatisticsOverview from './StatisticsOverview';
 import StatisticsRecentMessage from './StatisticsRecentMessage';
-import StatisticsRecentStory from './StatisticsRecentStory';
+// import StatisticsRecentStory from './StatisticsRecentStory'; // stories removed
 
 import styles from './Statistics.module.scss';
 
@@ -236,17 +236,8 @@ const Statistics = ({
               );
             }
 
-            if ('storyId' in postStatistic && chat) {
-              const story = storiesById?.[postStatistic.storyId];
-
-              return (
-                <StatisticsRecentStory
-                  key={`statistic_story_${postStatistic.storyId}`}
-                  chat={chat}
-                  story={story}
-                  postStatistic={postStatistic}
-                />
-              );
+            if ('storyId' in postStatistic) {
+              return undefined; // Stories removed
             }
 
             return undefined;
@@ -264,10 +255,9 @@ export default memo(withGlobal<OwnProps>(
     const dcId = selectChatFullInfo(global, chatId)?.statisticsDcId;
     const isGroup = chat?.type === 'chatTypeSuperGroup';
     const messagesById = selectChatMessages(global, chatId);
-    const storiesById = selectPeerStories(global, chatId)?.byId;
 
     return {
-      statistics, dcId, isGroup, chat, messagesById, storiesById,
+      statistics, dcId, isGroup, chat, messagesById, storiesById: undefined,
     };
   },
 )(Statistics));

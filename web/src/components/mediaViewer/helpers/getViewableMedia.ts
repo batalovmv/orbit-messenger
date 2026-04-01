@@ -1,5 +1,5 @@
 import type {
-  ApiMessage, ApiPeer, ApiPeerPhotos, ApiSponsoredMessage,
+  ApiMessage, ApiPeer, ApiPeerPhotos,
 } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import type { MediaViewerMedia, MediaViewerOrigin } from '../../../types';
@@ -20,10 +20,6 @@ export type MediaViewerItem = {
   type: 'standalone';
   media: MediaViewerMedia[];
   mediaIndex: number;
-} | {
-  type: 'sponsoredMessage';
-  message: ApiSponsoredMessage;
-  mediaIndex?: number;
 };
 
 export type ViewableMedia = {
@@ -32,13 +28,12 @@ export type ViewableMedia = {
 };
 
 export function getMediaViewerItem({
-  message, avatarOwner, profilePhotos, standaloneMedia, mediaIndex, sponsoredMessage,
+  message, avatarOwner, profilePhotos, standaloneMedia, mediaIndex,
 }: {
   message?: ApiMessage;
   avatarOwner?: ApiPeer;
   profilePhotos?: ApiPeerPhotos;
   standaloneMedia?: MediaViewerMedia[];
-  sponsoredMessage?: ApiSponsoredMessage;
   mediaIndex?: number;
 }): MediaViewerItem | undefined {
   if (avatarOwner && profilePhotos) {
@@ -62,14 +57,6 @@ export function getMediaViewerItem({
     return {
       type: 'message',
       message,
-      mediaIndex,
-    };
-  }
-
-  if (sponsoredMessage) {
-    return {
-      type: 'sponsoredMessage',
-      message: sponsoredMessage,
       mediaIndex,
     };
   }

@@ -13,7 +13,6 @@ import buildClassName from '../../../../util/buildClassName';
 import { formatIntegerCompact } from '../../../../util/textFormat';
 import { REM } from '../../../common/helpers/mediaDimensions';
 
-import useSelector from '../../../../hooks/data/useSelector';
 import useContextMenuHandlers from '../../../../hooks/useContextMenuHandlers';
 import useEffectWithPrevDeps from '../../../../hooks/useEffectWithPrevDeps';
 import useLang from '../../../../hooks/useLang';
@@ -48,9 +47,6 @@ type OwnProps = {
   onPaidClick?: (count: number) => void;
 };
 
-function selectStarsState(global: GlobalState) {
-  return global.stars;
-}
 
 const ReactionButton = ({
   reaction,
@@ -67,9 +63,7 @@ const ReactionButton = ({
   onPaidClick,
 }: OwnProps) => {
   const {
-    openStarsBalanceModal,
     resetLocalPaidReactions,
-    openPaidReactionModal,
     requestWave,
   } = getActions();
   const ref = useRef<HTMLButtonElement>();
@@ -80,8 +74,6 @@ const ReactionButton = ({
 
   const isPaid = reaction.reaction.type === 'paid';
 
-  const starsState = useSelector(selectStarsState);
-  const areStarsLoaded = Boolean(starsState);
 
   const handlePaidClick = useLastCallback((count = 1) => {
     onPaidClick?.(count);
@@ -108,35 +100,15 @@ const ReactionButton = ({
 
   useEffect(() => {
     if (isContextMenuOpen) {
-      openPaidReactionModal({
-        chatId,
-        messageId,
-      });
-
       handleContextMenuClose();
       handleContextMenuHide();
     }
-  }, [handleContextMenuClose, handleContextMenuHide, isContextMenuOpen, chatId, messageId]);
+  }, [handleContextMenuClose, handleContextMenuHide, isContextMenuOpen]);
 
   useEffectWithPrevDeps(([prevReaction]) => {
     const amount = reaction.localAmount;
     const button = ref.current;
     if (!amount || !button || amount === prevReaction?.localAmount) return;
-
-    if (areStarsLoaded && amount > starsState.balance.amount) {
-      openStarsBalanceModal({
-        originReaction: {
-          chatId,
-          messageId,
-          amount,
-        },
-      });
-      resetLocalPaidReactions({
-        chatId,
-        messageId,
-      });
-      return;
-    }
 
     if (reaction.localAmount) {
       const { left, top } = button.getBoundingClientRect();
@@ -156,7 +128,7 @@ const ReactionButton = ({
       duration: 500 * currentScale,
       easing: 'ease-out',
     });
-  }, [reaction, starsState?.balance, areStarsLoaded, chatId, messageId]);
+  }, [reaction, chatId, messageId]);
 
   const prevAmount = usePrevious(reaction.localAmount);
 

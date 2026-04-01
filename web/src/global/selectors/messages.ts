@@ -5,7 +5,7 @@ import type {
   ApiMessageEntityCustomEmoji,
   ApiMessageForwardInfo,
   ApiMessageOutgoingStatus,
-  ApiPeer, ApiRestrictionReason, ApiSponsoredMessage,
+  ApiPeer, ApiRestrictionReason,
   ApiStickerSetInfo,
   MediaContainer,
 } from '../../api/types';
@@ -82,7 +82,7 @@ import {
 import { selectCurrentLimit } from './limits';
 import { selectMessageDownloadableMedia } from './media';
 import { selectPeer, selectPeerPaidMessagesStars } from './peers';
-import { selectPeerStory } from './stories';
+// import { selectPeerStory } from './stories'; // stories removed
 import { selectCustomEmoji, selectIsStickerFavorite } from './symbols';
 import { selectTabState } from './tabs';
 import {
@@ -504,14 +504,9 @@ export function selectCanForwardMessage<T extends GlobalState>(global: T, messag
 
   const webPage = selectFullWebPageFromMessage(global, message);
 
-  const story = content.storyData
-    ? selectPeerStory(global, content.storyData.peerId, content.storyData.id)
-    : (webPage?.story
-      ? selectPeerStory(global, webPage.story.peerId, webPage.story.id)
-      : undefined
-    );
+  const story = undefined;
   const isChatProtected = selectIsChatProtected(global, message.chatId);
-  const isStoryForwardForbidden = story && ('isDeleted' in story || ('noForwards' in story && story.noForwards));
+  const isStoryForwardForbidden = false;
   const canForward = (
     !isLocal && !isAction && !isChatProtected && !isStoryForwardForbidden
     && (message.isForwardingAllowed || isServiceNotification) && !hasTtl
@@ -637,7 +632,9 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const canEdit = !isLocal && !isAction && isMessageEditable && hasMessageEditRight;
 
   const hasSticker = Boolean(message.content?.sticker);
-  const hasFavoriteSticker = hasSticker && selectIsStickerFavorite(global, message.content?.sticker);
+  const hasFavoriteSticker = hasSticker && message.content?.sticker
+    ? selectIsStickerFavorite(global, message.content.sticker)
+    : false;
   const canFaveSticker = !isAction && hasSticker && !hasFavoriteSticker;
   const canUnfaveSticker = !isAction && hasFavoriteSticker;
   const canCopy = !isAction;
@@ -1032,14 +1029,14 @@ function selectShouldDisplayReplyKeyboard<T extends GlobalState>(global: T, mess
 }
 
 export function selectCanAutoLoadMedia<T extends GlobalState>(
-  global: T, message: ApiMessage | ApiSponsoredMessage,
+  global: T, message: ApiMessage,
 ) {
   const chat = selectChat(global, message.chatId);
   if (!chat) {
     return undefined;
   }
 
-  const sender = 'id' in message ? selectSender(global, message) : undefined;
+  const sender = selectSender(global, message);
 
   const webPage = selectWebPageFromMessage(global, message);
   const isPhoto = Boolean(getMessagePhoto(message) || getWebPagePhoto(webPage));
@@ -1194,12 +1191,6 @@ export function selectHasIpRevealingMedia<T extends GlobalState>(global: T, chat
 
       return isIpRevealingMedia({ mimeType: document.mimeType, extension });
     });
-}
-
-export function selectSponsoredMessage<T extends GlobalState>(global: T, chatId: string) {
-  const message = global.messages.sponsoredByChatId[chatId];
-
-  return message && message.expiresAt >= Math.round(Date.now() / 1000) ? message : undefined;
 }
 
 export function selectDefaultReaction<T extends GlobalState>(global: T, chatId: string) {
@@ -1370,13 +1361,9 @@ export function selectForwardsCanBeSentToChat<T extends GlobalState>(
   toChatId: string,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  const { messageIds, storyId, fromChatId } = selectTabState(global, tabId).forwardMessages;
+  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages;
   const chat = selectChat(global, toChatId);
-  if ((!messageIds && !storyId) || !chat) return false;
-
-  if (storyId) {
-    return true;
-  }
+  if (!messageIds || !chat) return false;
 
   const chatFullInfo = selectChatFullInfo(global, toChatId);
   const chatMessages = selectChatMessages(global, fromChatId!);

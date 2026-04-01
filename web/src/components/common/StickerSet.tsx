@@ -36,7 +36,6 @@ import useWindowSize from '../../hooks/window/useWindowSize';
 
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import GiftEffectWrapper from './gift/GiftEffectWrapper';
 import Icon from './icons/Icon';
 import ReactionEmoji from './reactions/ReactionEmoji';
 import StickerButton from './StickerButton';
@@ -408,14 +407,6 @@ const StickerSet = ({
                   && (stickerSet.id === EFFECT_STICKERS_SET_ID || stickerSet.id === EFFECT_EMOJIS_SET_ID)}
               />
             );
-
-            if (withSparkles) {
-              return (
-                <GiftEffectWrapper className="gift-effect-wrapper" withSparkles>
-                  {component}
-                </GiftEffectWrapper>
-              );
-            }
 
             return component;
           })}

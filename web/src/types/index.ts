@@ -301,7 +301,6 @@ export enum RightColumnContent {
   ChatInfo,
   Management,
   Statistics,
-  BoostStatistics,
   MessageStatistics,
   StoryStatistics,
   StickerSearch,
@@ -310,7 +309,6 @@ export enum RightColumnContent {
   AddingMembers,
   CreateTopic,
   EditTopic,
-  MonetizationStatistics,
   NewGroup,
 }
 
@@ -330,7 +328,6 @@ export enum MediaViewerOrigin {
   SuggestedAvatar,
   StarsTransaction,
   PreviewMedia,
-  SponsoredMessage,
 }
 
 export enum StoryViewerOrigin {

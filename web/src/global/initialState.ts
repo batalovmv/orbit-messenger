@@ -164,7 +164,6 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
 
   messages: {
     byChatId: {},
-    sponsoredByChatId: {},
     pollById: {},
     webPageById: {},
     playbackByChatId: {},
@@ -418,10 +417,6 @@ export const INITIAL_TAB_STATE: TabState = {
     },
   },
 
-  storyViewer: {
-    isMuted: true,
-    isRibbonShown: false,
-  },
 
   mediaViewer: {
     volume: DEFAULT_VOLUME,
@@ -445,7 +440,6 @@ export const INITIAL_TAB_STATE: TabState = {
   pollResults: {},
 
   payment: {},
-  starsPayment: {},
 
   notifications: [],
 

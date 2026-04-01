@@ -15,7 +15,6 @@ import type {
   ApiGroupCall,
   ApiMessage,
   ApiNotifyPeerType,
-  ApiPaidReactionPrivacyType,
   ApiPasskey,
   ApiPasskeyOption,
   ApiPeerColors,
@@ -33,18 +32,14 @@ import type {
   ApiSavedReactionTag,
   ApiSavedStarGift,
   ApiSession,
-  ApiSponsoredMessage,
   ApiStarGiftAuctionState,
   ApiStarGiftCollection,
   ApiStarGiftRegular,
-  ApiStarsAmount,
-  ApiStarTopupOption,
   ApiStealthMode,
   ApiSticker,
   ApiStickerSet,
   ApiStoryAlbum,
   ApiTimezone,
-  ApiTonAmount,
   ApiTranscription,
   ApiUpdateAuthorizationStateType,
   ApiUpdateConnectionStateType,
@@ -68,8 +63,6 @@ import type {
   ServiceNotification,
   SimilarBotsInfo,
   StarGiftCategory,
-  StarsSubscriptions,
-  StarsTransactionHistory,
   TextSummary,
   ThemeKey,
   Thread,
@@ -253,7 +246,6 @@ export type GlobalState = {
     playbackByChatId: Record<string, {
       byId: Record<number, number>;
     }>;
-    sponsoredByChatId: Record<string, ApiSponsoredMessage>;
     pollById: Record<string, ApiPoll>;
     webPageById: Record<string, ApiWebPage>;
   };
@@ -446,7 +438,6 @@ export type GlobalState = {
     privacy: Partial<Record<ApiPrivacyKey, ApiPrivacySettings>>;
     notifyDefaults?: Record<ApiNotifyPeerType, ApiPeerNotifySettings>;
     lastPremiumBandwithNotificationDate?: number;
-    paidReactionPrivacy?: ApiPaidReactionPrivacyType;
     botVerificationShownPeerIds: string[];
     themes: Partial<Record<ThemeKey, IThemeSettings>>;
     accountDaysTtl: number;
@@ -480,16 +471,6 @@ export type GlobalState = {
     hash: string;
   };
 
-  stars?: {
-    topupOptions: ApiStarTopupOption[];
-    balance: ApiStarsAmount;
-    history: StarsTransactionHistory;
-    subscriptions?: StarsSubscriptions;
-  };
-  ton?: {
-    balance: ApiTonAmount;
-    history: StarsTransactionHistory;
-  };
 };
 
 export type RequiredGlobalState = GlobalState & { _: never };

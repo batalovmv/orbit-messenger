@@ -8,7 +8,7 @@ import {
   deleteContact,
   replaceUserStatuses,
   updateChat,
-  updatePeerStoriesHidden,
+
   updateUser,
   updateUserFullInfo,
 } from '../../reducers';
@@ -62,9 +62,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updateUserFullInfo(global, update.id, update.fullInfo);
       }
 
-      if (localUser?.areStoriesHidden !== update.user.areStoriesHidden) {
-        global = updatePeerStoriesHidden(global, update.id, update.user.areStoriesHidden || false);
-      }
 
       return global;
     }

@@ -36,7 +36,6 @@ type OwnProps = {
 
 type StateProps = {
   isCurrentUserPremium?: boolean;
-  starsBalance: number;
 };
 
 const WAIT_DELAY = 2;
@@ -48,12 +47,10 @@ const PublicPostsSearchLauncher = ({
   onSearch,
   isLoading,
   isCurrentUserPremium,
-  starsBalance,
 }: OwnProps & StateProps) => {
   const {
     checkSearchPostsFlood,
     openPremiumModal,
-    openStarsBalanceModal,
   } = getActions();
 
   const lang = useLang();
@@ -73,18 +70,7 @@ const PublicPostsSearchLauncher = ({
   }, [queryIsFree, searchQuery, queryFromFlood, onSearch]);
 
   const handlePaidSearchClick = useLastCallback(() => {
-    const starsAmount = searchFlood?.starsAmount || 0;
-    const currentBalance = starsBalance;
-
-    if (currentBalance < starsAmount) {
-      openStarsBalanceModal({
-        topup: {
-          balanceNeeded: starsAmount,
-        },
-      });
-    } else {
-      onSearch();
-    }
+    onSearch();
   });
 
   useEffect(() => {
@@ -281,5 +267,4 @@ const PublicPostsSearchLauncher = ({
 
 export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => ({
   isCurrentUserPremium: selectIsCurrentUserPremium(global),
-  starsBalance: global.stars?.balance?.amount || 0,
 }))(PublicPostsSearchLauncher));

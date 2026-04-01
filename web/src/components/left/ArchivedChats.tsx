@@ -5,9 +5,7 @@ import { getActions } from '../../global';
 import type { GlobalState } from '../../global/types';
 import type { FolderEditDispatch } from '../../hooks/reducers/useFoldersReducer';
 
-import { ANIMATION_END_DELAY } from '../../config';
 import buildClassName from '../../util/buildClassName';
-import { ANIMATION_DURATION } from '../story/helpers/ribbonAnimation';
 
 import useForumPanelRender from '../../hooks/useForumPanelRender';
 import useHistoryBack from '../../hooks/useHistoryBack';
@@ -16,8 +14,6 @@ import useOldLang from '../../hooks/useOldLang';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 import useLeftHeaderButtonRtlForumTransition from './main/hooks/useLeftHeaderButtonRtlForumTransition';
 
-import StoryRibbon from '../story/StoryRibbon';
-import StoryToggler from '../story/StoryToggler';
 import Button from '../ui/Button';
 import DropdownMenu from '../ui/DropdownMenu';
 import MenuItem from '../ui/MenuItem';
@@ -30,7 +26,6 @@ export type OwnProps = {
   isActive: boolean;
   isForumPanelOpen?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
-  isStoryRibbonShown?: boolean;
   onReset: () => void;
   onTopicSearch: NoneToVoidFunction;
   foldersDispatch: FolderEditDispatch;
@@ -40,7 +35,6 @@ const ArchivedChats: FC<OwnProps> = ({
   isActive,
   isForumPanelOpen,
   archiveSettings,
-  isStoryRibbonShown,
   onReset,
   onTopicSearch,
   foldersDispatch,
@@ -73,17 +67,9 @@ const ArchivedChats: FC<OwnProps> = ({
   } = useForumPanelRender(isForumPanelOpen);
   const isForumPanelVisible = isForumPanelOpen && isAnimationStarted;
 
-  const {
-    shouldRender: shouldRenderStoryRibbon,
-    transitionClassNames: storyRibbonClassNames,
-    isClosing: isStoryRibbonClosing,
-  } = useShowTransitionDeprecated(
-    isStoryRibbonShown, undefined, undefined, '', false, ANIMATION_DURATION + ANIMATION_END_DELAY,
-  );
-
   return (
     <div className="ArchivedChats">
-      <div className={buildClassName('left-header', !shouldRenderStoryRibbon && 'left-header-shadow')}>
+      <div className={buildClassName('left-header', 'left-header-shadow')}>
         {lang.isRtl && <div className="DropdownMenuFiller" />}
         <Button
           round
@@ -100,9 +86,6 @@ const ArchivedChats: FC<OwnProps> = ({
           iconName="arrow-left"
         />
         {shouldRenderTitle && <h3 className={titleClassNames}>{lang('ArchivedChats')}</h3>}
-        <div className="story-toggler-wrapper">
-          <StoryToggler canShow isArchived />
-        </div>
         {archiveSettings.isHidden && (
           <DropdownMenu
             className="archived-chats-more-menu"
@@ -115,16 +98,7 @@ const ArchivedChats: FC<OwnProps> = ({
           </DropdownMenu>
         )}
       </div>
-      <div
-        className={buildClassName(
-          'chat-list-wrapper',
-          shouldRenderStoryRibbon && 'with-story-ribbon',
-          storyRibbonClassNames,
-        )}
-      >
-        {shouldRenderStoryRibbon && (
-          <StoryRibbon isArchived className="left-header-shadow" isClosing={isStoryRibbonClosing} />
-        )}
+      <div className="chat-list-wrapper">
         <ChatList
           folderType="archived"
           isActive={isActive}
@@ -132,7 +106,6 @@ const ArchivedChats: FC<OwnProps> = ({
           isMainList
           foldersDispatch={foldersDispatch}
           archiveSettings={archiveSettings}
-          isStoryRibbonShown={isStoryRibbonShown}
         />
       </div>
       {shouldRenderForumPanel && (

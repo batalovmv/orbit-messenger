@@ -116,16 +116,6 @@ addActionHandler('openInvoice', async (global, actions, payload): Promise<void> 
     global = setPaymentStep(global, PaymentStep.Checkout, tabId);
   }
 
-  if (form.type === 'stars') {
-    global = updateTabState(global, {
-      starsPayment: {
-        inputInvoice,
-        form,
-        status: 'pending',
-      },
-    }, tabId);
-  }
-
   setGlobal(global);
 });
 
@@ -298,8 +288,7 @@ addActionHandler('sendPaymentForm', async (global, actions, payload): Promise<vo
 
 addActionHandler('sendStarPaymentForm', async (global, actions, payload): Promise<void> => {
   const { directInfo, tabId = getCurrentTabId() } = payload;
-  const starPayment = selectStarsPayment(global, tabId);
-  const inputInvoice = starPayment?.inputInvoice || directInfo?.inputInvoice;
+  const inputInvoice = directInfo?.inputInvoice;
   if (!inputInvoice) return;
 
   const requestInputInvoice = getRequestInputInvoice(global, inputInvoice);
@@ -307,7 +296,7 @@ addActionHandler('sendStarPaymentForm', async (global, actions, payload): Promis
     return;
   }
 
-  const formId = (starPayment.form?.formId || starPayment.subscriptionInfo?.subscriptionFormId || directInfo?.formId)!;
+  const formId = directInfo?.formId!;
 
   global = updateStarsPayment(global, { status: 'pending' }, tabId);
   setGlobal(global);
@@ -337,10 +326,8 @@ addActionHandler('sendStarPaymentForm', async (global, actions, payload): Promis
 
   actions.apiUpdate({
     '@type': 'updateStarPaymentStateCompleted',
-    paymentState: directInfo ? { inputInvoice } : starPayment,
     tabId,
   });
-  actions.loadStarStatus();
 });
 
 async function sendStripeCredentials<T extends GlobalState>(
@@ -514,39 +501,6 @@ addActionHandler('openPremiumModal', async (global, actions, payload): Promise<v
   actions.closeReactionPicker({ tabId });
 });
 
-addActionHandler('openGiveawayModal', async (global, actions, payload): Promise<void> => {
-  const {
-    chatId, prepaidGiveaway,
-    tabId = getCurrentTabId(),
-  } = payload;
-
-  const chat = selectChat(global, chatId);
-  if (!chat) return;
-
-  const result = await callApi('getPremiumGiftCodeOptions', {
-    chat,
-  });
-
-  const starOptions = await callApi('fetchStarsGiveawayOptions');
-
-  if (!result || !starOptions) {
-    return;
-  }
-
-  global = getGlobal();
-
-  global = updateTabState(global, {
-    giveawayModal: {
-      chatId,
-      gifts: result,
-      isOpen: true,
-      prepaidGiveaway,
-      starOptions,
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
 addActionHandler('checkCanSendGift', async (global, actions, payload): Promise<void> => {
   const {
     gift, onSuccess, tabId = getCurrentTabId(),
@@ -599,35 +553,6 @@ addActionHandler('openGiftModal', async (global, actions, payload): Promise<void
   setGlobal(global);
 });
 
-addActionHandler('openStarsGiftModal', async (global, actions, payload): Promise<void> => {
-  const {
-    forUserId,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  if (selectIsCurrentUserFrozen(global)) {
-    actions.openFrozenAccountModal({ tabId });
-    return;
-  }
-
-  const chat = forUserId ? selectChat(global, forUserId) : undefined;
-  if (forUserId && !chat) return;
-
-  const starsGiftOptions = await callApi('fetchStarsGiftOptions', {
-    chat,
-  });
-
-  global = getGlobal();
-  global = updateTabState(global, {
-    starsGiftModal: {
-      isOpen: true,
-      forUserId,
-      starsGiftOptions,
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
 addActionHandler('validatePaymentPassword', async (global, actions, payload): Promise<void> => {
   const { password, tabId = getCurrentTabId() } = payload;
   const result = await callApi('fetchTemporaryPaymentPassword', password);
@@ -669,264 +594,6 @@ async function validateRequestedInfo<T extends GlobalState>(
   setGlobal(global);
 }
 
-addActionHandler('openBoostModal', async (global, actions, payload): Promise<void> => {
-  const { chatId, tabId = getCurrentTabId() } = payload;
-  const chat = selectChat(global, chatId);
-  if (!chat || !(isChatChannel(chat) || isChatSuperGroup(chat))) return;
-
-  global = updateTabState(global, {
-    boostModal: {
-      chatId,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  const result = await callApi('fetchBoostStatus', {
-    chat,
-  });
-
-  if (!result) {
-    actions.closeBoostModal({ tabId });
-    return;
-  }
-
-  global = getGlobal();
-  global = updateTabState(global, {
-    boostModal: {
-      chatId,
-      boostStatus: result,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  const myBoosts = await callApi('fetchMyBoosts');
-
-  if (!myBoosts) return;
-
-  global = getGlobal();
-  const tabState = selectTabState(global, tabId);
-  if (!tabState.boostModal) return;
-
-  global = updateTabState(global, {
-    boostModal: {
-      ...tabState.boostModal,
-      myBoosts: myBoosts.boosts,
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
-addActionHandler('openBoostStatistics', async (global, actions, payload): Promise<void> => {
-  const { chatId, tabId = getCurrentTabId() } = payload;
-
-  const chat = selectChat(global, chatId);
-  if (!chat) return;
-
-  global = updateTabState(global, {
-    boostStatistics: {
-      chatId,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  const [boostListResult, boostListGiftResult,
-    boostStatusResult] = await Promise.all([
-    callApi('fetchBoostList', { chat }),
-    callApi('fetchBoostList', { chat, isGifts: true }),
-    callApi('fetchBoostStatus', { chat }),
-  ]);
-
-  global = getGlobal();
-  if (!boostListResult || !boostListGiftResult || !boostStatusResult) {
-    global = updateTabState(global, {
-      boostStatistics: undefined,
-    }, tabId);
-    setGlobal(global);
-    return;
-  }
-
-  global = updateTabState(global, {
-    boostStatistics: {
-      chatId,
-      boostStatus: boostStatusResult,
-      nextOffset: boostListResult.nextOffset,
-      boosts: {
-        count: boostListResult.count,
-        list: boostListResult.boostList,
-      },
-      giftedBoosts: {
-        count: boostListGiftResult?.count,
-        list: boostListGiftResult?.boostList,
-      },
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
-addActionHandler('openMonetizationStatistics', (global, actions, payload): ActionReturnType => {
-  const { chatId, tabId = getCurrentTabId() } = payload;
-
-  const chat = selectChat(global, chatId);
-  if (!chat) return;
-
-  global = updateTabState(global, {
-    monetizationStatistics: {
-      chatId,
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
-addActionHandler('loadMoreBoosters', async (global, actions, payload): Promise<void> => {
-  const { isGifts, tabId = getCurrentTabId() } = payload || {};
-  let tabState = selectTabState(global, tabId);
-  if (!tabState.boostStatistics) return;
-
-  const chat = selectChat(global, tabState.boostStatistics.chatId);
-  if (!chat) return;
-
-  global = updateTabState(global, {
-    boostStatistics: {
-      ...tabState.boostStatistics,
-      isLoadingBoosters: true,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  const result = await callApi('fetchBoostList', {
-    chat,
-    offset: tabState.boostStatistics.nextOffset,
-    isGifts,
-  });
-  if (!result) return;
-
-  global = getGlobal();
-
-  tabState = selectTabState(global, tabId);
-  if (!tabState.boostStatistics) return;
-
-  const updatedBoostList = (isGifts
-    ? tabState.boostStatistics.giftedBoosts?.list || []
-    : tabState.boostStatistics.boosts?.list || []).concat(result.boostList);
-
-  global = updateTabState(global, {
-    boostStatistics: {
-      ...tabState.boostStatistics,
-      nextOffset: result.nextOffset,
-      isLoadingBoosters: false,
-      [isGifts ? 'giftedBoosts' : 'boosts']: {
-        count: result.count,
-        list: updatedBoostList,
-      },
-    },
-  }, tabId);
-  setGlobal(global);
-});
-
-addActionHandler('applyBoost', async (global, actions, payload): Promise<void> => {
-  const { chatId, slots, tabId = getCurrentTabId() } = payload;
-
-  const chat = selectChat(global, chatId);
-  if (!chat) return;
-
-  const oldChatFullInfo = selectChatFullInfo(global, chatId);
-  const oldBoostsApplied = oldChatFullInfo?.boostsApplied || 0;
-
-  const appliedBoostsCount = slots.length;
-
-  let tabState = selectTabState(global, tabId);
-  const oldStatus = tabState.boostModal?.boostStatus;
-
-  if (oldStatus) {
-    const boostsPerLevel = oldStatus.nextLevelBoosts ? oldStatus.nextLevelBoosts - oldStatus.currentLevelBoosts : 1;
-    const newBoosts = oldStatus.boosts + appliedBoostsCount;
-    const isLevelUp = oldStatus.nextLevelBoosts && newBoosts >= oldStatus.nextLevelBoosts;
-    const newCurrentLevelBoosts = isLevelUp ? oldStatus.nextLevelBoosts! : oldStatus.currentLevelBoosts;
-    const newNextLevelBoosts = isLevelUp ? oldStatus.nextLevelBoosts! + boostsPerLevel : oldStatus.nextLevelBoosts;
-
-    global = updateTabState(global, {
-      boostModal: {
-        ...tabState.boostModal!,
-        boostStatus: {
-          ...oldStatus,
-          level: isLevelUp ? oldStatus.level + 1 : oldStatus.level,
-          currentLevelBoosts: newCurrentLevelBoosts,
-          nextLevelBoosts: newNextLevelBoosts,
-          hasMyBoost: true,
-          boosts: newBoosts,
-        },
-      },
-    }, tabId);
-    setGlobal(global);
-  }
-
-  global = getGlobal();
-  tabState = selectTabState(global, tabId);
-  const oldMyBoosts = tabState.boostModal?.myBoosts;
-
-  if (oldMyBoosts) {
-    const unixNow = getServerTime();
-    const newMyBoosts = oldMyBoosts.map((boost) => {
-      if (slots.includes(boost.slot)) {
-        return {
-          ...boost,
-          chatId,
-          date: unixNow,
-          cooldownUntil: unixNow + LOCAL_BOOST_COOLDOWN, // Will be refetched below
-        };
-      }
-      return boost;
-    });
-
-    global = updateTabState(global, {
-      boostModal: {
-        ...tabState.boostModal!,
-        myBoosts: newMyBoosts,
-      },
-    }, tabId);
-    setGlobal(global);
-  }
-
-  const result = await callApi('applyBoost', {
-    slots,
-    chat,
-  });
-
-  global = getGlobal();
-
-  if (!result) {
-    // Rollback local changes
-    const boostModal = selectTabState(global, tabId).boostModal;
-    if (boostModal) {
-      global = updateTabState(global, {
-        boostModal: {
-          ...boostModal,
-          boostStatus: oldStatus,
-          myBoosts: oldMyBoosts,
-        },
-      }, tabId);
-      setGlobal(global);
-    }
-    return;
-  }
-
-  tabState = selectTabState(global, tabId);
-  if (oldChatFullInfo) {
-    global = updateChatFullInfo(global, chatId, {
-      boostsApplied: oldBoostsApplied + slots.length,
-    });
-  }
-
-  if (tabState.boostModal) {
-    global = updateTabState(global, {
-      boostModal: {
-        ...tabState.boostModal,
-        myBoosts: result.boosts,
-      },
-    }, tabId);
-  }
-  setGlobal(global);
-});
 
 addActionHandler('checkGiftCode', async (global, actions, payload): Promise<void> => {
   const { slug, message, tabId = getCurrentTabId() } = payload;
@@ -994,11 +661,6 @@ addActionHandler('launchPrepaidGiveaway', async (global, actions, payload): Prom
     },
   });
 
-  if (!result) {
-    return;
-  }
-
-  actions.openBoostStatistics({ chatId, tabId });
 });
 
 addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload): Promise<void> => {
@@ -1029,11 +691,6 @@ addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload):
     },
   });
 
-  if (!result) {
-    return;
-  }
-
-  actions.openBoostStatistics({ chatId, tabId });
 });
 
 addActionHandler('upgradeGift', async (global, actions, payload): Promise<void> => {
@@ -1165,16 +822,7 @@ async function payInputStarInvoice<T extends GlobalState>(
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
   const actions = getActions();
-  const isTon = inputInvoice.type === 'stargiftResale' && inputInvoice.currency === TON_CURRENCY_CODE;
-  const balance = isTon ? global.ton?.balance : global.stars?.balance;
-  const currency = isTon ? TON_CURRENCY_CODE : STARS_CURRENCY_CODE;
-
-  if (balance === undefined) return;
-
-  if (balance.amount < price) {
-    actions.openStarsBalanceModal({ currency, tabId });
-    return;
-  }
+  if (price === undefined) return;
 
   const requestInputInvoice = getRequestInputInvoice(global, inputInvoice);
   if (!requestInputInvoice) {
@@ -1202,21 +850,6 @@ async function payInputStarInvoice<T extends GlobalState>(
 
   if ('error' in form) {
     handlePaymentFormError(form.error, tabId);
-    return;
-  }
-
-  const formPrice = form.invoice.totalAmount;
-  if (formPrice !== price) {
-    actions.openPriceConfirmModal({
-      originalAmount: price,
-      newAmount: formPrice,
-      currency,
-      directInfo: {
-        inputInvoice,
-        formId: form.formId,
-      },
-      tabId,
-    });
     return;
   }
 

@@ -254,7 +254,7 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
       if (user) {
         void callApi('fetchChat', { type: 'user', user }).then((result) => {
           if (result?.chat) {
-            actions.openChat({ id: result.chat.id, shouldReplaceHistory: true });
+            actions.openChat({ id: result.chat.id, shouldReplaceHistory: true, tabId });
           }
         });
       } else if (id && /^[0-9a-f]{8}-/.test(id)) {
@@ -511,8 +511,8 @@ addActionHandler('openSupportChat', async (global, actions, payload): Promise<vo
   actions.openChat({ id: TMP_CHAT_ID, shouldReplaceHistory: true, tabId });
 
   const result = await callApi('fetchChat', { type: 'support' });
-  if (result) {
-    actions.openChat({ id: result.chatId, shouldReplaceHistory: true, tabId });
+  if (result?.chat) {
+    actions.openChat({ id: result.chat.id, shouldReplaceHistory: true, tabId });
   }
 });
 
@@ -1504,17 +1504,7 @@ addActionHandler('checkChatInvite', async (global, actions, payload): Promise<vo
   }
 
   if (result.invite.subscriptionFormId) {
-    global = updateTabState(global, {
-      starsPayment: {
-        inputInvoice: {
-          type: 'chatInviteSubscription',
-          hash,
-        },
-        subscriptionInfo: result.invite,
-        status: 'pending',
-      },
-    }, tabId);
-    setGlobal(global);
+    // Stars payment modal removed
     return;
   }
 
@@ -1574,7 +1564,7 @@ addActionHandler('openTelegramLink', async (global, actions, payload): Promise<v
     openInvoice,
     checkChatlistInvite,
     openChatByUsername: openChatByUsernameAction,
-    openStoryViewerByUsername,
+
     checkGiftCode,
   } = actions;
 
@@ -1619,12 +1609,7 @@ addActionHandler('openTelegramLink', async (global, actions, payload): Promise<v
   }
 
   if (storyId) {
-    openStoryViewerByUsername({
-      username: part1,
-      storyId,
-      tabId,
-    });
-
+    // Stories removed — ignore story deeplinks
     return;
   }
 
@@ -1737,10 +1722,7 @@ addActionHandler('processBoostParameters', async (global, actions, payload): Pro
     return;
   }
 
-  actions.openBoostModal({
-    chatId: chat.id,
-    tabId,
-  });
+  actions.openChat({ id: chat.id, tabId });
 });
 
 addActionHandler('acceptChatInvite', async (global, actions, payload): Promise<void> => {
@@ -2281,13 +2263,12 @@ addActionHandler('loadMoreMembers', async (global, actions, payload): Promise<vo
     return;
   }
 
-  const { members, userStatusesById } = result;
+  const { members } = result;
   if (!members || !members.length) {
     return;
   }
 
   global = getGlobal();
-  global = addUserStatuses(global, userStatusesById);
   global = addChatMembers(global, chat, members);
   setGlobal(global);
 });
@@ -2424,8 +2405,6 @@ addActionHandler('toggleJoinRequest', async (global, actions, payload): Promise<
 
 addActionHandler('openForumPanel', (global, actions, payload): ActionReturnType => {
   const { chatId, tabId = getCurrentTabId() } = payload;
-  actions.toggleStoryRibbon({ isShown: false, tabId });
-  actions.toggleStoryRibbon({ isShown: false, isArchived: true, tabId });
   return updateTabState(global, {
     forumPanelChatId: chatId,
   }, tabId);

@@ -43,8 +43,6 @@ export type OwnProps = {
 };
 
 type StateProps = {
-  starBalance?: ApiStarsAmount;
-  tonBalance?: number;
   peer?: ApiPeer;
   currentDraft?: ApiDraft;
   maxStarsAmount: number;
@@ -62,8 +60,6 @@ const FUTURE_TIME_ADJUSTMENT = 1 * 60;
 
 const SuggestMessageModal = ({
   modal,
-  starBalance,
-  tonBalance,
   peer,
   currentDraft,
   maxStarsAmount,
@@ -75,7 +71,7 @@ const SuggestMessageModal = ({
   futureMax,
   isMonoforumAdmin,
 }: OwnProps & StateProps) => {
-  const { closeSuggestMessageModal, updateDraftSuggestedPostInfo, openStarsBalanceModal } = getActions();
+  const { closeSuggestMessageModal, updateDraftSuggestedPostInfo } = getActions();
   const [isCalendarOpened, openCalendar, closeCalendar] = useFlag();
 
   const currentSuggestedPostInfo = currentDraft?.suggestedPostInfo;
@@ -144,29 +140,6 @@ const SuggestMessageModal = ({
 
     if (isDisabled) {
       return;
-    }
-
-    if (!isMonoforumAdmin) {
-      if (isCurrencyStars) {
-        const currentBalance = starBalance?.amount || 0;
-
-        if (neededAmount > currentBalance) {
-          openStarsBalanceModal({
-            topup: {
-              balanceNeeded: neededAmount,
-            },
-          });
-          return;
-        }
-      } else {
-        const currentTonBalance = tonBalance || 0;
-        if (neededAmount > currentTonBalance) {
-          openStarsBalanceModal({
-            currency: TON_CURRENCY_CODE,
-          });
-          return;
-        }
-      }
     }
 
     updateDraftSuggestedPostInfo({
@@ -302,7 +275,6 @@ const SuggestMessageModal = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { modal }): Complete<StateProps> => {
-    const starBalance = global.stars?.balance;
     const peer = modal ? selectPeer(global, modal.chatId) : undefined;
     const currentDraft = modal ? selectDraft(global, modal.chatId, MAIN_THREAD_ID) : undefined;
 
@@ -320,8 +292,6 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       peer,
-      starBalance,
-      tonBalance: global.ton?.balance?.amount,
       currentDraft,
       maxStarsAmount,
       minStarsAmount,

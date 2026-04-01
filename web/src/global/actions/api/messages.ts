@@ -6,11 +6,9 @@ import type {
   ApiError,
   ApiFactCheck,
   ApiInputMessageReplyInfo,
-  ApiInputStoryReplyInfo,
   ApiInputSuggestedPostInfo,
   ApiMessage,
   ApiOnProgress,
-  ApiStory,
   ApiThreadInfo,
   ApiTopicWithState,
   ApiUser,
@@ -84,7 +82,6 @@ import {
   addChatMessagesById,
   addUnreadMentions,
   clearMessageSummary,
-  deleteSponsoredMessage,
   removeOutlyingList,
   removeRequestedMessageTranslation,
   removeUnreadMentions,
@@ -105,7 +102,6 @@ import {
   updateQuickReplyMessages,
   updateRequestedMessageTranslation,
   updateScheduledMessages,
-  updateSponsoredMessage,
   updateTopicWithState,
   updateUploadByMessageKey,
   updateUserFullInfo,
@@ -126,7 +122,6 @@ import {
   selectChatMessage,
   selectCurrentChat,
   selectCurrentMessageList,
-  selectCurrentViewedStory,
   selectCustomEmoji,
   selectEditingMessage,
   selectFirstMessageId,
@@ -145,7 +140,6 @@ import {
   selectMessageReplyInfo,
   selectOutlyingListByMessageId,
   selectPeer,
-  selectPeerStory,
   selectPinnedIds,
   selectPollFromMessage,
   selectRealLastReadId,
@@ -371,19 +365,11 @@ addActionHandler('loadMessagesById', async (global, actions, payload): Promise<v
 addActionHandler('sendMessage', async (global, actions, payload): Promise<void> => {
   const { messageList, tabId = getCurrentTabId() } = payload;
 
-  const { storyId, peerId: storyPeerId } = selectCurrentViewedStory(global, tabId);
-  const isStoryReply = Boolean(storyId && storyPeerId);
-
-  if (!messageList && !isStoryReply) {
+  if (!messageList) {
     return;
   }
 
-  let { chatId, threadId, type } = messageList || {};
-  if (isStoryReply) {
-    chatId = storyPeerId!;
-    threadId = MAIN_THREAD_ID;
-    type = 'thread';
-  }
+  let { chatId, threadId, type } = messageList;
 
   payload = omit(payload, ['tabId']);
 
@@ -400,19 +386,12 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
   const draft = selectDraft(global, chatId!, threadId!);
   const isForwarding = selectTabState(global, tabId).forwardMessages?.messageIds?.length;
 
-  const draftReplyInfo = !isForwarding && !isStoryReply ? draft?.replyInfo : undefined;
-  const draftSuggestedPostInfo = !isForwarding && !isStoryReply
-    ? draft?.suggestedPostInfo : undefined;
-
-  const storyReplyInfo = isStoryReply ? {
-    type: 'story',
-    peerId: storyPeerId!,
-    storyId: storyId!,
-  } satisfies ApiInputStoryReplyInfo : undefined;
+  const draftReplyInfo = !isForwarding ? draft?.replyInfo : undefined;
+  const draftSuggestedPostInfo = !isForwarding ? draft?.suggestedPostInfo : undefined;
 
   const messageReplyInfo = selectMessageReplyInfo(global, chatId!, threadId!, draftReplyInfo);
 
-  const replyInfo = storyReplyInfo || messageReplyInfo;
+  const replyInfo = messageReplyInfo;
 
   const threadInfo = selectThreadInfo(global, chatId!, threadId!);
   const lastMessageId = threadId === MAIN_THREAD_ID
@@ -424,28 +403,7 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
   const suggestedPostCurrency = suggestedPostPrice?.currency || STARS_CURRENCY_CODE;
   const suggestedPostAmount = suggestedPostPrice?.amount || 0;
   if (suggestedPostAmount && !draftReplyInfo) {
-    if (suggestedPostCurrency === STARS_CURRENCY_CODE) {
-      const currentBalance = global.stars?.balance?.amount || 0;
-
-      if (suggestedPostAmount > currentBalance) {
-        actions.openStarsBalanceModal({
-          topup: {
-            balanceNeeded: suggestedPostAmount,
-          },
-          tabId,
-        });
-        return;
-      }
-    } else if (suggestedPostCurrency === TON_CURRENCY_CODE) {
-      const currentTonBalance = global.ton?.balance?.amount || 0;
-      if (suggestedPostAmount > currentTonBalance) {
-        actions.openStarsBalanceModal({
-          currency: TON_CURRENCY_CODE,
-          tabId,
-        });
-        return;
-      }
-    }
+    // Balance check removed (stars/TON modals no longer available)
   }
 
   const suggestedMessage = draftReplyInfo && draftSuggestedPostInfo
@@ -484,16 +442,13 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
     sendAs: selectSendAs(global, chatId!),
     lastMessageId,
     messagePriceInStars,
-    isStoryReply,
     dice,
     text: !dice ? payload.text : undefined,
     isPending: messagePriceInStars ? true : undefined,
     ...suggestedMessage && { isInvertedMedia: suggestedMessage?.isInvertedMedia },
   };
 
-  if (!isStoryReply) {
-    actions.clearWebPagePreview({ tabId });
-  }
+  actions.clearWebPagePreview({ tabId });
 
   // Create new bot forum topic
   if (chat.isBotForum && user?.canManageBotForumTopics && threadId === MAIN_THREAD_ID
@@ -2070,7 +2025,6 @@ addActionHandler('sendMessages', async (global, actions, payload): Promise<void>
       await sendMessage(global, params);
     }
   }));
-  if (sendParams.length > 0 && sendParams[0].messagePriceInStars) actions.loadStarStatus();
 });
 
 addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise<void> => {
@@ -2174,118 +2128,6 @@ addActionHandler('loadSendPaidReactionsAs', async (global, actions, payload): Pr
   setGlobal(global);
 });
 
-addActionHandler('loadSponsoredMessages', async (global, actions, payload): Promise<void> => {
-  if (selectIsCurrentUserFrozen(global)) return;
-
-  const { peerId } = payload;
-  const peer = selectPeer(global, peerId);
-  if (!peer) {
-    return;
-  }
-
-  if (isApiPeerUser(peer) && selectIsChatBotNotStarted(global, peer.id)) {
-    return;
-  }
-
-  const result = await callApi('fetchSponsoredMessages', { peer });
-  if (!result) {
-    return;
-  }
-
-  global = getGlobal();
-  global = updateSponsoredMessage(global, peerId, result.messages[0]);
-  setGlobal(global);
-});
-
-addActionHandler('viewSponsored', (global, actions, payload): ActionReturnType => {
-  const { randomId } = payload;
-
-  void callApi('viewSponsoredMessage', { random: randomId });
-});
-
-addActionHandler('clickSponsored', (global, actions, payload): ActionReturnType => {
-  const { randomId, isMedia, isFullscreen } = payload;
-
-  void callApi('clickSponsoredMessage', {
-    random: randomId, isMedia, isFullscreen,
-  });
-});
-
-addActionHandler('reportSponsored', async (global, actions, payload): Promise<void> => {
-  const {
-    peerId, randomId, option = '', tabId = getCurrentTabId(),
-  } = payload;
-
-  const result = await callApi('reportSponsoredMessage', { randomId, option });
-
-  if (!result) return;
-
-  if (result.type === 'premiumRequired') {
-    actions.openPremiumModal({ initialSection: 'no_ads', tabId });
-    actions.closeReportAdModal({ tabId });
-    return;
-  }
-
-  if (result.type === 'reported' || result.type === 'hidden') {
-    actions.showNotification({
-      message: oldTranslate(result.type === 'reported' ? 'AdReported' : 'AdHidden'),
-      tabId,
-    });
-    actions.closeReportAdModal({ tabId });
-
-    global = getGlobal();
-    if (peerId) {
-      global = deleteSponsoredMessage(global, peerId);
-    } else {
-      global = updateGlobalSearch(global, {
-        sponsoredPeer: undefined,
-      }, tabId);
-    }
-    setGlobal(global);
-    return;
-  }
-
-  if (result.type === 'selectOption') {
-    global = getGlobal();
-    const oldSections = selectTabState(global, tabId).reportAdModal?.sections;
-    const selectedOption = oldSections?.[oldSections.length - 1]?.options.find((o) => o.option === option);
-    const newSection = {
-      title: result.title,
-      options: result.options,
-      subtitle: selectedOption?.text,
-    };
-    global = updateTabState(global, {
-      reportAdModal: {
-        chatId: peerId,
-        randomId,
-        sections: oldSections ? [...oldSections, newSection] : [newSection],
-      },
-    }, tabId);
-    setGlobal(global);
-  }
-});
-
-addActionHandler('hideSponsored', async (global, actions, payload): Promise<void> => {
-  const { tabId = getCurrentTabId() } = payload || {};
-  const isCurrentUserPremium = selectIsCurrentUserPremium(global);
-  if (!isCurrentUserPremium) {
-    actions.openPremiumModal({ initialSection: 'no_ads', tabId });
-    return;
-  }
-
-  const result = await callApi('toggleSponsoredMessages', { enabled: false });
-  if (!result) return;
-  global = getGlobal();
-  global = updateUserFullInfo(global, global.currentUserId!, {
-    areAdsEnabled: false,
-  });
-  setGlobal(global);
-  actions.showNotification({
-    message: oldTranslate('AdHidden'),
-    tabId,
-  });
-});
-
 addActionHandler('loadUnreadMentions', async (global, actions, payload): Promise<void> => {
   const { chatId, threadId = MAIN_THREAD_ID, offsetId } = payload;
 
@@ -2328,33 +2170,6 @@ addActionHandler('approveSuggestedPost', async (global, actions, payload): Promi
   const message = selectChatMessage(global, chatId, messageId);
 
   const isAdmin = selectIsMonoforumAdmin(global, chatId);
-
-  if (!isAdmin && message?.suggestedPostInfo?.price?.amount) {
-    const neededAmount = message.suggestedPostInfo.price.amount;
-    const isCurrencyStars = message.suggestedPostInfo.price.currency === STARS_CURRENCY_CODE;
-
-    if (isCurrencyStars) {
-      const currentBalance = global.stars?.balance?.amount || 0;
-      if (neededAmount > currentBalance) {
-        actions.openStarsBalanceModal({
-          topup: {
-            balanceNeeded: neededAmount,
-          },
-          tabId,
-        });
-        return;
-      }
-    } else {
-      const currentTonBalance = global.ton?.balance?.amount || 0;
-      if (neededAmount > currentTonBalance) {
-        actions.openStarsBalanceModal({
-          currency: TON_CURRENCY_CODE,
-          tabId,
-        });
-        return;
-      }
-    }
-  }
 
   const result = await callApi('toggleSuggestedPostApproval', {
     chat,
@@ -2446,7 +2261,6 @@ addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
   const isMixedScript = isMixedScriptUrl(urlWithProtocol);
 
   if (!ignoreDeepLinks && isDeepLink(urlWithProtocol)) {
-    actions.closeStoryViewer({ tabId });
     actions.closePaymentModal({ tabId });
 
     actions.openTelegramLink({ url, linkContext, tabId });
@@ -2461,8 +2275,6 @@ addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
   }
 
   if (appConfig.urlAuthDomains.includes(parsedUrl.hostname)) {
-    actions.closeStoryViewer({ tabId });
-
     actions.requestLinkUrlAuth({ url, tabId });
     return;
   }
@@ -2621,38 +2433,7 @@ addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionRet
   actions.forwardMessages({ isSilent: true, tabId });
 });
 
-addActionHandler('forwardStory', (global, actions, payload): ActionReturnType => {
-  const { toChatId, tabId = getCurrentTabId() } = payload || {};
-
-  const { fromChatId, storyId } = selectTabState(global, tabId).forwardMessages;
-  const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
-  const toChat = toChatId ? selectChat(global, toChatId) : undefined;
-  const story = fromChatId && storyId
-    ? selectPeerStory(global, fromChatId, storyId)
-    : undefined;
-
-  if (!fromChat || !toChat || !story || 'isDeleted' in story) {
-    return;
-  }
-
-  const lastMessageId = selectChatLastMessageId(global, toChatId);
-
-  const { text, entities } = (story as ApiStory).content.text || {};
-  void sendMessage(global, {
-    chat: toChat,
-    text,
-    entities,
-    story,
-    lastMessageId,
-  });
-
-  global = getGlobal();
-  global = updateTabState(global, {
-    forwardMessages: {},
-    isShareMessageModalShown: false,
-  }, tabId);
-  setGlobal(global);
-});
+// forwardStory removed — stories feature removed
 
 addActionHandler('requestMessageTranslation', (global, actions, payload): ActionReturnType => {
   const {

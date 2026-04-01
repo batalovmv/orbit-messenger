@@ -73,9 +73,6 @@ interface StateProps {
   canCall?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
-  canViewMonetization?: boolean;
-  canViewBoosts?: boolean;
-  canShowBoostModal?: boolean;
   canLeave?: boolean;
   canEnterVoiceChat?: boolean;
   canCreateVoiceChat?: boolean;
@@ -107,9 +104,6 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   canCall,
   canMute,
   canViewStatistics,
-  canViewMonetization,
-  canViewBoosts,
-  canShowBoostModal,
   canLeave,
   canEnterVoiceChat,
   canCreateVoiceChat,
@@ -463,9 +457,6 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           canCall={canCall}
           canMute={canMute}
           canViewStatistics={canViewStatistics}
-          canViewBoosts={canViewBoosts}
-          canViewMonetization={canViewMonetization}
-          canShowBoostModal={canShowBoostModal}
           canLeave={canLeave}
           canEnterVoiceChat={canEnterVoiceChat}
           canCreateVoiceChat={canCreateVoiceChat}
@@ -533,10 +524,6 @@ export default memo(withGlobal<OwnProps>(
     const canCreateVoiceChat = ARE_CALLS_SUPPORTED && isMainThread && !chat.isCallActive
       && (chat.adminRights?.manageCall || (chat.isCreator && isChatBasicGroup(chat))) && !chat.isMonoforum;
     const canViewStatistics = isMainThread && chatFullInfo?.canViewStatistics;
-    const canViewMonetization = isMainThread && chatFullInfo?.canViewMonetization;
-    const canViewBoosts = isMainThread && !chat.isMonoforum
-      && (isSuperGroup || isChannel) && (canViewStatistics || getHasAdminRight(chat, 'postStories'));
-    const canShowBoostModal = !canViewBoosts && (isSuperGroup || isChannel) && !chat.isMonoforum;
     const pendingJoinRequests = isMainThread ? chatFullInfo?.requestsPending : undefined;
     const shouldJoinToSend = Boolean(chat?.isNotJoined && chat.isJoinToSend);
     const shouldSendJoinRequest = Boolean(chat?.isNotJoined && chat.isJoinRequest);
@@ -559,9 +546,6 @@ export default memo(withGlobal<OwnProps>(
       canCall,
       canMute,
       canViewStatistics,
-      canViewMonetization,
-      canViewBoosts,
-      canShowBoostModal,
       canLeave,
       canEnterVoiceChat,
       canCreateVoiceChat,

@@ -34,11 +34,9 @@ import Management from './management/Management.async';
 import PollResults from './PollResults.async';
 import Profile from './Profile';
 import RightHeader from './RightHeader';
-import BoostStatistics from './statistics/BoostStatistics';
 import MessageStatistics from './statistics/MessageStatistics.async';
-import MonetizationStatistics from './statistics/MonetizationStatistics';
 import Statistics from './statistics/Statistics.async';
-import StoryStatistics from './statistics/StoryStatistics.async';
+// import StoryStatistics from './statistics/StoryStatistics.async'; // stories removed
 import StickerSearch from './StickerSearch.async';
 
 import './RightColumn.scss';
@@ -97,14 +95,12 @@ const RightColumn: FC<OwnProps & StateProps> = ({
     setEditingExportedInvite,
     toggleStatistics,
     toggleMessageStatistics,
-    toggleStoryStatistics,
+
     setOpenedInviteInfo,
     requestNextManagementScreen,
     closeCreateTopicPanel,
     closeEditTopicPanel,
-    closeBoostStatistics,
     setShouldCloseRightColumn,
-    closeMonetizationStatistics,
   } = getActions();
 
   const containerRef = useRef<HTMLDivElement>();
@@ -124,8 +120,6 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   const isStatistics = contentKey === RightColumnContent.Statistics;
   const isMessageStatistics = contentKey === RightColumnContent.MessageStatistics;
   const isStoryStatistics = contentKey === RightColumnContent.StoryStatistics;
-  const isBoostStatistics = contentKey === RightColumnContent.BoostStatistics;
-  const isMonetizationStatistics = contentKey === RightColumnContent.MonetizationStatistics;
   const isStickerSearch = contentKey === RightColumnContent.StickerSearch;
   const isGifSearch = contentKey === RightColumnContent.GifSearch;
   const isPollResults = contentKey === RightColumnContent.PollResults;
@@ -203,16 +197,9 @@ const RightColumn: FC<OwnProps & StateProps> = ({
         toggleMessageStatistics();
         break;
       case RightColumnContent.StoryStatistics:
-        toggleStoryStatistics();
         break;
       case RightColumnContent.Statistics:
         toggleStatistics();
-        break;
-      case RightColumnContent.BoostStatistics:
-        closeBoostStatistics();
-        break;
-      case RightColumnContent.MonetizationStatistics:
-        closeMonetizationStatistics();
         break;
       case RightColumnContent.StickerSearch:
         blurSearchInput();
@@ -339,14 +326,10 @@ const RightColumn: FC<OwnProps & StateProps> = ({
 
       case RightColumnContent.Statistics:
         return <Statistics chatId={chatId!} />;
-      case RightColumnContent.BoostStatistics:
-        return <BoostStatistics />;
-      case RightColumnContent.MonetizationStatistics:
-        return <MonetizationStatistics />;
       case RightColumnContent.MessageStatistics:
         return <MessageStatistics chatId={chatId!} isActive={isOpen && isActive} />;
       case RightColumnContent.StoryStatistics:
-        return <StoryStatistics chatId={chatId!} isActive={isOpen && isActive} />;
+        return undefined;
       case RightColumnContent.StickerSearch:
         return <StickerSearch onClose={close} isActive={isOpen && isActive} />;
       case RightColumnContent.GifSearch:
@@ -378,8 +361,6 @@ const RightColumn: FC<OwnProps & StateProps> = ({
           isProfile={isProfile}
           isManagement={isManagement}
           isStatistics={isStatistics}
-          isBoostStatistics={isBoostStatistics}
-          isMonetizationStatistics={isMonetizationStatistics}
           isMessageStatistics={isMessageStatistics}
           isStoryStatistics={isStoryStatistics}
           isStickerSearch={isStickerSearch}

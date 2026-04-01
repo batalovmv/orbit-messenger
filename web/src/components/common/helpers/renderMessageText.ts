@@ -1,6 +1,6 @@
 import { getGlobal } from '../../../global';
 
-import type { ApiMessage, ApiSponsoredMessage } from '../../../api/types';
+import type { ApiMessage } from '../../../api/types';
 import type { TextPart, ThreadId } from '../../../types';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
@@ -33,7 +33,7 @@ export function renderMessageText({
   threadId,
   maxTimestamp,
 }: {
-  message: ApiMessage | ApiSponsoredMessage;
+  message: ApiMessage;
   highlight?: string;
   emojiSize?: number;
   asPreview?: boolean;
@@ -64,7 +64,7 @@ export function renderMessageText({
     asPreview,
     isProtected,
     forcePlayback,
-    messageId: 'id' in message ? message.id : undefined,
+    messageId: message.id,
     chatId: message.chatId,
     threadId,
     maxTimestamp,

@@ -102,7 +102,6 @@ const QuickPreviewModalHeader: FC<OwnProps & StateProps> = ({
               withDots={Boolean(connectionStatusText)}
               withFullInfo={false}
               withMediaViewer={false}
-              withStory={false}
               withUpdatingStatus
               isSavedDialog={isSavedDialog}
               emojiStatusSize={EMOJI_STATUS_SIZE}
@@ -120,7 +119,6 @@ const QuickPreviewModalHeader: FC<OwnProps & StateProps> = ({
               withMediaViewer={false}
               withFullInfo={false}
               withUpdatingStatus
-              withStory={false}
               isSavedDialog={isSavedDialog}
               emojiStatusSize={EMOJI_STATUS_SIZE}
               noRtl

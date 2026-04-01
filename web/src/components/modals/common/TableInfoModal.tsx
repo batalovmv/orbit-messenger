@@ -83,9 +83,7 @@ const TableInfoModal = ({
       moreMenuItems={moreMenuItems}
       headerRightToolBar={headerRightToolBar}
       onClose={onClose}
-      withBalanceBar={withBalanceBar}
-      currencyInBalanceBar={currencyInBalanceBar}
-      isLowStackPriority={isLowStackPriority}
+      isLowStackPriority={Boolean(isLowStackPriority)}
     >
       {headerAvatarPeer && (
         <Avatar peer={headerAvatarPeer} size="jumbo" className={styles.avatar} />

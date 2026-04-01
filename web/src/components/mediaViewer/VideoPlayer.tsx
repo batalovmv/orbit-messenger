@@ -49,9 +49,7 @@ type OwnProps = {
   shouldCloseOnClick?: boolean;
   isForceMobileVersion?: boolean;
   isClickDisabled?: boolean;
-  isSponsoredMessage?: boolean;
   timestamp?: number;
-  handleSponsoredClick?: (isFromMedia?: boolean) => void;
   onClose: (e: React.MouseEvent<HTMLElement, MouseEvent>) => void;
 };
 
@@ -76,9 +74,7 @@ const VideoPlayer: FC<OwnProps> = ({
   shouldCloseOnClick,
   isProtected,
   isClickDisabled,
-  isSponsoredMessage,
   timestamp,
-  handleSponsoredClick,
   onClose,
 }) => {
   const {
@@ -218,10 +214,6 @@ const VideoPlayer: FC<OwnProps> = ({
   });
 
   const handleClick = useLastCallback((e: React.MouseEvent<HTMLVideoElement, MouseEvent>) => {
-    if (isSponsoredMessage) {
-      handleSponsoredClick?.(true);
-      onClose(e);
-    }
     if (isClickDisabled) {
       return;
     }
@@ -376,7 +368,7 @@ const VideoPlayer: FC<OwnProps> = ({
           />
         </div>
       )}
-      {!isGif && !isSponsoredMessage && !isUnsupported && (
+      {!isGif && !isUnsupported && (
         <VideoPlayerControls
           storyboardInfo={storyboardInfo}
           isPlaying={isPlaying}

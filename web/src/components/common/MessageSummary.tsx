@@ -19,7 +19,7 @@ import {
   getMessageSummaryText,
   TRUNCATED_SUMMARY_LENGTH,
 } from '../../global/helpers/messageSummary';
-import { selectPeerStory, selectPollFromMessage, selectWebPageFromMessage } from '../../global/selectors';
+import { selectPollFromMessage, selectWebPageFromMessage } from '../../global/selectors';
 import trimText from '../../util/trimText';
 import renderText from './helpers/renderText';
 
@@ -123,7 +123,7 @@ export default memo(withGlobal<OwnProps>(
     const poll = selectPollFromMessage(global, message);
     const webPage = selectWebPageFromMessage(global, message);
     const storyData = message.content?.storyData;
-    const story = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
+    const story = undefined;
 
     return {
       poll,

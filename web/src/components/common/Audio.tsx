@@ -30,7 +30,7 @@ import { makeTrackId } from '../../util/audioPlayer';
 import buildClassName from '../../util/buildClassName';
 import { captureEvents } from '../../util/captureEvents';
 import { formatMediaDateTime, formatMediaDuration, formatPastTimeShort } from '../../util/dates/dateFormat';
-import { decodeWaveform, interpolateArray } from '../../util/waveform';
+import { interpolateArray } from '../../util/waveform';
 import { LOCAL_TGS_URLS } from './helpers/animatedAssets';
 import renderText from './helpers/renderText';
 import { MAX_EMPTY_WAVEFORM_POINTS, renderWaveform } from './helpers/waveform';
@@ -663,9 +663,7 @@ function useWaveformCanvas(
     const { MIN_SPIKES, MAX_SPIKES } = getSeeklineSpikeAmounts(isMobile, withAvatar);
     const durationFactor = Math.min(duration / AVG_VOICE_DURATION, 1);
     const spikesCount = Math.round(MIN_SPIKES + (MAX_SPIKES - MIN_SPIKES) * durationFactor);
-    const decodedWaveform = decodeWaveform(new Uint8Array(waveform));
-
-    return interpolateArray(decodedWaveform, spikesCount);
+    return interpolateArray(waveform, spikesCount);
   }, [isMobile, media, withAvatar]) || {};
 
   useLayoutEffect(() => {

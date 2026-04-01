@@ -1,23 +1,16 @@
 import type {
   ApiReceiptRegular,
-  ApiReceiptStars,
-  ApiStarsSubscription,
-  ApiStarsTransaction,
-  ApiTypeCurrencyAmount,
 } from '../../api/types';
 import type {
   PaymentStep,
   ShippingOption,
-  StarsSubscriptions,
-  StarsTransactionType,
 } from '../../types';
 import type {
   GlobalState, TabArgs, TabState,
 } from '../types';
 
-import { STARS_CURRENCY_CODE, TON_CURRENCY_CODE } from '../../config';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
-import { selectStarsPayment, selectTabState } from '../selectors';
+import { selectTabState } from '../selectors';
 import { updateTabState } from './tabs';
 
 export function updatePayment<T extends GlobalState>(
@@ -33,20 +26,10 @@ export function updatePayment<T extends GlobalState>(
 }
 
 export function updateStarsPayment<T extends GlobalState>(
-  global: T, update: Partial<TabState['starsPayment']>,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
+  global: T, _update: Record<string, unknown>,
+  ...[_tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const starPayment = selectStarsPayment(global, tabId);
-  if (!starPayment) {
-    return global;
-  }
-
-  return updateTabState(global, {
-    starsPayment: {
-      ...starPayment,
-      ...update,
-    },
-  }, tabId);
+  return global;
 }
 
 export function updateShippingOptions<T extends GlobalState>(
@@ -119,11 +102,9 @@ export function clearPayment<T extends GlobalState>(
 
 export function clearStarPayment<T extends GlobalState>(
   global: T,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
+  ...[_tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  return updateTabState(global, {
-    starsPayment: {},
-  }, tabId);
+  return global;
 }
 
 export function closeInvoice<T extends GlobalState>(
@@ -138,155 +119,43 @@ export function closeInvoice<T extends GlobalState>(
 }
 
 export function updateStarsBalance<T extends GlobalState>(
-  global: T, balance: ApiTypeCurrencyAmount,
+  global: T, _balance: unknown,
 ): T {
-  if (balance.currency === STARS_CURRENCY_CODE) {
-    return {
-      ...global,
-      stars: {
-        ...global.stars,
-        balance,
-      },
-    };
-  }
-
-  if (balance.currency === TON_CURRENCY_CODE) {
-    return {
-      ...global,
-      ton: {
-        ...global.ton,
-        balance,
-      },
-    };
-  }
-
   return global;
 }
 
 export function appendStarsTransactions<T extends GlobalState>(
   global: T,
-  type: StarsTransactionType,
-  transactions: ApiStarsTransaction[],
-  nextOffset?: string,
-  isTon?: boolean,
+  _type: unknown,
+  _transactions: unknown[],
+  _nextOffset?: string,
+  _isTon?: boolean,
 ): T {
-  if (isTon) {
-    const history = global.ton?.history;
-    if (!history) {
-      return global;
-    }
-
-    const newTypeObject = {
-      transactions: (history[type]?.transactions || []).concat(transactions),
-      nextOffset,
-    };
-
-    return {
-      ...global,
-      ton: {
-        ...global.ton,
-        history: {
-          ...history,
-          [type]: newTypeObject,
-        },
-      },
-    };
-  }
-
-  const history = global.stars?.history;
-  if (!history) {
-    return global;
-  }
-
-  const newTypeObject = {
-    transactions: (history[type]?.transactions || []).concat(transactions),
-    nextOffset,
-  };
-
-  return {
-    ...global,
-    stars: {
-      ...global.stars,
-      history: {
-        ...history,
-        [type]: newTypeObject,
-      },
-    },
-  };
+  return global;
 }
 
 export function appendStarsSubscriptions<T extends GlobalState>(
   global: T,
-  subscriptions: ApiStarsSubscription[],
-  nextOffset?: string,
+  _subscriptions: unknown[],
+  _nextOffset?: string,
 ): T {
-  if (!global.stars) {
-    return global;
-  }
-
-  const newObject = {
-    list: (global.stars.subscriptions?.list || []).concat(subscriptions),
-    nextOffset,
-  } satisfies StarsSubscriptions;
-
-  return {
-    ...global,
-    stars: {
-      ...global.stars,
-      subscriptions: newObject,
-    },
-  };
+  return global;
 }
 
 export function updateStarsSubscriptionLoading<T extends GlobalState>(
-  global: T, isLoading: boolean,
+  global: T, _isLoading: boolean,
 ): T {
-  const subscriptions = global.stars?.subscriptions;
-  if (!subscriptions) {
-    return global;
-  }
-
-  return {
-    ...global,
-    stars: {
-      ...global.stars,
-      subscriptions: {
-        ...subscriptions,
-        isLoading,
-      },
-    },
-  };
+  return global;
 }
 
 export function openStarsTransactionModal<T extends GlobalState>(
-  global: T, transaction: ApiStarsTransaction, ...[tabId = getCurrentTabId()]: TabArgs<T>
+  global: T, _transaction: unknown, ...[_tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  return updateTabState(global, {
-    starsTransactionModal: {
-      transaction,
-    },
-  }, tabId);
+  return global;
 }
 
 export function openStarsTransactionFromReceipt<T extends GlobalState>(
-  global: T, receipt: ApiReceiptStars, ...[tabId = getCurrentTabId()]: TabArgs<T>
+  global: T, _receipt: unknown, ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const transaction: ApiStarsTransaction = {
-    id: receipt.transactionId,
-    peer: {
-      type: 'peer',
-      id: receipt.botId,
-    },
-    amount: {
-      currency: STARS_CURRENCY_CODE,
-      amount: receipt.totalAmount,
-      nanos: 0,
-    },
-    date: receipt.date,
-    title: receipt.title,
-    description: receipt.description,
-    photo: receipt.photo,
-  };
-
-  return openStarsTransactionModal(global, transaction, tabId);
+  return openStarsTransactionModal(global, undefined, tabId);
 }

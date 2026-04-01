@@ -10,7 +10,6 @@ import type {
   ApiMessageOutgoingStatus,
   ApiPeer,
   ApiTopic,
-  ApiTypeStory,
   ApiTypingStatus,
   ApiUser,
   ApiUserStatus,
@@ -18,7 +17,6 @@ import type {
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
 import { MAIN_THREAD_ID } from '../../../api/types';
-import { StoryViewerOrigin } from '../../../types';
 
 import { ALL_FOLDER_ID, UNMUTE_TIMESTAMP } from '../../../config';
 import {
@@ -42,7 +40,6 @@ import {
   selectNotifyException,
   selectOutgoingStatus,
   selectPeer,
-  selectPeerStory,
   selectSender,
   selectTabState,
   selectTopicFromMessage,
@@ -105,7 +102,6 @@ type OwnProps = {
 type StateProps = {
   chat?: ApiChat;
   monoforumChannel?: ApiChat;
-  lastMessageStory?: ApiTypeStory;
   listedTopicIds?: number[];
   isMuted?: boolean;
   user?: ApiUser;
@@ -143,7 +139,6 @@ const Chat: FC<OwnProps & StateProps> = ({
   observeIntersection,
   chat,
   monoforumChannel,
-  lastMessageStory,
   isMuted,
   user,
   userStatus,
@@ -233,7 +228,7 @@ const Chat: FC<OwnProps & StateProps> = ({
     lastMessage,
     typingStatus,
     draft,
-    statefulMediaContent: groupStatefulContent({ story: lastMessageStory }),
+    statefulMediaContent: groupStatefulContent({}),
     lastMessageTopic,
     lastMessageSender,
     observeIntersection,
@@ -428,10 +423,6 @@ const Chat: FC<OwnProps & StateProps> = ({
           isSavedDialog={isSavedDialog}
           size={isPreview ? 'medium' : 'large'}
           asMessageBubble={isMonoforum}
-          withStory={!user?.isSelf && !isMonoforum}
-          withStoryGap={isAvatarOnlineShown || Boolean(chat.subscriptionUntil)}
-          storyViewerOrigin={StoryViewerOrigin.ChatList}
-          storyViewerMode="single-peer"
         />
         <div className="avatar-badge-wrapper">
           <div
@@ -569,8 +560,6 @@ export default memo(withGlobal<OwnProps>(
 
     const topicsInfo = selectTopicsInfo(global, chatId);
 
-    const storyData = lastMessage?.content?.storyData;
-    const lastMessageStory = storyData && selectPeerStory(global, storyData.peerId, storyData.id);
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
 
     const monoforumChannel = selectMonoforumChannel(global, chatId);
@@ -598,7 +587,6 @@ export default memo(withGlobal<OwnProps>(
       currentUserId: global.currentUserId!,
       listedTopicIds: topicsInfo?.listedTopicIds,
       isSynced: global.isSynced,
-      lastMessageStory,
       isAccountFrozen,
       monoforumChannel,
       chatFolderIds,

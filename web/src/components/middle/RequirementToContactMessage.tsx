@@ -35,13 +35,9 @@ function RequirementToContactMessage({
 }: OwnProps & StateProps) {
   const oldLang = useOldLang();
   const lang = useLang();
-  const { openPremiumModal, openStarsBalanceModal } = getActions();
+  const { openPremiumModal } = getActions();
 
   const handleOpenPremiumModal = useLastCallback(() => openPremiumModal());
-
-  const handleGetMoreStars = useLastCallback(() => {
-    openStarsBalanceModal({});
-  });
 
   if (!peer) return undefined;
 
@@ -79,7 +75,7 @@ function RequirementToContactMessage({
           color="translucent-black"
           size="default"
           pill
-          onClick={paidMessagesStars ? handleGetMoreStars : handleOpenPremiumModal}
+          onClick={handleOpenPremiumModal}
           className={styles.button}
         >
           {

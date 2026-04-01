@@ -33,7 +33,7 @@ const ReportModal = ({
   modal,
 }: OwnProps) => {
   const {
-    reportMessages, reportStory, closeReportModal, openPreviousReportModal,
+    reportMessages, closeReportModal, openPreviousReportModal,
   } = getActions();
   const lang = useOldLang();
   const isOpen = Boolean(modal);
@@ -50,11 +50,6 @@ const ReportModal = ({
     switch (subject) {
       case 'message':
         reportMessages({ chatId: chatId!, messageIds, option });
-        break;
-      case 'story':
-        reportStory({
-          storyId: messageIds[0], peerId: peerId!, option,
-        });
         break;
     }
   });
@@ -104,7 +99,7 @@ const ReportModal = ({
         <div className={buildClassName('modal-title', styles.modalTitle, hasSubtitle && styles.titleMultiline)}>
           <h3 className={buildClassName(styles.title, renderingDepth && styles.hasDepth)}>
             {renderingSection?.options
-              ? lang(modal?.subject === 'story' ? 'ReportStory' : 'Report') : renderingSection?.title}
+              ? lang('Report') : renderingSection?.title}
           </h3>
           {hasSubtitle && (
             <span className={styles.subtitle}>{renderingSection.subtitle}</span>
@@ -155,11 +150,6 @@ const ReportModal = ({
           chatId: chatId!, messageIds, option: renderingSection?.option, description: text,
         });
         break;
-      case 'story':
-        reportStory({
-          storyId: messageIds?.[0], peerId: peerId!, option: renderingSection?.option, description: text,
-        });
-        break;
     }
     closeReportMessageModalHandler();
   });
@@ -170,7 +160,7 @@ const ReportModal = ({
       header={header}
       onClose={closeReportMessageModalHandler}
       contentClassName={styles.content}
-      className={buildClassName(styles.root, modal?.subject === 'story' && 'component-theme-dark')}
+      className={styles.root}
     >
       <Transition
         name="slide"

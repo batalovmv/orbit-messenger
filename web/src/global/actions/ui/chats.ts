@@ -40,9 +40,7 @@ addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionRe
   }
   actions.hideEffectInComposer({ tabId });
 
-  actions.closeStoryViewer({ tabId });
-  actions.closeStarsBalanceModal({ tabId });
-  actions.closeStarsTransactionModal({ tabId });
+
   actions.closeGiftInfoModal({ tabId });
   actions.closeGiftAuctionModal({ tabId });
 
@@ -66,8 +64,6 @@ addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionRe
 
     global = updateTabState(global, {
       isStatisticsShown: false,
-      monetizationStatistics: undefined,
-      boostStatistics: undefined,
       contentToBeScheduled: undefined,
       ...(chatId !== selectTabState(global, tabId).forwardMessages.toChatId && {
         forwardMessages: {},

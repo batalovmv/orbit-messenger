@@ -136,7 +136,7 @@ const ChatExtra = ({
     showNotification,
     updateChatMutedState,
     updateTopicMutedState,
-    loadPeerStories,
+
     openSavedDialog,
     openMapModal,
     requestCollectibleInfo,
@@ -182,12 +182,7 @@ const ChatExtra = ({
     !shouldRenderNote,
   );
 
-  useEffectWithPrevDeps(([prevPeerId]) => {
-    if (!peerId || prevPeerId === peerId) return;
-    if (user || (chat && isChatChannel(chat))) {
-      loadPeerStories({ peerId });
-    }
-  }, [peerId, chat, user]);
+  // Stories removed — loadPeerStories call removed
 
   const { width, height, zoom } = DEFAULT_MAP_CONFIG;
   const dpr = useDevicePixelRatio();

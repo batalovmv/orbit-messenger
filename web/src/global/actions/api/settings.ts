@@ -331,19 +331,10 @@ addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
     callApi('fetchNotifyDefaultSettings'),
   ]);
 
-  if (!notifyDefaults) return;
-
   global = getGlobal();
   global = replaceSettings(global, {
     hasContactJoinedNotifications: signUpNotification,
   });
-  global = {
-    ...global,
-    settings: {
-      ...global.settings,
-      notifyDefaults,
-    },
-  };
   setGlobal(global);
 });
 

@@ -2,16 +2,12 @@ import type { FC } from '../../../lib/teact/teact';
 import { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiStarsAmount, ApiTonAmount } from '../../../api/types';
 import { SettingsScreens } from '../../../types';
 
-import { FAQ_URL, PRIVACY_URL, TON_CURRENCY_CODE } from '../../../config';
-import { formatStarsAmount } from '../../../global/helpers/payments';
+import { FAQ_URL, PRIVACY_URL } from '../../../config';
 import {
-  selectIsGiveawayGiftsPurchaseAvailable,
   selectIsPremiumPurchaseBlocked,
 } from '../../../global/selectors';
-import { convertCurrencyFromBaseUnit } from '../../../util/formatCurrency';
 
 import { request } from '../../../api/saturn/client';
 
@@ -20,8 +16,6 @@ import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import Icon from '../../common/icons/Icon';
-import StarIcon from '../../common/icons/StarIcon';
 import ChatExtra from '../../common/profile/ChatExtra';
 import ProfileInfo from '../../common/profile/ProfileInfo';
 import ConfirmDialog from '../../ui/ConfirmDialog';
@@ -36,9 +30,6 @@ type StateProps = {
   sessionCount: number;
   currentUserId?: string;
   canBuyPremium?: boolean;
-  isGiveawayAvailable?: boolean;
-  starsBalance?: ApiStarsAmount;
-  tonBalance?: ApiTonAmount;
   isSaturnAdmin?: boolean;
 };
 
@@ -47,9 +38,6 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
   currentUserId,
   sessionCount,
   canBuyPremium,
-  isGiveawayAvailable,
-  starsBalance,
-  tonBalance,
   isSaturnAdmin,
   onReset,
 }) => {
@@ -58,8 +46,6 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     openPremiumModal,
     openSupportChat,
     openUrl,
-    openGiftRecipientPicker,
-    openStarsBalanceModal,
     openSettingsScreen,
     showNotification,
   } = getActions();
@@ -193,47 +179,12 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
       <div className="settings-main-menu">
         {canBuyPremium && (
           <ListItem
-            leftElement={<StarIcon className="icon ListItem-main-icon" type="premium" size="big" />}
+            icon="star"
             narrow
 
             onClick={() => openPremiumModal()}
           >
             {lang('TelegramPremium')}
-          </ListItem>
-        )}
-        <ListItem
-          leftElement={<StarIcon className="icon ListItem-main-icon" type="gold" size="big" />}
-          narrow
-
-          onClick={() => openStarsBalanceModal({})}
-        >
-          {lang('MenuStars')}
-          {Boolean(starsBalance) && (
-            <span className="settings-item__current-value">
-              {formatStarsAmount(lang, starsBalance)}
-            </span>
-          )}
-        </ListItem>
-        <ListItem
-          leftElement={<Icon className="icon ListItem-main-icon" name="toncoin" />}
-          narrow
-          onClick={() => openStarsBalanceModal({ currency: TON_CURRENCY_CODE })}
-        >
-          {lang('MenuTon')}
-          {Boolean(tonBalance) && (
-            <span className="settings-item__current-value">
-              {convertCurrencyFromBaseUnit(tonBalance.amount, tonBalance.currency)}
-            </span>
-          )}
-        </ListItem>
-        {isGiveawayAvailable && (
-          <ListItem
-            icon="gift"
-            narrow
-
-            onClick={() => openGiftRecipientPicker()}
-          >
-            {lang('MenuSendGift')}
           </ListItem>
         )}
       </div>
@@ -288,17 +239,11 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     const { currentUserId } = global;
-    const isGiveawayAvailable = selectIsGiveawayGiftsPurchaseAvailable(global);
-    const starsBalance = global.stars?.balance;
-    const tonBalance = global.ton?.balance;
 
     return {
       sessionCount: global.activeSessions.orderedHashes.length,
       currentUserId,
       canBuyPremium: !selectIsPremiumPurchaseBlocked(global),
-      isGiveawayAvailable,
-      starsBalance,
-      tonBalance,
       isSaturnAdmin: global.saturnRole === 'admin',
     };
   },

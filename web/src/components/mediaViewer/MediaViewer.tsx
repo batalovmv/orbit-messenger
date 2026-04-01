@@ -11,7 +11,6 @@ import type {
   ApiPeer,
   ApiPeerPhotos,
   ApiPhoto,
-  ApiSponsoredMessage,
 } from '../../api/types';
 import { type MediaViewerMedia, MediaViewerOrigin, type ThreadId } from '../../types';
 
@@ -34,7 +33,7 @@ import {
   selectPeer,
   selectPeerPhotos,
   selectPerformanceSettingsValue,
-  selectScheduledMessage, selectSponsoredMessage,
+  selectScheduledMessage,
   selectTabState,
 } from '../../global/selectors';
 import { stopCurrentAudio } from '../../util/audioPlayer';
@@ -84,7 +83,6 @@ type StateProps = {
   avatarOwner?: ApiPeer;
   profilePhotos?: ApiPeerPhotos;
   chatMessages?: Record<number, ApiMessage>;
-  sponsoredMessage?: ApiSponsoredMessage;
   standaloneMedia?: MediaViewerMedia[];
   mediaIndex?: number;
   isHidden?: boolean;
@@ -113,7 +111,6 @@ const MediaViewer = ({
   avatarOwner,
   profilePhotos,
   chatMessages,
-  sponsoredMessage,
   standaloneMedia,
   mediaIndex,
   withAnimation,
@@ -133,11 +130,9 @@ const MediaViewer = ({
     toggleChatInfo,
     searchChatMediaMessages,
     loadMoreProfilePhotos,
-    clickSponsored,
-    openUrl,
   } = getActions();
 
-  const isOpen = Boolean(avatarOwner || message || standaloneMedia || sponsoredMessage);
+  const isOpen = Boolean(avatarOwner || message || standaloneMedia);
   const { isMobile } = useAppLayout();
 
   const { media, isSingle } = viewableMedia || {};
@@ -265,14 +260,6 @@ const MediaViewer = ({
     }
   });
 
-  const handleSponsoredClick = useLastCallback((isFromMedia?: boolean) => {
-    if (!sponsoredMessage || !chatId) return;
-
-    clickSponsored({ isMedia: isFromMedia, isFullscreen: true, randomId: sponsoredMessage.randomId });
-    openUrl({ url: sponsoredMessage.url });
-    closeMediaViewer();
-  });
-
   const handleForward = useLastCallback(() => {
     openForwardMenu({
       fromChatId: chatId!,
@@ -327,16 +314,6 @@ const MediaViewer = ({
           profilePhotos: fromProfilePhotos,
           mediaIndex: nextIndex,
         };
-      }
-
-      return undefined;
-    }
-
-    if (from.type === 'sponsoredMessage') {
-      const { message: fromSponsoredMessage, mediaIndex: fromSponsoredMessageIndex } = from;
-      const nextIndex = fromSponsoredMessageIndex! + direction;
-      if (nextIndex >= 0 && fromSponsoredMessage) {
-        return { type: 'sponsoredMessage', message: fromSponsoredMessage, mediaIndex: nextIndex };
       }
 
       return undefined;
@@ -482,7 +459,6 @@ const MediaViewer = ({
         selectItem={openMediaViewerItem}
         isHidden={isHidden}
         onFooterClick={handleFooterClick}
-        handleSponsoredClick={handleSponsoredClick}
       />
     </ShowTransition>
   );
@@ -501,7 +477,6 @@ export default memo(withGlobal(
       standaloneMedia,
       mediaIndex,
       isAvatarView,
-      isSponsoredMessage,
     } = mediaViewer;
     const withAnimation = selectPerformanceSettingsValue(global, 'mediaViewerAnimations');
 
@@ -545,7 +520,6 @@ export default memo(withGlobal(
         message: undefined,
         collectedMessageIds: undefined,
         chatMessages: undefined,
-        sponsoredMessage: undefined,
         withDynamicLoading,
       };
     }
@@ -559,15 +533,8 @@ export default memo(withGlobal(
       }
     }
 
-    let sponsoredMessage: ApiSponsoredMessage | undefined;
-    if (isSponsoredMessage && chatId) {
-      if (origin === MediaViewerOrigin.SponsoredMessage) {
-        sponsoredMessage = selectSponsoredMessage(global, chatId);
-      }
-    }
-
     const currentItem = getMediaViewerItem({
-      message, standaloneMedia, mediaIndex, sponsoredMessage,
+      message, standaloneMedia, mediaIndex,
     });
     const viewableMedia = selectViewableMedia(global, origin, currentItem);
 
@@ -612,7 +579,6 @@ export default memo(withGlobal(
       origin,
       message,
       chatMessages,
-      sponsoredMessage,
       collectedMessageIds,
       withAnimation,
       isHidden,

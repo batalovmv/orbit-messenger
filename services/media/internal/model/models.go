@@ -86,7 +86,7 @@ type MediaResponse struct {
 	Width            *int     `json:"width,omitempty"`
 	Height           *int     `json:"height,omitempty"`
 	DurationSeconds  *float64 `json:"duration_seconds,omitempty"`
-	WaveformData     []byte   `json:"waveform_data,omitempty"`
+	WaveformData     []int    `json:"waveform_data,omitempty"`
 	ProcessingStatus string   `json:"processing_status"`
 }
 

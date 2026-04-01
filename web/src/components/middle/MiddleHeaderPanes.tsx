@@ -26,12 +26,9 @@ import { applyAnimationState, type PaneState } from './hooks/useHeaderPane';
 
 import GroupCallTopPane from '../calls/group/GroupCallTopPane';
 import AudioPlayer from './panes/AudioPlayer';
-import BotAdPane from './panes/BotAdPane';
 import BotVerificationPane from './panes/BotVerificationPane';
 import ChatReportPane from './panes/ChatReportPane';
 import HeaderPinnedMessage from './panes/HeaderPinnedMessage';
-import PaidMessageChargePane from './panes/PaidMessageChargePane';
-
 import styles from './MiddleHeaderPanes.module.scss';
 
 type OwnProps = {
@@ -75,10 +72,7 @@ const MiddleHeaderPanes = ({
   const [getPinnedState, setPinnedState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
   const [getGroupCallState, setGroupCallState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
   const [getChatReportState, setChatReportState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
-  const [getBotAdState, setBotAdState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
   const [getBotVerificationState, setBotVerificationState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
-  const [getPaidMessageChargeState, setPaidMessageChargeState] = useSignal<PaneState>(FALLBACK_PANE_STATE);
-
   const isPinnedMessagesFullWidth = isAudioPlayerRendered || !isDesktop;
 
   const isFirstRenderRef = useRef(true);
@@ -101,12 +95,10 @@ const MiddleHeaderPanes = ({
     const pinnedState = getPinnedState();
     const groupCallState = getGroupCallState();
     const chatReportState = getChatReportState();
-    const botAdState = getBotAdState();
-    const paidMessageState = getPaidMessageChargeState();
 
     // Keep in sync with the order of the panes in the DOM
     const stateArray = [audioPlayerState, groupCallState,
-      chatReportState, botVerificationState, pinnedState, botAdState, paidMessageState];
+      chatReportState, botVerificationState, pinnedState];
 
     const isFirstRender = isFirstRenderRef.current;
     const totalHeight = stateArray.reduce((acc, state) => acc + state.height, 0);
@@ -122,7 +114,7 @@ const MiddleHeaderPanes = ({
       });
     });
   }, [getAudioPlayerState, getGroupCallState, getPinnedState,
-    getChatReportState, getBotAdState, getBotVerificationState, getPaidMessageChargeState]);
+    getChatReportState, getBotVerificationState]);
 
   if (!shouldRender) return undefined;
 
@@ -160,10 +152,6 @@ const MiddleHeaderPanes = ({
         peerId={chatId}
         onPaneStateChange={setBotVerificationState}
       />
-      <PaidMessageChargePane
-        peerId={chatId}
-        onPaneStateChange={setPaidMessageChargeState}
-      />
       <HeaderPinnedMessage
         chatId={chatId}
         threadId={threadId}
@@ -174,11 +162,6 @@ const MiddleHeaderPanes = ({
         onPaneStateChange={setPinnedState}
         isFullWidth
         shouldHide={!isPinnedMessagesFullWidth}
-      />
-      <BotAdPane
-        chatId={chatId}
-        messageListType={messageListType}
-        onPaneStateChange={setBotAdState}
       />
     </div>
   );

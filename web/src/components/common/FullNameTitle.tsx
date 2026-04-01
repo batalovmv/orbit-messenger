@@ -29,7 +29,6 @@ import useOldLang from '../../hooks/useOldLang';
 import Transition from '../ui/Transition';
 import CustomEmoji from './CustomEmoji';
 import FakeIcon from './FakeIcon';
-import GiftEffectWrapper from './gift/GiftEffectWrapper';
 import StarIcon from './icons/StarIcon';
 import VerifiedIcon from './VerifiedIcon';
 
@@ -161,13 +160,7 @@ const FullNameTitle = ({
               direction={-1}
               shouldCleanup
             >
-              <GiftEffectWrapper
-                withSparkles={emojiStatus.type === 'collectible'}
-                sparklesClassName="statusSparkles"
-                sparklesColor={emojiStatus.type === 'collectible' && !withStatusTextColor
-                  ? emojiStatus.textColor : undefined}
-              >
-                <CustomEmoji
+              <CustomEmoji
                   className={buildClassName('no-selection', !withStatusTextColor && styles.statusPrimaryColor)}
                   documentId={emojiStatus.documentId}
                   size={emojiStatusSize}
@@ -175,7 +168,6 @@ const FullNameTitle = ({
                   observeIntersectionForLoading={observeIntersection}
                   onClick={onEmojiStatusClick}
                 />
-              </GiftEffectWrapper>
             </Transition>
           )}
           {canShowEmojiStatus && !emojiStatus && isPremium && <StarIcon />}

@@ -62,7 +62,6 @@ type OwnProps = {
   story?: ApiTypeStory;
   canSendNow?: boolean;
   enabledReactions?: ApiChatReactions;
-  isWithPaidReaction?: boolean;
   reactionsLimit?: number;
   canReschedule?: boolean;
   canReply?: boolean;
@@ -131,8 +130,6 @@ type OwnProps = {
   onShowOriginal?: NoneToVoidFunction;
   onSelectLanguage?: NoneToVoidFunction;
   onToggleReaction?: (reaction: ApiReaction) => void;
-  onSendPaidReaction?: NoneToVoidFunction;
-  onShowPaidReactionModal?: NoneToVoidFunction;
   onReactionPickerOpen?: (position: IAnchorPosition) => void;
   userFullName?: string;
   canGift?: boolean;
@@ -155,7 +152,6 @@ const MessageContextMenu: FC<OwnProps> = ({
   isPrivate,
   isCurrentUserPremium,
   enabledReactions,
-  isWithPaidReaction,
   reactionsLimit,
   anchor,
   targetHref,
@@ -221,8 +217,6 @@ const MessageContextMenu: FC<OwnProps> = ({
   onShowSeenBy,
   onShowReactors,
   onToggleReaction,
-  onSendPaidReaction,
-  onShowPaidReactionModal,
   onCopyMessages,
   onReactionPickerOpen,
   onTranslate,
@@ -370,9 +364,6 @@ const MessageContextMenu: FC<OwnProps> = ({
           currentReactions={message.reactions?.results}
           reactionsLimit={reactionsLimit}
           onToggleReaction={onToggleReaction!}
-          onSendPaidReaction={onSendPaidReaction}
-          onShowPaidReactionModal={onShowPaidReactionModal}
-          isWithPaidReaction={isWithPaidReaction}
           isPrivate={isPrivate}
           isReady={isReady}
           canBuyPremium={canBuyPremium}

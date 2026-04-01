@@ -73,7 +73,7 @@ const ChatList = ({
     openChat,
     openNextChat,
     closeForumPanel,
-    toggleStoryRibbon,
+
     openLeftColumnContent,
   } = getActions();
   const containerRef = useRef<HTMLDivElement>();
@@ -160,11 +160,11 @@ const ChatList = ({
   });
 
   const handleShowStoryRibbon = useLastCallback(() => {
-    toggleStoryRibbon({ isShown: true, isArchived });
+    // Stories removed
   });
 
   const handleHideStoryRibbon = useLastCallback(() => {
-    toggleStoryRibbon({ isShown: false, isArchived });
+    // Stories removed
   });
 
   const handleArchivedDragEnter = useLastCallback(() => {

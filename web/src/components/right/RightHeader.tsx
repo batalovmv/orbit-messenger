@@ -57,9 +57,7 @@ type OwnProps = {
   isProfile?: boolean;
   isManagement?: boolean;
   isStatistics?: boolean;
-  isBoostStatistics?: boolean;
   isMessageStatistics?: boolean;
-  isMonetizationStatistics?: boolean;
   isStoryStatistics?: boolean;
   isStickerSearch?: boolean;
   isGifSearch?: boolean;
@@ -108,8 +106,6 @@ enum HeaderContent {
   Statistics,
   MessageStatistics,
   StoryStatistics,
-  BoostStatistics,
-  MonetizationStatistics,
   Management,
   ManageInitial,
   ManageChannelSubscribers,
@@ -150,8 +146,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isStatistics,
   isMessageStatistics,
   isStoryStatistics,
-  isMonetizationStatistics,
-  isBoostStatistics,
   isStickerSearch,
   isGifSearch,
   isPollResults,
@@ -338,14 +332,10 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     HeaderContent.MessageStatistics
   ) : isStoryStatistics ? (
     HeaderContent.StoryStatistics
-  ) : isBoostStatistics ? (
-    HeaderContent.BoostStatistics
   ) : isCreatingTopic ? (
     HeaderContent.CreateTopic
   ) : isEditingTopic ? (
     HeaderContent.EditTopic
-  ) : isMonetizationStatistics ? (
-    HeaderContent.MonetizationStatistics
   ) : undefined; // When column is closed
 
   const renderingContentKey = useCurrentOrPrev(contentKey, true) ?? -1;
@@ -494,10 +484,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
         return <h3 className="title">{oldLang('Stats.MessageTitle')}</h3>;
       case HeaderContent.StoryStatistics:
         return <h3 className="title">{oldLang('Stats.StoryTitle')}</h3>;
-      case HeaderContent.BoostStatistics:
-        return <h3 className="title">{oldLang('Boosts')}</h3>;
-      case HeaderContent.MonetizationStatistics:
-        return <h3 className="title">{oldLang('lng_channel_earn_title')}</h3>;
       case HeaderContent.SharedMedia:
         return <h3 className="title">{oldLang('SharedMedia')}</h3>;
       case HeaderContent.ManageChannelSubscribers:

@@ -1,5 +1,5 @@
 import type {
-  ApiAvailableEffect, ApiError, ApiMessage, ApiReaction, ApiReactionEmoji,
+  ApiAvailableEffect, ApiMessage, ApiReaction, ApiReactionEmoji,
   ApiSavedReactionTag, ApiSticker, ApiTopicWithState,
 } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
@@ -8,14 +8,13 @@ import { ApiMediaFormat, MAIN_THREAD_ID } from '../../../api/types';
 import { GENERAL_REFETCH_INTERVAL } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import {
-  buildCollectionByCallback, buildCollectionByKey, omit, partition,
+  buildCollectionByCallback, buildCollectionByKey, omit,
 } from '../../../util/iteratees';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import * as mediaLoader from '../../../util/mediaLoader';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { callApi } from '../../../api/saturn';
 import {
-  addPaidReaction,
   getDocumentMediaHash,
   getReactionKey,
   getUserReactions,
@@ -222,9 +221,8 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
     ? userReactions.filter((userReaction) => !isSameReaction(userReaction, reaction)) : [...userReactions, reaction];
 
   const limit = selectMaxUserReactions(global);
-  const [paidReactions, regularReactions] = partition(newUserReactions, (r) => r.type === 'paid');
-  const trimmedRegularReactions = regularReactions.slice(-limit) as ApiReaction[];
-  const localReactions = [...paidReactions, ...trimmedRegularReactions];
+  const trimmedRegularReactions = newUserReactions.filter((r) => r.type !== 'paid').slice(-limit) as ApiReaction[];
+  const localReactions = trimmedRegularReactions;
   const messageKey = getMessageKey(message);
 
   if (selectPerformanceSettingsValue(global, 'reactionEffects')) {
@@ -253,77 +251,6 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
     global = getGlobal();
     global = addMessageReaction(global, message, userReactions);
     setGlobal(global);
-  }
-});
-
-addActionHandler('addLocalPaidReaction', (global, actions, payload): ActionReturnType => {
-  const {
-    chatId, messageId, count, shouldIgnoreDefaultPrivacy = false, tabId = getCurrentTabId(),
-  } = payload;
-  const defaultPrivacy = global.settings.paidReactionPrivacy;
-  const isPrivate = !shouldIgnoreDefaultPrivacy ? defaultPrivacy?.type === 'anonymous' : payload.isPrivate;
-  const peerId = !shouldIgnoreDefaultPrivacy
-    ? (defaultPrivacy?.type === 'peer' ? defaultPrivacy.peerId : undefined) : payload.peerId;
-
-  const chat = selectChat(global, chatId);
-  const message = selectChatMessage(global, chatId, messageId);
-
-  if (!chat || !message) {
-    return;
-  }
-
-  const currentReactions = message.reactions?.results || [];
-  const newReactions = addPaidReaction(currentReactions, count, isPrivate, peerId);
-  global = updateChatMessage(global, message.chatId, message.id, {
-    reactions: {
-      ...currentReactions,
-      results: newReactions,
-    },
-  });
-  setGlobal(global);
-
-  const messageKey = getMessageKey(message);
-  if (selectPerformanceSettingsValue(global, 'reactionEffects')) {
-    actions.startActiveReaction({
-      containerId: messageKey,
-      reaction: {
-        type: 'paid',
-      },
-      tabId,
-    });
-  }
-});
-
-addActionHandler('sendPaidReaction', async (global, actions, payload): Promise<void> => {
-  const {
-    chatId, messageId, forcedAmount, tabId = getCurrentTabId(),
-  } = payload;
-  const chat = selectChat(global, chatId);
-  const message = selectChatMessage(global, chatId, messageId);
-
-  if (!chat || !message) {
-    return;
-  }
-
-  const paidReaction = message.reactions?.results?.find((r) => r.reaction.type === 'paid');
-  const count = forcedAmount || paidReaction?.localAmount || 0;
-  if (!count) {
-    return;
-  }
-  actions.resetLocalPaidReactions({ chatId, messageId });
-
-  try {
-    await callApi('sendPaidReaction', {
-      chat,
-      messageId,
-      count,
-      isPrivate: paidReaction?.localIsPrivate,
-      peerId: paidReaction?.localPeerId,
-    });
-  } catch (error) {
-    if ((error as ApiError).message === 'BALANCE_TOO_LOW') {
-      actions.openStarsBalanceModal({ originReaction: { chatId, messageId, amount: count }, tabId });
-    }
   }
 });
 

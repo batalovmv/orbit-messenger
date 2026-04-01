@@ -22,7 +22,7 @@ import {
   selectChatMessage,
   selectIsContextMenuTranslucent,
   selectIsCurrentUserPremium,
-  selectPeerStory,
+
   selectTabState,
 } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
@@ -78,8 +78,8 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   availableEffectById,
 }) => {
   const {
-    toggleReaction, closeReactionPicker, sendMessage, showNotification, sendStoryReaction, saveEffectInDraft,
-    requestEffectInComposer, addLocalPaidReaction, openPaidReactionModal,
+    toggleReaction, closeReactionPicker, sendMessage, showNotification, saveEffectInDraft,
+    requestEffectInComposer, addLocalPaidReaction,
   } = getActions();
 
   const lang = useOldLang();
@@ -145,13 +145,7 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
     closeReactionPicker();
   });
 
-  const handleReactionContextMenu = useLastCallback((reaction: ApiReactionWithPaid) => {
-    if (reaction.type !== 'paid') return;
-
-    openPaidReactionModal({
-      chatId: renderedChatId!,
-      messageId: renderedMessageId!,
-    });
+  const handleReactionContextMenu = useLastCallback((_reaction: ApiReactionWithPaid) => {
     closeReactionPicker();
   });
 
@@ -178,17 +172,6 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
       return;
     }
 
-    if (!sendAsMessage) {
-      sendStoryReaction({
-        peerId: renderedStoryPeerId!,
-        storyId: renderedStoryId!,
-        containerId: getStoryKey(renderedStoryPeerId!, renderedStoryId!),
-        reaction,
-        shouldAddToRecent: true,
-      });
-      closeReactionPicker();
-      return;
-    }
 
     let text: string | undefined;
     let entities: ApiMessageEntity[] | undefined;
@@ -294,15 +277,13 @@ export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
   const state = selectTabState(global);
   const availableEffectById = global.availableEffectById;
   const {
-    chatId, messageId, storyPeerId, storyId, position, sendAsMessage, isForEffects,
+    chatId, messageId, position, sendAsMessage, isForEffects,
   } = state.reactionPicker || {};
-  const story = storyPeerId && storyId
-    ? selectPeerStory(global, storyPeerId, storyId) as ApiStory | ApiStorySkipped
-    : undefined;
+  const story = undefined;
   const chat = chatId ? selectChat(global, chatId) : undefined;
   const chatFullInfo = chatId ? selectChatFullInfo(global, chatId) : undefined;
   const message = chatId && messageId ? selectChatMessage(global, chatId, messageId) : undefined;
-  const isPrivateChat = isUserId(chatId || storyPeerId || '');
+  const isPrivateChat = isUserId(chatId || '');
   const areSomeReactionsAllowed = chatFullInfo?.enabledReactions?.type === 'some';
   const { maxUniqueReactions } = global.appConfig;
   const areAllReactionsAllowed = chatFullInfo?.enabledReactions?.type === 'all'

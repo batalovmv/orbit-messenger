@@ -88,9 +88,6 @@ export type OwnProps = {
   canCall?: boolean;
   canMute?: boolean;
   canViewStatistics?: boolean;
-  canViewBoosts?: boolean;
-  canViewMonetization?: boolean;
-  canShowBoostModal?: boolean;
   withForumActions?: boolean;
   canLeave?: boolean;
   canEnterVoiceChat?: boolean;
@@ -159,8 +156,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   canCall,
   canMute,
   canViewStatistics,
-  canViewMonetization,
-  canViewBoosts,
   pendingJoinRequests,
   canLeave,
   canEnterVoiceChat,
@@ -181,7 +176,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   isBot,
   isChatWithSelf,
   savedDialog,
-  canShowBoostModal,
   disallowedGifts,
   isAccountFrozen,
   channelMonoforumId,
@@ -204,8 +198,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     openFrozenAccountModal,
     requestMasterAndRequestCall,
     toggleStatistics,
-    openMonetizationStatistics,
-    openBoostStatistics,
     openGiftModal,
     openThreadWithInfo,
     openCreateTopicPanel,
@@ -217,7 +209,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     blockUser,
     unblockUser,
     setViewForumAsMessages,
-    openBoostModal,
     reportMessages,
     showNotification,
   } = getActions();
@@ -440,24 +431,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
-  const handleMonetizationClick = useLastCallback(() => {
-    openMonetizationStatistics({ chatId });
-    setShouldCloseFast(!isRightColumnShown);
-    closeMenu();
-  });
-
-  const handleBoostClick = useLastCallback(() => {
-    if (isAccountFrozen) {
-      openFrozenAccountModal();
-    } else if (canViewBoosts) {
-      openBoostStatistics({ chatId });
-      setShouldCloseFast(!isRightColumnShown);
-    } else {
-      openBoostModal({ chatId });
-    }
-    closeMenu();
-  });
-
   const handleEnableTranslations = useLastCallback(() => {
     togglePeerTranslations({ chatId, isEnabled: true });
     closeMenu();
@@ -670,14 +643,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               {oldLang(isChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
             </MenuItem>
           )}
-          {canShowBoostModal && !canViewBoosts && (
-            <MenuItem
-              icon="boost-outline"
-              onClick={handleBoostClick}
-            >
-              {oldLang(isChannel ? 'BoostingBoostChannelMenu' : 'BoostingBoostGroupMenu')}
-            </MenuItem>
-          )}
           {canAddContact && (
             <MenuItem
               icon="add-user"
@@ -744,28 +709,12 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               {oldLang('ReportSelectMessages')}
             </MenuItem>
           )}
-          {canViewBoosts && (
-            <MenuItem
-              icon="boost-outline"
-              onClick={handleBoostClick}
-            >
-              {oldLang('Boosts')}
-            </MenuItem>
-          )}
           {canViewStatistics && (
             <MenuItem
               icon="stats"
               onClick={handleStatisticsClick}
             >
               {oldLang('Statistics')}
-            </MenuItem>
-          )}
-          {isChannel && canViewMonetization && (
-            <MenuItem
-              icon="cash-circle"
-              onClick={handleMonetizationClick}
-            >
-              {oldLang('lng_channel_earn_title')}
             </MenuItem>
           )}
           {canTranslate && (

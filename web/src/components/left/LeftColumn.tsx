@@ -59,7 +59,6 @@ type StateProps = {
   forumPanelChatId?: string;
   isClosingSearch?: boolean;
   archiveSettings: GlobalState['archiveSettings'];
-  isArchivedStoryRibbonShown?: boolean;
   isAccountFrozen?: boolean;
 };
 
@@ -96,7 +95,6 @@ function LeftColumn({
   forumPanelChatId,
   isClosingSearch,
   archiveSettings,
-  isArchivedStoryRibbonShown,
   isAccountFrozen,
   isFoldersSidebarShown,
 }: OwnProps & StateProps) {
@@ -502,7 +500,6 @@ function LeftColumn({
             foldersDispatch={foldersDispatch}
             isForumPanelOpen={isForumPanelOpen}
             archiveSettings={archiveSettings}
-            isStoryRibbonShown={isArchivedStoryRibbonShown}
           />
         );
       case ContentType.Settings:
@@ -590,9 +587,6 @@ export default memo(withGlobal<OwnProps>(
       activeChatFolder,
       leftColumn,
       nextFoldersAction,
-      storyViewer: {
-        isArchivedRibbonShown,
-      },
     } = tabState;
     const {
       currentUserId,
@@ -625,7 +619,6 @@ export default memo(withGlobal<OwnProps>(
       forumPanelChatId,
       isClosingSearch: tabState.globalSearch.isClosing,
       archiveSettings,
-      isArchivedStoryRibbonShown: isArchivedRibbonShown,
       isAccountFrozen,
       contentKey: leftColumn.contentKey,
       settingsScreen: leftColumn.settingsScreen,

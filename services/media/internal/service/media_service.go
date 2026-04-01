@@ -815,7 +815,7 @@ func (s *MediaService) BuildMediaResponse(ctx context.Context, m *model.Media) *
 		Width:            m.Width,
 		Height:           m.Height,
 		DurationSeconds:  m.DurationSeconds,
-		WaveformData:     m.WaveformData,
+		WaveformData:     bytesToInts(m.WaveformData),
 		ProcessingStatus: m.ProcessingStatus,
 	}
 	if m.OriginalFilename != nil {
@@ -829,4 +829,16 @@ func (s *MediaService) BuildMediaResponse(ctx context.Context, m *model.Media) *
 		resp.MediumURL = s.R2KeyToURL(ctx, *m.MediumR2Key)
 	}
 	return resp
+}
+
+// bytesToInts converts []byte waveform to []int for JSON serialization as number array.
+func bytesToInts(b []byte) []int {
+	if len(b) == 0 {
+		return nil
+	}
+	out := make([]int, len(b))
+	for i, v := range b {
+		out[i] = int(v)
+	}
+	return out
 }

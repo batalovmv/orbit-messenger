@@ -25,11 +25,9 @@ import PeerColorWrapper from '../../common/PeerColorWrapper';
 import SafeLink from '../../common/SafeLink';
 import StickerView from '../../common/StickerView';
 import Button from '../../ui/Button';
-import BaseStory from './BaseStory';
+
 import Photo from './Photo';
 import Video from './Video';
-import WebPageStarGiftAuction from './WebPageStarGiftAuction';
-import WebPageUniqueGift from './WebPageUniqueGift';
 
 import './WebPage.scss';
 
@@ -146,13 +144,10 @@ const WebPage = ({
   } = webPage;
   const { mediaSize } = messageWebPage;
   const isStory = type === WEBPAGE_STORY_TYPE;
-  const isGift = type === WEBPAGE_GIFT_TYPE;
-  const isAuction = type === WEBPAGE_AUCTION_TYPE;
   const isExpiredStory = story && 'isDeleted' in story;
 
   const resultType = stickers?.isEmoji ? 'telegram_emojiset' : type;
-  const auctionEndDate = isAuction && webPage.auction ? webPage.auction.endDate : undefined;
-  const quickButtonLangKey = !isExpiredStory ? getWebpageButtonLangKey(resultType, auctionEndDate) : undefined;
+  const quickButtonLangKey = !isExpiredStory ? getWebpageButtonLangKey(resultType, undefined) : undefined;
   const quickButtonTitle = quickButtonLangKey && lang(quickButtonLangKey);
   const quickButtonIcon = getWebpageButtonIcon(resultType);
 
@@ -172,7 +167,6 @@ const WebPage = ({
     !isArticle && 'no-article',
     document && 'with-document',
     quickButtonTitle && 'with-quick-button',
-    (isGift || isAuction) && 'with-gift',
   );
 
   function renderQuickButton() {
@@ -182,7 +176,7 @@ const WebPage = ({
         size="tiny"
         color="translucent"
         isRectangular
-        noForcedUpperCase={!isAuction}
+        noForcedUpperCase
         onClick={handleOpenTelegramLink}
       >
         {quickButtonIcon && <Icon name={quickButtonIcon} />}
@@ -201,7 +195,6 @@ const WebPage = ({
       <div className={buildClassName(
         'WebPage--content',
         isStory && 'is-story',
-        (isGift || isAuction) && 'is-gift',
       )}
       >
         {backgroundEmojiId && (
@@ -210,25 +203,7 @@ const WebPage = ({
             className="WebPage--background-icons"
           />
         )}
-        {isStory && (
-          <BaseStory story={story} isProtected={isProtected} isConnected={isConnected} isPreview />
-        )}
-        {isGift && (
-          <WebPageUniqueGift
-            gift={webPage.gift!}
-            observeIntersectionForLoading={observeIntersectionForLoading}
-            observeIntersectionForPlaying={observeIntersectionForPlaying}
-            onClick={handleOpenTelegramLink}
-          />
-        )}
-        {isAuction && webPage.auction && (
-          <WebPageStarGiftAuction
-            auction={webPage.auction}
-            observeIntersectionForLoading={observeIntersectionForLoading}
-            observeIntersectionForPlaying={observeIntersectionForPlaying}
-            onClick={handleOpenTelegramLink}
-          />
-        )}
+        {/* BaseStory removed — stories feature removed */}
         {isArticle && (
           <div
             className={buildClassName('WebPage-text', 'WebPage-text_interactive')}
@@ -238,12 +213,12 @@ const WebPage = ({
             {title && (
               <p className="site-title">{renderText(title)}</p>
             )}
-            {truncatedDescription && !isGift && !isAuction && (
+            {truncatedDescription && (
               <p className="site-description">{renderText(truncatedDescription, ['emoji', 'br'])}</p>
             )}
           </div>
         )}
-        {photo && !isGift && !isAuction && !video && (
+        {photo && !video && (
           <Photo
             photo={photo}
             isOwn={message?.isOutgoing}

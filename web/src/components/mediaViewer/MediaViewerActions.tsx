@@ -186,7 +186,7 @@ const MediaViewerActions: FC<OwnProps & StateProps> = ({
       return undefined;
     }
 
-    return item?.type !== 'sponsoredMessage' && (isVideo ? (
+    return (isVideo ? (
       <Button
         round
         size="smaller"

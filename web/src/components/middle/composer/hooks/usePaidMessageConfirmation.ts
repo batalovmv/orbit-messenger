@@ -34,12 +34,6 @@ export default function usePaidMessageConfirmation(
   }, [isWaitingStarsTopup, isStarsBalanceModeOpen, starsBalance, starsForAllMessages]);
 
   const handleStarsTopup = useLastCallback(() => {
-    getActions().openStarsBalanceModal({
-      topup: {
-        balanceNeeded: starsForAllMessages,
-        purpose: PAID_MESSAGES_PURPOSE,
-      },
-    });
     setIsWaitingStarsTopup(true);
   });
 

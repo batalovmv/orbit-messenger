@@ -11,7 +11,6 @@ import { REM } from '../common/helpers/mediaDimensions';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useDerivedState from '../../hooks/useDerivedState';
-import useLastCallback from '../../hooks/useLastCallback';
 import useControlsSignal from './hooks/useControlsSignal';
 
 import Button from '../ui/Button';
@@ -24,14 +23,13 @@ type OwnProps = {
   text: TextPart | TextPart[];
   buttonText?: string;
   onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  handleSponsoredClick: (isFromMedia?: boolean) => void;
   isForVideo: boolean;
   isForceMobileVersion?: boolean;
   isProtected?: boolean;
 };
 
 const MediaViewerFooter: FC<OwnProps> = ({
-  text = '', buttonText, isForVideo, onClick, handleSponsoredClick, isProtected, isForceMobileVersion,
+  text = '', buttonText, isForVideo, onClick, isProtected, isForceMobileVersion,
 }) => {
   const [isMultiline, setIsMultiline] = useState(false);
   const { isMobile } = useAppLayout();
@@ -65,10 +63,6 @@ const MediaViewerFooter: FC<OwnProps> = ({
     }
   }
 
-  const onButtonClick = useLastCallback(() => {
-    handleSponsoredClick();
-  });
-
   const classNames = buildClassName(
     'MediaViewerFooter',
     isForVideo && 'is-for-video',
@@ -92,7 +86,7 @@ const MediaViewerFooter: FC<OwnProps> = ({
           size="default"
           color="primary"
           isRectangular
-          onClick={onButtonClick}
+          onClick={undefined}
         >
           {buttonText}
         </Button>

@@ -58,7 +58,6 @@ import type {
   ApiThemeParameters,
   ApiTodoItem,
   ApiTypeCurrencyAmount,
-  ApiTypePrepaidGiveaway,
   ApiUpdate,
   ApiUser,
   ApiVideo,
@@ -103,7 +102,6 @@ import type {
   Size,
   StarGiftInfo,
   StarsTransactionType,
-  StoryViewerOrigin,
   ThemeKey,
   ThreadId,
   WebPageMediaSize,
@@ -201,11 +199,6 @@ export interface ActionPayloads {
   updatePerformanceSettings: Partial<PerformanceType>;
   loadPasswordInfo: undefined;
   clearTwoFaError: undefined;
-  openMonetizationVerificationModal: {
-    chatId: string;
-  } & WithTabId;
-  clearMonetizationVerificationError: WithTabId | undefined;
-  closeMonetizationVerificationModal: WithTabId | undefined;
   updatePassword: {
     currentPassword: string;
     password: string;
@@ -566,29 +559,6 @@ export interface ActionPayloads {
   deleteSavedHistory: {
     chatId: string;
   } & WithTabId;
-  loadSponsoredMessages: {
-    peerId: string;
-  };
-  viewSponsored: {
-    randomId: string;
-  };
-  clickSponsored: {
-    randomId: string;
-    isMedia?: boolean;
-    isFullscreen?: boolean;
-  };
-  reportSponsored: {
-    peerId?: string;
-    randomId: string;
-    option?: string;
-  } & WithTabId;
-  openAboutAdsModal: {
-    randomId: string;
-    canReport?: boolean;
-    sponsorInfo?: string;
-    additionalInfo?: string;
-  } & WithTabId;
-  closeAboutAdsModal: WithTabId | undefined;
   openPreparedInlineMessageModal: {
     botId: string;
     messageId: string;
@@ -606,11 +576,8 @@ export interface ActionPayloads {
       threadId?: ThreadId;
     };
   } & WithTabId;
-  openPreviousReportAdModal: WithTabId | undefined;
   openPreviousReportModal: WithTabId | undefined;
-  closeReportAdModal: WithTabId | undefined;
   closeReportModal: WithTabId | undefined;
-  hideSponsored: WithTabId | undefined;
   loadSendAs: {
     chatId: string;
   };
@@ -809,23 +776,6 @@ export interface ActionPayloads {
     chatId: string;
     messageId: number;
   } & WithTabId;
-  openStarsTransactionModal: {
-    transaction: ApiStarsTransaction;
-  } & WithTabId;
-  openStarsTransactionFromGift: {
-    chatId: string;
-    messageId: number;
-  } & WithTabId;
-  closeStarsTransactionModal: WithTabId | undefined;
-  openStarsSubscriptionModal: {
-    subscription: ApiStarsSubscription;
-  } & WithTabId;
-  closeStarsSubscriptionModal: WithTabId | undefined;
-  openPrizeStarsTransactionFromGiveaway: {
-    chatId: string;
-    messageId: number;
-  } & WithTabId;
-  closePrizeStarsTransactionFromGiveaway: WithTabId | undefined;
   sendCredentialsInfo: {
     credentials: ApiCredentials;
   } & WithTabId;
@@ -841,9 +791,6 @@ export interface ActionPayloads {
   toggleMessageStatistics: ({
     messageId?: number;
   } & WithTabId) | undefined;
-  toggleStoryStatistics: ({
-    storyId?: number;
-  } & WithTabId) | undefined;
   loadStatistics: {
     chatId: string;
     isGroup: boolean;
@@ -856,29 +803,12 @@ export interface ActionPayloads {
     chatId: string;
     messageId: number;
   } & WithTabId;
-  loadStoryStatistics: {
-    chatId: string;
-    storyId: number;
-  } & WithTabId;
-  loadStoryPublicForwards: {
-    chatId: string;
-    storyId: number;
-  } & WithTabId;
   loadStatisticsAsyncGraph: {
     chatId: string;
     token: string;
     name: string;
     isPercentage?: boolean;
   } & WithTabId;
-  loadChannelMonetizationStatistics: {
-    peerId: string;
-  } & WithTabId;
-
-  processMonetizationRevenueWithdrawalUrl: {
-    peerId: string;
-    currentPassword: string;
-  } & WithTabId;
-
   // ui
   dismissDialog: WithTabId | undefined;
   setNewChatMembersDialogState: {
@@ -1336,7 +1266,6 @@ export interface ActionPayloads {
     };
   } & WithTabId;
 
-  loadStarStatus: undefined;
   loadStarsTransactions: {
     type: StarsTransactionType;
     isTon?: boolean;
@@ -1351,23 +1280,6 @@ export interface ActionPayloads {
     peerId?: string;
     id: string;
   };
-  openStarsBalanceModal: {
-    originStarsPayment?: TabState['starsPayment'];
-    originGift?: StarGiftInfo;
-    originReaction?: {
-      chatId: string;
-      messageId: number;
-      amount: number;
-    };
-    topup?: {
-      balanceNeeded: number;
-      purpose?: string;
-    };
-    shouldIgnoreBalance?: boolean;
-    currency?: ApiTypeCurrencyAmount['currency'];
-  } & WithTabId;
-  closeStarsBalanceModal: WithTabId | undefined;
-
   checkChatlistInvite: {
     slug: string;
   } & WithTabId;
@@ -1610,179 +1522,14 @@ export interface ActionPayloads {
     messageId: number;
     position: IAnchorPosition;
   } & WithTabId;
-  openStoryReactionPicker: {
-    peerId: string;
-    storyId: number;
-    position: IAnchorPosition;
-    sendAsMessage?: boolean;
-  } & WithTabId;
   closeReactionPicker: WithTabId | undefined;
 
-  // Stories
-  loadAllStories: undefined;
-  loadAllHiddenStories: undefined;
-  loadPeerStories: {
-    peerId: string;
-  };
-  loadPeerProfileStories: {
-    peerId: string;
-    offsetId?: number;
-  } & WithTabId;
-  loadStoriesArchive: {
-    peerId: string;
-    offsetId?: number;
-  } & WithTabId;
-  loadPeerSkippedStories: {
-    peerId: string;
-  } & WithTabId;
-  loadPeerStoriesByIds: {
-    peerId: string;
-    storyIds: number[];
-  };
-  viewStory: {
-    peerId: string;
-    storyId: number;
-  } & WithTabId;
-  deleteStory: {
-    peerId: string;
-    storyId: number;
-  } & WithTabId;
-  toggleStoryInProfile: {
-    peerId: string;
-    storyId: number;
-    isInProfile?: boolean;
-  };
-  toggleStoryPinnedToTop: {
-    peerId: string;
-    storyId: number;
-  };
-  toggleStoryRibbon: {
-    isShown: boolean;
-    isArchived?: boolean;
-  } & WithTabId;
-  openStoryViewer: {
-    peerId: string;
-    storyId?: number;
-    isSinglePeer?: boolean;
-    isSingleStory?: boolean;
-    isPrivate?: boolean;
-    isArchive?: boolean;
-    origin?: StoryViewerOrigin;
-  } & WithTabId;
-  openStoryViewerByUsername: {
-    username: string;
-    storyId: number;
-    origin?: StoryViewerOrigin;
-  } & WithTabId;
   openUniqueGiftBySlug: {
     slug: string;
   } & WithTabId;
   openGiftAuctionBySlug: {
     slug: string;
   } & WithTabId;
-  openPreviousStory: WithTabId | undefined;
-  openNextStory: WithTabId | undefined;
-  setStoryViewerMuted: {
-    isMuted: boolean;
-  } & WithTabId;
-  closeStoryViewer: WithTabId | undefined;
-  loadStoryViews: {
-    peerId: string;
-    storyId: number;
-  };
-  loadStoryViewList: ({
-    peerId: string;
-    storyId: number;
-    offset?: string;
-    query?: string;
-    limit?: number;
-    areJustContacts?: true;
-    areReactionsFirst?: true;
-  }) & WithTabId;
-  clearStoryViews: {
-    isLoading?: boolean;
-  } & WithTabId;
-  updateStoryView: {
-    userId: string;
-    isUserBlocked?: boolean;
-    areStoriesBlocked?: boolean;
-  } & WithTabId;
-  openStoryViewModal: {
-    storyId: number;
-  } & WithTabId;
-  closeStoryViewModal: WithTabId | undefined;
-  copyStoryLink: {
-    peerId: string;
-    storyId: number;
-  } & WithTabId;
-  reportStory: {
-    peerId: string;
-    option?: string;
-    storyId: number;
-    description?: string;
-  } & WithTabId;
-  openStoryPrivacyEditor: WithTabId | undefined;
-  closeStoryPrivacyEditor: WithTabId | undefined;
-  editStoryPrivacy: {
-    peerId: string;
-    storyId: number;
-    privacy: ApiPrivacySettings;
-  };
-  toggleStoriesHidden: {
-    peerId: string;
-    isHidden: boolean;
-  };
-  loadStoriesMaxIds: {
-    peerIds: string[];
-  };
-  sendStoryReaction: {
-    peerId: string;
-    storyId: number;
-    containerId: string;
-    reaction?: ApiReaction;
-    shouldAddToRecent?: boolean;
-  } & WithTabId;
-  openStealthModal: ({
-    targetPeerId: string;
-  } | Record<string, never>) & WithTabId;
-  closeStealthModal: WithTabId | undefined;
-  activateStealthMode: {
-    isForPast?: boolean;
-    isForFuture?: boolean;
-  } | undefined;
-  loadStoryAlbums: {
-    peerId: string;
-  };
-  selectStoryAlbum: {
-    peerId: string;
-    albumId?: number;
-  } & WithTabId;
-  loadAlbumStories: {
-    peerId: string;
-    albumId: number;
-    offsetId?: number;
-  };
-  resetSelectedStoryAlbum: WithTabId | undefined;
-
-  openBoostModal: {
-    chatId: string;
-  } & WithTabId;
-  closeBoostModal: WithTabId | undefined;
-  openBoostStatistics: {
-    chatId: string;
-  } & WithTabId;
-  closeBoostStatistics: WithTabId | undefined;
-  loadMoreBoosters: { isGifts?: boolean } & WithTabId | undefined;
-  applyBoost: {
-    slots: number[];
-    chatId: string;
-  } & WithTabId;
-
-  openMonetizationStatistics: {
-    chatId: string;
-  } & WithTabId;
-  closeMonetizationStatistics: WithTabId | undefined;
-
   // Media Viewer & Audio Player
   openMediaViewer: {
     chatId?: string;
@@ -1791,7 +1538,6 @@ export interface ActionPayloads {
     standaloneMedia?: MediaViewerMedia[];
     mediaIndex?: number;
     isAvatarView?: boolean;
-    isSponsoredMessage?: boolean;
     origin: MediaViewerOrigin;
     withDynamicLoading?: boolean;
     timestamp?: number;
@@ -1929,10 +1675,6 @@ export interface ActionPayloads {
     userId: string;
     shouldRefundCharged: boolean;
   };
-  openChatRefundModal: {
-    userId: string;
-  } & WithTabId;
-  closeChatRefundModal: WithTabId | undefined;
   openProfileRatingModal: {
     userId: string;
     level: number;
@@ -1967,7 +1709,6 @@ export interface ActionPayloads {
   openForwardMenu: {
     fromChatId: string;
     messageIds?: number[];
-    storyId?: number;
     groupedId?: string;
     withMyScore?: boolean;
   } & WithTabId;
@@ -1994,10 +1735,6 @@ export interface ActionPayloads {
   exitForwardMode: WithTabId | undefined;
   changeRecipient: WithTabId | undefined;
   forwardToSavedMessages: WithTabId | undefined;
-  forwardStory: {
-    toChatId: string;
-  } & WithTabId;
-
   // GIFs
   loadSavedGifs: undefined;
 
@@ -2553,13 +2290,6 @@ export interface ActionPayloads {
   } & WithTabId) | undefined;
   closePremiumModal: WithTabId | undefined;
 
-  openGiveawayModal: ({
-    chatId: string;
-    gifts?: number[] | undefined;
-    prepaidGiveaway?: ApiTypePrepaidGiveaway | undefined;
-  } & WithTabId);
-  closeGiveawayModal: WithTabId | undefined;
-
   openGiftRecipientPicker: WithTabId | undefined;
   closeGiftRecipientPicker: WithTabId | undefined;
 
@@ -2594,15 +2324,6 @@ export interface ActionPayloads {
   closeWebAppsCloseConfirmationModal: ({
     shouldSkipInFuture?: boolean;
   } & WithTabId);
-
-  openStarsGiftingPickerModal: WithTabId | undefined;
-  closeStarsGiftingPickerModal: WithTabId | undefined;
-
-  openPaidReactionModal: {
-    chatId: string;
-    messageId: number;
-  } & WithTabId;
-  closePaidReactionModal: WithTabId | undefined;
 
   openSuggestMessageModal: {
     chatId: string;
@@ -2906,12 +2627,6 @@ export interface ActionPayloads {
     messageId: number;
   } & WithTabId;
 
-  openStarsGiftModal: ({
-    chatId?: string;
-    forUserId?: string;
-  } & WithTabId) | undefined;
-  closeStarsGiftModal: WithTabId | undefined;
-
   setEmojiStatus: {
     emojiStatus: ApiEmojiStatusType;
     referrerWebAppKey?: string;
@@ -2941,23 +2656,12 @@ export interface ActionPayloads {
   } & WithTabId;
 
   processOriginStarsPayment: {
-    originData: TabState['starsBalanceModal'];
+    originData: undefined;
     status: ApiPaymentStatus;
   } & WithTabId;
 
   openPaymentMessageConfirmDialogOpen: WithTabId | undefined;
   closePaymentMessageConfirmDialogOpen: WithTabId | undefined;
-  openPriceConfirmModal: {
-    originalAmount: number;
-    newAmount: number;
-    currency: 'TON' | 'XTR';
-    directInfo: {
-      formId: string;
-      inputInvoice: ApiInputInvoice;
-    };
-  } & WithTabId;
-  closePriceConfirmModal: WithTabId | undefined;
-
   // Forums
   toggleForum: {
     chatId: string;

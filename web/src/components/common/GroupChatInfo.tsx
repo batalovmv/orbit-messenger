@@ -5,7 +5,7 @@ import type {
   ApiChat, ApiTopic, ApiTypingStatus, ApiUser,
 } from '../../api/types';
 import type { IconName } from '../../types/icons';
-import { MediaViewerOrigin, type StoryViewerOrigin, type ThreadId } from '../../types';
+import { MediaViewerOrigin, type ThreadId } from '../../types';
 
 import {
   getChatTypeLangKey,
@@ -59,8 +59,6 @@ type OwnProps = {
   noRtl?: boolean;
   noAvatar?: boolean;
   noStatusOrTyping?: boolean;
-  withStory?: boolean;
-  storyViewerOrigin?: StoryViewerOrigin;
   isSavedDialog?: boolean;
   withMonoforumStatus?: boolean;
   onClick?: VoidFunction;
@@ -97,8 +95,6 @@ const GroupChatInfo = ({
   topic,
   messagesCount,
   noStatusOrTyping,
-  withStory,
-  storyViewerOrigin,
   noEmojiStatus,
   emojiStatusSize,
   isSavedDialog,
@@ -251,10 +247,7 @@ const GroupChatInfo = ({
             className={buildClassName(isSavedDialog && 'overlay-avatar')}
             size={avatarSize}
             peer={chat}
-            withStory={withStory}
             asMessageBubble={Boolean(monoforumChannel)}
-            storyViewerOrigin={storyViewerOrigin}
-            storyViewerMode="single-peer"
             isSavedDialog={isSavedDialog}
             onClick={withMediaViewer ? handleAvatarViewerOpen : undefined}
           />

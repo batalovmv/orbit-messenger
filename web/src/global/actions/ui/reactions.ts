@@ -45,24 +45,6 @@ addActionHandler('openMessageReactionPicker', (global, actions, payload): Action
   }, tabId);
 });
 
-addActionHandler('openStoryReactionPicker', (global, actions, payload): ActionReturnType => {
-  const {
-    peerId,
-    storyId,
-    position,
-    sendAsMessage,
-    tabId = getCurrentTabId(),
-  } = payload;
-
-  return updateTabState(global, {
-    reactionPicker: {
-      storyPeerId: peerId,
-      storyId,
-      sendAsMessage,
-      position,
-    },
-  }, tabId);
-});
 
 addActionHandler('openEffectPicker', (global, actions, payload): ActionReturnType => {
   const {
@@ -89,8 +71,6 @@ addActionHandler('closeReactionPicker', (global, actions, payload): ActionReturn
       ...tabState.reactionPicker,
       messageId: undefined,
       position: undefined,
-      storyId: undefined,
-      storyPeerId: undefined,
       isForEffects: undefined,
     },
   }, tabId);

@@ -1,5 +1,4 @@
 export { default as MediaViewer } from '../components/mediaViewer/MediaViewer';
-export { default as StoryViewer } from '../components/story/StoryViewer';
 
 export { default as ForwardRecipientPicker } from '../components/main/ForwardRecipientPicker';
 export { default as DraftRecipientPicker } from '../components/main/DraftRecipientPicker';
@@ -16,12 +15,9 @@ export { default as BotTrustModal } from '../components/main/BotTrustModal';
 export { default as AttachBotInstallModal } from '../components/modals/attachBotInstall/AttachBotInstallModal';
 export { default as DeleteFolderDialog } from '../components/main/DeleteFolderDialog';
 export { default as PremiumMainModal } from '../components/main/premium/PremiumMainModal';
-export { default as GiveawayModal } from '../components/main/premium/GiveawayModal';
 export { default as PremiumLimitReachedModal } from '../components/main/premium/common/PremiumLimitReachedModal';
 export { default as StatusPickerMenu } from '../components/left/main/StatusPickerMenu';
 export { default as SuggestedStatusModal } from '../components/modals/suggestedStatus/SuggestedStatusModal';
-export { default as BoostModal } from '../components/modals/boost/BoostModal';
-export { default as GiftCodeModal } from '../components/modals/giftcode/GiftCodeModal';
 export { default as DeleteAccountModal } from '../components/modals/deleteAccount/DeleteAccountModal';
 export { default as AgeVerificationModal } from '../components/modals/ageVerification/AgeVerificationModal';
 export { default as ChatlistModal } from '../components/modals/chatlist/ChatlistModal';
@@ -29,12 +25,8 @@ export { default as ChatInviteModal } from '../components/modals/chatInvite/Chat
 export { default as PasskeyModal } from '../components/modals/passkey/PasskeyModal';
 export { default as BirthdaySetupModal } from '../components/modals/birthday/BirthdaySetupModal';
 
-export { default as AboutAdsModal } from '../components/modals/aboutAds/AboutAdsModal';
-export { default as AboutMonetizationModal } from '../components/common/AboutMonetizationModal';
-export { default as VerificationMonetizationModal } from '../components/common/VerificationMonetizationModal';
 export { default as EmojiStatusAccessModal } from '../components/modals/emojiStatusAccess/EmojiStatusAccessModal';
 export { default as LocationAccessModal } from '../components/modals/locationAccess/LocationAccessModal';
-export { default as ReportAdModal } from '../components/modals/reportAd/ReportAdModal';
 export { default as ReportModal } from '../components/modals/reportModal/ReportModal';
 export { default as PreparedMessageModal } from '../components/modals/preparedMessage/PreparedMessageModal';
 export { default as SharePreparedMessageModal }
@@ -53,8 +45,6 @@ export { default as CountryPickerModal } from '../components/common/CountryPicke
 export { default as ReactorListModal } from '../components/middle/ReactorListModal';
 export { default as EmojiInteractionAnimation } from '../components/middle/EmojiInteractionAnimation';
 export { default as ChatLanguageModal } from '../components/middle/ChatLanguageModal';
-export { default as CollectibleInfoModal } from '../components/modals/collectible/CollectibleInfoModal';
-
 export { default as LeftSearch } from '../components/left/search/LeftSearch';
 export { default as Settings } from '../components/left/settings/Settings';
 export { default as ContactList } from '../components/left/main/ContactList';
@@ -64,7 +54,6 @@ export { default as ChatFolderModal } from '../components/left/ChatFolderModal';
 export { default as MuteChatModal } from '../components/left/MuteChatModal';
 
 export { default as ContextMenuContainer } from '../components/middle/message/ContextMenuContainer';
-export { default as SponsoredContextMenuContainer } from '../components/middle/message/SponsoredContextMenuContainer';
 export { default as StickerSetModal } from '../components/common/StickerSetModal';
 export { default as CustomEmojiSetsModal } from '../components/common/CustomEmojiSetsModal';
 export { default as HeaderMenuContainer } from '../components/middle/HeaderMenuContainer';
@@ -91,7 +80,6 @@ export { default as StickerSearch } from '../components/right/StickerSearch';
 export { default as GifSearch } from '../components/right/GifSearch';
 export { default as Statistics } from '../components/right/statistics/Statistics';
 export { default as MessageStatistics } from '../components/right/statistics/MessageStatistics';
-export { default as StoryStatistics } from '../components/right/statistics/StoryStatistics';
 export { default as PollResults } from '../components/right/PollResults';
 export { default as CreateTopic } from '../components/right/CreateTopic';
 export { default as EditTopic } from '../components/right/EditTopic';
@@ -106,7 +94,6 @@ export { default as WebAppsCloseConfirmationModal } from '../components/main/Web
 export { default as FrozenAccountModal } from '../components/modals/frozenAccount/FrozenAccountModal';
 export { default as ProfileRatingModal } from '../components/modals/profileRating/ProfileRatingModal';
 export { default as QuickPreviewModal } from '../components/modals/quickPreview/QuickPreviewModal';
-export { default as StealthModeModal } from '../components/modals/storyStealthMode/StealthModeModal';
 export { default as LeaveGroupModal } from '../components/modals/leaveGroup/LeaveGroupModal';
 export { default as TwoFaCheckModal } from '../components/modals/twoFaCheck/TwoFaCheckModal';
 export { default as QuickChatPickerModal } from '../components/modals/quickChatPicker/QuickChatPickerModal';

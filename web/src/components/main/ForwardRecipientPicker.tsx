@@ -43,7 +43,7 @@ const ForwardRecipientPicker: FC<OwnProps & StateProps> = ({
     setForwardChatOrTopic,
     exitForwardMode,
     forwardToSavedMessages,
-    forwardStory,
+
     showNotification,
   } = getActions();
 
@@ -60,7 +60,7 @@ const ForwardRecipientPicker: FC<OwnProps & StateProps> = ({
   const handleSelectRecipient = useCallback((recipientId: string, threadId?: ThreadId) => {
     const isSelf = recipientId === currentUserId;
     if (isStory) {
-      forwardStory({ toChatId: recipientId });
+      // forwardStory removed — stories feature removed
       const global = getGlobal();
       if (isUserId(recipientId)) {
         showNotification({
@@ -125,12 +125,12 @@ const ForwardRecipientPicker: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
-  const { messageIds, storyId } = selectTabState(global).forwardMessages;
+  const { messageIds } = selectTabState(global).forwardMessages;
   const isForwarding = (messageIds && messageIds.length > 0);
   return {
     currentUserId: global.currentUserId,
     isManyMessages: (messageIds?.length || 0) > 1,
-    isStory: Boolean(storyId),
+    isStory: false,
     isForwarding,
   };
 })(ForwardRecipientPicker));

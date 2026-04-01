@@ -167,7 +167,7 @@ async function fetchFromCacheOrRemote(
   }
 
   let { mimeType } = remote;
-  let prepared = prepareMedia(remote.dataBlob);
+  let prepared = prepareMedia(remote.dataBlob!);
 
   if (mimeType === 'audio/ogg' && !IS_OPUS_SUPPORTED) {
     const blob = await fetchBlob(prepared);

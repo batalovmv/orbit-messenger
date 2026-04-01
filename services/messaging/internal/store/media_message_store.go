@@ -125,7 +125,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			Width:            width,
 			Height:           height,
 			DurationSeconds:  duration,
-			WaveformData:     waveform,
+			WaveformData:     bytesToInts(waveform),
 			Position:         position,
 			IsSpoiler:        isSpoiler,
 			IsOneTime:        isOneTime,
@@ -229,7 +229,7 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 			Width:            width,
 			Height:           height,
 			DurationSeconds:  duration,
-			WaveformData:     waveform,
+			WaveformData:     bytesToInts(waveform),
 			ProcessingStatus: procStatus,
 		}
 		if filename != nil {
@@ -266,4 +266,15 @@ func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, me
 	}
 
 	return items, nextCursor, hasMore, rows.Err()
+}
+
+func bytesToInts(b []byte) []int {
+	if len(b) == 0 {
+		return nil
+	}
+	out := make([]int, len(b))
+	for i, v := range b {
+		out[i] = int(v)
+	}
+	return out
 }

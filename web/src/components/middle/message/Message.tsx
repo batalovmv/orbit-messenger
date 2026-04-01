@@ -101,7 +101,7 @@ import {
   selectMessageSummary,
   selectOutgoingStatus,
   selectPeer,
-  selectPeerStory,
+
   selectPerformanceSettingsValue,
   selectPollFromMessage,
   selectReplyMessage,
@@ -139,7 +139,6 @@ import renderText from '../../common/helpers/renderText';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
 import { buildContentClassName } from './helpers/buildContentClassName';
 import { calculateAlbumLayout } from './helpers/calculateAlbumLayout';
-import getSingularPaidMedia from './helpers/getSingularPaidMedia';
 import { calculateMediaDimensions, getMinMediaWidth, getMinMediaWidthWithText } from './helpers/mediaDimensions';
 
 import useAppLayout from '../../../hooks/useAppLayout';
@@ -199,14 +198,12 @@ import MessageAppendix from './MessageAppendix';
 import MessageEffect from './MessageEffect';
 import MessageMeta from './MessageMeta';
 import MessagePhoneCall from './MessagePhoneCall';
-import PaidMediaOverlay from './PaidMediaOverlay';
 import Photo from './Photo';
 import Poll from './Poll';
 import Reactions from './reactions/Reactions';
 import RoundVideo from './RoundVideo';
 import Sticker from './Sticker';
-import Story from './Story';
-import StoryMention from './StoryMention';
+
 import TodoList from './TodoList';
 import Video from './Video';
 import WebPage from './WebPage';
@@ -551,11 +548,8 @@ const Message = ({
   const isScheduled = messageListType === 'scheduled' || message.isScheduled;
   const hasMessageReply = isReplyToMessage(message) && !shouldHideReply;
 
-  const { paidMedia } = getMessageContent(message);
-  const { photo: paidMediaPhoto, video: paidMediaVideo } = getSingularPaidMedia(paidMedia);
-
   const {
-    photo = paidMediaPhoto, video = paidMediaVideo, audio,
+    photo, video, audio,
     voice, document, sticker, contact,
     invoice, location,
     action, game, storyData, giveaway,
@@ -585,8 +579,7 @@ const Message = ({
   const isRoundVideo = video?.mediaType === 'video' && video.isRound;
   const isAlbum = Boolean(album)
     && (
-      (album.isPaidMedia && paidMedia!.extendedMedia.length > 1)
-      || (album.isSaturnAlbum && (album.mainMessage.content.albumMedia?.length || 0) > 1)
+      (album.isSaturnAlbum && (album.mainMessage.content.albumMedia?.length || 0) > 1)
       || album.messages.length > 1
     ) && !album.messages.some((msg) => Object.keys(msg.content).length === 0);
   const isInDocumentGroupNotFirst = isInDocumentGroup && !isFirstInDocumentGroup;
@@ -1342,13 +1335,7 @@ const Message = ({
             shouldWarnAboutFiles={shouldWarnAboutFiles}
           />
         )}
-        {storyData && !isStoryMention && (
-          <Story
-            message={message}
-            isProtected={isProtected}
-          />
-        )}
-        {isStoryMention && <StoryMention message={message} />}
+        {/* Story and StoryMention removed */}
         {contact && (
           <Contact contact={contact} noUserColors={isOwn} />
         )}
@@ -1574,19 +1561,11 @@ const Message = ({
       </>
     );
 
-    if (paidMedia) {
-      return (
-        <PaidMediaOverlay chatId={chatId} messageId={messageId} paidMedia={paidMedia} isOutgoing={isOwn}>
-          {content}
-        </PaidMediaOverlay>
-      );
-    }
-
     return content;
   }
 
   function shouldRenderSenderName() {
-    const media = photo || video || location || paidMedia;
+    const media = photo || video || location;
     return !(isCustomShape && !viaBotId) && (
       (withSenderName && (!media || hasTopicChip)) || asForwarded || viaBotId || forceSenderName
     ) && !isInDocumentGroupNotFirst && !(hasMessageReply && isCustomShape);
@@ -2021,10 +2000,7 @@ export default memo(withGlobal<OwnProps>(
     const isChannel = chat && isChatChannel(chat);
     const isGroup = chat && isChatGroup(chat);
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
-    const webPageStoryData = webPage?.story;
-    const webPageStory = webPageStoryData
-      ? selectPeerStory(global, webPageStoryData.peerId, webPageStoryData.id)
-      : undefined;
+    const webPageStory = undefined;
 
     const isForwarding = forwardMessages.messageIds && forwardMessages.messageIds.includes(id);
     const forceSenderName = !isChatWithSelf && isAnonymousOwnMessage(message);
@@ -2053,9 +2029,7 @@ export default memo(withGlobal<OwnProps>(
       && !isChatPublic(replyMessageChat)
       && (replyMessageChat.isNotJoined || selectIsChatRestricted(global, replyMessageChat.id));
     const isReplyToTopicStart = replyMessage?.content?.action?.type === 'topicCreate';
-    const replyStory = storyReplyId && storyReplyPeerId
-      ? selectPeerStory(global, storyReplyPeerId, storyReplyId)
-      : undefined;
+    const replyStory = undefined;
     const storySender = storyReplyPeerId ? selectPeer(global, storyReplyPeerId) : undefined;
 
     const uploadProgress = selectUploadProgress(global, message);

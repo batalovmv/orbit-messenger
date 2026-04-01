@@ -43,6 +43,7 @@ import {
 } from '../../../config';
 import { addTimestampEntities } from '../../../util/dates/timestamp';
 import { generateWaveform } from '../../../util/generateWaveform';
+import { decodeWaveform } from '../../../util/waveform';
 import { pick } from '../../../util/iteratees';
 import { toJSNumber } from '../../../util/numbers';
 import {
@@ -451,7 +452,7 @@ function buildVoice(media: GramJs.TypeMessageMedia): ApiVoice | undefined {
     id: String(media.document.id),
     size: toJSNumber(media.document.size),
     duration,
-    waveform: waveform ? Array.from(waveform) : undefined,
+    waveform: waveform ? decodeWaveform(waveform) : undefined,
   };
 }
 

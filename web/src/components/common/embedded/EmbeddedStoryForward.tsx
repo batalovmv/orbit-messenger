@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from '../../../lib/teact/teact';
+import { memo, useRef } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type {
@@ -10,7 +10,7 @@ import type { ThemeKey } from '../../../types';
 import type { IconName } from '../../../types/icons';
 
 import { getPeerTitle } from '../../../global/helpers/peers';
-import { selectPeer, selectPeerStory, selectTheme } from '../../../global/selectors';
+import { selectPeer, selectTheme } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { isUserId } from '../../../util/entities/ids';
 import renderText from '../helpers/renderText';
@@ -45,19 +45,10 @@ const EmbeddedStoryForward = ({
   story,
   theme,
 }: OwnProps & StateProps) => {
-  const { openStoryViewer, loadPeerStoriesByIds, openChat } = getActions();
+  const { openChat } = getActions();
   const ref = useRef<HTMLDivElement>();
 
   const lang = useOldLang();
-
-  useEffect(() => {
-    if (!story && forwardInfo.fromPeerId && forwardInfo.storyId) {
-      loadPeerStoriesByIds({
-        peerId: forwardInfo.fromPeerId,
-        storyIds: [forwardInfo.storyId],
-      });
-    }
-  }, [forwardInfo, story]);
 
   const { className: peerColorClass, style: peerColorStyle } = usePeerColor({
     peer: sender,
@@ -74,15 +65,7 @@ const EmbeddedStoryForward = ({
 
     const isStoryReady = story && !('isDeleted' in story && story.isDeleted);
 
-    if (isStoryReady) {
-      openStoryViewer({
-        peerId: fromPeerId,
-        storyId,
-        isSingleStory: true,
-      });
-    } else {
-      openChat({ id: fromPeerId });
-    }
+    openChat({ id: fromPeerId });
   });
 
   const { handleClick, handleMouseDown } = useFastClick(openOriginalStory);
@@ -146,8 +129,7 @@ const EmbeddedStoryForward = ({
 export default memo(withGlobal<OwnProps>(
   (global, { forwardInfo }): Complete<StateProps> => {
     const sender = forwardInfo.fromPeerId ? selectPeer(global, forwardInfo.fromPeerId) : undefined;
-    const story = forwardInfo.storyId && forwardInfo.fromPeerId
-      ? selectPeerStory(global, forwardInfo.fromPeerId, forwardInfo.storyId) : undefined;
+    const story = undefined;
 
     return {
       sender,

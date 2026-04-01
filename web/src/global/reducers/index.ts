@@ -10,8 +10,6 @@ export * from './twoFaSettings';
 export * from './passcode';
 export * from './payments';
 export * from './statistics';
-export * from './stories';
 export * from './translations';
 export * from './peers';
 export * from './topics';
-export * from './gifts';

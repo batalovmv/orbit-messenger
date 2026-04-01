@@ -1,17 +1,13 @@
 import type { ApiSavedStarGift, ApiStarGiftUnique } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 
-import { STARS_CURRENCY_CODE } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import * as langProvider from '../../../util/oldLangProvider';
 import { addTabStateResetterAction } from '../../helpers/meta';
-import { getPrizeStarsTransactionFromGiveaway, getStarsTransactionFromGift } from '../../helpers/payments';
 import { addActionHandler, setGlobal } from '../../index';
-import { clearStarPayment, openStarsTransactionModal } from '../../reducers';
 import { removeGiftAuction } from '../../reducers/gifts';
 import { updateTabState } from '../../reducers/tabs';
 import {
-  selectChatMessage, selectIsCurrentUserFrozen, selectShouldRemoveGiftAuction, selectStarsPayment, selectTabState,
+  selectIsCurrentUserFrozen, selectShouldRemoveGiftAuction, selectTabState,
 } from '../../selectors';
 
 function buildShortSavedGift(gift: ApiStarGiftUnique, fromId?: string): ApiSavedStarGift {
@@ -21,48 +17,6 @@ function buildShortSavedGift(gift: ApiStarGiftUnique, fromId?: string): ApiSaved
     fromId,
   };
 }
-
-addActionHandler('processOriginStarsPayment', (global, actions, payload): ActionReturnType => {
-  const { originData, status, tabId = getCurrentTabId() } = payload;
-  const {
-    originStarsPayment, originReaction, originGift, topup,
-  } = originData || {};
-
-  if (!originStarsPayment && !originReaction && !originGift && !topup) {
-    return undefined;
-  }
-
-  actions.closeStarsBalanceModal({ tabId });
-
-  if (status !== 'paid') {
-    return undefined;
-  }
-
-  // Re-open previous payment modal
-  if (originStarsPayment) {
-    global = updateTabState(global, {
-      starsPayment: originStarsPayment,
-    }, tabId);
-  }
-
-  if (originReaction) {
-    actions.sendPaidReaction({
-      chatId: originReaction.chatId,
-      messageId: originReaction.messageId,
-      forcedAmount: originReaction.amount,
-      tabId,
-    });
-  }
-
-  if (originGift) {
-    actions.sendStarGift({
-      ...originGift,
-      tabId,
-    });
-  }
-
-  return global;
-});
 
 addActionHandler('openGiftRecipientPicker', (global, actions, payload): ActionReturnType => {
   const {
@@ -80,132 +34,6 @@ addActionHandler('openGiftRecipientPicker', (global, actions, payload): ActionRe
 });
 
 addTabStateResetterAction('closeGiftRecipientPicker', 'isGiftRecipientPickerOpen');
-
-addActionHandler('openStarsGiftingPickerModal', (global, actions, payload): ActionReturnType => {
-  const {
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  return updateTabState(global, {
-    starsGiftingPickerModal: {
-      isOpen: true,
-    },
-  }, tabId);
-});
-
-addTabStateResetterAction('closeStarsGiftingPickerModal', 'starsGiftingPickerModal');
-
-addActionHandler('openPrizeStarsTransactionFromGiveaway', (global, actions, payload): ActionReturnType => {
-  const {
-    chatId,
-    messageId,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  const message = selectChatMessage(global, chatId, messageId);
-  if (!message) return undefined;
-
-  const transaction = getPrizeStarsTransactionFromGiveaway(message);
-  if (!transaction) return undefined;
-
-  return openStarsTransactionModal(global, transaction, tabId);
-});
-
-addActionHandler('openStarsBalanceModal', (global, actions, payload): ActionReturnType => {
-  const {
-    originStarsPayment,
-    originReaction,
-    originGift,
-    topup,
-    shouldIgnoreBalance,
-    currency = STARS_CURRENCY_CODE,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  const starBalance = global.stars?.balance;
-
-  if (!shouldIgnoreBalance && starBalance && topup && topup.balanceNeeded <= starBalance.amount) {
-    actions.showNotification({
-      message: langProvider.oldTranslate('StarsTopupLinkEnough'),
-      actionText: langProvider.oldTranslate('StarsTopupLinkTopupAnyway'),
-      action: {
-        action: 'openStarsBalanceModal',
-        payload: { topup, shouldIgnoreBalance: true, tabId },
-      },
-      icon: 'star',
-      tabId,
-    });
-    return undefined;
-  }
-
-  global = clearStarPayment(global, tabId);
-
-  // Always refresh status on opening
-  actions.loadStarStatus();
-
-  return updateTabState(global, {
-    starsBalanceModal: {
-      originStarsPayment,
-      originReaction,
-      originGift,
-      topup,
-      currency,
-    },
-  }, tabId);
-});
-
-addTabStateResetterAction('closeStarsBalanceModal', 'starsBalanceModal');
-
-addActionHandler('closeStarsPaymentModal', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-
-  const starsPayment = selectStarsPayment(global, tabId);
-  let status = starsPayment?.status;
-  if (!status || status === 'pending') {
-    status = 'cancelled';
-  }
-
-  return updateTabState(global, {
-    starsPayment: {
-      status,
-    },
-  }, tabId);
-});
-
-addActionHandler('openStarsTransactionModal', (global, actions, payload): ActionReturnType => {
-  const { transaction, tabId = getCurrentTabId() } = payload;
-  return openStarsTransactionModal(global, transaction, tabId);
-});
-
-addActionHandler('openStarsTransactionFromGift', (global, actions, payload): ActionReturnType => {
-  const {
-    chatId,
-    messageId,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  const message = selectChatMessage(global, chatId, messageId);
-  if (!message) return undefined;
-
-  const transaction = getStarsTransactionFromGift(message);
-  if (!transaction) return undefined;
-
-  return openStarsTransactionModal(global, transaction, tabId);
-});
-
-addTabStateResetterAction('closeStarsTransactionModal', 'starsTransactionModal');
-
-addActionHandler('openStarsSubscriptionModal', (global, actions, payload): ActionReturnType => {
-  const { subscription, tabId = getCurrentTabId() } = payload;
-
-  return updateTabState(global, {
-    starsSubscriptionModal: {
-      subscription,
-    },
-  }, tabId);
-});
-
-addTabStateResetterAction('closeStarsSubscriptionModal', 'starsSubscriptionModal');
 
 addTabStateResetterAction('closeGiftModal', 'giftModal');
 
@@ -243,13 +71,6 @@ addActionHandler('setGiftModalSelectedGift', (global, actions, payload): ActionR
   }
 
   return undefined;
-});
-
-addActionHandler('closeStarsGiftModal', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-  return updateTabState(global, {
-    starsGiftModal: { isOpen: false },
-  }, tabId);
 });
 
 addActionHandler('openGiftInfoModal', (global, actions, payload): ActionReturnType => {
