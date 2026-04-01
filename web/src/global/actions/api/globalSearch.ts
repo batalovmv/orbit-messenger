@@ -293,12 +293,12 @@ async function searchMessagesGlobal<T extends GlobalState>(global: T, params: {
     return;
   }
 
-  if (messageLink) {
+  if (messageLink && result.messages) {
     result.totalCount = result.messages.unshift(messageLink);
   }
 
   const {
-    messages, userStatusesById, totalCount, nextOffsetRate, nextOffsetId, nextOffsetPeerId,
+    messages = [], userStatusesById, totalCount, nextOffsetRate, nextOffsetId, nextOffsetPeerId,
   } = result;
 
   const searchFlood = result.searchFlood || previousSearchFlood;
@@ -307,7 +307,7 @@ async function searchMessagesGlobal<T extends GlobalState>(global: T, params: {
     global = addUserStatuses(global, userStatusesById);
   }
 
-  if (messages.length) {
+  if (messages && messages.length) {
     global = addMessages(global, messages);
   }
 
