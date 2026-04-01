@@ -442,9 +442,10 @@ export async function fetchBlockedUsers() {
   const { fetchBlockedUsersList: fetchList } = await import('./settingsApi');
   const result = await fetchList({ limit: 100 });
   if (!result) return undefined;
+  const blocked = result.blocked_users || [];
   return {
-    blockedIds: result.blocked_users.map((u: { blocked_user_id: string }) => u.blocked_user_id),
-    totalCount: result.blocked_users.length,
+    blockedIds: blocked.map((u: { blocked_user_id: string }) => u.blocked_user_id),
+    totalCount: blocked.length,
   };
 }
 
