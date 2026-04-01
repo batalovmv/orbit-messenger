@@ -76,7 +76,7 @@
 "PremiumLimitAccountsNoPremium" = "You have reached your current limit of connected accounts. You can free one more place by subscribing to Telegram Premium.";
 "PremiumLimitAccounts" = "You have reached your current limit of connected accounts. You can free one more place by subscribing to Telegram Premium with one of these connected accounts.";
 "SendMessage" = "Send Message";
-"MessageUnsupported" = "This message is not supported on the web version of Telegram";
+"MessageUnsupported" = "This message is not supported in the current version";
 "ConversationDefaultRestrictedMedia" = "Sending media isn't allowed in this group.";
 "AccDescrVoiceMessage" = "Record voice message";
 "BotSettings" = "Settings";
@@ -2774,3 +2774,10 @@
 "AdminCreateInvite" = "Create Invite Code";
 "AdminInviteCreated" = "Invite code copied to clipboard";
 "AdminInviteError" = "Failed to create invite (admin only)";
+"lng_channel_add_users" = "Add Members";
+"ConversationSearchPlaceholder" = "Search";
+"MarkAllAsRead" = "Mark All as Read";
+"MessageContextGoto" = "Go to Message";
+"ReplyToAnotherChat" = "Reply in Another Chat";
+"DoNotReply" = "Cancel Reply";
+"ChannelInfo" = "Channel Info";

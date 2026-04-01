@@ -21,7 +21,7 @@ import (
 func newChatApp(cs *mockChatStore) *fiber.App {
 	app := fiber.New()
 	nats := service.NewNoopNATSPublisher()
-	svc := service.NewChatService(cs, nats)
+	svc := service.NewChatService(cs, &mockMessageStore{}, nats)
 	h := NewChatHandler(svc, slog.Default())
 	h.Register(app)
 	return app

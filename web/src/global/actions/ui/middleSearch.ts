@@ -72,5 +72,12 @@ addActionHandler('setSharedMediaSearchType', (global, actions, payload): ActionR
     return undefined;
   }
 
+  // Trigger initial search after state is updated
+  if (mediaType) {
+    queueMicrotask(() => {
+      actions.searchSharedMediaMessages({ tabId });
+    });
+  }
+
   return updateSharedMediaSearchType(global, chatId, threadId, mediaType, tabId);
 });

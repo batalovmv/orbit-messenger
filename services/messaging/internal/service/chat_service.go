@@ -13,12 +13,13 @@ import (
 )
 
 type ChatService struct {
-	chats store.ChatStore
-	nats  Publisher
+	chats    store.ChatStore
+	messages store.MessageStore
+	nats     Publisher
 }
 
-func NewChatService(chats store.ChatStore, nats Publisher) *ChatService {
-	return &ChatService{chats: chats, nats: nats}
+func NewChatService(chats store.ChatStore, messages store.MessageStore, nats Publisher) *ChatService {
+	return &ChatService{chats: chats, messages: messages, nats: nats}
 }
 
 func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
@@ -30,7 +31,41 @@ func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (b
 }
 
 func (s *ChatService) ListChats(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
-	return s.chats.ListByUser(ctx, userID, cursor, limit)
+	items, nextCursor, hasMore, err := s.chats.ListByUser(ctx, userID, cursor, limit)
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	// Collect message IDs that have media types to batch-load attachments
+	var msgIDs []uuid.UUID
+	for i := range items {
+		lm := items[i].LastMessage
+		if lm == nil {
+			continue
+		}
+		if lm.Type == "photo" || lm.Type == "video" || lm.Type == "voice" || lm.Type == "videonote" || lm.Type == "file" || lm.Type == "gif" {
+			msgIDs = append(msgIDs, lm.ID)
+		}
+	}
+
+	if len(msgIDs) > 0 {
+		mediaMap, mediaErr := s.messages.GetMediaByMessageIDs(ctx, msgIDs)
+		if mediaErr != nil {
+			slog.Error("failed to load media for last messages", "error", mediaErr)
+		} else {
+			for i := range items {
+				lm := items[i].LastMessage
+				if lm == nil {
+					continue
+				}
+				if atts, ok := mediaMap[lm.ID]; ok {
+					items[i].LastMessage.MediaAttachments = atts
+				}
+			}
+		}
+	}
+
+	return items, nextCursor, hasMore, nil
 }
 
 func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*model.Chat, error) {

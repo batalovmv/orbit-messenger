@@ -26,8 +26,10 @@ export function buildMessageKey(chatId: string, msgId: number): MessageKey {
 }
 
 export function parseMessageKey(key: MessageKey) {
-  const match = key.match(/^msg(-?\d+)-(\d+)/)!;
-
+  const match = key.match(/^msg(.+)-(\d+)$/);
+  if (!match) {
+    return { chatId: '', messageId: 0 };
+  }
   return { chatId: match[1], messageId: Number(match[2]) };
 }
 

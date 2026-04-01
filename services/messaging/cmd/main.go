@@ -19,6 +19,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/config"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/messaging/internal/handler"
+	"github.com/mst-corp/orbit/services/messaging/internal/search"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
@@ -102,18 +103,44 @@ func main() {
 
 	natsPublisher := service.NewNATSPublisher(nc)
 
+	// Meilisearch
+	meiliURL := config.EnvOr("MEILISEARCH_URL", "http://localhost:7700")
+	meiliKey := config.EnvOr("MEILISEARCH_KEY", "")
+	var searchClient service.SearchClient
+	var meiliClient *search.MeilisearchClient
+	if meiliKey != "" {
+		mc, err := search.NewMeilisearchClient(meiliURL, meiliKey)
+		if err != nil {
+			slog.Error("failed to init meilisearch", "error", err)
+			os.Exit(1)
+		}
+		meiliClient = mc
+		searchClient = mc
+		slog.Info("meilisearch connected", "url", meiliURL)
+	} else {
+		searchClient = search.NewNoopSearchClient()
+		slog.Warn("meilisearch not configured, search will return empty results")
+	}
+
 	// Stores
 	chatStore := store.NewChatStore(pool)
 	messageStore := store.NewMessageStore(pool)
 	userStore := store.NewUserStore(pool)
 	inviteStore := store.NewInviteStore(pool)
+	privacyStore := store.NewPrivacySettingsStore(pool)
+	blockedStore := store.NewBlockedUsersStore(pool)
+	userSettingsStore := store.NewUserSettingsStore(pool)
+	notifStore := store.NewNotificationSettingsStore(pool)
+	pushStore := store.NewPushSubscriptionStore(pool)
 
 	// Services
 	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher)
-	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher, rdb)
+	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb)
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
+	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore)
+	searchSvc := service.NewSearchService(searchClient, chatStore)
 
 	// NATS subscriber: update user status + last_seen_at in DB
 	statusSub, subErr := nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
@@ -161,12 +188,24 @@ func main() {
 	}
 	defer statusSub.Unsubscribe()
 
+	// Search indexer (listens to NATS message events → indexes in Meilisearch)
+	if meiliClient != nil {
+		indexer := search.NewIndexer(meiliClient, nc, logger)
+		if err := indexer.Start(); err != nil {
+			slog.Error("failed to start search indexer", "error", err)
+			os.Exit(1)
+		}
+		defer indexer.Stop()
+	}
+
 	// Handlers
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
 	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
 	userHandler := handler.NewUserHandler(userSvc, logger)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
+	settingsHandler := handler.NewSettingsHandler(settingsSvc, pushStore, logger)
+	searchHandler := handler.NewSearchHandler(searchSvc, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -183,6 +222,8 @@ func main() {
 	userHandler.Register(app)
 	inviteHandler.Register(app)
 	inviteHandler.RegisterPublic(app)
+	settingsHandler.Register(app)
+	searchHandler.Register(app)
 
 	// Graceful shutdown
 	go func() {

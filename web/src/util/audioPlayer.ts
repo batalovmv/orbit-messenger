@@ -341,8 +341,9 @@ export function makeTrackId(message: ApiMessage): TrackId | undefined {
 }
 
 function splitTrackId(trackId: TrackId) {
-  const messageKey = trackId.match(/^msg(-?\d+)-(\d+)/)![0] as MessageKey;
-  const date = Number(trackId.split('-').pop());
+  const lastDashIdx = trackId.lastIndexOf('-');
+  const messageKey = trackId.slice(0, lastDashIdx) as MessageKey;
+  const date = Number(trackId.slice(lastDashIdx + 1));
   return {
     messageKey,
     date,

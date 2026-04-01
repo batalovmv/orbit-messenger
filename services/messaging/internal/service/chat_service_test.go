@@ -19,7 +19,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func newTestChatService(cs *mockChatStore, rec *RecordingPublisher) *ChatService {
-	return NewChatService(cs, rec)
+	return NewChatService(cs, &mockMessageStore{}, rec)
 }
 
 func defaultGroupChat(chatID uuid.UUID) *model.Chat {

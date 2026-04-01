@@ -1,0 +1,412 @@
+package store
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
+)
+
+// ─── PrivacySettingsStore ────────────────────────────────────────────────────
+
+type PrivacySettingsStore interface {
+	GetByUserID(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error)
+	Upsert(ctx context.Context, settings *model.PrivacySettings) error
+}
+
+type privacySettingsStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewPrivacySettingsStore(pool *pgxpool.Pool) PrivacySettingsStore {
+	return &privacySettingsStore{pool: pool}
+}
+
+func (s *privacySettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error) {
+	ps := &model.PrivacySettings{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT user_id, last_seen, avatar, phone, calls, groups, forwarded, created_at, updated_at
+		 FROM privacy_settings
+		 WHERE user_id = $1`,
+		userID,
+	).Scan(
+		&ps.UserID, &ps.LastSeen, &ps.Avatar, &ps.Phone,
+		&ps.Calls, &ps.Groups, &ps.Forwarded,
+		&ps.CreatedAt, &ps.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		now := time.Now()
+		return &model.PrivacySettings{
+			UserID:    userID,
+			LastSeen:  "everyone",
+			Avatar:    "everyone",
+			Phone:     "contacts",
+			Calls:     "everyone",
+			Groups:    "everyone",
+			Forwarded: "everyone",
+			CreatedAt: now,
+			UpdatedAt: now,
+		}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("privacySettingsStore.GetByUserID: %w", err)
+	}
+	return ps, nil
+}
+
+func (s *privacySettingsStore) Upsert(ctx context.Context, settings *model.PrivacySettings) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO privacy_settings (user_id, last_seen, avatar, phone, calls, groups, forwarded, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET
+		   last_seen  = EXCLUDED.last_seen,
+		   avatar     = EXCLUDED.avatar,
+		   phone      = EXCLUDED.phone,
+		   calls      = EXCLUDED.calls,
+		   groups     = EXCLUDED.groups,
+		   forwarded  = EXCLUDED.forwarded,
+		   updated_at = NOW()`,
+		settings.UserID, settings.LastSeen, settings.Avatar, settings.Phone,
+		settings.Calls, settings.Groups, settings.Forwarded,
+	)
+	if err != nil {
+		return fmt.Errorf("privacySettingsStore.Upsert: %w", err)
+	}
+	return nil
+}
+
+// ─── BlockedUsersStore ───────────────────────────────────────────────────────
+
+type BlockedUsersStore interface {
+	List(ctx context.Context, userID uuid.UUID, limit int) ([]model.BlockedUser, error)
+	IsBlocked(ctx context.Context, userID, targetID uuid.UUID) (bool, error)
+	Block(ctx context.Context, userID, blockedID uuid.UUID) error
+	Unblock(ctx context.Context, userID, blockedID uuid.UUID) error
+}
+
+type blockedUsersStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewBlockedUsersStore(pool *pgxpool.Pool) BlockedUsersStore {
+	return &blockedUsersStore{pool: pool}
+}
+
+func (s *blockedUsersStore) List(ctx context.Context, userID uuid.UUID, limit int) ([]model.BlockedUser, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT b.user_id, b.blocked_user_id, b.created_at,
+		        u.display_name, u.avatar_url
+		 FROM blocked_users b
+		 JOIN users u ON u.id = b.blocked_user_id
+		 WHERE b.user_id = $1
+		 ORDER BY b.created_at DESC
+		 LIMIT $2`,
+		userID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("blockedUsersStore.List: %w", err)
+	}
+	defer rows.Close()
+
+	var result []model.BlockedUser
+	for rows.Next() {
+		var bu model.BlockedUser
+		if err := rows.Scan(
+			&bu.UserID, &bu.BlockedUserID, &bu.CreatedAt,
+			&bu.DisplayName, &bu.AvatarURL,
+		); err != nil {
+			return nil, fmt.Errorf("blockedUsersStore.List scan: %w", err)
+		}
+		result = append(result, bu)
+	}
+	return result, rows.Err()
+}
+
+func (s *blockedUsersStore) IsBlocked(ctx context.Context, userID, targetID uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(
+		   SELECT 1 FROM blocked_users
+		   WHERE user_id = $1 AND blocked_user_id = $2
+		 )`,
+		userID, targetID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("blockedUsersStore.IsBlocked: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *blockedUsersStore) Block(ctx context.Context, userID, blockedID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO blocked_users (user_id, blocked_user_id, created_at)
+		 VALUES ($1, $2, NOW())`,
+		userID, blockedID,
+	)
+	if err != nil {
+		// pgx surfaces unique-violation as a pgconn.PgError with Code "23505"
+		if isPgUniqueViolation(err) {
+			return apperror.Conflict("user is already blocked")
+		}
+		return fmt.Errorf("blockedUsersStore.Block: %w", err)
+	}
+	return nil
+}
+
+func (s *blockedUsersStore) Unblock(ctx context.Context, userID, blockedID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM blocked_users
+		 WHERE user_id = $1 AND blocked_user_id = $2`,
+		userID, blockedID,
+	)
+	if err != nil {
+		return fmt.Errorf("blockedUsersStore.Unblock: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NotFound("blocked user not found")
+	}
+	return nil
+}
+
+// ─── UserSettingsStore ───────────────────────────────────────────────────────
+
+type UserSettingsStore interface {
+	GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserSettings, error)
+	Upsert(ctx context.Context, settings *model.UserSettings) error
+}
+
+type userSettingsStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewUserSettingsStore(pool *pgxpool.Pool) UserSettingsStore {
+	return &userSettingsStore{pool: pool}
+}
+
+func (s *userSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserSettings, error) {
+	us := &model.UserSettings{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT user_id, theme, language, font_size, send_by_enter,
+		        dnd_from, dnd_until, created_at, updated_at
+		 FROM user_settings
+		 WHERE user_id = $1`,
+		userID,
+	).Scan(
+		&us.UserID, &us.Theme, &us.Language, &us.FontSize, &us.SendByEnter,
+		&us.DNDFrom, &us.DNDUntil,
+		&us.CreatedAt, &us.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		now := time.Now()
+		return &model.UserSettings{
+			UserID:      userID,
+			Theme:       "auto",
+			Language:    "ru",
+			FontSize:    16,
+			SendByEnter: true,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("userSettingsStore.GetByUserID: %w", err)
+	}
+	return us, nil
+}
+
+func (s *userSettingsStore) Upsert(ctx context.Context, settings *model.UserSettings) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO user_settings (user_id, theme, language, font_size, send_by_enter,
+		                            dnd_from, dnd_until, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET
+		   theme        = EXCLUDED.theme,
+		   language     = EXCLUDED.language,
+		   font_size    = EXCLUDED.font_size,
+		   send_by_enter = EXCLUDED.send_by_enter,
+		   dnd_from     = EXCLUDED.dnd_from,
+		   dnd_until    = EXCLUDED.dnd_until,
+		   updated_at   = NOW()`,
+		settings.UserID, settings.Theme, settings.Language, settings.FontSize,
+		settings.SendByEnter, settings.DNDFrom, settings.DNDUntil,
+	)
+	if err != nil {
+		return fmt.Errorf("userSettingsStore.Upsert: %w", err)
+	}
+	return nil
+}
+
+// ─── NotificationSettingsStore ───────────────────────────────────────────────
+
+type NotificationSettingsStore interface {
+	Get(ctx context.Context, userID, chatID uuid.UUID) (*model.NotificationSettings, error)
+	Upsert(ctx context.Context, settings *model.NotificationSettings) error
+	Delete(ctx context.Context, userID, chatID uuid.UUID) error
+}
+
+type notificationSettingsStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewNotificationSettingsStore(pool *pgxpool.Pool) NotificationSettingsStore {
+	return &notificationSettingsStore{pool: pool}
+}
+
+func (s *notificationSettingsStore) Get(ctx context.Context, userID, chatID uuid.UUID) (*model.NotificationSettings, error) {
+	ns := &model.NotificationSettings{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT user_id, chat_id, muted_until, sound, show_preview
+		 FROM notification_settings
+		 WHERE user_id = $1 AND chat_id = $2`,
+		userID, chatID,
+	).Scan(&ns.UserID, &ns.ChatID, &ns.MutedUntil, &ns.Sound, &ns.ShowPreview)
+	if err == pgx.ErrNoRows {
+		return nil, apperror.NotFound("notification settings not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("notificationSettingsStore.Get: %w", err)
+	}
+	return ns, nil
+}
+
+func (s *notificationSettingsStore) Upsert(ctx context.Context, settings *model.NotificationSettings) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO notification_settings (user_id, chat_id, muted_until, sound, show_preview)
+		 VALUES ($1, $2, $3, $4, $5)
+		 ON CONFLICT (user_id, chat_id) DO UPDATE SET
+		   muted_until  = EXCLUDED.muted_until,
+		   sound        = EXCLUDED.sound,
+		   show_preview = EXCLUDED.show_preview`,
+		settings.UserID, settings.ChatID, settings.MutedUntil,
+		settings.Sound, settings.ShowPreview,
+	)
+	if err != nil {
+		return fmt.Errorf("notificationSettingsStore.Upsert: %w", err)
+	}
+	return nil
+}
+
+func (s *notificationSettingsStore) Delete(ctx context.Context, userID, chatID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM notification_settings
+		 WHERE user_id = $1 AND chat_id = $2`,
+		userID, chatID,
+	)
+	if err != nil {
+		return fmt.Errorf("notificationSettingsStore.Delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NotFound("notification settings not found")
+	}
+	return nil
+}
+
+// ─── PushSubscriptionStore ───────────────────────────────────────────────────
+
+type PushSubscriptionStore interface {
+	Create(ctx context.Context, sub *model.PushSubscription) error
+	Delete(ctx context.Context, userID uuid.UUID, endpoint string) error
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]model.PushSubscription, error)
+	CountByUser(ctx context.Context, userID uuid.UUID) (int, error)
+}
+
+type pushSubscriptionStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewPushSubscriptionStore(pool *pgxpool.Pool) PushSubscriptionStore {
+	return &pushSubscriptionStore{pool: pool}
+}
+
+func (s *pushSubscriptionStore) Create(ctx context.Context, sub *model.PushSubscription) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		 ON CONFLICT (user_id, endpoint) DO UPDATE SET
+		   p256dh     = EXCLUDED.p256dh,
+		   auth       = EXCLUDED.auth,
+		   user_agent = EXCLUDED.user_agent`,
+		sub.ID, sub.UserID, sub.Endpoint, sub.P256DH, sub.Auth, sub.UserAgent,
+	)
+	if err != nil {
+		return fmt.Errorf("pushSubscriptionStore.Create: %w", err)
+	}
+	return nil
+}
+
+func (s *pushSubscriptionStore) Delete(ctx context.Context, userID uuid.UUID, endpoint string) error {
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM push_subscriptions
+		 WHERE user_id = $1 AND endpoint = $2`,
+		userID, endpoint,
+	)
+	if err != nil {
+		return fmt.Errorf("pushSubscriptionStore.Delete: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return apperror.NotFound("push subscription not found")
+	}
+	return nil
+}
+
+func (s *pushSubscriptionStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.PushSubscription, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, user_id, endpoint, p256dh, auth, user_agent, created_at
+		 FROM push_subscriptions
+		 WHERE user_id = $1
+		 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("pushSubscriptionStore.ListByUser: %w", err)
+	}
+	defer rows.Close()
+
+	var subs []model.PushSubscription
+	for rows.Next() {
+		var sub model.PushSubscription
+		if err := rows.Scan(
+			&sub.ID, &sub.UserID, &sub.Endpoint, &sub.P256DH,
+			&sub.Auth, &sub.UserAgent, &sub.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("pushSubscriptionStore.ListByUser scan: %w", err)
+		}
+		subs = append(subs, sub)
+	}
+	return subs, rows.Err()
+}
+
+func (s *pushSubscriptionStore) CountByUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM push_subscriptions WHERE user_id = $1`,
+		userID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("pushSubscriptionStore.CountByUser: %w", err)
+	}
+	return count, nil
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+// isPgUniqueViolation returns true when err is a PostgreSQL unique-constraint
+// violation (SQLSTATE 23505).
+func isPgUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	type pgErr interface{ SQLState() string }
+	if e, ok := err.(pgErr); ok {
+		return e.SQLState() == "23505"
+	}
+	return false
+}

@@ -183,6 +183,65 @@ export interface SaturnJoinRequest {
   avatar_url?: string;
 }
 
+// Phase 4: Settings, Privacy, Search
+
+export interface SaturnPrivacySettings {
+  user_id: string;
+  last_seen: 'everyone' | 'contacts' | 'nobody';
+  avatar: 'everyone' | 'contacts' | 'nobody';
+  phone: 'everyone' | 'contacts' | 'nobody';
+  calls: 'everyone' | 'contacts' | 'nobody';
+  groups: 'everyone' | 'contacts' | 'nobody';
+  forwarded: 'everyone' | 'contacts' | 'nobody';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaturnUserSettings {
+  user_id: string;
+  theme: 'auto' | 'light' | 'dark';
+  language: string;
+  font_size: number;
+  send_by_enter: boolean;
+  dnd_from?: string;
+  dnd_until?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaturnNotificationSettings {
+  user_id: string;
+  chat_id: string;
+  muted_until?: string;
+  sound: string;
+  show_preview: boolean;
+}
+
+export interface SaturnBlockedUser {
+  user_id: string;
+  blocked_user_id: string;
+  created_at: string;
+  display_name: string;
+  avatar_url?: string;
+}
+
+export interface SaturnPushSubscription {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+export interface SaturnSearchResponse {
+  results: Record<string, unknown>[];
+  total: number;
+  query: string;
+  scope: 'messages' | 'users' | 'chats';
+}
+
 // WebSocket message format
 export interface SaturnWsMessage {
   type: string;

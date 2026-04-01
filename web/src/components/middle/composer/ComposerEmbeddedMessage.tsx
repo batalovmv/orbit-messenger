@@ -442,7 +442,7 @@ const ComposerEmbeddedMessage = (props: OwnProps & StateProps) => {
                   icon="show-message"
                   onClick={handleShowMessageClick}
                 >
-                  {oldLang('Message.Context.Goto')}
+                  {oldLang('MessageContextGoto')}
                 </MenuItem>
                 {isReplyWithQuoteRendering && (
                   <MenuItem

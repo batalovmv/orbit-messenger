@@ -134,17 +134,9 @@ func main() {
 	})
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
 
-	// Public media endpoints (no JWT) — presigned R2 URLs are self-authenticating.
-	// Used by <img src>, <video src>, <a href> which cannot send Authorization headers.
-	mediaRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 600, KeyPrefix: "media_pub",
-	})
-	app.Get("/api/v1/media/:id", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
-	app.Get("/api/v1/media/:id/thumbnail", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
-	app.Get("/api/v1/media/:id/medium", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
-	app.Get("/api/v1/media/:id/info", mediaRateLimit, handler.PublicMediaProxy(mediaServiceURL, frontendURL))
-
 	// API group with JWT + rate limiting
+	// Note: media GET routes are handled by apiGroup.All("/media/*") in SetupProxy,
+	// which applies JWT middleware and forwards X-Internal-Token to the media service.
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
 
 	// Setup proxy routes

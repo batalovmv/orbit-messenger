@@ -13,7 +13,7 @@ import type {
   ApiWebPage,
   ApiChat,
 } from '../../types';
-import { request } from '../client';
+import { ensureAuth, getBaseUrl, request } from '../client';
 
 export {
   destroy, disconnect, init, setCurrentUser,
@@ -36,8 +36,9 @@ export async function downloadMedia(
   { url, mediaFormat }: { url: string; mediaFormat?: number; isHtmlAllowed?: boolean },
   onProgress?: (progress: number) => void,
 ) {
-  // url is a mediaHash like "photo<mediaId>?size=x" or "document<mediaId>"
-  const match = url.match(/^(?:photo|video|document)([a-f0-9-]+)/);
+  // url may be a full URL from service worker (http://.../progressive/document<id>)
+  // or a relative mediaHash like "document<id>" or "./progressive/document<id>"
+  const match = url.match(/(?:photo|video|document)([a-f0-9-]+)/);
   if (!match) return undefined;
 
   const mediaId = match[1];
@@ -53,10 +54,9 @@ export async function downloadMedia(
   }
 
   try {
-    const { getBaseUrl, getAccessToken } = await import('../client');
+    const token = await ensureAuth();
     const fullUrl = `${getBaseUrl()}${endpoint}`;
     const headers: Record<string, string> = {};
-    const token = getAccessToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -66,9 +66,16 @@ export async function downloadMedia(
 
     if (onProgress) onProgress(1);
 
-    const dataBlob = await response.blob();
-    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
 
+    // Progressive format (used by service worker for audio/video streaming):
+    // must return arrayBuffer + fullSize for range-request simulation
+    if (mediaFormat === 1 /* ApiMediaFormat.Progressive */) {
+      const arrayBuffer = await response.arrayBuffer();
+      return { arrayBuffer, mimeType, fullSize: arrayBuffer.byteLength };
+    }
+
+    const dataBlob = await response.blob();
     return { dataBlob, mimeType };
   } catch {
     return undefined;
@@ -190,17 +197,13 @@ export function fetchDefaultTagReactions() {
   return Promise.resolve(undefined);
 }
 
-export function fetchNotifyDefaultSettings() {
-  return Promise.resolve(undefined);
-}
+export { getUserSettings as fetchNotifyDefaultSettings } from './settingsApi';
 
 export function fetchPremiumPromo(): Promise<{ promo: ApiPremiumPromo } | undefined> {
   return Promise.resolve(undefined);
 }
 
-export function registerDevice() {
-  return Promise.resolve(undefined);
-}
+export { subscribePush as registerDevice } from './settingsApi';
 
 export function updateIsOnline() {
   return Promise.resolve(undefined);
@@ -297,9 +300,7 @@ export async function fetchWebPagePreview({ text }: {
   }
 }
 
-export function fetchPrivacySettings() {
-  return Promise.resolve(undefined);
-}
+export { getPrivacySettings as fetchPrivacySettings } from './settingsApi';
 
 export function fetchGlobalPrivacySettings() {
   return Promise.resolve(undefined);
@@ -321,8 +322,15 @@ export function fetchWallpapers(): Promise<{ wallpapers: ApiWallpaper[] } | unde
   return Promise.resolve(undefined);
 }
 
-export function fetchBlockedUsers() {
-  return Promise.resolve(undefined);
+// fetchBlockedUsers: adapt Saturn format to TG Web A format
+export async function fetchBlockedUsers() {
+  const { fetchBlockedUsersList: fetchList } = await import('./settingsApi');
+  const result = await fetchList({ limit: 100 });
+  if (!result) return undefined;
+  return {
+    blockedIds: result.blocked_users.map((u: { blocked_user_id: string }) => u.blocked_user_id),
+    totalCount: result.blocked_users.length,
+  };
 }
 
 export function fetchDefaultTopicIcons() {
@@ -393,3 +401,26 @@ export {
   fetchMediaInfo, deleteMedia, fetchSharedMedia,
   updateChatPhoto, deleteChatPhoto,
 } from './media';
+
+export {
+  getPrivacySettings, setPrivacySettings,
+  getUserSettings, updateUserSettings,
+  fetchBlockedUsersList,
+  getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings,
+  subscribePush, unsubscribePush,
+} from './settingsApi';
+
+// blockUser/unblockUser adapted for TG Web A action format: { user: ApiUser }
+export async function blockUser({ user }: { user: { id: string }; isOnlyStories?: boolean }) {
+  const { blockUser: block } = await import('./settingsApi');
+  return block({ userId: user.id });
+}
+
+export async function unblockUser({ user }: { user: { id: string }; isOnlyStories?: boolean }) {
+  const { unblockUser: unblock } = await import('./settingsApi');
+  return unblock({ userId: user.id });
+}
+
+export {
+  searchMessagesGlobal, searchUsersGlobal, searchChatsGlobal,
+} from './search';

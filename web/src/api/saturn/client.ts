@@ -53,6 +53,14 @@ export function getAccessToken() {
   return accessToken;
 }
 
+export async function ensureAuth(): Promise<string | undefined> {
+  if (authReadyPromise) {
+    await authReadyPromise;
+  }
+  await ensureToken();
+  return accessToken;
+}
+
 export function clearAuth() {
   accessToken = undefined;
   tokenExpiresAt = 0;

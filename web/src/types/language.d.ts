@@ -734,6 +734,7 @@ export interface LangPair {
   'ConversationClousStorageInfoDescription3': undefined;
   'ConversationClousStorageInfoDescription4': undefined;
   'GroupInfoTitle': undefined;
+  'ChannelTitleInfo': undefined;
   'EmptyGroupInfoTitle': undefined;
   'EmptyGroupInfoSubtitle': undefined;
   'EmptyGroupInfoLine2': undefined;
@@ -1100,6 +1101,9 @@ export interface LangPair {
   'ScheduleRepeatMonthly': undefined;
   'ScheduleRepeatYearly': undefined;
   'VoipIncoming': undefined;
+  'TimeJustNow': undefined;
+  'MuteForForever': undefined;
+  'NoViews': undefined;
   'LiveLocationUpdatedJustNow': undefined;
   'RightNow': undefined;
   'JustNowAgo': undefined;
@@ -2029,6 +2033,12 @@ export interface LangPair {
   'AdminCreateInvite': undefined;
   'AdminInviteCreated': undefined;
   'AdminInviteError': undefined;
+  'ConversationSearchPlaceholder': undefined;
+  'MarkAllAsRead': undefined;
+  'MessageContextGoto': undefined;
+  'ReplyToAnotherChat': undefined;
+  'DoNotReply': undefined;
+  'ChannelInfo': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -2332,11 +2342,23 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ScheduleRepeat': {
     'value': V;
   };
+  'MessageTimerShortMinutes': {
+    'count': V;
+  };
   'MessageTimerShortHours': {
     'count': V;
   };
   'MessageTimerShortDays': {
     'count': V;
+  };
+  'TimeTodayAt': {
+    'time': V;
+  };
+  'TimeYesterdayAt': {
+    'time': V;
+  };
+  'TimeAtDate': {
+    'date': V;
   };
   'LiveLocationUpdatedTodayAt': {
     'time': V;
@@ -3545,6 +3567,7 @@ export interface LangPairPlural {
   'DeleteForMeChatHint': undefined;
   'DeleteForEveryoneHint': undefined;
   'Chat.DeleteMessagesConfirmation': undefined;
+  'lng': undefined;
   'MediaReplaceInvalidError': undefined;
 }
 
@@ -3682,6 +3705,15 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'Years': {
+    'count': V;
+  };
+  'TimeMinutesAgo': {
+    'count': V;
+  };
+  'MuteForDays': {
+    'count': V;
+  };
+  'MuteForHours': {
     'count': V;
   };
   'LiveLocationUpdatedMinutesAgo': {

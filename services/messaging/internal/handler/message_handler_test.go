@@ -19,7 +19,7 @@ import (
 func newMessageApp(ms *mockMessageStore, cs *mockChatStore) *fiber.App {
 	app := fiber.New()
 	nats := service.NewNoopNATSPublisher()
-	svc := service.NewMessageService(ms, cs, nats, nil) // nil redis = slow mode disabled in tests
+	svc := service.NewMessageService(ms, cs, nil, nats, nil) // nil blockedStore + nil redis in tests
 	h := NewMessageHandler(svc, nil, slog.Default())
 	h.Register(app)
 	return app

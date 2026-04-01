@@ -407,7 +407,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
               color="translucent"
               size="smaller"
               onClick={handleSearchClick}
-              ariaLabel={oldLang('Conversation.SearchPlaceholder')}
+              ariaLabel={oldLang('ConversationSearchPlaceholder')}
               iconName="search"
             />
           )}

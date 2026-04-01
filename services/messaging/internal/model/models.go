@@ -132,6 +132,78 @@ type InviteLink struct {
 	CreatedAt        time.Time  `json:"created_at"`
 }
 
+// Phase 4: Settings & Privacy
+
+type PrivacySettings struct {
+	UserID    uuid.UUID `json:"user_id"`
+	LastSeen  string    `json:"last_seen"`
+	Avatar    string    `json:"avatar"`
+	Phone     string    `json:"phone"`
+	Calls     string    `json:"calls"`
+	Groups    string    `json:"groups"`
+	Forwarded string    `json:"forwarded"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type BlockedUser struct {
+	UserID        uuid.UUID `json:"user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	// Joined user data
+	DisplayName string  `json:"display_name,omitempty"`
+	AvatarURL   *string `json:"avatar_url,omitempty"`
+}
+
+type UserSettings struct {
+	UserID      uuid.UUID `json:"user_id"`
+	Theme       string    `json:"theme"`
+	Language    string    `json:"language"`
+	FontSize    int       `json:"font_size"`
+	SendByEnter bool      `json:"send_by_enter"`
+	DNDFrom     *string   `json:"dnd_from,omitempty"`
+	DNDUntil    *string   `json:"dnd_until,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type NotificationSettings struct {
+	UserID      uuid.UUID  `json:"user_id"`
+	ChatID      uuid.UUID  `json:"chat_id"`
+	MutedUntil  *time.Time `json:"muted_until,omitempty"`
+	Sound       string     `json:"sound"`
+	ShowPreview bool       `json:"show_preview"`
+}
+
+type PushSubscription struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256DH    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	UserAgent *string   `json:"user_agent,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// SearchResult represents a unified search result item.
+type SearchResult struct {
+	Type    string      `json:"type"` // message, user, chat
+	Data    interface{} `json:"data"`
+	ChatID  *string     `json:"chat_id,omitempty"`
+	Score   float64     `json:"score,omitempty"`
+}
+
+// ValidPrivacyValues are the allowed values for privacy settings fields.
+var ValidPrivacyValues = map[string]bool{
+	"everyone": true,
+	"contacts": true,
+	"nobody":   true,
+}
+
+var ValidThemes = map[string]bool{
+	"auto": true, "light": true, "dark": true,
+}
+
 type JoinRequest struct {
 	ChatID     uuid.UUID  `json:"chat_id"`
 	UserID     uuid.UUID  `json:"user_id"`

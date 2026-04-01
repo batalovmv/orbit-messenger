@@ -2,7 +2,7 @@ import type { FC } from '../../../lib/teact/teact';
 import type React from '../../../lib/teact/teact';
 import {
   memo,
-  useCallback, useEffect, useState,
+  useCallback, useEffect, useRef, useState,
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
@@ -61,6 +61,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
   const [about, setAbout] = useState('');
   const [photo, setPhoto] = useState<File | undefined>();
   const [error, setError] = useState<string | undefined>();
+  const hasManualTitle = useRef(false);
 
   const chatTitleEmptyError = 'Chat title can\'t be empty';
   const channelTitleEmptyError = 'Channel title can\'t be empty';
@@ -69,7 +70,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
   const isLoading = creationProgress === ChatCreationProgress.InProgress;
 
   useEffect(() => {
-    if (isChannel) {
+    if (isChannel || hasManualTitle.current) {
       return;
     }
     if (!memberIds.length || memberIds.length > MAX_MEMBERS_FOR_GENERATE_CHAT_NAME) {
@@ -94,6 +95,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
     const { value } = e.currentTarget;
     const newValue = value.replace(/^\s+/, '');
 
+    hasManualTitle.current = true;
     setTitle(newValue);
 
     if (newValue !== value) {

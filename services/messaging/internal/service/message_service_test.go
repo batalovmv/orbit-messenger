@@ -21,7 +21,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func newTestMessageService(ms *mockMessageStore, cs *mockChatStore, rec *RecordingPublisher, rdb *redis.Client) *MessageService {
-	return NewMessageService(ms, cs, rec, rdb)
+	return NewMessageService(ms, cs, nil, rec, rdb)
 }
 
 func msgAssertAppError(t *testing.T, err error, wantStatus int) {

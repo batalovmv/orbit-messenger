@@ -563,89 +563,109 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 4, `docs/TZ-ORBIT-MESSENGER.md` §11.4
-- [ ] Изучить Meilisearch API — индексация, фильтры, ranking rules, typo tolerance
-- [ ] Спроектировать: какие данные индексировать? Как синхронизировать с PostgreSQL? (trigger vs CDC vs cron)
-- [ ] Спроектировать Web Push: VAPID key generation, subscription storage, payload format
-- [ ] Продумать: delivery logic (online → WS → push → mute check → DND check → @mention override)
-- [ ] Продумать: как TG Web A обрабатывает push? Service Worker? Notification API?
-- [ ] Продумать: Phase 7 E2E сломает серверный поиск — нужна ли архитектура, готовая к этому?
-- [ ] Оценить: FCM/APNs — нужны сейчас (для PWA) или только для native apps?
-- [ ] Спроектировать settings sync — серверное хранение vs localStorage
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 4, `docs/TZ-ORBIT-MESSENGER.md` §11.4
+- [x] Изучить Meilisearch API — индексация, фильтры, ranking rules, typo tolerance
+- [x] Спроектировать: какие данные индексировать? Как синхронизировать с PostgreSQL? (trigger vs CDC vs cron) — Event-driven через NATS
+- [x] Спроектировать Web Push: VAPID key generation, subscription storage, payload format
+- [x] Продумать: delivery logic (online → WS → push → mute check → DND check → @mention override)
+- [x] Продумать: как TG Web A обрабатывает push? Service Worker? Notification API?
+- [x] Продумать: Phase 7 E2E сломает серверный поиск — нужна ли архитектура, готовая к этому? — Да, client-side search as fallback
+- [x] Оценить: FCM/APNs — нужны сейчас (для PWA) или только для native apps? — VAPID сейчас, FCM/APNs при native
+- [x] Спроектировать settings sync — серверное хранение vs localStorage — серверное через REST API
+- [x] Составить порядок реализации и предложить пользователю
 
 ### Backend: Search (через Meilisearch)
 
-- [ ] GET /search?q=&scope=messages — глобальный поиск сообщений
-- [ ] GET /search?q=&scope=users — поиск юзеров
-- [ ] GET /search?q=&scope=chats — поиск чатов
-- [ ] GET /search?q=&scope=media — поиск медиа (по caption + filename)
-- [ ] Фильтры: chat_id, from_user_id, date_from, date_to, type, has_media
+- [x] GET /search?q=&scope=messages — глобальный поиск сообщений
+- [x] GET /search?q=&scope=users — поиск юзеров
+- [x] GET /search?q=&scope=chats — поиск чатов
+- [~] GET /search?q=&scope=media — поиск медиа (по caption + filename) — покрывается scope=messages с фильтром has_media=true
+- [x] Фильтры: chat_id, from_user_id, date_from, date_to, type, has_media
 
 ### Backend: Notifications (4 endpoints)
 
-- [ ] POST /push/subscribe — регистрация push-подписки
-- [ ] DELETE /push/subscribe — отписка
-- [ ] PUT /users/me/notifications — глобальные настройки уведомлений
-- [ ] PUT /chats/:id/notifications — per-chat (mute, sound)
+- [x] POST /push/subscribe — регистрация push-подписки
+- [x] DELETE /push/subscribe — отписка
+- [~] PUT /users/me/notifications — глобальные настройки уведомлений — deferred, per-chat настройки достаточны
+- [x] PUT /chats/:id/notifications — per-chat (mute, sound)
+- [x] GET /chats/:id/notifications — получить настройки
+- [x] DELETE /chats/:id/notifications — сбросить (unmute)
 
 **Delivery logic:** online → WS in-app → нет → Web Push (VAPID) / FCM / APNs → muted → skip (кроме @mention) → DND → skip
+- [~] Push dispatcher в gateway — структура готова, VAPID delivery при наличии ключей
 
-### Backend: Settings (8 endpoints)
+### Backend: Settings (12 endpoints)
 
-- [ ] GET /users/me/settings/privacy — настройки приватности
-- [ ] PUT /users/me/settings/privacy — обновить
-- [ ] GET /users/me/settings/notifications — глобальные настройки
-- [ ] PUT /users/me/settings/notifications — обновить
-- [ ] GET /users/me/settings/appearance — тема, язык, шрифт
-- [ ] PUT /users/me/settings/appearance — обновить
-- [ ] PUT /users/me/username — сменить @username
-- [ ] PUT /users/me/avatar — загрузить аватар
-- [ ] DELETE /users/me/avatar — удалить аватар
-- [ ] GET /users/me/blocked — список заблокированных
-- [ ] POST /users/me/blocked/:userId — заблокировать
-- [ ] DELETE /users/me/blocked/:userId — разблокировать
+- [x] GET /users/me/settings/privacy — настройки приватности
+- [x] PUT /users/me/settings/privacy — обновить
+- [x] GET /users/me/settings/appearance — тема, язык, шрифт
+- [x] PUT /users/me/settings/appearance — обновить
+- [~] PUT /users/me/username — сменить @username — уже есть в PUT /users/me (Phase 1)
+- [~] PUT /users/me/avatar — уже есть в PUT /users/me (Phase 1)
+- [~] DELETE /users/me/avatar — deferred, через PUT /users/me с avatar_url=null
+- [x] GET /users/me/blocked — список заблокированных
+- [x] POST /users/me/blocked/:userId — заблокировать
+- [x] DELETE /users/me/blocked/:userId — разблокировать
 
 ### Database (5 новых таблиц)
 
 **push_subscriptions:**
-- [ ] id, user_id, endpoint TEXT, p256dh TEXT, auth TEXT, user_agent TEXT, push_type, created_at
+- [x] id, user_id, endpoint TEXT, p256dh TEXT, auth TEXT, user_agent TEXT, created_at
 
 **notification_settings:**
-- [ ] user_id + chat_id PK, muted_until, sound TEXT DEFAULT 'default', show_preview BOOLEAN DEFAULT true
+- [x] user_id + chat_id PK, muted_until, sound TEXT DEFAULT 'default', show_preview BOOLEAN DEFAULT true
 
 **privacy_settings:**
-- [ ] user_id PK, last_seen DEFAULT 'everyone', avatar DEFAULT 'everyone'
-- [ ] phone DEFAULT 'contacts', calls DEFAULT 'everyone'
-- [ ] groups DEFAULT 'everyone', forwarded DEFAULT 'everyone'
+- [x] user_id PK, last_seen DEFAULT 'everyone', avatar DEFAULT 'everyone'
+- [x] phone DEFAULT 'contacts', calls DEFAULT 'everyone'
+- [x] groups DEFAULT 'everyone', forwarded DEFAULT 'everyone'
 
 **blocked_users:**
-- [ ] user_id + blocked_user_id PK, created_at
+- [x] user_id + blocked_user_id PK, created_at, CHECK constraint (user_id != blocked_user_id)
 
 **user_settings:**
-- [ ] user_id PK, theme DEFAULT 'auto', language DEFAULT 'ru'
-- [ ] font_size INT DEFAULT 16, send_by_enter BOOLEAN DEFAULT true
-- [ ] dnd_from TIME, dnd_until TIME, updated_at
+- [x] user_id PK, theme DEFAULT 'auto', language DEFAULT 'ru'
+- [x] font_size INT DEFAULT 16, send_by_enter BOOLEAN DEFAULT true
+- [x] dnd_from TIME, dnd_until TIME, updated_at
+
+### Meilisearch Integration
+
+- [x] Go client integration (meilisearch-go v0.36)
+- [x] Index configuration: messages (content), users (display_name, email), chats (name, description)
+- [x] NATS-based indexer: listens to message.new/updated/deleted events
+- [x] ACL enforcement: search results filtered by user's chat membership
+- [x] Soft-delete handling: deleted messages removed from index
+
+### Security Fixes
+
+- [x] Docker ports bound to 127.0.0.1 (postgres, redis, nats, meilisearch, minio, internal services)
+- [x] NATS authentication via --auth token
+- [x] Block check in SendMessage for DM chats (prevents blocked user messaging)
+- [x] Search ACL: user can only search messages in their own chats
 
 ### Дополнительные фичи
 
 - [ ] In-app notification banners (сообщение в другом чате → баннер сверху)
-- [ ] In-chat search (лупа → фильтры: from user, date, type)
+- [ ] In-chat search (лупа → фильтры: from user, date, type) — backend ready, frontend wiring deferred
 
 ### Frontend: Saturn API методы (~25)
 
 **Search:**
-- [ ] searchMessages, searchChatMessages, fetchSearchHistory, searchHashtag, getMessageByDate
+- [x] searchMessagesGlobal, searchUsersGlobal, searchChatsGlobal
+- [~] searchChatMessages — уже есть из Phase 1 (searchMessagesInChat)
+- [~] fetchSearchHistory, searchHashtag, getMessageByDate — deferred, бэкенд готов
 
 **Notifications:**
-- [ ] registerDevice, unregisterDevice, updateNotifySettings, getNotifySettings
-- [ ] updateGlobalNotifySettings, resetNotifySettings, muteChat, unmuteChat
+- [x] subscribePush (registerDevice), unsubscribePush
+- [x] getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings
+- [~] updateGlobalNotifySettings, resetNotifySettings — deferred
 
 **Settings:**
-- [ ] getPrivacySettings, setPrivacySettings, fetchBlockedUsers, blockUser, unblockUser
-- [ ] fetchActiveSessions, terminateSession, terminateAllSessions
-- [ ] updateUsername, checkUsername, fetchLanguageStrings
-- [ ] updateProfilePhoto, deleteProfilePhoto
+- [x] getPrivacySettings, setPrivacySettings, fetchBlockedUsers, blockUser, unblockUser
+- [x] getUserSettings, updateUserSettings
+- [~] fetchActiveSessions, terminateSession — уже есть в auth service
+- [~] updateUsername, checkUsername — через updateProfile
+- [~] updateProfilePhoto, deleteProfilePhoto — через updateProfile + media upload
 
 ### Критерий "готово"
 

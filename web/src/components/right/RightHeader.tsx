@@ -364,7 +364,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     }
 
     if (isChannel) {
-      return oldLang('Channel.TitleInfo');
+      return oldLang('ChannelInfo');
     }
 
     if (userId) {

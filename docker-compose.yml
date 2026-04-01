@@ -8,7 +8,7 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-orbit}
       POSTGRES_USER: ${POSTGRES_USER:-orbit}
@@ -25,7 +25,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     volumes:
       - redis_data:/data
@@ -38,9 +38,9 @@ services:
   nats:
     image: nats:2-alpine
     ports:
-      - "4222:4222"   # client
-      - "8222:8222"   # monitoring
-    command: -js -m 8222  # enable JetStream + monitoring
+      - "127.0.0.1:4222:4222"   # client
+      - "127.0.0.1:8222:8222"   # monitoring
+    command: -js -m 8222 --auth ${NATS_TOKEN:?Set NATS_TOKEN in .env}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
       interval: 5s
@@ -50,14 +50,14 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.7
     ports:
-      - "7700:7700"
+      - "127.0.0.1:7700:7700"
     environment:
       MEILI_MASTER_KEY: ${MEILISEARCH_KEY:?Set MEILISEARCH_KEY in .env}
       MEILI_NO_ANALYTICS: "true"
     volumes:
       - meili_data:/meili_data
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:7700/health"]
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://127.0.0.1:7700/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -65,8 +65,8 @@ services:
   minio:
     image: minio/minio:latest
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${R2_ACCESS_KEY_ID:-minioadmin}
       MINIO_ROOT_PASSWORD: ${R2_SECRET_ACCESS_KEY:-minioadmin}
@@ -105,13 +105,15 @@ services:
     environment:
       PORT: "8080"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      ORBIT_NATS_URL: nats://nats:4222
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       AUTH_SERVICE_URL: http://auth:8081
       MESSAGING_SERVICE_URL: http://messaging:8082
       MEDIA_SERVICE_URL: http://media:8083
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     depends_on:
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }
@@ -124,7 +126,7 @@ services:
       context: .
       dockerfile: services/auth/Dockerfile
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       PORT: "8081"
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
@@ -145,29 +147,32 @@ services:
       context: .
       dockerfile: services/messaging/Dockerfile
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     environment:
       PORT: "8082"
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      ORBIT_NATS_URL: nats://nats:4222
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: ${MEILISEARCH_KEY}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }
+      meilisearch: { condition: service_healthy }
 
   media:
     build:
       context: .
       dockerfile: services/media/Dockerfile
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     environment:
       PORT: "8083"
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-      ORBIT_NATS_URL: nats://nats:4222
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       R2_ENDPOINT: http://minio:9000
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-minioadmin}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}

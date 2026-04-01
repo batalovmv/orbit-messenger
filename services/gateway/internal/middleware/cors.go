@@ -37,7 +37,7 @@ func CORSMiddleware(frontendURL string) fiber.Handler {
 		// Preflight: add extra headers and return 204
 		if c.Method() == fiber.MethodOptions {
 			c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Set("Access-Control-Allow-Headers", "Origin,Content-Type,Authorization,Accept")
+			c.Set("Access-Control-Allow-Headers", "Origin,Content-Type,Authorization,Accept,X-Requested-With")
 			c.Set("Access-Control-Max-Age", "86400")
 			return c.SendStatus(fiber.StatusNoContent)
 		}

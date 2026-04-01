@@ -105,6 +105,14 @@ const PLURAL_RULES = {
 const cache = new Map<string, string>();
 
 let langPack: ApiOldLangPack | undefined;
+let fallbackStrings: Record<string, string> | undefined;
+
+// Load fallback strings for keys not in the remote langPack
+import('./data/readStrings').then((mod) => {
+  import('../assets/localization/fallback.strings').then((file) => {
+    fallbackStrings = mod.default(file.default);
+  });
+});
 
 const {
   addCallback,
@@ -129,7 +137,10 @@ function createLangFn() {
 
     // Try exact key first, then fallback to non-dotted version
     // (fallback.strings uses "LastSeenJustNow" but code uses "LastSeen.JustNow")
-    const langString = langPack?.[key] || (key.includes('.') ? langPack?.[key.replace(/\./g, '')] : undefined);
+    const langString = langPack?.[key]
+      || (key.includes('.') ? langPack?.[key.replace(/\./g, '')] : undefined)
+      || fallbackStrings?.[key]
+      || (key.includes('.') ? fallbackStrings?.[key.replace(/\./g, '')] : undefined);
     if (!langString) {
       return key;
     }

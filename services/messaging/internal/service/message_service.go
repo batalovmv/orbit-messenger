@@ -18,14 +18,15 @@ import (
 )
 
 type MessageService struct {
-	messages store.MessageStore
-	chats    store.ChatStore
-	nats     Publisher
-	redis    *redis.Client
+	messages     store.MessageStore
+	chats        store.ChatStore
+	blockedStore store.BlockedUsersStore
+	nats         Publisher
+	redis        *redis.Client
 }
 
-func NewMessageService(messages store.MessageStore, chats store.ChatStore, nats Publisher, rdb *redis.Client) *MessageService {
-	return &MessageService{messages: messages, chats: chats, nats: nats, redis: rdb}
+func NewMessageService(messages store.MessageStore, chats store.ChatStore, blockedStore store.BlockedUsersStore, nats Publisher, rdb *redis.Client) *MessageService {
+	return &MessageService{messages: messages, chats: chats, blockedStore: blockedStore, nats: nats, redis: rdb}
 }
 
 func (s *MessageService) ListMessages(ctx context.Context, chatID, userID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error) {
@@ -71,6 +72,35 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 
 	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
 		return nil, apperror.Forbidden("You don't have permission to send messages")
+	}
+
+	// Block check: in direct chats, check if either user has blocked the other
+	if chat.Type == "direct" && s.blockedStore != nil {
+		members, _, _, err := s.chats.GetMembers(ctx, chatID, "", 2)
+		if err != nil {
+			return nil, fmt.Errorf("get dm members: %w", err)
+		}
+		for _, m := range members {
+			if m.UserID == senderID {
+				continue
+			}
+			// Check if recipient blocked the sender
+			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, senderID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You cannot send messages to this user")
+			}
+			// Check if sender blocked the recipient
+			blocked, err = s.blockedStore.IsBlocked(ctx, senderID, m.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You have blocked this user")
+			}
+		}
 	}
 
 	// Slow mode: check Redis TTL key (admin/owner bypass)

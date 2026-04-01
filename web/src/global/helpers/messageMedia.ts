@@ -406,8 +406,14 @@ export function getMediaFormat(
   }
 
   if (isAudio || isVoice) {
-    // Safari
+    // Safari can't decode Opus natively, use BlobUrl for transcoding
     if (isVoice && !IS_OPUS_SUPPORTED) {
+      return ApiMediaFormat.BlobUrl;
+    }
+
+    // Saturn backend doesn't support HTTP Range requests needed for Progressive streaming.
+    // Voice messages are small enough to download fully as BlobUrl.
+    if (isVoice) {
       return ApiMediaFormat.BlobUrl;
     }
 
