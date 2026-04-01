@@ -443,10 +443,10 @@ export async function setChatMuted({ chatId, isMuted }: { chatId: string; isMute
   });
 }
 
-export async function fetchMembers({ chatId, type, offset, limit }: {
-  chatId: string; type?: string; offset?: number; limit?: number;
+export async function fetchMembers({ chat, type, offset, limit }: {
+  chat: { id: string }; type?: string; offset?: number; limit?: number;
 }) {
-  return getChatMembers({ chatId, limit: limit || 200 });
+  return getChatMembers({ chatId: chat.id, limit: limit || 200 });
 }
 
 export async function searchMembers({ chatId, query, limit }: {
