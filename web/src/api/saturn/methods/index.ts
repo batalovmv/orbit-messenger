@@ -437,6 +437,10 @@ export function fetchWallpapers(): Promise<{ wallpapers: ApiWallpaper[] } | unde
   return Promise.resolve(undefined);
 }
 
+export function fetchPasskeys() {
+  return Promise.resolve([]);
+}
+
 // fetchBlockedUsers: adapt Saturn format to TG Web A format
 export async function fetchBlockedUsers() {
   const { fetchBlockedUsersList: fetchList } = await import('./settingsApi');
