@@ -99,7 +99,12 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 
 		var msgType *string
 		if raw := c.Query("type"); raw != "" {
-			msgType = &raw
+			switch raw {
+			case "text", "photo", "video", "file", "voice", "video_note", "sticker", "gif", "system":
+				msgType = &raw
+			default:
+				return response.Error(c, apperror.BadRequest("Invalid message type"))
+			}
 		}
 
 		var hasMedia *bool

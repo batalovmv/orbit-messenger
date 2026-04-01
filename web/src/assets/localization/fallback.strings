@@ -548,6 +548,16 @@
 "BlockContact" = "Block";
 "CustomHelp" = "You won't see Last Seen or Online statuses for people with whom you don't share yours. Approximate times will be shown instead (recently, within a week, within a month).";
 "PrivacyExceptions" = "Exceptions";
+"PrivacyBio" = "Bio";
+"PrivacyBirthday" = "Birthday";
+"PrivacyVoiceMessagesTitle" = "Voice Messages";
+"PrivacyMessagesTitle" = "Messages";
+"HideReadTime" = "Hide read time";
+"HideReadTimeInfo" = "If you hide your read time, other users won't know when you've read their messages. Your read time will not be hidden in groups.";
+"PrivacyLastSeenPremium" = "Precise Last Seen Time";
+"PrivacyLastSeenPremiumInfo" = "Premium subscribers can see the exact last seen time of other users, even if they have chosen to hide it.";
+"lng_settings_window_system" = "System";
+"lng_settings_title_chat_name" = "Show chat name in window title";
 "AlwaysAllow" = "Always Allow";
 "EditAdminAddUsers" = "Add Users";
 "NeverAllow" = "Never Allow";

@@ -68,7 +68,7 @@ func configureIndexes(client meilisearch.ServiceManager) error {
 		{
 			name:       "chats",
 			searchable: []string{"name", "description"},
-			filterable: []interface{}{"type"},
+			filterable: []interface{}{"id", "type"},
 		},
 	}
 

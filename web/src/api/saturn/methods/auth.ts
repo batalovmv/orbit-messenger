@@ -231,6 +231,10 @@ export async function logout() {
   client.disconnectWs();
   client.clearAuth();
 
+  // Clear cached privacy data to prevent leaking between sessions
+  const { clearPrivacyCache } = await import('./index');
+  clearPrivacyCache();
+
   sendApiUpdate({
     '@type': 'updateAuthorizationState',
     authorizationState: 'authorizationStateLoggingOut',

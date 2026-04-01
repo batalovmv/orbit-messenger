@@ -349,11 +349,17 @@ let cachedPrivacy: Record<string, string> | undefined;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5000;
 
-async function loadSaturnPrivacy(): Promise<Record<string, string>> {
+// Clear privacy cache on logout to prevent data leaking between sessions
+export function clearPrivacyCache() {
+  cachedPrivacy = undefined;
+  cacheTimestamp = 0;
+}
+
+async function loadSaturnPrivacy(): Promise<Record<string, string> | undefined> {
   if (cachedPrivacy && Date.now() - cacheTimestamp < CACHE_TTL) return cachedPrivacy;
   const { getPrivacySettings } = await import('./settingsApi');
   const result = await getPrivacySettings();
-  if (!result) return {};
+  if (!result) return undefined;
   cachedPrivacy = {
     last_seen: result.last_seen,
     phone: result.phone,
@@ -374,6 +380,11 @@ export async function fetchPrivacySettings(privacyKey: string) {
     return buildPrivacyRules('everybody');
   }
   const privacy = await loadSaturnPrivacy();
+  if (!privacy) {
+    // Network failure — return undefined so the caller retries later
+    // instead of silently falling back to 'everyone' (most permissive)
+    return undefined;
+  }
   const value = privacy[saturnField] || 'everyone';
   return buildPrivacyRules(value);
 }

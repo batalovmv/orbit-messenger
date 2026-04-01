@@ -2,9 +2,15 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+)
+
+// Sentinel errors
+var (
+	ErrPushSubscriptionLimitReached = errors.New("maximum of 10 push subscriptions per user")
 )
 
 type User struct {
@@ -99,7 +105,7 @@ type MediaAttachment struct {
 	Width            *int     `json:"width,omitempty"`
 	Height           *int     `json:"height,omitempty"`
 	DurationSeconds  *float64 `json:"duration_seconds,omitempty"`
-	WaveformData     []byte   `json:"waveform_data,omitempty"`
+	WaveformData     []int    `json:"waveform_data,omitempty"`
 	Position         int      `json:"position"`
 	IsSpoiler        bool     `json:"is_spoiler"`
 	IsOneTime        bool     `json:"is_one_time"`

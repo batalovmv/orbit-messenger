@@ -140,7 +140,7 @@ func main() {
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
-	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore)
+	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
 	searchSvc := service.NewSearchService(searchClient, chatStore)
 
 	// NATS subscriber: update user status + last_seen_at in DB

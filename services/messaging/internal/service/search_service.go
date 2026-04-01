@@ -164,13 +164,15 @@ func (s *SearchService) DeleteMessage(messageID string) error {
 }
 
 // userChatIDs fetches all chat IDs the user belongs to (used for ACL filtering).
-// It pages through ListByUser until all chats are collected.
+// It pages through ListByUser until all chats are collected, capped at maxChats
+// to prevent unbounded loops and oversized Meilisearch filter expressions.
 func (s *SearchService) userChatIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	const pageSize = 200
+	const maxChats = 2000
 	var ids []string
 	cursor := ""
 
-	for {
+	for len(ids) < maxChats {
 		chats, next, hasMore, err := s.chatStore.ListByUser(ctx, userID, cursor, pageSize)
 		if err != nil {
 			return nil, err
@@ -178,7 +180,7 @@ func (s *SearchService) userChatIDs(ctx context.Context, userID uuid.UUID) ([]st
 		for _, c := range chats {
 			ids = append(ids, fmt.Sprintf("%q", c.ID.String()))
 		}
-		if !hasMore {
+		if !hasMore || len(ids) >= maxChats {
 			break
 		}
 		cursor = next

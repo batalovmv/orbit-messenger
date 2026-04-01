@@ -17,6 +17,7 @@ type SettingsService struct {
 	blockedStore      store.BlockedUsersStore
 	userSettingsStore store.UserSettingsStore
 	notifStore        store.NotificationSettingsStore
+	chatStore         store.ChatStore
 }
 
 // NewSettingsService creates a new SettingsService.
@@ -25,12 +26,14 @@ func NewSettingsService(
 	blockedStore store.BlockedUsersStore,
 	userSettingsStore store.UserSettingsStore,
 	notifStore store.NotificationSettingsStore,
+	chatStore store.ChatStore,
 ) *SettingsService {
 	return &SettingsService{
 		privacyStore:      privacyStore,
 		blockedStore:      blockedStore,
 		userSettingsStore: userSettingsStore,
 		notifStore:        notifStore,
+		chatStore:         chatStore,
 	}
 }
 
@@ -166,8 +169,23 @@ func (s *SettingsService) UpdateUserSettings(
 
 // — Notification Settings —
 
+// requireChatMembership verifies that userID is a member of chatID.
+func (s *SettingsService) requireChatMembership(ctx context.Context, userID, chatID uuid.UUID) error {
+	isMember, _, err := s.chatStore.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("check chat membership: %w", err)
+	}
+	if !isMember {
+		return apperror.Forbidden("not a member of this chat")
+	}
+	return nil
+}
+
 // GetNotificationSettings returns per-chat notification settings for a user.
 func (s *SettingsService) GetNotificationSettings(ctx context.Context, userID, chatID uuid.UUID) (*model.NotificationSettings, error) {
+	if err := s.requireChatMembership(ctx, userID, chatID); err != nil {
+		return nil, err
+	}
 	ns, err := s.notifStore.Get(ctx, userID, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("get notification settings: %w", err)
@@ -183,6 +201,9 @@ func (s *SettingsService) UpdateNotificationSettings(
 	sound string,
 	showPreview bool,
 ) (*model.NotificationSettings, error) {
+	if err := s.requireChatMembership(ctx, userID, chatID); err != nil {
+		return nil, err
+	}
 	ns := &model.NotificationSettings{
 		UserID:      userID,
 		ChatID:      chatID,
@@ -199,6 +220,9 @@ func (s *SettingsService) UpdateNotificationSettings(
 // DeleteNotificationSettings removes per-chat notification overrides for a user,
 // restoring default notification behaviour for that chat.
 func (s *SettingsService) DeleteNotificationSettings(ctx context.Context, userID, chatID uuid.UUID) error {
+	if err := s.requireChatMembership(ctx, userID, chatID); err != nil {
+		return err
+	}
 	if err := s.notifStore.Delete(ctx, userID, chatID); err != nil {
 		return fmt.Errorf("delete notification settings: %w", err)
 	}

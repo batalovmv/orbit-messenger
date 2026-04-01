@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -283,15 +284,6 @@ func (h *SettingsHandler) SubscribePush(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("auth is required"))
 	}
 
-	count, err := h.pushStore.CountByUser(c.Context(), uid)
-	if err != nil {
-		h.logger.Error("count push subscriptions", "error", err, "user_id", uid)
-		return response.Error(c, apperror.Internal("failed to check subscription count"))
-	}
-	if count >= 10 {
-		return response.Error(c, apperror.TooManyRequests("maximum of 10 push subscriptions per user"))
-	}
-
 	ua := c.Get("User-Agent")
 	sub := &model.PushSubscription{
 		ID:        uuid.New(),
@@ -302,6 +294,9 @@ func (h *SettingsHandler) SubscribePush(c *fiber.Ctx) error {
 		UserAgent: &ua,
 	}
 	if err := h.pushStore.Create(c.Context(), sub); err != nil {
+		if errors.Is(err, model.ErrPushSubscriptionLimitReached) {
+			return response.Error(c, apperror.TooManyRequests("maximum of 10 push subscriptions per user"))
+		}
 		h.logger.Error("create push subscription", "error", err, "user_id", uid)
 		return response.Error(c, apperror.Internal("failed to save push subscription"))
 	}

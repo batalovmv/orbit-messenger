@@ -60,7 +60,7 @@ func (s *privacySettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID
 }
 
 func (s *privacySettingsStore) Upsert(ctx context.Context, settings *model.PrivacySettings) error {
-	_, err := s.pool.Exec(ctx,
+	return s.pool.QueryRow(ctx,
 		`INSERT INTO privacy_settings (user_id, last_seen, avatar, phone, calls, groups, forwarded, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 		 ON CONFLICT (user_id) DO UPDATE SET
@@ -70,14 +70,11 @@ func (s *privacySettingsStore) Upsert(ctx context.Context, settings *model.Priva
 		   calls      = EXCLUDED.calls,
 		   groups     = EXCLUDED.groups,
 		   forwarded  = EXCLUDED.forwarded,
-		   updated_at = NOW()`,
+		   updated_at = NOW()
+		 RETURNING created_at, updated_at`,
 		settings.UserID, settings.LastSeen, settings.Avatar, settings.Phone,
 		settings.Calls, settings.Groups, settings.Forwarded,
-	)
-	if err != nil {
-		return fmt.Errorf("privacySettingsStore.Upsert: %w", err)
-	}
-	return nil
+	).Scan(&settings.CreatedAt, &settings.UpdatedAt)
 }
 
 // ─── BlockedUsersStore ───────────────────────────────────────────────────────
@@ -327,9 +324,13 @@ func NewPushSubscriptionStore(pool *pgxpool.Pool) PushSubscriptionStore {
 }
 
 func (s *pushSubscriptionStore) Create(ctx context.Context, sub *model.PushSubscription) error {
-	_, err := s.pool.Exec(ctx,
+	// Atomic cap enforcement: only insert if the user has fewer than 10 subscriptions,
+	// or if the endpoint already exists (upsert). Prevents TOCTOU race on the cap check.
+	tag, err := s.pool.Exec(ctx,
 		`INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		 SELECT $1, $2, $3, $4, $5, $6, NOW()
+		 WHERE (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = $2) < 10
+		    OR EXISTS (SELECT 1 FROM push_subscriptions WHERE user_id = $2 AND endpoint = $3)
 		 ON CONFLICT (user_id, endpoint) DO UPDATE SET
 		   p256dh     = EXCLUDED.p256dh,
 		   auth       = EXCLUDED.auth,
@@ -338,6 +339,9 @@ func (s *pushSubscriptionStore) Create(ctx context.Context, sub *model.PushSubsc
 	)
 	if err != nil {
 		return fmt.Errorf("pushSubscriptionStore.Create: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("pushSubscriptionStore.Create: %w", model.ErrPushSubscriptionLimitReached)
 	}
 	return nil
 }

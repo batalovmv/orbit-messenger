@@ -495,6 +495,14 @@ export interface LangPair {
   'BlockContact': undefined;
   'CustomHelp': undefined;
   'PrivacyExceptions': undefined;
+  'PrivacyBio': undefined;
+  'PrivacyBirthday': undefined;
+  'PrivacyVoiceMessagesTitle': undefined;
+  'PrivacyMessagesTitle': undefined;
+  'HideReadTime': undefined;
+  'HideReadTimeInfo': undefined;
+  'PrivacyLastSeenPremium': undefined;
+  'PrivacyLastSeenPremiumInfo': undefined;
   'AlwaysAllow': undefined;
   'EditAdminAddUsers': undefined;
   'NeverAllow': undefined;
