@@ -1315,6 +1315,11 @@
 "MuteForHours_one" = "Mute for {count} hour";
 "MuteForHours_other" = "Mute for {count} hours";
 "MuteForForever" = "Mute forever";
+"MuteFor.Hours_one" = "Mute for {count} hour";
+"MuteFor.Hours_other" = "Mute for {count} hours";
+"MuteFor.Days_one" = "Mute for {count} day";
+"MuteFor.Days_other" = "Mute for {count} days";
+"Common.Done" = "Done";
 "NoViews" = "No views";
 "LiveLocationUpdatedJustNow" = "updated just now";
 "LiveLocationUpdatedMinutesAgo_one" = "updated 1 minute ago";
