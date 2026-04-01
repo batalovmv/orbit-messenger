@@ -118,15 +118,22 @@ export async function sendMessage({
   const localId = (lastMessageId || Math.floor(Date.now() / 1000)) + (++localMessageCounter / LOCAL_MESSAGES_LIMIT);
   const now = Math.floor(Date.now() / 1000);
 
+  const localContent: ApiMessage['content'] = {
+    text: text ? { text, entities: entities || [] } : undefined,
+  };
+
+  // Populate media content so the optimistic message shows a preview instead of "not supported"
+  if (attachment) {
+    buildLocalMediaContent(localContent, attachment);
+  }
+
   const localMessage: ApiMessage = {
     id: localId,
     chatId,
     date: now,
     isOutgoing: true,
     senderId: currentUserId,
-    content: {
-      text: text ? { text, entities: entities || [] } : undefined,
-    },
+    content: localContent,
     sendingState: 'messageSendingStatePending',
   };
 
@@ -493,6 +500,93 @@ function detectMediaType(attachment: ApiAttachment): string {
   }
   if (mime.startsWith('audio/')) return 'voice';
   return 'file';
+}
+
+function buildLocalMediaContent(content: ApiMessage['content'], attachment: ApiAttachment) {
+  const mediaType = detectMediaType(attachment);
+  const localId = `local-${Date.now()}`;
+  const { quick } = attachment;
+
+  switch (mediaType) {
+    case 'photo': {
+      content.photo = {
+        mediaType: 'photo',
+        id: localId,
+        date: 0,
+        thumbnail: attachment.previewBlobUrl ? {
+          dataUri: attachment.previewBlobUrl,
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+        } : undefined,
+        sizes: [{
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+          type: 's' as const,
+        }, {
+          width: quick?.width || 800,
+          height: quick?.height || 800,
+          type: 'y' as const,
+        }],
+        blobUrl: attachment.compressedBlobUrl || attachment.blobUrl,
+        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
+      };
+      break;
+    }
+    case 'video': {
+      content.video = {
+        mediaType: 'video',
+        id: localId,
+        mimeType: attachment.mimeType || 'video/mp4',
+        duration: quick?.duration || 0,
+        width: quick?.width || 0,
+        height: quick?.height || 0,
+        fileName: attachment.filename || 'video.mp4',
+        size: attachment.size,
+        thumbnail: attachment.previewBlobUrl ? {
+          dataUri: attachment.previewBlobUrl,
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+        } : undefined,
+        blobUrl: attachment.blobUrl,
+        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
+      };
+      break;
+    }
+    case 'voice': {
+      content.voice = {
+        mediaType: 'voice',
+        id: localId,
+        duration: attachment.voice?.duration || 0,
+        waveform: attachment.voice?.waveform || [],
+        size: attachment.size,
+      };
+      break;
+    }
+    case 'gif': {
+      content.video = {
+        mediaType: 'video',
+        id: localId,
+        mimeType: 'video/mp4',
+        duration: quick?.duration || 0,
+        width: quick?.width || 0,
+        height: quick?.height || 0,
+        fileName: 'animation.mp4',
+        size: attachment.size,
+        isGif: true,
+      };
+      break;
+    }
+    default: {
+      content.document = {
+        mediaType: 'document',
+        id: localId,
+        mimeType: attachment.mimeType || 'application/octet-stream',
+        fileName: attachment.filename || 'file',
+        size: attachment.size,
+      };
+      break;
+    }
+  }
 }
 
 export function sendMessageAction({

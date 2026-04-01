@@ -102,6 +102,7 @@ type MediaAttachment struct {
 	WaveformData     []byte   `json:"waveform_data,omitempty"`
 	Position         int      `json:"position"`
 	IsSpoiler        bool     `json:"is_spoiler"`
+	IsOneTime        bool     `json:"is_one_time"`
 	ProcessingStatus string   `json:"processing_status"`
 }
 

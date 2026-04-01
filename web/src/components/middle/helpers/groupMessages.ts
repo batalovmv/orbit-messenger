@@ -55,6 +55,14 @@ export function groupMessages(
           }
         }
       }
+    } else if ((message.content.albumMedia?.length || 0) > 1) {
+      currentSenderGroup.push({
+        albumId: `album-${message.id}`,
+        messages: [message],
+        mainMessage: message,
+        hasMultipleCaptions: false,
+        isSaturnAlbum: true,
+      } satisfies IAlbum);
     } else if ((message.content.paidMedia?.extendedMedia.length || 0) > 1) {
       currentSenderGroup.push({
         albumId: `paid-${message.id}`,

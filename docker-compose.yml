@@ -151,6 +151,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       ORBIT_NATS_URL: nats://nats:4222
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -172,6 +173,7 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
       R2_BUCKET: ${R2_BUCKET:-orbit-media}
       R2_PUBLIC_ENDPOINT: ${R2_PUBLIC_ENDPOINT:-http://localhost:9000}
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

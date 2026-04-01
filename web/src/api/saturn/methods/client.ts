@@ -12,12 +12,8 @@ let currentOnUpdate: OnApiUpdate | undefined;
 export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
   currentOnUpdate = onUpdate;
 
-  // In production: nginx proxies /api/* to gateway (same origin, no CORS)
-  // In development: direct connection to localhost:8080
-  const { hostname } = window.location;
-  const apiUrl = (hostname === 'localhost' || hostname === '127.0.0.1')
-    ? 'http://localhost:8080/api/v1'
-    : `${window.location.origin}/api/v1`;
+  // Both production (nginx) and development (webpack proxy) route /api/* to gateway
+  const apiUrl = `${window.location.origin}/api/v1`;
 
   saturnClient.init(apiUrl, onUpdate);
   initUpdateEmitter(onUpdate);

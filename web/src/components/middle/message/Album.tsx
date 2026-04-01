@@ -61,9 +61,13 @@ const Album: FC<OwnProps & StateProps> = ({
 }) => {
   const { cancelUploadMedia } = getActions();
 
-  const { content: { paidMedia } } = album.mainMessage;
+  const { content: { paidMedia, albumMedia } } = album.mainMessage;
 
-  const mediaCount = album.isPaidMedia ? paidMedia!.extendedMedia.length : album.messages.length;
+  const mediaCount = album.isPaidMedia
+    ? paidMedia!.extendedMedia.length
+    : album.isSaturnAlbum
+      ? albumMedia!.length
+      : album.messages.length;
 
   const handlePaidMediaClick = useLastCallback((index: number) => {
     onMediaClick(album.mainMessage.id, index);
@@ -81,6 +85,9 @@ const Album: FC<OwnProps & StateProps> = ({
     if (album.isPaidMedia) {
       return album.mainMessage.content.paidMedia!.extendedMedia.map(() => album.mainMessage);
     }
+    if (album.isSaturnAlbum) {
+      return album.mainMessage.content.albumMedia!.map(() => album.mainMessage);
+    }
 
     return album.messages;
   }, [album]);
@@ -91,8 +98,14 @@ const Album: FC<OwnProps & StateProps> = ({
       ? renderingPaidMedia : renderingPaidMedia?.photo;
     const paidVideoOrPreview = renderingPaidMedia && 'mediaType' in renderingPaidMedia
       ? renderingPaidMedia : renderingPaidMedia?.video;
-    const photo = paidPhotoOrPreview || getMessagePhoto(message);
-    const video = paidVideoOrPreview || getMessageContent(message).video;
+
+    // Saturn album: extract photo/video from albumMedia by index
+    const saturnMedia = album.isSaturnAlbum ? message.content.albumMedia?.[index] : undefined;
+    const saturnPhoto = saturnMedia?.mediaType === 'photo' ? saturnMedia : undefined;
+    const saturnVideo = saturnMedia?.mediaType === 'video' ? saturnMedia : undefined;
+
+    const photo = paidPhotoOrPreview || saturnPhoto || getMessagePhoto(message);
+    const video = paidVideoOrPreview || saturnVideo || getMessageContent(message).video;
 
     const fileUpload = uploadsByKey[getMessageKey(message)];
     const uploadProgress = fileUpload?.progress;
@@ -110,7 +123,7 @@ const Album: FC<OwnProps & StateProps> = ({
 
       return (
         <PhotoWithSelect
-          id={`album-media-${getMessageHtmlId(message.id, album.isPaidMedia ? index : undefined)}`}
+          id={`album-media-${getMessageHtmlId(message.id, (album.isPaidMedia || album.isSaturnAlbum) ? index : undefined)}`}
           photo={photo}
           isOwn={isOwn}
           observeIntersectionForLoading={observeIntersection}
@@ -119,12 +132,12 @@ const Album: FC<OwnProps & StateProps> = ({
           uploadProgress={uploadProgress}
           dimensions={dimensions}
           isProtected={isProtected}
-          clickArg={album.isPaidMedia ? index : message.id}
-          onClick={album.isPaidMedia ? handlePaidMediaClick : handleAlbumMessageClick}
+          clickArg={(album.isPaidMedia || album.isSaturnAlbum) ? index : message.id}
+          onClick={(album.isPaidMedia || album.isSaturnAlbum) ? handlePaidMediaClick : handleAlbumMessageClick}
           onCancelUpload={handleCancelUpload}
           isDownloading={photo.mediaType !== 'extendedMediaPreview' && getIsDownloading(activeDownloads, photo)}
           theme={theme}
-          noSelectControls={album.isPaidMedia}
+          noSelectControls={album.isPaidMedia || album.isSaturnAlbum}
         />
       );
     } else if (video) {
@@ -138,12 +151,12 @@ const Album: FC<OwnProps & StateProps> = ({
           uploadProgress={uploadProgress}
           dimensions={dimensions}
           isProtected={isProtected}
-          clickArg={album.isPaidMedia ? index : message.id}
-          onClick={album.isPaidMedia ? handlePaidMediaClick : handleAlbumMessageClick}
+          clickArg={(album.isPaidMedia || album.isSaturnAlbum) ? index : message.id}
+          onClick={(album.isPaidMedia || album.isSaturnAlbum) ? handlePaidMediaClick : handleAlbumMessageClick}
           onCancelUpload={handleCancelUpload}
           isDownloading={video.mediaType !== 'extendedMediaPreview' && getIsDownloading(activeDownloads, video)}
           theme={theme}
-          noSelectControls={album.isPaidMedia}
+          noSelectControls={album.isPaidMedia || album.isSaturnAlbum}
         />
       );
     }

@@ -109,7 +109,7 @@ func main() {
 	inviteStore := store.NewInviteStore(pool)
 
 	// Services
-	chatSvc := service.NewChatService(chatStore, natsPublisher)
+	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher)
 	msgSvc := service.NewMessageService(messageStore, chatStore, natsPublisher, rdb)
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
@@ -162,7 +162,7 @@ func main() {
 	defer statusSub.Unsubscribe()
 
 	// Handlers
-	internalSecret := config.EnvOr("INTERNAL_SECRET", "")
+	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
 	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
 	userHandler := handler.NewUserHandler(userSvc, logger)

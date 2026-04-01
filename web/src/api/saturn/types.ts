@@ -87,6 +87,7 @@ export interface SaturnMediaAttachment {
   waveform_data?: number[];
   position: number;
   is_spoiler: boolean;
+  is_one_time: boolean;
   processing_status: string;
 }
 

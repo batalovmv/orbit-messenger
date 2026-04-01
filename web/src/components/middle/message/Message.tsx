@@ -586,6 +586,7 @@ const Message = ({
   const isAlbum = Boolean(album)
     && (
       (album.isPaidMedia && paidMedia!.extendedMedia.length > 1)
+      || (album.isSaturnAlbum && (album.mainMessage.content.albumMedia?.length || 0) > 1)
       || album.messages.length > 1
     ) && !album.messages.some((msg) => Object.keys(msg.content).length === 0);
   const isInDocumentGroupNotFirst = isInDocumentGroup && !isFirstInDocumentGroup;

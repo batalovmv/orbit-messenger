@@ -90,6 +90,7 @@ export interface IAlbum {
   albumId: string;
   messages: ApiMessage[];
   isPaidMedia?: boolean;
+  isSaturnAlbum?: boolean;
   mainMessage: ApiMessage;
   captionMessage?: ApiMessage;
   hasMultipleCaptions: boolean;

@@ -1,4 +1,4 @@
-import type { ApiMessage, ApiMessageEntity } from '../../types';
+import type { ApiMessage, ApiMessageEntity, ApiPhoto, ApiVideo } from '../../types';
 import type { SaturnMediaAttachment, SaturnMessage, SaturnMessageEntity } from '../types';
 import { getBaseUrl } from '../client';
 
@@ -15,9 +15,16 @@ function evictOldEntries() {
   // Map iterates in insertion order — delete oldest entries
   const toDelete = uuidToSeqMap.size - MAX_UUID_MAP_SIZE;
   let count = 0;
-  for (const key of uuidToSeqMap.keys()) {
+  for (const [uuid, seqNum] of uuidToSeqMap.entries()) {
     if (count >= toDelete) break;
-    uuidToSeqMap.delete(key);
+    uuidToSeqMap.delete(uuid);
+    // Also evict from reverse map to prevent unbounded growth
+    for (const chatMap of seqToUuidMap.values()) {
+      if (chatMap.get(seqNum) === uuid) {
+        chatMap.delete(seqNum);
+        break;
+      }
+    }
     count++;
   }
 }
@@ -54,11 +61,6 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   // Map media_attachments to TG Web A content fields
   if (msg.media_attachments?.length) {
     buildMediaContent(content, msg.media_attachments);
-    // TG Web A requires content.text to exist when media is present,
-    // otherwise it shows "This message is not supported"
-    if (!content.text) {
-      content.text = { text: '', entities: [] };
-    }
   }
 
   return {
@@ -86,48 +88,68 @@ function fullMediaUrl(relativePath: string): string {
   return `${getBaseUrl()}${relativePath}`;
 }
 
+function buildSaturnPhoto(att: SaturnMediaAttachment): ApiPhoto {
+  return {
+    mediaType: 'photo',
+    id: att.media_id,
+    date: 0,
+    thumbnail: undefined,
+    sizes: [
+      { width: att.width || 320, height: att.height || 320, type: 's' as const },
+      { width: att.width || 800, height: att.height || 800, type: 'y' as const },
+    ],
+    isSpoiler: att.is_spoiler || undefined,
+  };
+}
+
+function buildSaturnVideo(att: SaturnMediaAttachment): ApiVideo {
+  return {
+    mediaType: 'video',
+    id: att.media_id,
+    mimeType: att.mime_type || 'video/mp4',
+    duration: att.duration_seconds || 0,
+    width: att.width || 0,
+    height: att.height || 0,
+    fileName: att.original_filename || 'video.mp4',
+    size: att.size_bytes,
+    isRound: att.type === 'videonote' || undefined,
+    thumbnail: undefined,
+    isSpoiler: att.is_spoiler || undefined,
+  };
+}
+
 function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMediaAttachment[]) {
   const first = attachments[0];
   if (!first) return;
 
+  // Wire one-time (self-destruct) flag
+  if (first.is_one_time) {
+    content.ttlSeconds = 1;
+  }
+
+  // Build album when multiple photo/video attachments
+  const albumAttachments = attachments.filter((a) => a.type === 'photo' || a.type === 'video');
+  if (albumAttachments.length > 1) {
+    content.albumMedia = albumAttachments.map((att) => (
+      att.type === 'photo' ? buildSaturnPhoto(att) : buildSaturnVideo(att)
+    ));
+    // Set first item as primary content for single-media fallback
+    if (first.type === 'photo') {
+      content.photo = content.albumMedia[0] as ApiPhoto;
+    } else {
+      content.video = content.albumMedia[0] as ApiVideo;
+    }
+    return;
+  }
+
   switch (first.type) {
     case 'photo': {
-      content.photo = {
-        mediaType: 'photo',
-        id: first.media_id,
-        date: 0,
-        thumbnail: undefined,
-        sizes: [
-          {
-            width: first.width || 320,
-            height: first.height || 320,
-            type: 's' as const,
-          },
-          {
-            width: first.width || 800,
-            height: first.height || 800,
-            type: 'y' as const,
-          },
-        ],
-        isSpoiler: first.is_spoiler || undefined,
-      };
+      content.photo = buildSaturnPhoto(first);
       break;
     }
     case 'video':
     case 'videonote': {
-      content.video = {
-        mediaType: 'video',
-        id: first.media_id,
-        mimeType: first.mime_type || 'video/mp4',
-        duration: first.duration_seconds || 0,
-        width: first.width || 0,
-        height: first.height || 0,
-        fileName: first.original_filename || 'video.mp4',
-        size: first.size_bytes,
-        isRound: first.type === 'videonote' || undefined,
-        thumbnail: undefined,
-        isSpoiler: first.is_spoiler || undefined,
-      };
+      content.video = buildSaturnVideo(first);
       break;
     }
     case 'voice': {

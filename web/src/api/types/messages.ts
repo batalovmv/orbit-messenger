@@ -614,6 +614,7 @@ export type MediaContent = {
   giveaway?: ApiGiveaway;
   giveawayResults?: ApiGiveawayResults;
   paidMedia?: ApiPaidMedia;
+  albumMedia?: (ApiPhoto | ApiVideo)[];
   dice?: ApiDice;
   ttlSeconds?: number;
 };

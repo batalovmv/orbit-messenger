@@ -73,7 +73,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			m.id, m.type, m.mime_type, m.original_filename,
 			m.size_bytes, m.r2_key, m.thumbnail_r2_key, m.medium_r2_key,
 			m.width, m.height, m.duration_seconds, m.waveform_data,
-			m.processing_status
+			m.is_one_time, m.processing_status
 		FROM message_media mm
 		JOIN media m ON m.id = mm.media_id
 		WHERE mm.message_id = ANY($1)
@@ -103,6 +103,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			height      *int
 			duration    *float64
 			waveform    []byte
+			isOneTime   bool
 			procStatus  string
 		)
 		if err := rows.Scan(
@@ -110,7 +111,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			&mediaID, &mediaType, &mimeType, &filename,
 			&sizeBytes, &r2Key, &thumbKey, &mediumKey,
 			&width, &height, &duration, &waveform,
-			&procStatus,
+			&isOneTime, &procStatus,
 		); err != nil {
 			return nil, fmt.Errorf("scan media attachment: %w", err)
 		}
@@ -127,6 +128,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			WaveformData:     waveform,
 			Position:         position,
 			IsSpoiler:        isSpoiler,
+			IsOneTime:        isOneTime,
 			ProcessingStatus: procStatus,
 			URL:              "/media/" + mediaIDStr,
 		}

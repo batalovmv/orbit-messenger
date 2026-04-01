@@ -46,15 +46,17 @@ export type IAlbumLayout = {
   containerStyle: ApiDimensions;
 };
 
-function getRatios(messages: ApiMessage[], isSingleMessage: boolean, isMobile: boolean) {
+function getRatios(messages: ApiMessage[], isPaidMedia: boolean, isSaturnAlbum: boolean, isMobile: boolean) {
   const isOutgoing = messages[0].isOutgoing;
-  const allMedia = (isSingleMessage
+  const allMedia = (isPaidMedia
     ? messages[0].content.paidMedia!.extendedMedia.map((media) => (
       'mediaType' in media ? media : (media.photo || media.video)
     ))
-    : messages.map((message) => (
-      getMessageContent(message).photo || getMessageContent(message).video
-    ))
+    : isSaturnAlbum
+      ? messages[0].content.albumMedia!
+      : messages.map((message) => (
+        getMessageContent(message).photo || getMessageContent(message).video
+      ))
   ).filter(Boolean);
   return allMedia.map(
     (media) => {
@@ -111,7 +113,7 @@ export function calculateAlbumLayout(
   isMobile: boolean,
 ): IAlbumLayout {
   const spacing = 2;
-  const ratios = getRatios(album.messages, Boolean(album.isPaidMedia), isMobile);
+  const ratios = getRatios(album.messages, Boolean(album.isPaidMedia), Boolean(album.isSaturnAlbum), isMobile);
   const proportions = getProportions(ratios);
   const averageRatio = getAverageRatio(ratios);
   const albumCount = ratios.length;

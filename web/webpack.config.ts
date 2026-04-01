@@ -108,6 +108,14 @@ export default function createConfig(
       devMiddleware: {
         stats: 'minimal',
       },
+      proxy: [
+        {
+          context: ['/api'],
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          ws: true,
+        },
+      ],
       headers: {
         'Content-Security-Policy': CSP,
       },
