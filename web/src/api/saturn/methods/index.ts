@@ -300,7 +300,111 @@ export async function fetchWebPagePreview({ text }: {
   }
 }
 
-export { getPrivacySettings as fetchPrivacySettings } from './settingsApi';
+// Saturn privacy key mapping: TG Web A key → Saturn field name
+const PRIVACY_KEY_MAP: Record<string, string> = {
+  lastSeen: 'last_seen',
+  phoneNumber: 'phone',
+  profilePhoto: 'avatar',
+  forwards: 'forwarded',
+  phoneCall: 'calls',
+  chatInvite: 'groups',
+};
+
+// Reverse: Saturn field → TG Web A key
+const SATURN_TO_TG_KEY: Record<string, string> = {
+  last_seen: 'lastSeen',
+  phone: 'phoneNumber',
+  avatar: 'profilePhoto',
+  forwarded: 'forwards',
+  calls: 'phoneCall',
+  groups: 'chatInvite',
+};
+
+// Saturn uses 'everyone', TG uses 'everybody'
+function saturnToTgVisibility(v: string): string {
+  return v === 'everyone' ? 'everybody' : v;
+}
+
+function tgToSaturnVisibility(v: string): string {
+  return v === 'everybody' ? 'everyone' : v;
+}
+
+// Build ApiPrivacySettings-compatible response from a visibility value
+function buildPrivacyRules(visibility: string) {
+  return {
+    rules: {
+      visibility: saturnToTgVisibility(visibility),
+      isUnspecified: false,
+      allowUserIds: [],
+      allowChatIds: [],
+      blockUserIds: [],
+      blockChatIds: [],
+      botsPrivacy: 'none' as const,
+    },
+  };
+}
+
+// Cached Saturn privacy settings to avoid fetching per-key
+let cachedPrivacy: Record<string, string> | undefined;
+let cacheTimestamp = 0;
+const CACHE_TTL = 5000;
+
+async function loadSaturnPrivacy(): Promise<Record<string, string>> {
+  if (cachedPrivacy && Date.now() - cacheTimestamp < CACHE_TTL) return cachedPrivacy;
+  const { getPrivacySettings } = await import('./settingsApi');
+  const result = await getPrivacySettings();
+  if (!result) return {};
+  cachedPrivacy = {
+    last_seen: result.last_seen,
+    phone: result.phone,
+    avatar: result.avatar,
+    forwarded: result.forwarded,
+    calls: result.calls,
+    groups: result.groups,
+  };
+  cacheTimestamp = Date.now();
+  return cachedPrivacy;
+}
+
+// TG Web A calls fetchPrivacySettings(privacyKey) per-key
+export async function fetchPrivacySettings(privacyKey: string) {
+  const saturnField = PRIVACY_KEY_MAP[privacyKey];
+  if (!saturnField) {
+    // Unsupported key (addByPhone, phoneP2P, voiceMessages, bio, birthday, gifts, noPaidMessages)
+    return buildPrivacyRules('everybody');
+  }
+  const privacy = await loadSaturnPrivacy();
+  const value = privacy[saturnField] || 'everyone';
+  return buildPrivacyRules(value);
+}
+
+// TG Web A calls setPrivacySettings(privacyKey, rules)
+export async function setPrivacySettings(privacyKey: string, rules: { visibility: string }) {
+  const saturnField = PRIVACY_KEY_MAP[privacyKey];
+  if (!saturnField) {
+    // Unsupported key — return as-is
+    return buildPrivacyRules(rules.visibility);
+  }
+
+  // Load current settings, update one field
+  const current = await loadSaturnPrivacy();
+  const updated = { ...current, [saturnField]: tgToSaturnVisibility(rules.visibility) };
+
+  const { setPrivacySettings: apiSet } = await import('./settingsApi');
+  await apiSet({
+    lastSeen: updated.last_seen || 'everyone',
+    avatar: updated.avatar || 'everyone',
+    phone: updated.phone || 'contacts',
+    calls: updated.calls || 'everyone',
+    groups: updated.groups || 'everyone',
+    forwarded: updated.forwarded || 'everyone',
+  });
+
+  // Invalidate cache
+  cachedPrivacy = undefined;
+
+  return buildPrivacyRules(tgToSaturnVisibility(rules.visibility));
+}
 
 export function fetchGlobalPrivacySettings() {
   return Promise.resolve(undefined);
@@ -403,7 +507,6 @@ export {
 } from './media';
 
 export {
-  getPrivacySettings, setPrivacySettings,
   getUserSettings, updateUserSettings,
   fetchBlockedUsersList,
   getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings,
