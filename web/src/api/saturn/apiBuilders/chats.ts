@@ -1,6 +1,13 @@
 import type { ApiChat, ApiChatFullInfo, ApiChatMember } from '../../types';
-import type { SaturnChat, SaturnChatListItem, SaturnChatMember } from '../types';
+import type {
+  SaturnChat,
+  SaturnChatAvailableReactions,
+  SaturnChatListItem,
+  SaturnChatMember,
+} from '../types';
+
 import { registerChatId } from '../../../util/entities/ids';
+import { buildApiChatReactions } from './reactions';
 
 const PERM = {
   sendMessages: 1 << 0,
@@ -21,7 +28,7 @@ function decodeAdminRights(mask: number, isOwner: boolean): any {
     banUsers: Boolean(mask & PERM.banUsers) || undefined,
     inviteUsers: Boolean(mask & PERM.addMembers) || undefined,
     pinMessages: Boolean(mask & PERM.pinMessages) || undefined,
-    addAdmins: isOwner ? true as true : undefined,
+    addAdmins: isOwner ? true as const : undefined,
     manageCall: true,
   };
 }
@@ -56,7 +63,9 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     creationDate: Math.floor(new Date(chat.created_at).getTime() / 1000),
     isMin: false,
     areSignaturesShown: chat.type === 'channel' ? (chat as SaturnChat).is_signatures : undefined,
-    defaultBannedRights: chat.type !== 'direct' ? decodeBannedRights((chat as SaturnChat).default_permissions ?? 255) : undefined,
+    defaultBannedRights: chat.type !== 'direct'
+      ? decodeBannedRights((chat as SaturnChat).default_permissions ?? 255)
+      : undefined,
   };
 
   if ('member_count' in chat) {
@@ -73,12 +82,14 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
 export function buildApiChatFullInfo(
   chat: SaturnChat,
   members?: SaturnChatMember[],
+  availableReactions?: SaturnChatAvailableReactions,
 ): ApiChatFullInfo {
   return {
     about: chat.description || undefined,
     members: members?.map(buildApiChatMember),
     canViewMembers: true,
     slowMode: chat.slow_mode_seconds ? { seconds: chat.slow_mode_seconds } : undefined,
+    enabledReactions: buildApiChatReactions(availableReactions),
   };
 }
 
@@ -96,7 +107,7 @@ export function buildApiChatMember(member: SaturnChatMember): ApiChatMember {
     bannedRights: !isAdmin && member.permissions ? decodeBannedRights(member.permissions) : undefined,
     adminRights: isAdmin ? decodeAdminRights(permMask, isOwner) : undefined,
     customTitle: member.custom_title || undefined,
-    isOwner: isOwner ? true as true : undefined,
-    isAdmin: isAdmin ? true as true : undefined,
+    isOwner: isOwner ? true as const : undefined,
+    isAdmin: isAdmin ? true as const : undefined,
   };
 }

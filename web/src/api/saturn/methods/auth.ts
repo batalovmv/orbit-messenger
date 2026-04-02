@@ -36,14 +36,18 @@ let pending2FATimeout: ReturnType<typeof setTimeout> | undefined;
 async function encryptCredentials(email: string, password: string) {
   const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(password));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv as BufferSource },
+    key,
+    new TextEncoder().encode(password),
+  );
   return { email, iv, ciphertext, key };
 }
 
 async function decryptCredentials(): Promise<{ email: string; password: string } | undefined> {
   if (!pending2FAEncrypted) return undefined;
   const { email, iv, ciphertext, key } = pending2FAEncrypted;
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, ciphertext);
   return { email, password: new TextDecoder().decode(decrypted) };
 }
 

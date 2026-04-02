@@ -90,6 +90,7 @@ import {
   selectEditingScheduledId,
   selectTabThreadParam,
   selectThreadByMessage,
+  selectThreadIdFromMessage,
   selectThreadInfo,
   selectThreadLocalState,
   selectThreadLocalStateParam,
@@ -181,7 +182,25 @@ export function selectPinnedIds<T extends GlobalState>(global: T, chatId: string
 }
 
 export function selectScheduledIds<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {
-  return selectThreadLocalStateParam(global, chatId, threadId, 'scheduledIds');
+  const scheduledIds = selectThreadLocalStateParam(global, chatId, threadId, 'scheduledIds');
+  if (scheduledIds) {
+    return scheduledIds;
+  }
+
+  const scheduledMessages = selectChatScheduledMessages(global, chatId);
+  if (!scheduledMessages) {
+    return undefined;
+  }
+
+  const derivedIds = Object.keys(scheduledMessages)
+    .map(Number)
+    .filter((messageId) => {
+      const message = scheduledMessages[messageId];
+      return message && selectThreadIdFromMessage(global, message) === threadId;
+    })
+    .sort((a, b) => b - a);
+
+  return derivedIds.length ? derivedIds : undefined;
 }
 
 export function selectFirstMessageId<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {

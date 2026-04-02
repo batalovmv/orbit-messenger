@@ -64,6 +64,38 @@ import { clearMessageSummary, clearMessageTranslation } from './translations';
 
 type MessageStoreSections = GlobalState['messages']['byChatId'][string];
 
+function mergeMessageContent(
+  existingContent: ApiMessage['content'] | undefined,
+  incomingContent: ApiMessage['content'] | undefined,
+): ApiMessage['content'] {
+  if (!existingContent) {
+    return incomingContent || {};
+  }
+
+  if (!incomingContent) {
+    return existingContent;
+  }
+
+  return omitUndefined({
+    ...existingContent,
+    ...incomingContent,
+  });
+}
+
+function mergeApiMessages(existingMessage: ApiMessage | undefined, incomingMessage: ApiMessage) {
+  if (!existingMessage) {
+    return incomingMessage;
+  }
+
+  const mergedMessage = omitUndefined({
+    ...existingMessage,
+    ...incomingMessage,
+    content: mergeMessageContent(existingMessage.content, incomingMessage.content),
+  });
+
+  return areDeepEqual(existingMessage, mergedMessage) ? existingMessage : mergedMessage;
+}
+
 export function updateCurrentMessageList<T extends GlobalState>(
   global: T,
   chatId: string | undefined,
@@ -186,16 +218,25 @@ export function replaceMessages<T extends GlobalState>(
 export function addChatMessagesById<T extends GlobalState>(
   global: T, chatId: string, newById: Record<number, ApiMessage>,
 ): T {
-  const byId = selectChatMessages(global, chatId);
+  const byId = selectChatMessages(global, chatId) || {};
+  const mergedById = { ...byId };
+  let hasUpdates = false;
 
-  if (byId && Object.keys(newById).every((newId) => Boolean(byId[Number(newId)]))) {
+  Object.entries(newById).forEach(([newId, incomingMessage]) => {
+    const messageId = Number(newId);
+    const mergedMessage = mergeApiMessages(byId[messageId], incomingMessage);
+
+    if (mergedById[messageId] !== mergedMessage) {
+      hasUpdates = true;
+      mergedById[messageId] = mergedMessage;
+    }
+  });
+
+  if (!hasUpdates) {
     return global;
   }
 
-  return replaceChatMessages(global, chatId, {
-    ...newById,
-    ...byId,
-  });
+  return replaceChatMessages(global, chatId, mergedById);
 }
 
 export function updateChatMessage<T extends GlobalState>(

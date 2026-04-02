@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,17 +12,53 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
 type MessageHandler struct {
 	svc            *service.MessageService
+	pollSvc        *service.PollService
+	reactionSvc    *service.ReactionService
+	scheduledSvc   *service.ScheduledMessageService
 	linkPreviewSvc *service.LinkPreviewService
 	logger         *slog.Logger
 }
 
-func NewMessageHandler(svc *service.MessageService, linkPreviewSvc *service.LinkPreviewService, logger *slog.Logger) *MessageHandler {
-	return &MessageHandler{svc: svc, linkPreviewSvc: linkPreviewSvc, logger: logger}
+type sendMessageRequest struct {
+	Content       string          `json:"content"`
+	Question      string          `json:"question"`
+	Entities      json.RawMessage `json:"entities"`
+	ReplyToID     *string         `json:"reply_to_id"`
+	Type          string          `json:"type"`
+	MediaIDs      []string        `json:"media_ids"`
+	IsSpoiler     bool            `json:"is_spoiler"`
+	Options       []string        `json:"options"`
+	IsAnonymous   *bool           `json:"is_anonymous"`
+	IsMultiple    bool            `json:"is_multiple"`
+	IsQuiz        bool            `json:"is_quiz"`
+	CorrectOption *int            `json:"correct_option"`
+}
+
+func NewMessageHandler(
+	svc *service.MessageService,
+	pollSvc *service.PollService,
+	scheduledSvc *service.ScheduledMessageService,
+	linkPreviewSvc *service.LinkPreviewService,
+	logger *slog.Logger,
+) *MessageHandler {
+	return &MessageHandler{
+		svc:            svc,
+		pollSvc:        pollSvc,
+		scheduledSvc:   scheduledSvc,
+		linkPreviewSvc: linkPreviewSvc,
+		logger:         logger,
+	}
+}
+
+func (h *MessageHandler) SetReactionService(reactionSvc *service.ReactionService) *MessageHandler {
+	h.reactionSvc = reactionSvc
+	return h
 }
 
 func (h *MessageHandler) Register(app fiber.Router) {
@@ -28,6 +66,7 @@ func (h *MessageHandler) Register(app fiber.Router) {
 	app.Get("/chats/:id/messages", h.ListMessages)
 	app.Get("/chats/:id/history", h.FindByDate)
 	app.Post("/chats/:id/messages", h.SendMessage)
+	app.Get("/messages/:id", h.GetMessage)
 
 	// Pin endpoints
 	app.Get("/chats/:id/media", h.ListSharedMedia)
@@ -70,8 +109,9 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	// Batch-load media attachments for messages that have media type
-	h.svc.EnrichMessagesMedia(c.Context(), msgs)
+	if err := h.hydrateMessages(c.Context(), uid, msgs); err != nil {
+		return response.Error(c, err)
+	}
 
 	return response.Paginated(c, msgs, nextCursor, hasMore)
 }
@@ -131,8 +171,34 @@ func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	h.svc.EnrichMessagesMedia(c.Context(), msgs)
+	if err := h.hydrateMessages(c.Context(), uid, msgs); err != nil {
+		return response.Error(c, err)
+	}
 	return response.Paginated(c, msgs, nextCursor, hasMore)
+}
+
+func (h *MessageHandler) GetMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	msg, err := h.svc.GetMessage(c.Context(), msgID, uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgs := []model.Message{*msg}
+	if err := h.hydrateMessages(c.Context(), uid, msgs); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, msgs[0])
 }
 
 func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
@@ -146,38 +212,9 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
 	}
 
-	var req struct {
-		Content   string          `json:"content"`
-		Entities  json.RawMessage `json:"entities"`
-		ReplyToID *string         `json:"reply_to_id"`
-		Type      string          `json:"type"`
-		MediaIDs  []string        `json:"media_ids"`
-		IsSpoiler bool            `json:"is_spoiler"`
-	}
+	var req sendMessageRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
-	}
-
-	// Content is required unless media_ids are provided
-	if req.Content == "" && len(req.MediaIDs) == 0 {
-		return response.Error(c, apperror.BadRequest("Content or media_ids is required"))
-	}
-
-	// Input length limits
-	if len(req.Content) > 4096 {
-		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
-	}
-	if len(req.Entities) > 65536 {
-		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
-	}
-
-	// Validate message type
-	validTypes := map[string]bool{
-		"": true, "text": true, "photo": true, "video": true, "file": true,
-		"voice": true, "video_note": true, "sticker": true, "gif": true, "system": true,
-	}
-	if !validTypes[req.Type] {
-		return response.Error(c, apperror.BadRequest("Invalid message type"))
 	}
 
 	var replyTo *uuid.UUID
@@ -189,9 +226,38 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		replyTo = &id
 	}
 
-	// Route to media or text message
 	if len(req.MediaIDs) > 10 {
 		return response.Error(c, apperror.BadRequest("Too many media attachments (max 10)"))
+	}
+
+	scheduledAtRaw := strings.TrimSpace(c.Query("scheduled_at"))
+	if scheduledAtRaw != "" {
+		return h.scheduleMessage(c, chatID, uid, req, replyTo, scheduledAtRaw)
+	}
+
+	if req.Type == "poll" {
+		return h.sendPoll(c, chatID, uid, req, replyTo)
+	}
+
+	// Content is required unless media_ids are provided.
+	if req.Content == "" && len(req.MediaIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("Content or media_ids is required"))
+	}
+
+	// Input length limits.
+	if len(req.Content) > 4096 {
+		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
+	}
+	if len(req.Entities) > 65536 {
+		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
+	}
+
+	validTypes := map[string]bool{
+		"": true, "text": true, "photo": true, "video": true, "file": true,
+		"voice": true, "video_note": true, "sticker": true, "gif": true, "system": true,
+	}
+	if !validTypes[req.Type] {
+		return response.Error(c, apperror.BadRequest("Invalid message type"))
 	}
 
 	if len(req.MediaIDs) > 0 {
@@ -214,6 +280,145 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, msg)
+}
+
+func (h *MessageHandler) sendPoll(
+	c *fiber.Ctx,
+	chatID uuid.UUID,
+	userID uuid.UUID,
+	req sendMessageRequest,
+	replyTo *uuid.UUID,
+) error {
+	if h.pollSvc == nil {
+		return response.Error(c, apperror.Internal("Poll service is not configured"))
+	}
+	if len(req.MediaIDs) > 0 {
+		return response.Error(c, apperror.BadRequest("Poll messages do not support media attachments"))
+	}
+	if replyTo != nil {
+		return response.Error(c, apperror.BadRequest("Poll messages do not support reply_to_id yet"))
+	}
+
+	question := strings.TrimSpace(req.Question)
+	if question == "" {
+		question = strings.TrimSpace(req.Content)
+	}
+	if len(question) > 4096 {
+		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
+	}
+
+	isAnonymous := true
+	if req.IsAnonymous != nil {
+		isAnonymous = *req.IsAnonymous
+	}
+
+	poll, msg, err := h.pollSvc.CreatePoll(
+		c.Context(),
+		chatID,
+		userID,
+		question,
+		req.Options,
+		isAnonymous,
+		req.IsMultiple,
+		req.IsQuiz,
+		req.CorrectOption,
+	)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, fiber.Map{
+		"message": msg,
+		"poll":    poll,
+	})
+}
+
+func (h *MessageHandler) scheduleMessage(
+	c *fiber.Ctx,
+	chatID uuid.UUID,
+	userID uuid.UUID,
+	req sendMessageRequest,
+	replyTo *uuid.UUID,
+	scheduledAtRaw string,
+) error {
+	if h.scheduledSvc == nil {
+		return response.Error(c, apperror.Internal("Scheduled message service is not configured"))
+	}
+	if len(req.Entities) > 65536 {
+		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
+	}
+
+	validTypes := map[string]bool{
+		"": true, "text": true, "photo": true, "video": true, "file": true,
+		"voice": true, "video_note": true, "sticker": true, "gif": true, "poll": true, "system": true,
+	}
+	if !validTypes[req.Type] {
+		return response.Error(c, apperror.BadRequest("Invalid scheduled message type"))
+	}
+
+	if req.Type == "poll" && replyTo != nil {
+		return response.Error(c, apperror.BadRequest("Poll messages do not support reply_to_id yet"))
+	}
+
+	scheduledAt, err := time.Parse(time.RFC3339, scheduledAtRaw)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid scheduled_at format (use RFC3339)"))
+	}
+
+	msgType := req.Type
+	if msgType == "" {
+		msgType = "text"
+	}
+
+	var mediaUUIDs []uuid.UUID
+	for _, idStr := range req.MediaIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid media_id: "+idStr))
+		}
+		mediaUUIDs = append(mediaUUIDs, id)
+	}
+
+	var pollPayload *model.ScheduledPollPayload
+	if req.Type == "poll" {
+		question := strings.TrimSpace(req.Question)
+		if question == "" {
+			question = strings.TrimSpace(req.Content)
+		}
+		isAnonymous := true
+		if req.IsAnonymous != nil {
+			isAnonymous = *req.IsAnonymous
+		}
+		pollPayload = &model.ScheduledPollPayload{
+			Question:      question,
+			Options:       req.Options,
+			IsAnonymous:   isAnonymous,
+			IsMultiple:    req.IsMultiple,
+			IsQuiz:        req.IsQuiz,
+			CorrectOption: req.CorrectOption,
+		}
+	}
+
+	msg, err := h.scheduledSvc.Schedule(
+		c.Context(),
+		chatID,
+		userID,
+		service.ScheduleMessageInput{
+			Content:     req.Content,
+			Entities:    req.Entities,
+			ReplyToID:   replyTo,
+			Type:        msgType,
+			MediaIDs:    mediaUUIDs,
+			IsSpoiler:   req.IsSpoiler,
+			Poll:        pollPayload,
+			ScheduledAt: scheduledAt,
+		},
+	)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -398,7 +603,9 @@ func (h *MessageHandler) ListPinned(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	h.svc.EnrichMessagesMedia(c.Context(), msgs)
+	if err := h.hydrateMessages(c.Context(), uid, msgs); err != nil {
+		return response.Error(c, err)
+	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"messages": msgs})
 }
 
@@ -454,4 +661,21 @@ func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"preview": preview})
+}
+
+func (h *MessageHandler) hydrateMessages(ctx context.Context, userID uuid.UUID, msgs []model.Message) error {
+	h.svc.EnrichMessagesMedia(ctx, msgs)
+
+	if h.reactionSvc != nil {
+		if err := h.reactionSvc.HydrateMessageReactions(ctx, msgs); err != nil {
+			return err
+		}
+	}
+	if h.pollSvc != nil {
+		if err := h.pollSvc.HydrateMessagePolls(ctx, userID, msgs); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -70,11 +70,13 @@ export interface SaturnMessage {
   sender_name: string;
   sender_avatar_url?: string;
   media_attachments?: SaturnMediaAttachment[];
+  reactions?: SaturnReactionSummary[];
+  poll?: SaturnPoll;
 }
 
 export interface SaturnMediaAttachment {
   media_id: string;
-  type: 'photo' | 'video' | 'file' | 'voice' | 'videonote' | 'gif';
+  type: 'photo' | 'video' | 'file' | 'voice' | 'videonote' | 'gif' | 'sticker';
   mime_type: string;
   url?: string;
   thumbnail_url?: string;
@@ -240,6 +242,134 @@ export interface SaturnSearchResponse {
   total: number;
   query: string;
   scope: 'messages' | 'users' | 'chats';
+}
+
+export interface SaturnReactionSummary {
+  emoji: string;
+  count: number;
+  user_ids: string[];
+}
+
+export interface SaturnReaction {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+  display_name?: string;
+  avatar_url?: string;
+}
+
+export interface SaturnChatAvailableReactions {
+  chat_id: string;
+  mode: 'all' | 'selected' | 'none';
+  allowed_emojis?: string[];
+  updated_at?: string;
+}
+
+export interface SaturnSticker {
+  id: string;
+  pack_id: string;
+  emoji?: string;
+  file_url: string;
+  file_type: 'webp' | 'tgs' | 'webm';
+  width?: number;
+  height?: number;
+  position: number;
+}
+
+export interface SaturnStickerPack {
+  id: string;
+  title: string;
+  short_name: string;
+  author_id?: string;
+  thumbnail_url?: string;
+  is_official: boolean;
+  is_animated: boolean;
+  sticker_count: number;
+  stickers?: SaturnSticker[];
+  is_installed?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaturnSavedGIF {
+  id: string;
+  user_id: string;
+  tenor_id: string;
+  url: string;
+  preview_url?: string;
+  width?: number;
+  height?: number;
+  created_at: string;
+}
+
+export interface SaturnTenorGIF {
+  tenor_id: string;
+  url: string;
+  preview_url: string;
+  width: number;
+  height: number;
+  title?: string;
+}
+
+export interface SaturnPoll {
+  id: string;
+  message_id: string;
+  question: string;
+  is_anonymous: boolean;
+  is_multiple: boolean;
+  is_quiz: boolean;
+  correct_option?: number;
+  is_closed: boolean;
+  close_at?: string;
+  options: SaturnPollOption[];
+  total_voters: number;
+  created_at: string;
+}
+
+export interface SaturnPollOption {
+  id: string;
+  poll_id: string;
+  text: string;
+  position: number;
+  voters: number;
+  is_chosen?: boolean;
+  is_correct?: boolean;
+}
+
+export interface SaturnPollVote {
+  poll_id: string;
+  option_id: string;
+  user_id: string;
+  voted_at: string;
+}
+
+export interface SaturnScheduledPoll {
+  question: string;
+  options: string[];
+  is_anonymous: boolean;
+  is_multiple: boolean;
+  is_quiz: boolean;
+  correct_option?: number;
+}
+
+export interface SaturnScheduledMessage {
+  id: string;
+  chat_id: string;
+  sender_id: string;
+  content?: string;
+  entities?: SaturnMessageEntity[];
+  reply_to_id?: string;
+  reply_to_sequence_number?: number;
+  type: string;
+  media_attachments?: SaturnMediaAttachment[];
+  is_spoiler?: boolean;
+  poll?: SaturnScheduledPoll;
+  scheduled_at: string;
+  is_sent: boolean;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // WebSocket message format

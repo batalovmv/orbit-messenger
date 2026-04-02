@@ -17,9 +17,10 @@ const (
 
 // Role defaults.
 const (
-	DefaultGroupPermissions = CanSendMessages | CanSendMedia | CanAddMembers | CanPinMessages // groups: no CanChangeInfo, CanDeleteMessages, CanBanUsers, CanInviteViaLink by default
-	DefaultChannelPermissions = int64(0)       // channels: only admin/owner can post
-	DefaultAdminPermissions   = AllPermissions // new admins get all capabilities
+	DefaultGroupPermissions   = CanSendMessages | CanSendMedia | CanAddMembers | CanPinMessages // groups: no CanChangeInfo, CanDeleteMessages, CanBanUsers, CanInviteViaLink by default
+	DefaultDirectPermissions  = CanSendMessages | CanSendMedia | CanPinMessages                 // direct chats: participants can send text/media and manage pins, but cannot add others
+	DefaultChannelPermissions = int64(0)                                                        // channels: only admin/owner can post
+	DefaultAdminPermissions   = AllPermissions                                                  // new admins get all capabilities
 )
 
 // Has returns true if bit is set in mask.

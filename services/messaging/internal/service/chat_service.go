@@ -16,10 +16,25 @@ type ChatService struct {
 	chats    store.ChatStore
 	messages store.MessageStore
 	nats     Publisher
+	polls    messagePollHydrator
 }
 
-func NewChatService(chats store.ChatStore, messages store.MessageStore, nats Publisher) *ChatService {
-	return &ChatService{chats: chats, messages: messages, nats: nats}
+type messagePollHydrator interface {
+	HydrateMessagePolls(ctx context.Context, userID uuid.UUID, msgs []model.Message) error
+}
+
+func NewChatService(
+	chats store.ChatStore,
+	messages store.MessageStore,
+	nats Publisher,
+	pollHydrators ...messagePollHydrator,
+) *ChatService {
+	var polls messagePollHydrator
+	if len(pollHydrators) > 0 {
+		polls = pollHydrators[0]
+	}
+
+	return &ChatService{chats: chats, messages: messages, nats: nats, polls: polls}
 }
 
 func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
@@ -38,13 +53,31 @@ func (s *ChatService) ListChats(ctx context.Context, userID uuid.UUID, cursor st
 
 	// Collect message IDs that have media types to batch-load attachments
 	var msgIDs []uuid.UUID
+	var pollMessages []model.Message
+	pollIndicesByID := make(map[uuid.UUID]int)
 	for i := range items {
 		lm := items[i].LastMessage
 		if lm == nil {
 			continue
 		}
+		if lm.Type == "poll" {
+			pollMessages = append(pollMessages, *lm)
+			pollIndicesByID[lm.ID] = i
+		}
 		if lm.Type == "photo" || lm.Type == "video" || lm.Type == "voice" || lm.Type == "videonote" || lm.Type == "file" || lm.Type == "gif" {
 			msgIDs = append(msgIDs, lm.ID)
+		}
+	}
+
+	if s.polls != nil && len(pollMessages) > 0 {
+		if pollErr := s.polls.HydrateMessagePolls(ctx, userID, pollMessages); pollErr != nil {
+			slog.Error("failed to hydrate polls for last messages", "error", pollErr)
+		} else {
+			for i := range pollMessages {
+				if idx, ok := pollIndicesByID[pollMessages[i].ID]; ok && items[idx].LastMessage != nil {
+					items[idx].LastMessage.Poll = pollMessages[i].Poll
+				}
+			}
 		}
 	}
 

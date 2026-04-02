@@ -73,10 +73,10 @@ type Message struct {
 	ChatID         uuid.UUID  `json:"chat_id"`
 	SenderID       *uuid.UUID `json:"sender_id,omitempty"`
 	Type           string     `json:"type"`
-	Content        *string         `json:"content,omitempty"`
+	Content        *string     `json:"content,omitempty"`
 	Entities       json.RawMessage `json:"entities,omitempty"`
-	ReplyToID        *uuid.UUID `json:"reply_to_id,omitempty"`
-	ReplyToSeqNum    *int64     `json:"reply_to_sequence_number,omitempty"`
+	ReplyToID      *uuid.UUID  `json:"reply_to_id,omitempty"`
+	ReplyToSeqNum  *int64      `json:"reply_to_sequence_number,omitempty"`
 	IsEdited       bool       `json:"is_edited"`
 	IsDeleted      bool       `json:"is_deleted"`
 	IsPinned       bool       `json:"is_pinned"`
@@ -90,6 +90,8 @@ type Message struct {
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`
 	// Media attachments (populated via message_media JOIN)
 	MediaAttachments []MediaAttachment `json:"media_attachments,omitempty"`
+	Reactions        []ReactionSummary `json:"reactions,omitempty"`
+	Poll             *Poll             `json:"poll,omitempty"`
 }
 
 // MediaAttachment represents a media file attached to a message.
@@ -208,6 +210,149 @@ var ValidPrivacyValues = map[string]bool{
 
 var ValidThemes = map[string]bool{
 	"auto": true, "light": true, "dark": true,
+}
+
+// Phase 5: Rich Messaging
+
+// Reaction represents a user's emoji reaction on a message.
+type Reaction struct {
+	MessageID uuid.UUID `json:"message_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Emoji     string    `json:"emoji"`
+	CreatedAt time.Time `json:"created_at"`
+	// Joined user data
+	DisplayName string  `json:"display_name,omitempty"`
+	AvatarURL   *string `json:"avatar_url,omitempty"`
+}
+
+// ReactionSummary groups a reaction emoji with its count and sample user IDs.
+type ReactionSummary struct {
+	Emoji   string   `json:"emoji"`
+	Count   int      `json:"count"`
+	UserIDs []string `json:"user_ids"`
+}
+
+// ChatAvailableReactions controls which emoji reactions are allowed in a chat.
+type ChatAvailableReactions struct {
+	ChatID        uuid.UUID `json:"chat_id"`
+	Mode          string    `json:"mode"` // all, selected, none
+	AllowedEmojis []string  `json:"allowed_emojis,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// StickerPack represents a collection of stickers.
+type StickerPack struct {
+	ID           uuid.UUID `json:"id"`
+	Title        string    `json:"title"`
+	ShortName    string    `json:"short_name"`
+	AuthorID     *uuid.UUID `json:"author_id,omitempty"`
+	ThumbnailURL *string   `json:"thumbnail_url,omitempty"`
+	IsOfficial   bool      `json:"is_official"`
+	IsAnimated   bool      `json:"is_animated"`
+	StickerCount int       `json:"sticker_count"`
+	Stickers     []Sticker `json:"stickers,omitempty"`
+	IsInstalled  bool      `json:"is_installed,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// Sticker represents a single sticker in a pack.
+type Sticker struct {
+	ID       uuid.UUID `json:"id"`
+	PackID   uuid.UUID `json:"pack_id"`
+	Emoji    *string   `json:"emoji,omitempty"`
+	FileURL  string    `json:"file_url"`
+	FileType string    `json:"file_type"` // webp, tgs, webm
+	Width    *int      `json:"width,omitempty"`
+	Height   *int      `json:"height,omitempty"`
+	Position int       `json:"position"`
+}
+
+// SavedGIF represents a user's saved GIF from Tenor.
+type SavedGIF struct {
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	TenorID    string    `json:"tenor_id"`
+	URL        string    `json:"url"`
+	PreviewURL *string   `json:"preview_url,omitempty"`
+	Width      *int      `json:"width,omitempty"`
+	Height     *int      `json:"height,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// TenorGIF represents a GIF result from the Tenor API.
+type TenorGIF struct {
+	TenorID    string  `json:"tenor_id"`
+	URL        string  `json:"url"`
+	PreviewURL string  `json:"preview_url"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Title      string  `json:"title,omitempty"`
+}
+
+// Poll represents a poll attached to a message.
+type Poll struct {
+	ID            uuid.UUID    `json:"id"`
+	MessageID     uuid.UUID    `json:"message_id"`
+	Question      string       `json:"question"`
+	IsAnonymous   bool         `json:"is_anonymous"`
+	IsMultiple    bool         `json:"is_multiple"`
+	IsQuiz        bool         `json:"is_quiz"`
+	CorrectOption *int         `json:"correct_option,omitempty"`
+	IsClosed      bool         `json:"is_closed"`
+	CloseAt       *time.Time   `json:"close_at,omitempty"`
+	Options       []PollOption `json:"options"`
+	TotalVoters   int          `json:"total_voters"`
+	CreatedAt     time.Time    `json:"created_at"`
+}
+
+// PollOption represents a single option in a poll.
+type PollOption struct {
+	ID        uuid.UUID `json:"id"`
+	PollID    uuid.UUID `json:"poll_id"`
+	Text      string    `json:"text"`
+	Position  int       `json:"position"`
+	Voters    int       `json:"voters"`
+	IsChosen  bool      `json:"is_chosen,omitempty"`
+	IsCorrect bool      `json:"is_correct,omitempty"`
+}
+
+// PollVote represents a user's vote on a poll option.
+type PollVote struct {
+	PollID   uuid.UUID `json:"poll_id"`
+	OptionID uuid.UUID `json:"option_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	VotedAt  time.Time `json:"voted_at"`
+}
+
+type ScheduledPollPayload struct {
+	Question      string   `json:"question"`
+	Options       []string `json:"options"`
+	IsAnonymous   bool     `json:"is_anonymous"`
+	IsMultiple    bool     `json:"is_multiple"`
+	IsQuiz        bool     `json:"is_quiz"`
+	CorrectOption *int     `json:"correct_option,omitempty"`
+}
+
+// ScheduledMessage represents a message scheduled for future delivery.
+type ScheduledMessage struct {
+	ID               uuid.UUID             `json:"id"`
+	ChatID           uuid.UUID             `json:"chat_id"`
+	SenderID         uuid.UUID             `json:"sender_id"`
+	Content          *string               `json:"content,omitempty"`
+	Entities         json.RawMessage       `json:"entities,omitempty"`
+	ReplyToID        *uuid.UUID            `json:"reply_to_id,omitempty"`
+	ReplyToSeqNum    *int64                `json:"reply_to_sequence_number,omitempty"`
+	Type             string                `json:"type"`
+	MediaIDs         []uuid.UUID           `json:"media_ids,omitempty"`
+	MediaAttachments []MediaAttachment     `json:"media_attachments,omitempty"`
+	IsSpoiler        bool                  `json:"is_spoiler"`
+	PollPayload      *ScheduledPollPayload `json:"poll,omitempty"`
+	ScheduledAt      time.Time             `json:"scheduled_at"`
+	IsSent           bool                  `json:"is_sent"`
+	SentAt           *time.Time            `json:"sent_at,omitempty"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
 }
 
 type JoinRequest struct {

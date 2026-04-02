@@ -1,18 +1,19 @@
 import type {
-  ApiAvailableReaction,
+  ApiChat,
+  ApiAppConfig,
   ApiConfig,
   ApiFormattedText,
   ApiPremiumPromo,
   ApiSession,
   ApiStarGiftRegular,
   ApiSticker,
-  ApiStickerSet,
   ApiUser,
-  ApiUserStatus,
   ApiWallpaper,
   ApiWebPage,
-  ApiChat,
 } from '../../types';
+import { DEFAULT_APP_CONFIG } from '../../../limits';
+
+import { getRegisteredAsset } from '../apiBuilders/symbols';
 import { ensureAuth, getBaseUrl, request } from '../client';
 
 export {
@@ -36,47 +37,30 @@ export async function downloadMedia(
   { url, mediaFormat }: { url: string; mediaFormat?: number; isHtmlAllowed?: boolean },
   onProgress?: (progress: number) => void,
 ) {
-  // url may be a full URL from service worker (http://.../progressive/document<id>)
-  // or a relative mediaHash like "document<id>" or "./progressive/document<id>"
-  const match = url.match(/(?:photo|video|document)([a-f0-9-]+)/);
-  if (!match) return undefined;
+  const assetRef = parseAssetRef(url);
+  if (!assetRef) return undefined;
 
-  const mediaId = match[1];
-  // Determine which variant to fetch based on size parameter
   const sizeMatch = url.match(/[?&]size=(\w)/);
   const size = sizeMatch ? sizeMatch[1] : 'y';
-
-  let endpoint: string;
-  if (size === 'm' || size === 's' || size === 'a') {
-    endpoint = `/media/${mediaId}/thumbnail`;
-  } else {
-    endpoint = `/media/${mediaId}`;
-  }
+  const isPreview = size === 'm' || size === 's' || size === 'a';
 
   try {
     const token = await ensureAuth();
-    const fullUrl = `${getBaseUrl()}${endpoint}`;
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    const asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
+
+    if (asset) {
+      return fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress);
     }
 
-    const response = await fetch(fullUrl, { headers, redirect: 'follow' });
-    if (!response.ok) return undefined;
-
-    if (onProgress) onProgress(1);
-
-    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
-
-    // Progressive format (used by service worker for audio/video streaming):
-    // must return arrayBuffer + fullSize for range-request simulation
-    if (mediaFormat === 1 /* ApiMediaFormat.Progressive */) {
-      const arrayBuffer = await response.arrayBuffer();
-      return { arrayBuffer, mimeType, fullSize: arrayBuffer.byteLength };
+    if (!/^[0-9a-f-]{36}$/i.test(assetRef.id)) {
+      return undefined;
     }
 
-    const dataBlob = await response.blob();
-    return { dataBlob, mimeType };
+    const endpoint = isPreview
+      ? `/media/${assetRef.id}/thumbnail`
+      : `/media/${assetRef.id}`;
+
+    return fetchBinary(`${getBaseUrl()}${endpoint}`, mediaFormat, token, undefined, onProgress);
   } catch {
     return undefined;
   }
@@ -116,7 +100,9 @@ export function fetchConfig(): Promise<ApiConfig | undefined> {
 }
 
 export function fetchAppConfig() {
-  return Promise.resolve(undefined);
+  return Promise.resolve({
+    ...DEFAULT_APP_CONFIG,
+  } as ApiAppConfig);
 }
 
 export function fetchPeerColors() {
@@ -145,37 +131,45 @@ export function fetchPinnedDialogs() {
   return Promise.resolve(undefined);
 }
 
-export function fetchStickerSets() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchFavoriteStickers() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchRecentStickers() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchSavedGifs() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchAnimatedEmojis(): Promise<{ set: ApiStickerSet; stickers: ApiSticker[] } | undefined> {
-  return Promise.resolve(undefined);
-}
-
-export function fetchAnimatedEmojiEffects(): Promise<{ set: ApiStickerSet; stickers: ApiSticker[] } | undefined> {
-  return Promise.resolve(undefined);
-}
+export {
+  fetchStickerSets,
+  fetchFavoriteStickers,
+  fetchRecentStickers,
+  fetchSavedGifs,
+  fetchAnimatedEmojis,
+  fetchAnimatedEmojiEffects,
+  fetchFeaturedStickers,
+  searchStickers,
+  fetchStickers,
+  installStickerSet,
+  uninstallStickerSet,
+  addRecentSticker,
+  removeRecentSticker,
+  clearRecentStickers,
+  addFavoriteSticker,
+  removeFavoriteSticker,
+  fetchCustomEmoji,
+  fetchCustomEmojiSets,
+  fetchFeaturedEmojiStickers,
+  fetchStickersForEmoji,
+  fetchGifs,
+  searchGifs,
+  saveGif,
+  removeGif,
+} from './symbols';
 
 export function fetchGenericEmojiEffects() {
   return Promise.resolve(undefined);
 }
 
-export function fetchAvailableReactions(): Promise<ApiAvailableReaction[] | undefined> {
-  return Promise.resolve(undefined);
-}
+export {
+  fetchAvailableReactions,
+  fetchMessageReactions,
+  fetchMessageReactionsList,
+  sendReaction,
+  setDefaultReaction,
+  setChatEnabledReactions,
+} from './reactions';
 
 export function fetchAvailableEffects() {
   return Promise.resolve(undefined);
@@ -209,18 +203,6 @@ export function updateIsOnline() {
   return Promise.resolve(undefined);
 }
 
-export function fetchStickers() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchCustomEmoji() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchCustomEmojiSets() {
-  return Promise.resolve(undefined);
-}
-
 export function fetchSavedReactionTags() {
   return Promise.resolve(undefined);
 }
@@ -239,10 +221,6 @@ export async function fetchChat({ type, user }: { type?: string; user?: { id: st
     }
   }
   return undefined;
-}
-
-export function fetchMessage() {
-  return Promise.resolve(undefined);
 }
 
 // fetchFullUser — re-exported from ./users
@@ -308,16 +286,6 @@ const PRIVACY_KEY_MAP: Record<string, string> = {
   forwards: 'forwarded',
   phoneCall: 'calls',
   chatInvite: 'groups',
-};
-
-// Reverse: Saturn field → TG Web A key
-const SATURN_TO_TG_KEY: Record<string, string> = {
-  last_seen: 'lastSeen',
-  phone: 'phoneNumber',
-  avatar: 'profilePhoto',
-  forwarded: 'forwards',
-  calls: 'phoneCall',
-  groups: 'chatInvite',
 };
 
 // Saturn uses 'everyone', TG uses 'everybody'
@@ -429,7 +397,15 @@ export function fetchContactSignUpSetting() {
   return Promise.resolve(undefined);
 }
 
-export function fetchAuthorizations(): Promise<{ authorizations: Record<string, ApiSession>; ttlDays: number } | undefined> {
+type AuthorizationsResult = { authorizations: Record<string, ApiSession>; ttlDays: number };
+type RecentEmojiStatusesResult = { hash: string; emojiStatuses: ApiSticker[] };
+type StarGiftsResult = {
+  gifts: ApiStarGiftRegular[];
+  chats: ApiChat[] | undefined;
+  users: ApiUser[] | undefined;
+};
+
+export function fetchAuthorizations(): Promise<AuthorizationsResult | undefined> {
   return Promise.resolve(undefined);
 }
 
@@ -438,7 +414,7 @@ export function fetchWallpapers(): Promise<{ wallpapers: ApiWallpaper[] } | unde
 }
 
 export function fetchPasskeys() {
-  return Promise.resolve([]);
+  return Promise.resolve({ passkeys: [] });
 }
 
 // fetchBlockedUsers: adapt Saturn format to TG Web A format
@@ -473,11 +449,11 @@ export function fetchDefaultStatusEmojis() {
   return Promise.resolve(undefined);
 }
 
-export function fetchRecentEmojiStatuses(): Promise<{ hash: string; emojiStatuses: ApiSticker[] } | undefined> {
+export function fetchRecentEmojiStatuses(): Promise<RecentEmojiStatusesResult | undefined> {
   return Promise.resolve(undefined);
 }
 
-export function fetchStarGifts(): Promise<{ gifts: ApiStarGiftRegular[]; chats: ApiChat[] | undefined; users: ApiUser[] | undefined } | undefined> {
+export function fetchStarGifts(): Promise<StarGiftsResult | undefined> {
   return Promise.resolve(undefined);
 }
 
@@ -511,6 +487,14 @@ export {
   deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
   fetchPinnedMessages, forwardMessages, markMessageListRead,
   pinMessage, searchMessagesInChat, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
+  fetchMessage, sendPollVote, closePoll, loadPollOptionResults, fetchScheduledHistory,
+  sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage,
+} from './messages';
+
+export {
+  sendMessage as sendPoll,
+  sendPollVote as votePoll,
+  loadPollOptionResults as fetchPollVoters,
 } from './messages';
 
 export { fetchDifference } from './sync';
@@ -543,3 +527,71 @@ export async function unblockUser({ user }: { user: { id: string }; isOnlyStorie
 export {
   searchMessagesGlobal, searchUsersGlobal, searchChatsGlobal,
 } from './search';
+
+function parseAssetRef(url: string) {
+  const normalizedUrl = url.replace(/^\.\//, '');
+  const match = normalizedUrl.match(/(?:progressive\/)?(photo|video|document|sticker|stickerSet)([^/?&#]+)/);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    kind: match[1],
+    id: match[2],
+  };
+}
+
+function resolveRegisteredAsset(kind: string, id: string, isPreview: boolean) {
+  const asset = kind === 'stickerSet'
+    ? getRegisteredAsset(id, 'stickerSet')
+    : kind === 'sticker'
+      ? getRegisteredAsset(id, 'sticker') || getRegisteredAsset(id, 'document')
+      : getRegisteredAsset(id, 'document');
+
+  if (!asset) {
+    return undefined;
+  }
+
+  const url = isPreview
+    ? asset.previewUrl || asset.thumbnailDataUri || asset.fullUrl
+    : asset.fullUrl || asset.previewUrl || asset.thumbnailDataUri;
+  if (!url) {
+    return undefined;
+  }
+
+  return {
+    url,
+    mimeType: asset.mimeType,
+  };
+}
+
+async function fetchBinary(
+  url: string,
+  mediaFormat?: number,
+  token?: string,
+  mimeTypeHint?: string,
+  onProgress?: (progress: number) => void,
+) {
+  const headers: Record<string, string> = {};
+  if (token && (url.startsWith(getBaseUrl()) || url.startsWith('/'))) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, { headers, redirect: 'follow' });
+  if (!response.ok) {
+    return undefined;
+  }
+
+  if (onProgress) {
+    onProgress(1);
+  }
+
+  const mimeType = response.headers.get('content-type') || mimeTypeHint || 'application/octet-stream';
+  if (mediaFormat === 1 /* ApiMediaFormat.Progressive */) {
+    const arrayBuffer = await response.arrayBuffer();
+    return { arrayBuffer, mimeType, fullSize: arrayBuffer.byteLength };
+  }
+
+  const dataBlob = await response.blob();
+  return { dataBlob, mimeType };
+}

@@ -1,27 +1,481 @@
-import type { ApiAttachment, ApiMessage, ApiMessageEntity, ApiPeer, ApiSendMessageAction } from '../../types';
-import type { SaturnMessage, SaturnPaginatedResponse, SaturnSharedMediaItem } from '../types';
+import type {
+  ApiAttachment,
+  ApiMessage,
+  ApiMessageEntity,
+  ApiNewPoll,
+  ApiPeer,
+  ApiPoll,
+  ApiSendMessageAction,
+  ApiSticker,
+  ApiVideo,
+} from '../../types';
+import type {
+  SaturnMessage,
+  SaturnPaginatedResponse,
+  SaturnPoll,
+  SaturnPollVote,
+  SaturnScheduledMessage,
+  SaturnSharedMediaItem,
+} from '../types';
+import { MESSAGE_DELETED } from '../../types';
 
-import { buildApiMessage, buildSaturnEntities, getMessageUuid } from '../apiBuilders/messages';
+import {
+  buildApiMessage,
+  buildApiPoll,
+  buildApiScheduledPoll,
+  buildApiScheduledMessage,
+  buildSaturnEntities,
+  getMessageUuid,
+  getScheduledMessageUuid,
+  setMessageBuilderCurrentUserId,
+} from '../apiBuilders/messages';
+import {
+  serializeGifForMessage,
+  serializeStickerForMessage,
+} from '../apiBuilders/symbols';
 import * as client from '../client';
-import { uploadMedia } from './media';
 import { sendApiUpdate, sendImmediateApiUpdate } from '../updates/apiUpdateEmitter';
 import { trackPendingSend } from '../updates/wsHandler';
+import { uploadMedia } from './media';
 
 let currentUserId: string | undefined;
+let localMessageCounter = 0;
+
+const LOCAL_MESSAGES_LIMIT = 1e6;
+const sharedMediaCursors = new Map<string, string>();
+const SHARED_MEDIA_TYPE_MAP: Record<string, string> = {
+  media: 'media',
+  documents: 'file',
+  voice: 'voice',
+  gif: 'gif',
+};
+
+type PollSendResponse = {
+  message: SaturnMessage;
+  poll: SaturnPoll;
+};
+type SendProgressCallback = (progress: number, key: string) => void;
+
+function extractApiPolls(messages: SaturnMessage[]) {
+  const pollsById: Record<string, ApiPoll> = {};
+
+  messages.forEach((message) => {
+    const poll = buildApiPoll(message.poll);
+    if (poll) {
+      pollsById[poll.id] = poll;
+    }
+  });
+
+  return Object.values(pollsById);
+}
+
+function extractScheduledApiPolls(messages: SaturnScheduledMessage[]) {
+  const pollsById: Record<string, ApiPoll> = {};
+
+  messages.forEach((message) => {
+    const poll = buildApiScheduledPoll(message);
+    if (poll) {
+      pollsById[poll.id] = poll;
+    }
+  });
+
+  return Object.values(pollsById);
+}
+
+function getGlobalState() {
+  return (window as any).getGlobal?.();
+}
+
+function getGlobalMessage(chatId: string, messageId: number) {
+  const global = getGlobalState();
+  return global?.messages?.byChatId?.[chatId]?.byId?.[messageId]
+    || global?.scheduledMessages?.byChatId?.[chatId]?.[messageId];
+}
+
+function getLocalId(lastMessageId?: number) {
+  return (lastMessageId || Math.floor(Date.now() / 1000)) + (++localMessageCounter / LOCAL_MESSAGES_LIMIT);
+}
+
+function buildLocalPoll(localId: number, poll: ApiNewPoll): ApiPoll {
+  return {
+    mediaType: 'poll',
+    id: `local-poll-${localId}`,
+    summary: {
+      closed: undefined,
+      isPublic: poll.summary.isPublic,
+      multipleChoice: poll.summary.multipleChoice,
+      quiz: poll.summary.quiz,
+      question: {
+        text: poll.summary.question.text,
+        entities: poll.summary.question.entities || [],
+      },
+      answers: poll.summary.answers,
+      closeDate: poll.summary.closeDate,
+      closePeriod: poll.summary.closePeriod,
+    },
+    results: {
+      results: poll.summary.answers.map((answer) => ({
+        option: answer.option,
+        votersCount: 0,
+      })),
+      totalVoters: 0,
+      solution: poll.quiz?.solution,
+      solutionEntities: poll.quiz?.solutionEntities,
+    },
+  };
+}
+
+function buildLocalMessageContent({
+  attachment,
+  gif,
+  poll,
+  sticker,
+  text,
+  entities,
+}: {
+  attachment?: ApiAttachment;
+  gif?: ApiVideo;
+  poll?: ApiNewPoll;
+  sticker?: ApiSticker;
+  text?: string;
+  entities?: ApiMessageEntity[];
+}) {
+  const content: ApiMessage['content'] = {
+    text: text ? { text, entities: entities || [] } : undefined,
+  };
+
+  if (attachment) {
+    buildAttachmentContent(content, attachment);
+  }
+
+  if (sticker) {
+    content.sticker = sticker;
+    content.text = undefined;
+  }
+
+  if (gif) {
+    content.video = gif;
+    content.text = undefined;
+  }
+
+  if (poll) {
+    content.pollId = '';
+    content.text = undefined;
+  }
+
+  return content;
+}
+
+function buildAttachmentContent(content: ApiMessage['content'], attachment: ApiAttachment) {
+  const mediaType = detectMediaType(attachment);
+  const localId = `local-${Date.now()}`;
+  const { quick } = attachment;
+
+  switch (mediaType) {
+    case 'photo':
+      content.photo = {
+        mediaType: 'photo',
+        id: localId,
+        date: 0,
+        thumbnail: attachment.previewBlobUrl ? {
+          dataUri: attachment.previewBlobUrl,
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+        } : undefined,
+        sizes: [{
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+          type: 's',
+        }, {
+          width: quick?.width || 800,
+          height: quick?.height || 800,
+          type: 'y',
+        }],
+        blobUrl: attachment.compressedBlobUrl || attachment.blobUrl,
+        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
+      };
+      break;
+    case 'video':
+      content.video = {
+        mediaType: 'video',
+        id: localId,
+        mimeType: attachment.mimeType || 'video/mp4',
+        duration: quick?.duration || 0,
+        width: quick?.width || 0,
+        height: quick?.height || 0,
+        fileName: attachment.filename || 'video.mp4',
+        size: attachment.size,
+        thumbnail: attachment.previewBlobUrl ? {
+          dataUri: attachment.previewBlobUrl,
+          width: quick?.width || 320,
+          height: quick?.height || 320,
+        } : undefined,
+        blobUrl: attachment.blobUrl,
+        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
+      };
+      break;
+    case 'voice':
+      content.voice = {
+        mediaType: 'voice',
+        id: localId,
+        duration: attachment.voice?.duration || 0,
+        waveform: attachment.voice?.waveform || [],
+        size: attachment.size,
+      };
+      break;
+    case 'gif':
+      content.video = {
+        mediaType: 'video',
+        id: localId,
+        mimeType: 'video/mp4',
+        duration: quick?.duration || 0,
+        width: quick?.width || 0,
+        height: quick?.height || 0,
+        fileName: 'animation.mp4',
+        size: attachment.size,
+        isGif: true,
+      };
+      break;
+    default:
+      content.document = {
+        mediaType: 'document',
+        id: localId,
+        mimeType: attachment.mimeType || 'application/octet-stream',
+        fileName: attachment.filename || 'file',
+        size: attachment.size,
+      };
+      break;
+  }
+}
+
+function buildSendBody({
+  attachment,
+  entities,
+  gif,
+  isSpoiler,
+  poll,
+  replyInfo,
+  sticker,
+  text,
+  chatId,
+}: {
+  attachment?: ApiAttachment;
+  entities?: ApiMessageEntity[];
+  gif?: ApiVideo;
+  isSpoiler?: boolean;
+  poll?: ApiNewPoll;
+  replyInfo?: { replyToMsgId?: number; type?: string };
+  sticker?: ApiSticker;
+  text?: string;
+  chatId: string;
+}) {
+  const body: Record<string, unknown> = {};
+
+  if (poll) {
+    body.type = 'poll';
+    body.question = poll.summary.question.text;
+    body.options = poll.summary.answers.map((answer) => answer.text.text);
+    body.is_anonymous = poll.summary.isPublic ? false : true;
+    body.is_multiple = Boolean(poll.summary.multipleChoice);
+    body.is_quiz = Boolean(poll.summary.quiz);
+    if (poll.quiz?.correctAnswers?.length) {
+      body.correct_option = poll.summary.answers.findIndex((answer) => (
+        poll.quiz?.correctAnswers.includes(answer.option)
+      ));
+    }
+    return body;
+  }
+
+  body.content = text || '';
+
+  if (entities?.length) {
+    body.entities = buildSaturnEntities(entities);
+  }
+
+  if (attachment) {
+    body.type = detectMediaType(attachment);
+  }
+
+  if (sticker) {
+    body.type = 'sticker';
+    body.content = serializeStickerForMessage(sticker);
+  }
+
+  if (gif) {
+    body.type = 'gif';
+    body.content = serializeGifForMessage(gif);
+  }
+
+  if ((isSpoiler || attachment?.shouldSendAsSpoiler) && !sticker && !gif) {
+    body.is_spoiler = true;
+  }
+
+  const replyToId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
+  if (replyToId) {
+    const replyUuid = resolveMessageUuid(chatId, replyToId);
+    if (replyUuid) {
+      body.reply_to_id = replyUuid;
+    }
+  }
+
+  return body;
+}
+
+async function uploadAttachmentIfNeeded(
+  attachment?: ApiAttachment,
+  progressCallback?: SendProgressCallback,
+  chatId?: string,
+  localId?: number,
+) {
+  if (!attachment) {
+    return [];
+  }
+
+  const mediaType = detectMediaType(attachment);
+  const onProgress = progressCallback && chatId && localId
+    ? (loaded: number, total: number) => {
+      progressCallback(total > 0 ? loaded / total : 0, `${chatId}_${localId}`);
+    }
+    : undefined;
+
+  const result = await uploadMedia(
+    attachment.blob,
+    mediaType,
+    onProgress,
+    attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0,
+  );
+
+  return [result.id];
+}
+
+async function sendScheduledMessage({
+  attachment,
+  chat,
+  entities,
+  gif,
+  lastMessageId,
+  poll,
+  progressCallback,
+  replyInfo,
+  scheduleRepeatPeriod,
+  scheduledAt,
+  sticker,
+  text,
+}: {
+  attachment?: ApiAttachment;
+  chat: { id: string };
+  entities?: ApiMessageEntity[];
+  gif?: ApiVideo;
+  lastMessageId?: number;
+  poll?: ApiNewPoll;
+  progressCallback?: SendProgressCallback;
+  replyInfo?: { replyToMsgId?: number; type?: string };
+  scheduleRepeatPeriod?: number;
+  scheduledAt: number;
+  sticker?: ApiSticker;
+  text?: string;
+}) {
+  if (scheduleRepeatPeriod) {
+    return undefined;
+  }
+
+  const chatId = chat.id;
+  const localId = getLocalId(lastMessageId);
+  const localPoll = poll ? buildLocalPoll(localId, poll) : undefined;
+  const localMessage: ApiMessage = {
+    id: localId,
+    chatId,
+    date: scheduledAt,
+    isOutgoing: true,
+    senderId: currentUserId,
+    content: buildLocalMessageContent({
+      attachment,
+      gif,
+      poll,
+      sticker,
+      text,
+      entities,
+    }),
+    sendingState: 'messageSendingStatePending',
+    isScheduled: true,
+  };
+  if (localPoll) {
+    localMessage.content.pollId = localPoll.id;
+  }
+
+  sendImmediateApiUpdate({
+    '@type': 'newScheduledMessage',
+    chatId,
+    id: localId,
+    message: localMessage,
+    poll: localPoll,
+  });
+
+  let uploadedMediaIds: string[] = [];
+  if (attachment) {
+    try {
+      uploadedMediaIds = await uploadAttachmentIfNeeded(attachment, progressCallback, chatId, localId);
+    } catch (error) {
+      sendApiUpdate({
+        '@type': 'updateScheduledMessageSendFailed',
+        chatId,
+        localId,
+        error: error instanceof Error ? error.message : 'Failed to upload media',
+      });
+      return undefined;
+    }
+  }
+
+  try {
+    const body = buildSendBody({
+      attachment,
+      entities,
+      gif,
+      poll,
+      replyInfo,
+      sticker,
+      text,
+      chatId,
+    });
+    if (uploadedMediaIds.length > 0) {
+      body.media_ids = uploadedMediaIds;
+    }
+    const scheduledAtIso = new Date(scheduledAt * 1000).toISOString();
+    const path = `/chats/${chatId}/messages?scheduled_at=${encodeURIComponent(scheduledAtIso)}`;
+    const scheduledMessage = await client.request<SaturnScheduledMessage>('POST', path, body);
+    const apiMessage = buildApiScheduledMessage(scheduledMessage);
+    const apiPoll = buildApiScheduledPoll(scheduledMessage) || localPoll;
+
+    sendApiUpdate({
+      '@type': 'updateScheduledMessageSendSucceeded',
+      chatId,
+      localId,
+      message: apiMessage,
+      poll: apiPoll,
+    });
+
+    return apiMessage;
+  } catch (error) {
+    sendApiUpdate({
+      '@type': 'updateScheduledMessageSendFailed',
+      chatId,
+      localId,
+      error: error instanceof Error ? error.message : 'Failed to schedule message',
+    });
+    return undefined;
+  }
+}
 
 export function setCurrentUserId(userId: string) {
   currentUserId = userId;
+  setMessageBuilderCurrentUserId(userId);
 }
 
-// Resolve sequence_number → Saturn UUID, with fallback to global state's saturnId field
-function resolveMessageUuid(chatId: string, seqNum: number): string | undefined {
-  // Try in-memory map first (fast path)
-  const uuid = getMessageUuid(chatId, seqNum);
+export function resolveMessageUuid(chatId: string, seqNum: number): string | undefined {
+  const uuid = getMessageUuid(chatId, seqNum) || getScheduledMessageUuid(chatId, seqNum);
   if (uuid) return uuid;
-  // Fallback: look up saturnId from cached ApiMessage in global state
-  const global = (window as any).getGlobal?.();
-  const msg = global?.messages?.byChatId?.[chatId]?.byId?.[seqNum];
-  return msg?.saturnId;
+
+  return getGlobalMessage(chatId, seqNum)?.saturnId;
 }
 
 export async function fetchMessages({
@@ -36,30 +490,30 @@ export async function fetchMessages({
   const chatId = chat?.id || chatIdDirect!;
   const params = new URLSearchParams();
   params.set('limit', String(limit));
+
   if (cursor) {
     params.set('cursor', cursor);
   } else if (offsetId !== undefined) {
-    // cursor returns messages with seq < cursor (DESC order)
-    // Add half the limit as forward buffer so we load messages AROUND offsetId
-    // (both older and newer), not just older ones
     const forwardBuffer = Math.ceil(limit / 2);
     params.set('cursor', btoa(String(offsetId + forwardBuffer)));
   }
 
   const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
-    'GET', `/chats/${chatId}/messages?${params.toString()}`,
+    'GET',
+    `/chats/${chatId}/messages?${params.toString()}`,
   );
 
-  const messages: ApiMessage[] = result.data.map((msg) => {
-    const apiMsg = buildApiMessage(msg);
+  const messages = result.data.map((message) => {
+    const apiMessage = buildApiMessage(message);
     if (currentUserId) {
-      apiMsg.isOutgoing = msg.sender_id === currentUserId;
+      apiMessage.isOutgoing = message.sender_id === currentUserId;
     }
-    return apiMsg;
+    return apiMessage;
   });
 
   return {
     messages,
+    polls: extractApiPolls(result.data),
     count: messages.length,
     topics: [] as any[],
     hasMore: result.has_more,
@@ -71,7 +525,7 @@ export async function fetchMessagesByDate({
   chatId, date, limit = 50,
 }: {
   chatId: string;
-  date: string; // RFC3339
+  date: string;
   limit?: number;
 }) {
   const params = new URLSearchParams();
@@ -79,26 +533,68 @@ export async function fetchMessagesByDate({
   params.set('limit', String(limit));
 
   const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
-    'GET', `/chats/${chatId}/history?${params.toString()}`,
+    'GET',
+    `/chats/${chatId}/history?${params.toString()}`,
   );
 
   return {
-    messages: result.data.map((msg) => {
-      const apiMsg = buildApiMessage(msg);
+    messages: result.data.map((message) => {
+      const apiMessage = buildApiMessage(message);
       if (currentUserId) {
-        apiMsg.isOutgoing = msg.sender_id === currentUserId;
+        apiMessage.isOutgoing = message.sender_id === currentUserId;
       }
-      return apiMsg;
+      return apiMessage;
     }),
+    polls: extractApiPolls(result.data),
     hasMore: result.has_more,
   };
 }
 
-let localMessageCounter = 0;
-const LOCAL_MESSAGES_LIMIT = 1e6; // Must match config.ts — keeps local IDs fractional
+export async function fetchMessage({
+  chat,
+  messageId,
+}: {
+  chat: { id: string };
+  messageId: number;
+}) {
+  const uuid = resolveMessageUuid(chat.id, messageId);
+  if (!uuid) {
+    return undefined;
+  }
+
+  try {
+    const message = await client.request<SaturnMessage>('GET', `/messages/${uuid}`);
+    const apiMessage = buildApiMessage(message);
+    if (currentUserId) {
+      apiMessage.isOutgoing = message.sender_id === currentUserId;
+    }
+
+    return {
+      message: apiMessage,
+      poll: buildApiPoll(message.poll),
+    };
+  } catch (error) {
+    if ((error as { status?: number }).status === 404) {
+      return MESSAGE_DELETED;
+    }
+    throw error;
+  }
+}
 
 export async function sendMessage({
-  chat, text, entities, replyInfo, lastMessageId, mediaIds, isSpoiler, attachment,
+  chat,
+  text,
+  entities,
+  replyInfo,
+  lastMessageId,
+  mediaIds,
+  isSpoiler,
+  attachment,
+  sticker,
+  gif,
+  poll,
+  scheduledAt,
+  scheduleRepeatPeriod,
 }: {
   chat: { id: string };
   text?: string;
@@ -108,122 +604,144 @@ export async function sendMessage({
   mediaIds?: string[];
   isSpoiler?: boolean;
   attachment?: ApiAttachment;
-}, progressCallback?: Function) {
+  sticker?: ApiSticker;
+  gif?: ApiVideo;
+  poll?: ApiNewPoll;
+  scheduledAt?: number;
+  scheduleRepeatPeriod?: number;
+}, progressCallback?: SendProgressCallback) {
   const chatId = chat.id;
-  if (!text && (!mediaIds || mediaIds.length === 0) && !attachment) return;
-
-  // Create local (optimistic) message.
-  // ID must be fractional so isLocalMessageId() recognizes it (checks !Number.isInteger).
-  // Format matches TG Web A: lastMessageId + counter/1e6 — sorts after existing messages.
-  const localId = (lastMessageId || Math.floor(Date.now() / 1000)) + (++localMessageCounter / LOCAL_MESSAGES_LIMIT);
-  const now = Math.floor(Date.now() / 1000);
-
-  const localContent: ApiMessage['content'] = {
-    text: text ? { text, entities: entities || [] } : undefined,
-  };
-
-  // Populate media content so the optimistic message shows a preview instead of "not supported"
-  if (attachment) {
-    buildLocalMediaContent(localContent, attachment);
+  if (!text && (!mediaIds || mediaIds.length === 0) && !attachment && !sticker && !gif && !poll) {
+    return undefined;
   }
 
+  if (scheduledAt) {
+    return sendScheduledMessage({
+      attachment,
+      chat,
+      entities,
+      gif,
+      lastMessageId,
+      poll,
+      progressCallback,
+      replyInfo,
+      scheduleRepeatPeriod,
+      scheduledAt,
+      sticker,
+      text,
+    });
+  }
+
+  const localId = getLocalId(lastMessageId);
+  const now = Math.floor(Date.now() / 1000);
+  const localPoll = poll ? buildLocalPoll(localId, poll) : undefined;
   const localMessage: ApiMessage = {
     id: localId,
     chatId,
     date: now,
     isOutgoing: true,
     senderId: currentUserId,
-    content: localContent,
+    content: buildLocalMessageContent({
+      attachment,
+      gif,
+      poll,
+      sticker,
+      text,
+      entities,
+    }),
     sendingState: 'messageSendingStatePending',
   };
 
-  // Dispatch optimistic update immediately (not batched) so the local message
-  // renders in its own frame before the HTTP response arrives
+  if (localPoll) {
+    localMessage.content.pollId = localPoll.id;
+  }
+
   sendImmediateApiUpdate({
     '@type': 'newMessage',
     chatId,
     id: localId,
     message: localMessage,
+    poll: localPoll,
   });
 
-  // Yield to browser render loop so the local message with ⏱ appears
-  // before the HTTP call blocks the microtask queue
-  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
-  const replyToId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
-
-  // Upload attachment if provided (photo/video/file/voice/videonote)
   let uploadedMediaIds = mediaIds || [];
   if (attachment) {
     try {
-      const mediaType = detectMediaType(attachment);
-      const onProgress = progressCallback
-        ? (loaded: number, total: number) => {
-          progressCallback(total > 0 ? loaded / total : 0, `${chatId}_${localId}`);
-        }
-        : undefined;
-      const result = await uploadMedia(
-        attachment.blob,
-        mediaType,
-        onProgress,
-        attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0,
-      );
-      uploadedMediaIds = [result.id];
-    } catch (e) {
+      uploadedMediaIds = await uploadAttachmentIfNeeded(attachment, progressCallback, chatId, localId);
+    } catch (error) {
       sendApiUpdate({
         '@type': 'updateMessageSendFailed',
         chatId,
         localId,
-        error: e instanceof Error ? e.message : 'Failed to upload media',
+        error: error instanceof Error ? error.message : 'Failed to upload media',
       });
       return undefined;
     }
   }
 
   try {
-    const body: Record<string, unknown> = { content: text || '' };
-    if (entities?.length) {
-      body.entities = buildSaturnEntities(entities);
-    }
+    const body = buildSendBody({
+      attachment,
+      entities,
+      gif,
+      isSpoiler,
+      poll,
+      replyInfo,
+      sticker,
+      text,
+      chatId,
+    });
     if (uploadedMediaIds.length > 0) {
       body.media_ids = uploadedMediaIds;
     }
-    if (isSpoiler || attachment?.shouldSendAsSpoiler) {
-      body.is_spoiler = true;
-    }
-    // Set message type based on attachment
-    if (attachment && uploadedMediaIds.length > 0) {
-      body.type = detectMediaType(attachment);
-    }
-    if (replyToId) {
-      const replyUuid = resolveMessageUuid(chatId, replyToId);
-      if (replyUuid) body.reply_to_id = replyUuid;
+
+    if (poll) {
+      const result = await client.request<PollSendResponse>('POST', `/chats/${chatId}/messages`, body);
+      trackPendingSend(result.message.id);
+
+      const apiMessage = buildApiMessage(result.message);
+      apiMessage.isOutgoing = true;
+      const apiPoll = buildApiPoll(result.poll);
+      if (apiPoll) {
+        apiMessage.content.pollId = apiPoll.id;
+      }
+
+      sendApiUpdate({
+        '@type': 'updateMessageSendSucceeded',
+        chatId,
+        localId,
+        message: apiMessage,
+        poll: apiPoll,
+      });
+
+      return apiMessage;
     }
 
-    const msg = await client.request<SaturnMessage>(
-      'POST', `/chats/${chatId}/messages`, body,
-    );
+    const message = await client.request<SaturnMessage>('POST', `/chats/${chatId}/messages`, body);
+    trackPendingSend(message.id);
 
-    // Track UUID so WS handler skips the echo of our own message
-    trackPendingSend(msg.id);
-
-    const apiMsg = buildApiMessage(msg);
-    apiMsg.isOutgoing = true;
+    const apiMessage = buildApiMessage(message);
+    apiMessage.isOutgoing = true;
 
     sendApiUpdate({
       '@type': 'updateMessageSendSucceeded',
       chatId,
       localId,
-      message: apiMsg,
+      message: apiMessage,
+      poll: buildApiPoll(message.poll),
     });
 
-    return apiMsg;
-  } catch (e) {
+    return apiMessage;
+  } catch (error) {
     sendApiUpdate({
       '@type': 'updateMessageSendFailed',
       chatId,
       localId,
-      error: e instanceof Error ? e.message : 'Failed to send message',
+      error: error instanceof Error ? error.message : 'Failed to send message',
     });
     return undefined;
   }
@@ -245,13 +763,10 @@ export async function editMessage({
     body.entities = buildSaturnEntities(entities);
   }
 
-  const msg = await client.request<SaturnMessage>(
-    'PATCH', `/messages/${uuid}`, body,
-  );
-
-  const apiMsg = buildApiMessage(msg);
+  const message = await client.request<SaturnMessage>('PATCH', `/messages/${uuid}`, body);
+  const apiMessage = buildApiMessage(message);
   if (currentUserId) {
-    apiMsg.isOutgoing = msg.sender_id === currentUserId;
+    apiMessage.isOutgoing = message.sender_id === currentUserId;
   }
 
   sendApiUpdate({
@@ -259,102 +774,103 @@ export async function editMessage({
     chatId,
     id: messageId,
     isFull: true,
-    message: apiMsg,
+    message: apiMessage,
+    poll: buildApiPoll(message.poll),
   });
 
-  return apiMsg;
+  return apiMessage;
 }
 
 export async function deleteMessages({
-  chat, messageIds,
+  chat,
+  messageIds,
 }: {
   chat: { id: string };
   messageIds: number[];
 }) {
-  const chatId = chat.id;
   const deletedIds: number[] = [];
-  const deletePromises = messageIds.map(async (seqNum) => {
-    const uuid = resolveMessageUuid(chatId, seqNum);
-    if (!uuid) {
-      // eslint-disable-next-line no-console
-      console.warn('[Saturn] deleteMessage: no UUID for', chatId, seqNum);
-      return;
-    }
+
+  await Promise.all(messageIds.map(async (messageId) => {
+    const uuid = resolveMessageUuid(chat.id, messageId);
+    if (!uuid) return;
+
     try {
       await client.request('DELETE', `/messages/${uuid}`);
-      deletedIds.push(seqNum);
-    } catch (e) {
-      // Silently skip messages user can't delete (not author / not admin)
-      // eslint-disable-next-line no-console
-      console.warn('[Saturn] deleteMessage failed:', e instanceof Error ? e.message : e);
+      deletedIds.push(messageId);
+    } catch {
+      // Ignore per-message deletion errors to match existing behavior.
     }
-  });
+  }));
 
-  await Promise.all(deletePromises);
-
-  if (deletedIds.length > 0) {
+  if (deletedIds.length) {
     sendApiUpdate({
       '@type': 'deleteMessages',
       ids: deletedIds,
-      chatId,
+      chatId: chat.id,
     });
   }
 }
 
 export async function forwardMessages({
-  fromChatId, messageIds, toChatId,
+  fromChatId,
+  messageIds,
+  toChatId,
 }: {
   fromChatId: string;
   messageIds: number[];
   toChatId: string;
 }) {
   const uuids = messageIds
-    .map((seqNum) => resolveMessageUuid(fromChatId, seqNum))
-    .filter(Boolean) as string[];
+    .map((messageId) => resolveMessageUuid(fromChatId, messageId))
+    .filter(Boolean);
 
-  if (!uuids.length) return undefined;
+  if (!uuids.length) {
+    return undefined;
+  }
 
   const result = await client.request<{ messages: SaturnMessage[] }>(
-    'POST', '/messages/forward', {
-      message_ids: uuids,
-      to_chat_id: toChatId,
-    },
+    'POST',
+    '/messages/forward',
+    { message_ids: uuids, to_chat_id: toChatId },
   );
 
-  const apiMessages = result.messages.map((msg) => {
-    const apiMsg = buildApiMessage(msg);
-    apiMsg.isOutgoing = true;
-    return apiMsg;
+  const messages = result.messages.map((message) => {
+    const apiMessage = buildApiMessage(message);
+    apiMessage.isOutgoing = true;
+    return apiMessage;
   });
 
-  apiMessages.forEach((apiMsg) => {
+  messages.forEach((message) => {
     sendApiUpdate({
       '@type': 'newMessage',
       chatId: toChatId,
-      id: apiMsg.id,
-      message: apiMsg,
+      id: message.id,
+      message,
+      poll: undefined,
     });
   });
 
-  return { messages: apiMessages };
+  return { messages };
 }
 
-export async function fetchPinnedMessages({ chat, chatId: chatIdDirect }: { chat?: { id: string }; chatId?: string }) {
+export async function fetchPinnedMessages({
+  chat,
+  chatId: chatIdDirect,
+}: {
+  chat?: { id: string };
+  chatId?: string;
+}) {
   const chatId = chat?.id || chatIdDirect!;
-  const result = await client.request<{ messages: SaturnMessage[] }>(
-    'GET', `/chats/${chatId}/pinned`,
-  );
+  const result = await client.request<{ messages: SaturnMessage[] }>('GET', `/chats/${chatId}/pinned`);
 
-  const rawMessages = result.messages || [];
-  const messages = rawMessages.map((msg) => {
-    const apiMsg = buildApiMessage(msg);
+  const messages = result.messages.map((message) => {
+    const apiMessage = buildApiMessage(message);
     if (currentUserId) {
-      apiMsg.isOutgoing = msg.sender_id === currentUserId;
+      apiMessage.isOutgoing = message.sender_id === currentUserId;
     }
-    return apiMsg;
+    return apiMessage;
   });
-
-  const pinnedIds = messages.map((m) => m.id);
+  const pinnedIds = messages.map((message) => message.id);
 
   sendApiUpdate({
     '@type': 'updatePinnedIds',
@@ -362,108 +878,84 @@ export async function fetchPinnedMessages({ chat, chatId: chatIdDirect }: { chat
     messageIds: pinnedIds,
   });
 
-  return { messages, pinnedIds };
+  return {
+    messages,
+    pinnedIds,
+    polls: extractApiPolls(result.messages),
+  };
 }
 
 export async function pinMessage({
-  chat, messageId, isUnpin,
+  chat,
+  messageId,
+  isUnpin,
 }: {
   chat: { id: string };
   messageId: number;
   isUnpin?: boolean;
 }) {
-  const chatId = chat.id;
-  const uuid = resolveMessageUuid(chatId, messageId);
-  if (!uuid) {
-    // eslint-disable-next-line no-console
-    console.warn('[Saturn] pinMessage: no UUID for', chatId, messageId);
-    return;
-  }
+  const uuid = resolveMessageUuid(chat.id, messageId);
+  if (!uuid) return undefined;
 
   if (isUnpin) {
-    await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
+    await client.request('DELETE', `/chats/${chat.id}/pin/${uuid}`);
   } else {
-    await client.request('POST', `/chats/${chatId}/pin/${uuid}`);
+    await client.request('POST', `/chats/${chat.id}/pin/${uuid}`);
   }
 
   sendApiUpdate({
     '@type': 'updateMessage',
-    chatId,
+    chatId: chat.id,
     id: messageId,
     isFull: false,
     message: { isPinned: !isUnpin },
   });
-
   sendApiUpdate({
     '@type': 'updatePinnedIds',
-    chatId,
+    chatId: chat.id,
     isPinned: !isUnpin,
     messageIds: [messageId],
   });
+
+  return true;
 }
 
 export async function unpinMessage({
-  chat, messageId,
+  chat,
+  messageId,
 }: {
   chat: { id: string };
   messageId: number;
 }) {
-  const chatId = chat.id;
-  const uuid = resolveMessageUuid(chatId, messageId);
-  if (!uuid) return;
-
-  await client.request('DELETE', `/chats/${chatId}/pin/${uuid}`);
-
-  sendApiUpdate({
-    '@type': 'updateMessage',
-    chatId,
-    id: messageId,
-    isFull: false,
-    message: { isPinned: false },
-  });
-
-  sendApiUpdate({
-    '@type': 'updatePinnedIds',
-    chatId,
-    isPinned: false,
-    messageIds: [messageId],
-  });
+  return pinMessage({ chat, messageId, isUnpin: true });
 }
 
 export async function unpinAllMessages({ chat }: { chat: { id: string } }) {
-  const chatId = chat.id;
-  await client.request('DELETE', `/chats/${chatId}/pin`);
-
+  await client.request('DELETE', `/chats/${chat.id}/pin`);
   sendApiUpdate({
     '@type': 'updatePinnedIds',
-    chatId,
+    chatId: chat.id,
     messageIds: [],
   });
+  return true;
 }
 
 export async function markMessageListRead({
-  chat, maxId,
+  chat,
+  maxId,
 }: {
   chat: { id: string };
   threadId?: number;
   maxId: number;
 }) {
-  const chatId = chat.id;
-  const uuid = resolveMessageUuid(chatId, maxId);
-  if (!uuid) {
-    // eslint-disable-next-line no-console
-    console.warn('[Saturn] markMessageListRead: no UUID for seq', maxId, 'in chat', chatId);
-    return;
-  }
+  const uuid = resolveMessageUuid(chat.id, maxId);
+  if (!uuid) return undefined;
 
-  await client.request('PATCH', `/chats/${chatId}/read`, {
-    last_read_message_id: uuid,
-  });
+  await client.request('PATCH', `/chats/${chat.id}/read`, { last_read_message_id: uuid });
 
-  // Immediately update local state so unread badge clears
   sendApiUpdate({
     '@type': 'updateChat',
-    id: chatId,
+    id: chat.id,
     chat: {},
     readState: {
       lastReadInboxMessageId: maxId,
@@ -471,126 +963,26 @@ export async function markMessageListRead({
     },
     noTopChatsRequest: true,
   });
+
+  return true;
 }
 
-export async function fetchMessageLink({
-  chatId, messageId,
+export function fetchMessageLink({
+  chatId,
+  messageId,
 }: {
   chatId: string;
   messageId: number;
 }) {
-  // Saturn doesn't have a message permalink endpoint yet.
-  // Return a client-side constructed link for now.
   const uuid = resolveMessageUuid(chatId, messageId);
   if (!uuid) return undefined;
 
   return { link: `#chat/${chatId}/${uuid}` };
 }
 
-// Detect media type from ApiAttachment for Saturn API
-function detectMediaType(attachment: ApiAttachment): string {
-  if (attachment.voice) return 'voice';
-  if (attachment.shouldSendAsFile) return 'file';
-  const mime = attachment.mimeType || '';
-  if (mime === 'image/gif') return 'gif';
-  if (mime.startsWith('image/')) return 'photo';
-  if (mime.startsWith('video/')) {
-    return attachment.quick && attachment.quick.duration && attachment.quick.duration <= 60
-      ? 'video' : 'video';
-  }
-  if (mime.startsWith('audio/')) return 'voice';
-  return 'file';
-}
-
-function buildLocalMediaContent(content: ApiMessage['content'], attachment: ApiAttachment) {
-  const mediaType = detectMediaType(attachment);
-  const localId = `local-${Date.now()}`;
-  const { quick } = attachment;
-
-  switch (mediaType) {
-    case 'photo': {
-      content.photo = {
-        mediaType: 'photo',
-        id: localId,
-        date: 0,
-        thumbnail: attachment.previewBlobUrl ? {
-          dataUri: attachment.previewBlobUrl,
-          width: quick?.width || 320,
-          height: quick?.height || 320,
-        } : undefined,
-        sizes: [{
-          width: quick?.width || 320,
-          height: quick?.height || 320,
-          type: 's' as const,
-        }, {
-          width: quick?.width || 800,
-          height: quick?.height || 800,
-          type: 'y' as const,
-        }],
-        blobUrl: attachment.compressedBlobUrl || attachment.blobUrl,
-        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
-      };
-      break;
-    }
-    case 'video': {
-      content.video = {
-        mediaType: 'video',
-        id: localId,
-        mimeType: attachment.mimeType || 'video/mp4',
-        duration: quick?.duration || 0,
-        width: quick?.width || 0,
-        height: quick?.height || 0,
-        fileName: attachment.filename || 'video.mp4',
-        size: attachment.size,
-        thumbnail: attachment.previewBlobUrl ? {
-          dataUri: attachment.previewBlobUrl,
-          width: quick?.width || 320,
-          height: quick?.height || 320,
-        } : undefined,
-        blobUrl: attachment.blobUrl,
-        isSpoiler: attachment.shouldSendAsSpoiler || undefined,
-      };
-      break;
-    }
-    case 'voice': {
-      content.voice = {
-        mediaType: 'voice',
-        id: localId,
-        duration: attachment.voice?.duration || 0,
-        waveform: attachment.voice?.waveform || [],
-        size: attachment.size,
-      };
-      break;
-    }
-    case 'gif': {
-      content.video = {
-        mediaType: 'video',
-        id: localId,
-        mimeType: 'video/mp4',
-        duration: quick?.duration || 0,
-        width: quick?.width || 0,
-        height: quick?.height || 0,
-        fileName: 'animation.mp4',
-        size: attachment.size,
-        isGif: true,
-      };
-      break;
-    }
-    default: {
-      content.document = {
-        mediaType: 'document',
-        id: localId,
-        mimeType: attachment.mimeType || 'application/octet-stream',
-        fileName: attachment.filename || 'file',
-        size: attachment.size,
-      };
-      break;
-    }
-  }
-}
-
 export function sendMessageAction({
-  peer, action,
+  peer,
+  action,
 }: {
   peer: { id: string };
   threadId?: number;
@@ -603,20 +995,11 @@ export function sendMessageAction({
   }
 }
 
-// Map TG Web A shared media types to Saturn backend media types
-const SHARED_MEDIA_TYPE_MAP: Record<string, string> = {
-  media: 'media', // backend handles photo+video combo
-  documents: 'file',
-  voice: 'voice',
-  gif: 'gif',
-};
-
-// Store backend cursors keyed by chatId+type+offsetId so we can map
-// the numeric offsetId back to the opaque backend cursor string.
-const sharedMediaCursors = new Map<string, string>();
-
 export async function searchMessagesInChat({
-  peer, type, limit, offsetId,
+  peer,
+  type,
+  limit,
+  offsetId,
 }: {
   peer: ApiPeer;
   type?: string;
@@ -628,7 +1011,6 @@ export async function searchMessagesInChat({
   const chatId = peer.id;
   const saturnType = type ? SHARED_MEDIA_TYPE_MAP[type] : undefined;
 
-  // 'links' and 'audio' not supported by backend yet
   if (type && !saturnType) {
     return {
       messages: [] as ApiMessage[],
@@ -642,24 +1024,21 @@ export async function searchMessagesInChat({
   params.set('limit', String(limit));
   if (saturnType) params.set('type', saturnType);
 
-  // Retrieve stored backend cursor for pagination
   if (offsetId) {
     const cursorKey = `${chatId}:${type || ''}:${offsetId}`;
     const cursor = sharedMediaCursors.get(cursorKey);
-    if (cursor) params.set('cursor', cursor);
+    if (cursor) {
+      params.set('cursor', cursor);
+    }
   }
 
   const result = await client.request<SaturnPaginatedResponse<SaturnSharedMediaItem>>(
-    'GET', `/chats/${chatId}/media?${params.toString()}`,
+    'GET',
+    `/chats/${chatId}/media?${params.toString()}`,
   );
 
-  if (!result?.data) {
-    return undefined;
-  }
-
   const messages: ApiMessage[] = result.data.map((item) => {
-    // Build a synthetic SaturnMessage so we can reuse buildApiMessage
-    const syntheticMsg: SaturnMessage = {
+    const syntheticMessage: SaturnMessage = {
       id: item.message_id,
       chat_id: item.chat_id,
       sender_id: item.sender_id,
@@ -675,20 +1054,18 @@ export async function searchMessagesInChat({
       media_attachments: [item.attachment],
     };
 
-    const apiMsg = buildApiMessage(syntheticMsg);
+    const apiMessage = buildApiMessage(syntheticMessage);
     if (currentUserId) {
-      apiMsg.isOutgoing = item.sender_id === currentUserId;
+      apiMessage.isOutgoing = item.sender_id === currentUserId;
     }
-    return apiMsg;
+    return apiMessage;
   });
 
-  // Store the backend cursor for next page, keyed by the last message's sequence_number
   let nextOffsetId: number | undefined;
   if (result.has_more && result.data.length > 0 && result.cursor) {
     const lastItem = result.data[result.data.length - 1];
     nextOffsetId = lastItem.sequence_number;
-    const cursorKey = `${chatId}:${type || ''}:${nextOffsetId}`;
-    sharedMediaCursors.set(cursorKey, result.cursor);
+    sharedMediaCursors.set(`${chatId}:${type || ''}:${nextOffsetId}`, result.cursor);
   }
 
   return {
@@ -697,4 +1074,259 @@ export async function searchMessagesInChat({
     nextOffsetId,
     userStatusesById: {} as Record<string, any>,
   };
+}
+
+export async function sendPollVote({
+  chat,
+  messageId,
+  options,
+}: {
+  chat: { id: string };
+  messageId: number;
+  options: string[];
+}) {
+  const uuid = resolveMessageUuid(chat.id, messageId);
+  if (!uuid) return undefined;
+
+  const method = options.length ? 'POST' : 'DELETE';
+  const path = `/messages/${uuid}/poll/vote`;
+  const body = options.length ? { option_ids: options } : undefined;
+
+  const poll = await client.request<SaturnPoll>(method, path, body);
+  const apiPoll = buildApiPoll(poll);
+
+  if (apiPoll) {
+    sendApiUpdate({
+      '@type': 'updateMessagePoll',
+      pollId: apiPoll.id,
+      pollUpdate: apiPoll,
+    });
+
+    if (currentUserId) {
+      sendApiUpdate({
+        '@type': 'updateMessagePollVote',
+        pollId: apiPoll.id,
+        peerId: currentUserId,
+        options,
+      });
+    }
+  }
+
+  return true;
+}
+
+export async function closePoll({
+  chat,
+  messageId,
+}: {
+  chat: { id: string };
+  messageId: number;
+  poll?: ApiPoll;
+}) {
+  const uuid = resolveMessageUuid(chat.id, messageId);
+  if (!uuid) return undefined;
+
+  const poll = await client.request<SaturnPoll>('POST', `/messages/${uuid}/poll/close`);
+  const apiPoll = buildApiPoll(poll);
+  if (apiPoll) {
+    sendApiUpdate({
+      '@type': 'updateMessagePoll',
+      pollId: apiPoll.id,
+      pollUpdate: apiPoll,
+    });
+  }
+  return true;
+}
+
+export async function loadPollOptionResults({
+  chat,
+  messageId,
+  option,
+  offset,
+  limit = 50,
+}: {
+  chat: { id: string };
+  messageId: number;
+  option: string;
+  offset?: string;
+  limit?: number;
+}) {
+  const uuid = resolveMessageUuid(chat.id, messageId);
+  if (!uuid) return undefined;
+
+  const params = new URLSearchParams({
+    option_id: option,
+    limit: String(limit),
+  });
+  if (offset) {
+    params.set('cursor', offset);
+  }
+
+  const page = await client.request<SaturnPaginatedResponse<SaturnPollVote>>(
+    'GET',
+    `/messages/${uuid}/poll/voters?${params.toString()}`,
+  );
+
+  return {
+    count: page.data.length + (page.has_more ? 1 : 0),
+    nextOffset: page.cursor,
+    shouldResetVoters: !offset,
+    votes: page.data.map((vote) => ({
+      peerId: vote.user_id,
+      date: Math.floor(new Date(vote.voted_at).getTime() / 1000),
+    })),
+  };
+}
+
+export async function fetchScheduledHistory({ chat }: { chat: { id: string } }) {
+  const scheduled = await client.request<SaturnScheduledMessage[]>(
+    'GET',
+    `/chats/${chat.id}/messages/scheduled`,
+  );
+
+  return {
+    messages: scheduled.map((message) => buildApiScheduledMessage(message)),
+    polls: extractScheduledApiPolls(scheduled),
+  };
+}
+
+export async function sendScheduledMessages({
+  chat,
+  ids,
+}: {
+  chat: { id: string };
+  ids: number[];
+}) {
+  const deliveredMessages: ApiMessage[] = [];
+  const deliveredPolls: Array<ApiPoll | undefined> = [];
+
+  for (const id of ids) {
+    const uuid = resolveMessageUuid(chat.id, id);
+    if (!uuid) continue;
+
+    const message = await client.request<SaturnMessage>('POST', `/messages/${uuid}/scheduled/send-now`);
+    const apiMessage = buildApiMessage(message);
+    if (currentUserId) {
+      apiMessage.isOutgoing = message.sender_id === currentUserId;
+    }
+    deliveredMessages.push(apiMessage);
+
+    const poll = buildApiPoll(message.poll);
+    deliveredPolls.push(poll);
+  }
+
+  if (ids.length) {
+    sendApiUpdate({
+      '@type': 'deleteScheduledMessages',
+      chatId: chat.id,
+      ids,
+      newIds: deliveredMessages.map((message) => message.id),
+    });
+  }
+
+  deliveredMessages.forEach((message, index) => {
+    sendApiUpdate({
+      '@type': 'newMessage',
+      chatId: chat.id,
+      id: message.id,
+      message,
+      poll: deliveredPolls[index],
+    });
+  });
+
+  return true;
+}
+
+export async function editScheduledMessage({
+  chat,
+  message,
+  text,
+  entities,
+  scheduledAt,
+}: {
+  chat: { id: string };
+  message: ApiMessage;
+  text?: string;
+  entities?: ApiMessageEntity[];
+  scheduledAt?: number;
+}) {
+  const uuid = message.saturnId || resolveMessageUuid(chat.id, message.id);
+  if (!uuid) return undefined;
+
+  const body: Record<string, unknown> = {};
+  if (text !== undefined) {
+    body.content = text;
+  }
+  if (entities?.length) {
+    body.entities = buildSaturnEntities(entities);
+  }
+  if (scheduledAt) {
+    body.scheduled_at = new Date(scheduledAt * 1000).toISOString();
+  }
+
+  const updated = await client.request<SaturnScheduledMessage>('PATCH', `/messages/${uuid}/scheduled`, body);
+  const apiMessage = buildApiScheduledMessage(updated);
+  const apiPoll = buildApiScheduledPoll(updated);
+
+  sendApiUpdate({
+    '@type': 'updateScheduledMessage',
+    chatId: chat.id,
+    id: message.id,
+    isFull: true,
+    message: apiMessage,
+    poll: apiPoll,
+  });
+
+  return apiMessage;
+}
+
+export async function deleteScheduledMessages({
+  chat,
+  messageIds,
+}: {
+  chat: { id: string };
+  messageIds: number[];
+}) {
+  for (const id of messageIds) {
+    const uuid = resolveMessageUuid(chat.id, id);
+    if (!uuid) continue;
+    await client.request('DELETE', `/messages/${uuid}/scheduled`);
+  }
+
+  sendApiUpdate({
+    '@type': 'deleteScheduledMessages',
+    chatId: chat.id,
+    ids: messageIds,
+  });
+
+  return true;
+}
+
+export async function rescheduleMessage({
+  chat,
+  message,
+  scheduledAt,
+}: {
+  chat: { id: string };
+  message: ApiMessage;
+  scheduledAt: number;
+  scheduleRepeatPeriod?: number;
+}) {
+  return editScheduledMessage({
+    chat,
+    message,
+    scheduledAt,
+  });
+}
+
+function detectMediaType(attachment: ApiAttachment) {
+  if (attachment.voice) return 'voice';
+  if (attachment.shouldSendAsFile) return 'file';
+
+  const mime = attachment.mimeType || '';
+  if (mime === 'image/gif') return 'gif';
+  if (mime.startsWith('image/')) return 'photo';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'voice';
+  return 'file';
 }

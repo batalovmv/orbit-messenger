@@ -33,9 +33,12 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
   isLocked,
   onToggleReaction,
 }) => {
-  const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || noAppearAnimation);
-  const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || noAppearAnimation);
-  const staticIconData = useMedia(`document${reaction.staticIcon?.id}`, !noAppearAnimation);
+  const hasAnimatedAppear = Boolean(reaction.appearAnimation?.id);
+  const hasAnimatedSelect = Boolean(reaction.selectAnimation?.id);
+  const shouldUseStaticIcon = noAppearAnimation || !hasAnimatedAppear || !hasAnimatedSelect;
+  const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || shouldUseStaticIcon);
+  const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || shouldUseStaticIcon);
+  const staticIconData = useMedia(`document${reaction.staticIcon?.id}`, !shouldUseStaticIcon);
   const [isAnimationLoaded, markAnimationLoaded] = useFlag();
 
   const [isFirstPlay, , unmarkIsFirstPlay] = useFlag(true);
@@ -51,7 +54,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
       onClick={handleClick}
       onMouseEnter={isReady && !isFirstPlay ? activate : undefined}
     >
-      {noAppearAnimation && (
+      {shouldUseStaticIcon && (
         <img
           className={styles.staticIcon}
           src={staticIconData}
@@ -59,7 +62,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
           draggable={false}
         />
       )}
-      {!isAnimationLoaded && !noAppearAnimation && (
+      {!isAnimationLoaded && !shouldUseStaticIcon && (
         <AnimatedSticker
           key={reaction.appearAnimation?.id}
           tgsUrl={mediaAppearData}
@@ -70,7 +73,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
           forceAlways
         />
       )}
-      {!isFirstPlay && !noAppearAnimation && (
+      {!isFirstPlay && !shouldUseStaticIcon && (
         <AnimatedSticker
           key={reaction.selectAnimation?.id}
           tgsUrl={mediaData}

@@ -1,7 +1,7 @@
 import type {
   ApiChat, ApiChatFolder, ApiChatlistExportedInvite,
   ApiChatMember, ApiDraft, ApiError, ApiMissingInvitedUser,
-  ApiThreadInfo, ApiTopic, ApiTopicWithState, ApiUser,
+  ApiPoll, ApiThreadInfo, ApiTopic, ApiTopicWithState, ApiUser,
   LinkContext,
 } from '../../../api/types';
 import type { RequiredGlobalActions } from '../../index';
@@ -91,6 +91,7 @@ import {
   updateManagementProgress,
   updateMissingInvitedUsers,
   updatePeerFullInfo,
+  updatePoll,
   updateTopic,
   updateTopicsInfo,
   updateTopicWithState,
@@ -692,6 +693,9 @@ addActionHandler('requestSavedDialogUpdate', async (global, actions, payload): P
 
   global = getGlobal();
 
+  result.polls?.forEach((poll: ApiPoll) => {
+    global = updatePoll(global, poll.id, poll);
+  });
   global = addMessages(global, result.messages);
 
   if (result.messages.length) {
@@ -3285,6 +3289,9 @@ async function loadChats(
 
   global = updateChatListSecondaryInfo(global, listType, result);
   global = updateChatsLastMessageId(global, result.lastMessageByChatId, listType);
+  result.polls?.forEach((poll: ApiPoll) => {
+    global = updatePoll(global, poll.id, poll);
+  });
 
   if (!shouldIgnorePagination) {
     global = replaceChatListLoadingParameters(
@@ -3345,6 +3352,7 @@ export async function loadFullChat<T extends GlobalState>(
   } = result;
 
   global = getGlobal();
+  const currentFullInfo = selectChatFullInfo(global, chat.id);
   global = updateChats(global, buildCollectionByKey(chats, 'id'));
 
   if (userStatusesById) {
@@ -3368,10 +3376,17 @@ export async function loadFullChat<T extends GlobalState>(
   if (chat.isForum) {
     global = updateChat(global, chat.id, { isForumAsMessages });
   }
-  global = replaceChatFullInfo(global, chat.id, fullInfo);
+  const fullInfoWithPreservedScheduledState = fullInfo.hasScheduledMessages === undefined
+    && currentFullInfo?.hasScheduledMessages !== undefined
+    ? {
+      ...fullInfo,
+      hasScheduledMessages: currentFullInfo.hasScheduledMessages,
+    }
+    : fullInfo;
+  global = replaceChatFullInfo(global, chat.id, fullInfoWithPreservedScheduledState);
   setGlobal(global);
 
-  const stickerSet = fullInfo.stickerSet;
+  const stickerSet = fullInfoWithPreservedScheduledState.stickerSet;
   const localSet = stickerSet && selectStickerSet(global, stickerSet);
   if (stickerSet && !localSet) {
     actions.loadStickers({
@@ -3382,7 +3397,7 @@ export async function loadFullChat<T extends GlobalState>(
     });
   }
 
-  const emojiSet = fullInfo.emojiSet;
+  const emojiSet = fullInfoWithPreservedScheduledState.emojiSet;
   const localEmojiSet = emojiSet && selectStickerSet(global, emojiSet);
   if (emojiSet && !localEmojiSet) {
     actions.loadStickers({

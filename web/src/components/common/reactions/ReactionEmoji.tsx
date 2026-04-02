@@ -55,10 +55,16 @@ const ReactionEmoji: FC<OwnProps> = ({
   ), [availableReactions, reaction]);
   const thumbDataUri = availableReaction?.staticIcon?.thumbnail?.dataUri;
   const animationId = availableReaction?.selectAnimation?.id;
+  const staticIcon = availableReaction?.staticIcon;
+  const staticIconId = staticIcon?.id;
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
     availableReaction?.selectAnimation ? getDocumentMediaHash(availableReaction.selectAnimation, 'full') : undefined,
     !animationId,
+  );
+  const staticIconData = useMedia(
+    staticIconId ? getDocumentMediaHash(staticIcon, 'full') : undefined,
+    !staticIconId,
   );
 
   const {
@@ -79,6 +85,7 @@ const ReactionEmoji: FC<OwnProps> = ({
   }, [handleContextMenuClose, onContextMenu, handleContextMenuHide, isContextMenuOpen, reaction]);
 
   const tgsUrl = reaction.type === 'paid' ? LOCAL_TGS_URLS.StarReaction : mediaData;
+  const shouldUseStaticIcon = reaction.type !== 'paid' && !animationId && Boolean(staticIconData || thumbDataUri);
   const handleClick = useLastCallback(() => {
     onClick(reaction);
   });
@@ -113,18 +120,27 @@ const ReactionEmoji: FC<OwnProps> = ({
           forceAlways={forcePlayback}
         />
       ) : (
-        <AnimatedIconWithPreview
-          tgsUrl={tgsUrl}
-          thumbDataUri={thumbDataUri}
-          play={loadAndPlay}
-          noLoop={false}
-          size={EMOJI_SIZE_PICKER}
-          isLowPriority
-          className={transitionClassNames}
-          sharedCanvas={sharedCanvasRef!.current || undefined}
-          sharedCanvasCoords={coords}
-          forceAlways={forcePlayback}
-        />
+        shouldUseStaticIcon ? (
+          <img
+            className={styles.staticIcon}
+            src={staticIconData || thumbDataUri}
+            alt={availableReaction?.title || ''}
+            draggable={false}
+          />
+        ) : (
+          <AnimatedIconWithPreview
+            tgsUrl={tgsUrl}
+            thumbDataUri={thumbDataUri}
+            play={loadAndPlay}
+            noLoop={false}
+            size={EMOJI_SIZE_PICKER}
+            isLowPriority
+            className={transitionClassNames}
+            sharedCanvas={sharedCanvasRef!.current || undefined}
+            sharedCanvasCoords={coords}
+            forceAlways={forcePlayback}
+          />
+        )
       )}
     </div>
   );

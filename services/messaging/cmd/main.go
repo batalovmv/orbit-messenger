@@ -22,6 +22,7 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/search"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
+	"github.com/mst-corp/orbit/services/messaging/internal/tenor"
 )
 
 func main() {
@@ -133,15 +134,33 @@ func main() {
 	userSettingsStore := store.NewUserSettingsStore(pool)
 	notifStore := store.NewNotificationSettingsStore(pool)
 	pushStore := store.NewPushSubscriptionStore(pool)
+	reactionStore := store.NewReactionStore(pool)
+	stickerStore := store.NewStickerStore(pool)
+	gifStore := store.NewGIFStore(pool)
+	pollStore := store.NewPollStore(pool)
+	scheduledStore := store.NewScheduledMessageStore(pool)
 
 	// Services
-	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher)
 	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb)
 	userSvc := service.NewUserService(userStore, chatStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
 	searchSvc := service.NewSearchService(searchClient, chatStore)
+	reactionSvc := service.NewReactionService(reactionStore, messageStore, chatStore, natsPublisher, logger)
+	stickerSvc := service.NewStickerService(stickerStore, logger)
+	tenorClient := tenor.NewClientFromEnv(rdb, logger)
+	gifSvc := service.NewGIFService(gifStore, tenorClient, logger)
+	pollSvc := service.NewPollService(pollStore, messageStore, chatStore, natsPublisher, logger)
+	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher, pollSvc)
+	scheduledSvc := service.NewScheduledMessageService(
+		scheduledStore,
+		messageStore,
+		pollStore,
+		chatStore,
+		natsPublisher,
+		logger,
+	)
 
 	// NATS subscriber: update user status + last_seen_at in DB
 	statusSub, subErr := nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
@@ -199,14 +218,23 @@ func main() {
 		defer indexer.Stop()
 	}
 
+	cronCtx, cancelCron := context.WithCancel(context.Background())
+	defer cancelCron()
+	go runScheduledDeliveryCron(cronCtx, scheduledSvc, logger)
+
 	// Handlers
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
-	msgHandler := handler.NewMessageHandler(msgSvc, linkPreviewSvc, logger)
+	msgHandler := handler.NewMessageHandler(msgSvc, pollSvc, scheduledSvc, linkPreviewSvc, logger).SetReactionService(reactionSvc)
 	userHandler := handler.NewUserHandler(userSvc, logger)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsSvc, pushStore, logger)
 	searchHandler := handler.NewSearchHandler(searchSvc, logger)
+	reactionHandler := handler.NewReactionHandler(reactionSvc, logger)
+	stickerHandler := handler.NewStickerHandler(stickerSvc, logger)
+	gifHandler := handler.NewGIFHandler(gifSvc, logger)
+	pollHandler := handler.NewPollHandler(pollSvc, logger)
+	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -225,6 +253,11 @@ func main() {
 	inviteHandler.RegisterPublic(app)
 	settingsHandler.Register(app)
 	searchHandler.Register(app)
+	reactionHandler.Register(app)
+	stickerHandler.Register(app)
+	gifHandler.Register(app)
+	pollHandler.Register(app)
+	scheduledHandler.Register(app)
 
 	// Graceful shutdown
 	go func() {
@@ -242,5 +275,29 @@ func main() {
 	slog.Info("shutting down messaging service")
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		slog.Error("shutdown error", "error", err)
+	}
+}
+
+func runScheduledDeliveryCron(ctx context.Context, scheduledSvc *service.ScheduledMessageService, logger *slog.Logger) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			deliverCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			count, err := scheduledSvc.DeliverPending(deliverCtx)
+			cancel()
+
+			if err != nil {
+				logger.Error("deliver pending scheduled messages", "error", err)
+				continue
+			}
+			if count > 0 {
+				logger.Info("delivered scheduled messages", "count", count)
+			}
+		}
 	}
 }

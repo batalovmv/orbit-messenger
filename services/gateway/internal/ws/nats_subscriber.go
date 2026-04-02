@@ -100,11 +100,9 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
-	// Fallback: if member_ids is empty for a message event, extract chat_id from subject
+	// Fallback: if member_ids is empty for a chat fanout event, extract chat_id from subject
 	// and fetch member IDs from messaging service. Subject format: orbit.chat.<chatID>.message.*
-	if event.Event == EventNewMessage || event.Event == EventMessageUpdated ||
-		event.Event == EventMessageDeleted || event.Event == EventMessagesRead ||
-		event.Event == EventMessagePinned || event.Event == EventMessageUnpinned {
+	if shouldFetchChatMemberIDs(event.Event) {
 		chatID := extractChatIDFromSubject(msg.Subject)
 		if chatID != "" {
 			select {
@@ -195,6 +193,24 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		default:
 			slog.Warn("nats: goroutine limit reached, dropping status fetch")
 		}
+	}
+}
+
+func shouldFetchChatMemberIDs(event string) bool {
+	switch event {
+	case EventNewMessage,
+		EventMessageUpdated,
+		EventMessageDeleted,
+		EventMessagesRead,
+		EventMessagePinned,
+		EventMessageUnpinned,
+		EventReactionAdded,
+		EventReactionRemoved,
+		EventPollVote,
+		EventPollClosed:
+		return true
+	default:
+		return false
 	}
 }
 

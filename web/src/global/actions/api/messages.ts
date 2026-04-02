@@ -9,6 +9,7 @@ import type {
   ApiInputSuggestedPostInfo,
   ApiMessage,
   ApiOnProgress,
+  ApiPoll,
   ApiThreadInfo,
   ApiTopicWithState,
   ApiUser,
@@ -98,6 +99,7 @@ import {
   updateMessageTranslation,
   updateOutlyingLists,
   updatePeerFullInfo,
+  updatePoll,
   updateQuickReplies,
   updateQuickReplyMessages,
   updateRequestedMessageTranslation,
@@ -340,6 +342,9 @@ addActionHandler('loadMessage', async (global, actions, payload): Promise<void> 
   }
 
   global = getGlobal();
+  if (result.poll) {
+    global = updatePoll(global, result.poll.id, result.poll);
+  }
   global = updateChatMessage(global, chat.id, messageId, result.message);
   setGlobal(global);
 });
@@ -1479,18 +1484,21 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
     return;
   }
 
-  const { messages } = result;
+  const { messages, polls } = result;
 
   const byId = buildCollectionByKey(messages, 'id');
   const ids = Object.keys(byId).map(Number).sort((a, b) => b - a);
 
   global = getGlobal();
   global = updateScheduledMessages(global, chat.id, byId as Record<number, ApiMessage>);
+  polls?.forEach((poll: ApiPoll) => {
+    global = updatePoll(global, poll.id, poll);
+  });
+  global = updatePeerFullInfo(global, chat.id, {
+    hasScheduledMessages: ids.length > 0,
+  });
 
   const idsByThreadId = groupMessageIdsByThreadId(global, chat.id, ids, true);
-  if (!ids.length) {
-    global = updatePeerFullInfo(global, chat.id, { hasScheduledMessages: false });
-  }
 
   Object.entries(idsByThreadId).forEach(([tId, newThreadScheduledIds]) => {
     const threadId = tId as ThreadId;
@@ -1756,7 +1764,7 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   const {
-    messages, count, topics,
+    messages, polls, count, topics,
   } = result;
 
   global = getGlobal();
@@ -1780,6 +1788,9 @@ async function loadViewportMessages<T extends GlobalState>(
   }
 
   global = addChatMessagesById(global, chatId, byId);
+  polls?.forEach((poll: ApiPoll) => {
+    global = updatePoll(global, poll.id, poll);
+  });
 
   // Ensure thread entry exists — Saturn API doesn't provide threadInfo like MTProto,
   // so threadsById[threadId] may be missing, causing updateListedIds to silently no-op
@@ -2046,6 +2057,9 @@ addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise
 
   global = getGlobal();
   global = addChatMessagesById(global, chat.id, byId as Record<number, ApiMessage>);
+  result.polls?.forEach((poll: ApiPoll) => {
+    global = updatePoll(global, poll.id, poll);
+  });
   global = safeReplacePinnedIds(global, chat.id, threadId, ids);
   setGlobal(global);
 });

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
 
@@ -251,19 +252,24 @@ func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID
 	}
 	defer tx.Rollback(ctx)
 
-	chat := &model.Chat{Type: "direct"}
+	chat := &model.Chat{
+		Type:               "direct",
+		DefaultPermissions: permissions.DefaultDirectPermissions,
+	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO chats (type) VALUES ('direct')
-		 RETURNING id, type, is_encrypted, max_members, created_at, updated_at`,
-	).Scan(&chat.ID, &chat.Type, &chat.IsEncrypted, &chat.MaxMembers, &chat.CreatedAt, &chat.UpdatedAt)
+		`INSERT INTO chats (type, default_permissions) VALUES ('direct', $1)
+		 RETURNING id, type, is_encrypted, max_members, default_permissions, created_at, updated_at`,
+		permissions.DefaultDirectPermissions,
+	).Scan(&chat.ID, &chat.Type, &chat.IsEncrypted, &chat.MaxMembers, &chat.DefaultPermissions, &chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 
 	// Add both users as members
 	_, err = tx.Exec(ctx,
-		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'member'), ($1, $3, 'member')`,
-		chat.ID, user1, user2,
+		`INSERT INTO chat_members (chat_id, user_id, role, permissions)
+		 VALUES ($1, $2, 'member', $4), ($1, $3, 'member', $4)`,
+		chat.ID, user1, user2, permissions.PermissionsUnset,
 	)
 	if err != nil {
 		return nil, err
@@ -362,9 +368,9 @@ func (s *chatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]strin
 
 func (s *chatStore) AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error {
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, $3)
+		`INSERT INTO chat_members (chat_id, user_id, role, permissions) VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (chat_id, user_id) DO NOTHING`,
-		chatID, userID, role,
+		chatID, userID, role, permissions.PermissionsUnset,
 	)
 	return err
 }
@@ -528,20 +534,21 @@ func (s *chatStore) AddMembers(ctx context.Context, chatID uuid.UUID, userIDs []
 		}
 		chunk := userIDs[i:end]
 
-		// Build batch VALUES clause: ($1, $2, $3), ($1, $4, $3), ...
-		args := []interface{}{chatID, role}
+		// Build batch VALUES clause: ($1, $3, $2, $4), ($1, $5, $2, $4), ...
+		args := []interface{}{chatID, role, permissions.PermissionsUnset}
 		values := ""
 		for j, uid := range chunk {
 			if j > 0 {
 				values += ", "
 			}
 			paramIdx := len(args) + 1
-			values += fmt.Sprintf("($1, $%d, $2)", paramIdx)
+			values += fmt.Sprintf("($1, $%d, $2, $3)", paramIdx)
 			args = append(args, uid)
 		}
 
 		query := fmt.Sprintf(
-			`INSERT INTO chat_members (chat_id, user_id, role) VALUES %s ON CONFLICT (chat_id, user_id) DO NOTHING`,
+			`INSERT INTO chat_members (chat_id, user_id, role, permissions) VALUES %s
+			 ON CONFLICT (chat_id, user_id) DO NOTHING`,
 			values,
 		)
 		if _, err := s.pool.Exec(ctx, query, args...); err != nil {

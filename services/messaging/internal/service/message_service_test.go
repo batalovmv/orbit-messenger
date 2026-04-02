@@ -83,10 +83,10 @@ func TestSendMessage_ChannelNoSignatures_AnonymousSender(t *testing.T) {
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
 			content := "Breaking news"
 			return &model.Message{
-				ID:       uuid.New(),
-				ChatID:   chatID,
-				SenderID: &senderID,
-				Content:  &content,
+				ID:         uuid.New(),
+				ChatID:     chatID,
+				SenderID:   &senderID,
+				Content:    &content,
 				SenderName: "Admin User",
 			}, nil
 		},
@@ -423,6 +423,95 @@ func TestSendMessage_OwnerCanPostInChannel(t *testing.T) {
 	_, err := svc.SendMessage(context.Background(), chatID, ownerID, "owner post", nil, nil, "text")
 	if err != nil {
 		t.Fatalf("owner should always be able to post in channel: %v", err)
+	}
+}
+
+func TestSendMessage_DirectChatMember_AllowedWithDirectDefaults(t *testing.T) {
+	chatID := uuid.New()
+	memberID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{
+				ID:                 chatID,
+				Type:               "direct",
+				DefaultPermissions: permissions.DefaultDirectPermissions,
+			}, nil
+		},
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{Role: "member", Permissions: permissions.PermissionsUnset}, nil
+		},
+		getMembersFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) ([]model.ChatMember, string, bool, error) {
+			return []model.ChatMember{
+				{UserID: memberID},
+				{UserID: uuid.New()},
+			}, "", false, nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{memberID.String()}, nil
+		},
+	}
+	ms := &mockMessageStore{
+		createFn: func(_ context.Context, msg *model.Message) error {
+			msg.ID = uuid.New()
+			msg.CreatedAt = time.Now()
+			return nil
+		},
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			content := "dm text"
+			return &model.Message{ID: uuid.New(), ChatID: chatID, SenderID: &memberID, Content: &content}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	_, err := svc.SendMessage(context.Background(), chatID, memberID, "dm text", nil, nil, "text")
+	if err != nil {
+		t.Fatalf("direct chat member should be able to send text with direct defaults: %v", err)
+	}
+}
+
+func TestSendMediaMessage_DirectChatMember_AllowedWithDirectDefaults(t *testing.T) {
+	chatID := uuid.New()
+	memberID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{
+				ID:                 chatID,
+				Type:               "direct",
+				DefaultPermissions: permissions.DefaultDirectPermissions,
+			}, nil
+		},
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{Role: "member", Permissions: permissions.PermissionsUnset}, nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{memberID.String()}, nil
+		},
+	}
+	ms := &mockMessageStore{
+		getByIDFn: func(_ context.Context, messageID uuid.UUID) (*model.Message, error) {
+			content := "dm media"
+			return &model.Message{ID: messageID, ChatID: chatID, SenderID: &memberID, Content: &content, Type: "photo"}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	_, err := svc.SendMediaMessage(
+		context.Background(),
+		chatID,
+		memberID,
+		"dm media",
+		nil,
+		nil,
+		"photo",
+		[]uuid.UUID{uuid.New()},
+		false,
+	)
+	if err != nil {
+		t.Fatalf("direct chat member should be able to send media with direct defaults: %v", err)
 	}
 }
 

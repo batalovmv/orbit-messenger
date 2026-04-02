@@ -58,7 +58,6 @@ const useSchedule = (
     <CalendarModal
       isOpen={Boolean(onScheduled)}
       withTimePicker
-      withRepeatMode
       initialRepeatMode={initialRepeatMode}
       selectedAt={scheduledDefaultDate.getTime()}
       maxAt={getDayStartAt(scheduledMaxDate)}

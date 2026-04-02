@@ -53,6 +53,26 @@ func (s *MessageService) FindByDate(ctx context.Context, chatID, userID uuid.UUI
 	return s.messages.FindByChatAndDate(ctx, chatID, date, limit)
 }
 
+func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+	msg, err := s.messages.GetByID(ctx, msgID)
+	if err != nil {
+		return nil, fmt.Errorf("get message: %w", err)
+	}
+	if msg == nil || msg.IsDeleted {
+		return nil, apperror.NotFound("Message not found")
+	}
+
+	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	return msg, nil
+}
+
 func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
@@ -564,7 +584,7 @@ func (s *MessageService) EnrichMessagesMedia(ctx context.Context, msgs []model.M
 	var mediaMessageIDs []uuid.UUID
 	for i := range msgs {
 		switch msgs[i].Type {
-		case "photo", "video", "file", "voice", "videonote", "gif":
+		case "photo", "video", "file", "voice", "videonote", "gif", "sticker":
 			mediaMessageIDs = append(mediaMessageIDs, msgs[i].ID)
 		}
 	}

@@ -17,10 +17,25 @@ import (
 
 // newMessageApp creates a Fiber app wired with a MessageHandler backed by given mock stores.
 func newMessageApp(ms *mockMessageStore, cs *mockChatStore) *fiber.App {
+	return newRichMessageApp(ms, cs, nil, nil)
+}
+
+func newRichMessageApp(ms *mockMessageStore, cs *mockChatStore, ps *mockPollStore, ss *mockScheduledMessageStore) *fiber.App {
 	app := fiber.New()
 	nats := service.NewNoopNATSPublisher()
-	svc := service.NewMessageService(ms, cs, nil, nats, nil) // nil blockedStore + nil redis in tests
-	h := NewMessageHandler(svc, nil, slog.Default())
+	msgSvc := service.NewMessageService(ms, cs, nil, nats, nil) // nil blockedStore + nil redis in tests
+
+	var pollSvc *service.PollService
+	if ps != nil {
+		pollSvc = service.NewPollService(ps, ms, cs, nats, slog.Default())
+	}
+
+	var scheduledSvc *service.ScheduledMessageService
+	if ss != nil {
+		scheduledSvc = service.NewScheduledMessageService(ss, ms, nil, cs, nats, slog.Default())
+	}
+
+	h := NewMessageHandler(msgSvc, pollSvc, scheduledSvc, nil, slog.Default())
 	h.Register(app)
 	return app
 }
@@ -67,6 +82,172 @@ func TestSendMessage_EmptyContent(t *testing.T) {
 	}
 }
 
+func TestSendMessage_PollTypeCreatesPoll(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	msgID := uuid.New()
+	pollID := uuid.New()
+
+	ms := &mockMessageStore{
+		createFn: func(_ context.Context, msg *model.Message) error {
+			msg.ID = msgID
+			msg.CreatedAt = time.Now()
+			return nil
+		},
+	}
+	ps := &mockPollStore{
+		createFn: func(_ context.Context, poll *model.Poll) error {
+			poll.ID = pollID
+			poll.CreatedAt = time.Now()
+			for i := range poll.Options {
+				poll.Options[i].ID = uuid.New()
+				poll.Options[i].PollID = pollID
+			}
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(ms, defaultMemberChatStore(), ps, nil)
+	body := `{"type":"poll","question":"Where?","options":["Office","Cafe"]}`
+	req, _ := http.NewRequest(http.MethodPost, "/chats/"+chatID.String()+"/messages", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for poll message, got %d", resp.StatusCode)
+	}
+}
+
+func TestSendMessage_ScheduledAtCreatesScheduledMessage(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	scheduledID := uuid.New()
+	scheduledAt := "2026-04-03T09:00:00Z"
+
+	ss := &mockScheduledMessageStore{
+		createFn: func(_ context.Context, msg *model.ScheduledMessage) error {
+			msg.ID = scheduledID
+			msg.CreatedAt = time.Now()
+			msg.UpdatedAt = msg.CreatedAt
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(&mockMessageStore{}, defaultMemberChatStore(), nil, ss)
+	req, _ := http.NewRequest(http.MethodPost, "/chats/"+chatID.String()+"/messages?scheduled_at="+scheduledAt,
+		bytes.NewBufferString(`{"content":"hello later"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled message, got %d", resp.StatusCode)
+	}
+}
+
+func TestSendMessage_ScheduledPollCreatesScheduledPollPayload(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	scheduledID := uuid.New()
+	scheduledAt := "2026-04-03T09:00:00Z"
+
+	var created *model.ScheduledMessage
+	ss := &mockScheduledMessageStore{
+		createFn: func(_ context.Context, msg *model.ScheduledMessage) error {
+			created = msg
+			msg.ID = scheduledID
+			msg.CreatedAt = time.Now()
+			msg.UpdatedAt = msg.CreatedAt
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(&mockMessageStore{}, defaultMemberChatStore(), nil, ss)
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/chats/"+chatID.String()+"/messages?scheduled_at="+scheduledAt,
+		bytes.NewBufferString(`{"type":"poll","question":"Where?","options":["Office","Cafe"]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled poll, got %d", resp.StatusCode)
+	}
+	if created == nil || created.PollPayload == nil {
+		t.Fatalf("expected scheduled poll payload to be stored")
+	}
+	if created.Type != "poll" {
+		t.Fatalf("expected poll type, got %q", created.Type)
+	}
+	if created.PollPayload.Question != "Where?" {
+		t.Fatalf("expected poll question to be stored, got %q", created.PollPayload.Question)
+	}
+}
+
+func TestSendMessage_ScheduledMediaSupportsReplyAndAttachments(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	replyToID := uuid.New()
+	mediaID := uuid.New()
+	scheduledAt := "2026-04-03T09:00:00Z"
+
+	var created *model.ScheduledMessage
+	ss := &mockScheduledMessageStore{
+		createFn: func(_ context.Context, msg *model.ScheduledMessage) error {
+			created = msg
+			msg.ID = uuid.New()
+			msg.CreatedAt = time.Now()
+			msg.UpdatedAt = msg.CreatedAt
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(&mockMessageStore{}, defaultMemberChatStore(), nil, ss)
+	body := fmt.Sprintf(
+		`{"type":"photo","content":"caption","reply_to_id":"%s","media_ids":["%s"],"is_spoiler":true}`,
+		replyToID,
+		mediaID,
+	)
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/chats/"+chatID.String()+"/messages?scheduled_at="+scheduledAt,
+		bytes.NewBufferString(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled media message, got %d", resp.StatusCode)
+	}
+	if created == nil {
+		t.Fatal("expected scheduled message to be created")
+	}
+	if created.ReplyToID == nil || *created.ReplyToID != replyToID {
+		t.Fatalf("expected reply_to_id %s, got %+v", replyToID, created.ReplyToID)
+	}
+	if len(created.MediaIDs) != 1 || created.MediaIDs[0] != mediaID {
+		t.Fatalf("expected media_ids [%s], got %+v", mediaID, created.MediaIDs)
+	}
+	if !created.IsSpoiler {
+		t.Fatal("expected scheduled media message to preserve spoiler flag")
+	}
+}
 
 // ---------------------------------------------------------------------------
 // ForwardMessages
@@ -190,4 +371,3 @@ func TestSendMessage_SlowModeZeroNotEnforced(t *testing.T) {
 		t.Fatalf("slow_mode=0 should not block, got %d", resp.StatusCode)
 	}
 }
-

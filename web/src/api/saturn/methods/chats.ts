@@ -1,8 +1,14 @@
-import type { ApiChat, ApiMessage, ApiUser, ApiUserStatus } from '../../types';
-import type { SaturnChat, SaturnChatListItem, SaturnChatMember, SaturnPaginatedResponse } from '../types';
+import type { ApiChat, ApiMessage, ApiPoll, ApiUser, ApiUserStatus } from '../../types';
+import type {
+  SaturnChat,
+  SaturnChatAvailableReactions,
+  SaturnChatListItem,
+  SaturnChatMember,
+  SaturnPaginatedResponse,
+} from '../types';
 
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
-import { buildApiMessage } from '../apiBuilders/messages';
+import { buildApiMessage, buildApiPoll } from '../apiBuilders/messages';
 import { buildApiUser, buildApiUserStatus } from '../apiBuilders/users';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
@@ -32,10 +38,15 @@ export async function fetchChats({
   const userStatusesById: Record<string, ApiUserStatus> = {};
   const lastMessageByChatId: Record<string, number> = {};
   const messages: ApiMessage[] = [];
+  const pollsById: Record<string, ApiPoll> = {};
   // TODO: This is an approximation — assumes contiguous sequence_numbers.
   // If messages were deleted, lastReadSeq may be off by the number of deletions.
   // Backend should return last_read_sequence_number directly in the chat list API.
-  const threadReadStatesById: Record<string, { lastReadInboxMessageId: number; unreadCount: number }> = {};
+  const threadReadStatesById: Record<string, {
+    lastReadInboxMessageId: number;
+    lastReadOutboxMessageId?: number;
+    unreadCount: number;
+  }> = {};
 
   for (const item of (result.data || [])) {
     const apiChat = buildApiChat(item);
@@ -79,11 +90,15 @@ export async function fetchChats({
 
     if (item.last_message) {
       const apiMessage = buildApiMessage(item.last_message);
+      const poll = buildApiPoll(item.last_message.poll);
       if (currentUserId) {
         apiMessage.isOutgoing = item.last_message.sender_id === currentUserId;
       }
       lastMessageByChatId[item.id] = apiMessage.id;
       messages.push(apiMessage);
+      if (poll) {
+        pollsById[poll.id] = poll;
+      }
 
       sendApiUpdate({
         '@type': 'updateChatLastMessage',
@@ -122,6 +137,7 @@ export async function fetchChats({
     lastMessageByChatId,
     totalChatCount,
     messages,
+    polls: Object.values(pollsById),
     threadInfos: [],
     threadReadStatesById,
     hasMore: result.has_more,
@@ -132,15 +148,17 @@ export async function fetchChats({
 export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: string; chatId?: string }) {
   // TG Web A passes full ApiChat object with `id`, Saturn methods used `chatId`
   if (!chatId) chatId = chatIdAlt!;
-  const [chat, membersResult] = await Promise.all([
+  const [chat, membersResult, availableReactions] = await Promise.all([
     client.request<SaturnChat>('GET', `/chats/${chatId}`),
     client.request<SaturnPaginatedResponse<SaturnChatMember>>(
       'GET', `/chats/${chatId}/members?limit=200`,
     ),
+    client.request<SaturnChatAvailableReactions>('GET', `/chats/${chatId}/available-reactions`)
+      .catch(() => undefined),
   ]);
 
   const apiChat = buildApiChat(chat);
-  const fullInfo = buildApiChatFullInfo(chat, membersResult.data);
+  const fullInfo = buildApiChatFullInfo(chat, membersResult.data, availableReactions);
 
   // Set current user's admin rights and creator flag on chat object
   if (currentUserId && membersResult.data) {
@@ -158,7 +176,7 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
           banUsers: Boolean(mask & (1 << 6)) || undefined,
           inviteUsers: Boolean(mask & (1 << 2)) || undefined,
           pinMessages: Boolean(mask & (1 << 3)) || undefined,
-          addAdmins: me.role === 'owner' ? true as true : undefined,
+          addAdmins: me.role === 'owner' ? true as const : undefined,
           manageCall: true,
         };
       }
@@ -227,15 +245,27 @@ export async function createGroupChat({
   return { chat: apiChat };
 }
 
-export async function getChatInviteLink({ chatId }: { chatId: string }) {
+export function getChatInviteLink({ chatId }: { chatId: string }) {
   // Saturn uses invite codes (not per-chat invite links) in Phase 1.
   // This will be implemented when per-chat invite link endpoint is added.
+  void chatId;
   return undefined;
 }
 
-export async function createChannel({ title, about, memberIds }: { title: string; about?: string; memberIds?: string[] }) {
+export async function createChannel({
+  title,
+  about,
+  memberIds,
+}: {
+  title: string;
+  about?: string;
+  memberIds?: string[];
+}) {
   const data = await client.request<SaturnChat>('POST', '/chats', {
-    type: 'channel', name: title, description: about || '', member_ids: memberIds || [],
+    type: 'channel',
+    name: title,
+    description: about || '',
+    member_ids: memberIds || [],
   });
   if (!data) return undefined;
   const chat = buildApiChat(data);
@@ -413,7 +443,7 @@ export async function deleteExportedChatInvite({ chatId, link }: { chatId: strin
   await client.request('DELETE', `/invite-links/${link}`);
 }
 
-export async function archiveChat({ chatId }: { chatId: string }) {
+export function archiveChat({ chatId }: { chatId: string }) {
   // Client-side only — move chat to archived folder in local state
   sendApiUpdate({
     '@type': 'updateChatListType',
@@ -422,7 +452,7 @@ export async function archiveChat({ chatId }: { chatId: string }) {
   });
 }
 
-export async function unarchiveChat({ chatId }: { chatId: string }) {
+export function unarchiveChat({ chatId }: { chatId: string }) {
   sendApiUpdate({
     '@type': 'updateChatListType',
     id: chatId,
@@ -430,7 +460,7 @@ export async function unarchiveChat({ chatId }: { chatId: string }) {
   });
 }
 
-export async function toggleChatPinned({ chatId, isPinned }: { chatId: string; isPinned: boolean }) {
+export function toggleChatPinned({ chatId, isPinned }: { chatId: string; isPinned: boolean }) {
   // Client-side only — pinned state stored locally
   sendApiUpdate({
     '@type': 'updateChat',
@@ -439,7 +469,7 @@ export async function toggleChatPinned({ chatId, isPinned }: { chatId: string; i
   });
 }
 
-export async function setChatMuted({ chatId, isMuted }: { chatId: string; isMuted: boolean }) {
+export function setChatMuted({ chatId, isMuted }: { chatId: string; isMuted: boolean }) {
   // Client-side toggle — future: PATCH /chats/:id/members/me with notification_level
   sendApiUpdate({
     '@type': 'updateChat',

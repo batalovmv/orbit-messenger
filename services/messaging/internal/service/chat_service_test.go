@@ -22,6 +22,18 @@ func newTestChatService(cs *mockChatStore, rec *RecordingPublisher) *ChatService
 	return NewChatService(cs, &mockMessageStore{}, rec)
 }
 
+type stubMessagePollHydrator struct {
+	hydrateFn func(ctx context.Context, userID uuid.UUID, msgs []model.Message) error
+}
+
+func (s *stubMessagePollHydrator) HydrateMessagePolls(ctx context.Context, userID uuid.UUID, msgs []model.Message) error {
+	if s.hydrateFn != nil {
+		return s.hydrateFn(ctx, userID, msgs)
+	}
+
+	return nil
+}
+
 func defaultGroupChat(chatID uuid.UUID) *model.Chat {
 	name := "Test Group"
 	return &model.Chat{
@@ -73,7 +85,7 @@ func TestCreateChat_NATS_ChatCreated(t *testing.T) {
 			chat.UpdatedAt = time.Now()
 			return nil
 		},
-		addMemberFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
+		addMemberFn:  func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
 		addMembersFn: func(_ context.Context, _ uuid.UUID, _ []uuid.UUID, _ string) error { return nil },
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{ownerID.String(), member1.String()}, nil
@@ -477,7 +489,7 @@ func TestCreateChat_ChannelDefaultPerms0(t *testing.T) {
 			createdChat = chat
 			return nil
 		},
-		addMemberFn:  func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
+		addMemberFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{ownerID.String()}, nil
 		},
@@ -506,7 +518,7 @@ func TestCreateChat_GroupDefaultPerms(t *testing.T) {
 			createdChat = chat
 			return nil
 		},
-		addMemberFn:  func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
+		addMemberFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{ownerID.String()}, nil
 		},
@@ -682,6 +694,78 @@ func TestGetChat_NonMember_Forbidden(t *testing.T) {
 	svc := newTestChatService(cs, rec)
 	_, err := svc.GetChat(context.Background(), chatID, userID)
 	assertAppError(t, err, 403)
+}
+
+func TestListChats_HydratesPollLastMessage(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	messageID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		listByUserFn: func(_ context.Context, gotUserID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
+			if gotUserID != userID {
+				t.Fatalf("expected userID %s, got %s", userID, gotUserID)
+			}
+			if cursor != "" {
+				t.Fatalf("expected empty cursor, got %q", cursor)
+			}
+			if limit != 50 {
+				t.Fatalf("expected limit 50, got %d", limit)
+			}
+
+			question := "Where?"
+			return []model.ChatListItem{{
+				Chat: *defaultGroupChat(chatID),
+				LastMessage: &model.Message{
+					ID:      messageID,
+					ChatID:  chatID,
+					Type:    "poll",
+					Content: &question,
+				},
+			}}, "", false, nil
+		},
+	}
+
+	polls := &stubMessagePollHydrator{
+		hydrateFn: func(_ context.Context, gotUserID uuid.UUID, msgs []model.Message) error {
+			if gotUserID != userID {
+				t.Fatalf("expected hydrate userID %s, got %s", userID, gotUserID)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("expected 1 poll message, got %d", len(msgs))
+			}
+
+			msgs[0].Poll = &model.Poll{
+				ID:        uuid.New(),
+				MessageID: messageID,
+				Question:  "Where?",
+			}
+			return nil
+		},
+	}
+
+	svc := NewChatService(cs, &mockMessageStore{}, rec, polls)
+	items, nextCursor, hasMore, err := svc.ListChats(context.Background(), userID, "", 50)
+	if err != nil {
+		t.Fatalf("ListChats: %v", err)
+	}
+
+	if nextCursor != "" {
+		t.Fatalf("expected empty next cursor, got %q", nextCursor)
+	}
+	if hasMore {
+		t.Fatal("expected hasMore=false")
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 chat list item, got %d", len(items))
+	}
+	if items[0].LastMessage == nil || items[0].LastMessage.Poll == nil {
+		t.Fatal("expected hydrated poll on last message")
+	}
+	if items[0].LastMessage.Poll.Question != "Where?" {
+		t.Fatalf("expected hydrated question, got %q", items[0].LastMessage.Poll.Question)
+	}
 }
 
 // suppress unused import

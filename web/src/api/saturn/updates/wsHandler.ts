@@ -1,7 +1,7 @@
 import type { SaturnChat, SaturnMessage, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
-import { buildApiMessage, getMessageSeqNum } from '../apiBuilders/messages';
+import { buildApiMessage, buildApiPoll, getMessageSeqNum } from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
 import { sendApiUpdate } from './apiUpdateEmitter';
 
@@ -15,7 +15,7 @@ const PENDING_UUID_TTL_MS = 30_000;
 
 // Buffer for own messages that arrive via WS before the HTTP response.
 // We hold them briefly and recheck after a short delay.
-const deferredOwnMessages: Map<string, SaturnMessage> = new Map();
+const deferredOwnMessages = new Map<string, SaturnMessage>();
 const DEFERRED_CHECK_MS = 500;
 
 export function trackPendingSend(uuid: string) {
@@ -44,23 +44,33 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       handleMessageUpdated(msg.data as unknown as SaturnMessage);
       break;
     case 'message_deleted':
-      handleMessageDeleted(msg.data as unknown as SaturnMessage);
+      handleMessageDeleted(msg.data);
       break;
     case 'messages_read':
-      handleMessagesRead(msg.data as Record<string, unknown>);
+      handleMessagesRead(msg.data);
       break;
     case 'typing':
-      handleTyping(msg.data as Record<string, unknown>);
+      handleTyping(msg.data);
       break;
     case 'stop_typing':
-      handleStopTyping(msg.data as Record<string, unknown>);
+      handleStopTyping(msg.data);
       break;
     case 'message_pinned':
     case 'message_unpinned':
-      handleMessagePinChanged(msg.data as Record<string, unknown>);
+      handleMessagePinChanged(msg.data);
+      break;
+    case 'reaction_added':
+    case 'reaction_removed':
+      await handleReactionChanged(msg.data);
+      break;
+    case 'poll_vote':
+      handlePollUpdated(msg.data);
+      break;
+    case 'poll_closed':
+      handlePollUpdated(msg.data, true);
       break;
     case 'user_status':
-      handleUserStatus(msg.data as Record<string, unknown>);
+      handleUserStatus(msg.data);
       break;
     case 'chat_created': {
       const chatData = msg.data as unknown as SaturnChat;
@@ -72,13 +82,13 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       break;
     }
     case 'chat_updated': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       const { fetchFullChat } = await import('../methods/chats');
       fetchFullChat({ id: (payload.chat_id || payload.id) as string });
       break;
     }
     case 'chat_deleted': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       sendApiUpdate({
         '@type': 'updateChat',
         id: payload.chat_id as string,
@@ -87,13 +97,13 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       break;
     }
     case 'chat_member_added': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       const { fetchFullChat } = await import('../methods/chats');
       fetchFullChat({ id: payload.chat_id as string });
       break;
     }
     case 'chat_member_removed': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       if (payload.user_id === currentUserId) {
         sendApiUpdate({
           '@type': 'updateChat',
@@ -107,25 +117,21 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       break;
     }
     case 'chat_member_updated': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       const { fetchFullChat } = await import('../methods/chats');
       fetchFullChat({ id: payload.chat_id as string });
       break;
     }
     case 'mention': {
-      const payload = msg.data as Record<string, unknown>;
+      const payload = msg.data;
       const { fetchFullChat } = await import('../methods/chats');
       fetchFullChat({ id: payload.chat_id as string });
       break;
     }
     case 'media_ready': {
-      // Media processing finished — could refresh message media URLs
-      // For now just log; full integration in Step 5
-      console.log('[Saturn WS] media_ready', msg.data);
       break;
     }
     case 'media_upload_progress': {
-      console.log('[Saturn WS] media_upload_progress', msg.data);
       break;
     }
     default:
@@ -172,6 +178,7 @@ function dispatchNewMessage(data: SaturnMessage) {
     chatId: data.chat_id,
     id: apiMsg.id,
     message: apiMsg,
+    poll: buildApiPoll(data.poll),
   });
 }
 
@@ -187,6 +194,7 @@ function handleMessageUpdated(data: SaturnMessage) {
     id: apiMsg.id,
     isFull: true,
     message: apiMsg,
+    poll: buildApiPoll(data.poll),
   });
 }
 
@@ -305,9 +313,110 @@ function handleUserStatus(data: Record<string, unknown>) {
     status: {
       type: status === 'online' ? 'userStatusOnline'
         : status === 'recently' ? 'userStatusRecently'
-        : 'userStatusOffline',
+          : 'userStatusOffline',
       wasOnline: lastSeen ? Math.floor(new Date(lastSeen).getTime() / 1000) : undefined,
       expires: status === 'online' ? Math.floor(Date.now() / 1000) + 300 : undefined,
     },
   });
+}
+
+async function handleReactionChanged(data: Record<string, unknown>) {
+  const chatId = data.chat_id as string | undefined;
+  const seqNum = data.sequence_number as number | undefined;
+
+  if (!chatId || !seqNum) {
+    return;
+  }
+
+  const { fetchMessageReactions } = await import('../methods/reactions');
+  await fetchMessageReactions({
+    ids: [seqNum],
+    chat: { id: chatId } as any,
+  });
+}
+
+function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
+  const poll = data.poll as Record<string, unknown> | undefined;
+  const pollId = (poll?.id || data.poll_id) as string | undefined;
+  if (!pollId) {
+    return;
+  }
+
+  sendApiUpdate({
+    '@type': 'updateMessagePoll',
+    pollId,
+    pollUpdate: {
+      id: pollId,
+      mediaType: 'poll',
+      summary: isClosed ? { closed: true } : undefined,
+      ...buildApiPollFromWs(poll, isClosed),
+    } as any,
+  });
+
+  const peerId = data.user_id as string | undefined;
+  const options = Array.isArray(data.option_ids)
+    ? data.option_ids.filter((optionId): optionId is string => typeof optionId === 'string')
+    : undefined;
+
+  if (peerId && options) {
+    sendApiUpdate({
+      '@type': 'updateMessagePollVote',
+      pollId,
+      peerId,
+      options,
+    });
+  }
+}
+
+function buildApiPollFromWs(poll?: Record<string, unknown>, isClosed = false) {
+  if (!poll) {
+    return isClosed ? { summary: { closed: true } } : undefined;
+  }
+
+  const options = Array.isArray(poll.options)
+    ? poll.options.filter((option): option is Record<string, unknown> => Boolean(option))
+    : [];
+  const createdAt = typeof poll.created_at === 'string' ? poll.created_at : undefined;
+  const closeAt = typeof poll.close_at === 'string' ? poll.close_at : undefined;
+  const createdAtTs = createdAt ? Math.floor(new Date(createdAt).getTime() / 1000) : undefined;
+  const closeAtTs = closeAt ? Math.floor(new Date(closeAt).getTime() / 1000) : undefined;
+
+  return {
+    id: poll.id as string,
+    mediaType: 'poll',
+    summary: {
+      closed: Boolean(poll.is_closed) || isClosed || undefined,
+      isPublic: poll.is_anonymous === false || undefined,
+      multipleChoice: Boolean(poll.is_multiple) || undefined,
+      quiz: Boolean(poll.is_quiz) || undefined,
+      question: {
+        text: (poll.question as string) || '',
+        entities: [],
+      },
+      answers: options
+        .slice()
+        .sort((left, right) => Number(left.position || 0) - Number(right.position || 0))
+        .map((option) => ({
+          option: option.id as string,
+          text: {
+            text: (option.text as string) || '',
+            entities: [],
+          },
+        })),
+      closeDate: closeAtTs,
+      closePeriod: createdAtTs && closeAtTs && closeAtTs > createdAtTs ? closeAtTs - createdAtTs : undefined,
+    },
+    results: {
+      results: options
+        .slice()
+        .sort((left, right) => Number(left.position || 0) - Number(right.position || 0))
+        .map((option) => ({
+          option: option.id as string,
+          votersCount: Number(option.voters || 0),
+          isChosen: Boolean(option.is_chosen) || undefined,
+          isCorrect: Boolean(option.is_correct) || undefined,
+        })),
+      totalVoters: Number(poll.total_voters || 0),
+    },
+  };
 }

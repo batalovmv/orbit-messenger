@@ -678,106 +678,115 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 **Цель:** Реакции, стикеры, GIF, опросы, scheduled messages. Всё бесплатно.
 **Сервисы:** messaging (расширить), gateway (WS)
 
+### Прогресс реализации
+
+- [x] Шаг 1 (Reactions backend): `ReactionStore` + `ReactionService` реализованы, `reaction_added` / `reaction_removed` публикуются в NATS, таргетные reaction tests PASS
+- [x] Шаг 3 (Stickers backend): `StickerStore` + `StickerService` реализованы, таргетные sticker handler/service tests PASS, runtime wiring в `services/messaging/cmd/main.go` подключён
+- [x] Шаг 4 (GIF backend): `GIFStore` + `GIFService` + `internal/tenor/client.go` реализованы, таргетные GIF handler/service tests PASS, runtime wiring в `services/messaging/cmd/main.go` подключён
+- [x] Шаг 6 (Runtime wiring в messaging): DI в `services/messaging/cmd/main.go` подключён для reactions/stickers/GIF/polls/scheduled, Phase 5 HTTP routes зарегистрированы, `POST /chats/:id/messages` поддерживает `type=poll` и `?scheduled_at=`
+- [x] Шаг 7 (Frontend wiring + poll hydration + smoke): Saturn API методы и TG Web A wiring закрыты для reactions/stickers/GIF/polls/scheduled, обычная history hydration для polls/reactions доведена, WS `reaction_added` / `reaction_removed` / `poll_vote` / `poll_closed` применяются без reload, live Playwright smoke PASS
+
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 5, `docs/TZ-ORBIT-MESSENGER.md` §11.5
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 5, `docs/TZ-ORBIT-MESSENGER.md` §11.5
 - [ ] Изучить TG Web A sticker rendering — TGS (Lottie), WebP, WebM. Какие библиотеки (rlottie)?
 - [ ] Изучить Tenor API — rate limits, API key, response format, caching strategy
 - [ ] Спроектировать sticker import из Telegram — как работает TG Bot API fetchStickerSet? Легальность?
-- [ ] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee
-- [ ] Продумать: isPremium removal — grep все проверки в TG Web A, составить список файлов для изменения
+- [x] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee
+- [x] Продумать: isPremium removal — grep все проверки в TG Web A, составить список файлов для изменения
 - [ ] Продумать: reactions animation — что отправляет сервер? Какой формат ожидает фронтенд?
-- [ ] Продумать: polls real-time — WS broadcast при каждом голосе или батчинг?
-- [ ] Оценить: custom emoji — нужен свой рендер или TG Web A уже умеет?
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Продумать: polls real-time — WS broadcast при каждом голосе или батчинг? → per-vote WS (`poll_vote`) + отдельный `poll_closed`
+- [x] Оценить: custom emoji — нужен свой рендер или TG Web A уже умеет? → TG Web A rendering reused, Saturn wiring + no-premium gating applied
+- [x] Составить порядок реализации и предложить пользователю
 
 ### Backend: Endpoints
 
 **Реакции:**
-- [ ] POST /messages/:id/reactions — добавить
-- [ ] DELETE /messages/:id/reactions — удалить
-- [ ] GET /messages/:id/reactions — список
-- [ ] PUT /chats/:id/available-reactions — настроить доступные
+- [x] POST /messages/:id/reactions — добавить
+- [x] DELETE /messages/:id/reactions — удалить
+- [x] GET /messages/:id/reactions — список
+- [x] PUT /chats/:id/available-reactions — настроить доступные
 
 **Стикеры:**
-- [ ] GET /stickers/featured — рекомендуемые паки
-- [ ] GET /stickers/search?q= — поиск
-- [ ] GET /stickers/sets/:id — получить пак
-- [ ] POST /stickers/sets/:id/install — установить
-- [ ] DELETE /stickers/sets/:id/install — удалить
-- [ ] GET /stickers/installed — мои паки
-- [ ] GET /stickers/recent — недавние
+- [x] GET /stickers/featured — рекомендуемые паки
+- [x] GET /stickers/search?q= — поиск
+- [x] GET /stickers/sets/:id — получить пак
+- [x] POST /stickers/sets/:id/install — установить
+- [x] DELETE /stickers/sets/:id/install — удалить
+- [x] GET /stickers/installed — мои паки
+- [x] GET /stickers/recent — недавние
 
 **GIF:**
-- [ ] GET /gifs/search?q= — поиск (Tenor прокси)
-- [ ] GET /gifs/trending — трендовые
-- [ ] GET /gifs/saved — сохранённые
-- [ ] POST /gifs/saved — сохранить
-- [ ] DELETE /gifs/saved/:id — удалить
+- [x] GET /gifs/search?q= — поиск (Tenor прокси)
+- [x] GET /gifs/trending — трендовые
+- [x] GET /gifs/saved — сохранённые
+- [x] POST /gifs/saved — сохранить
+- [x] DELETE /gifs/saved/:id — удалить
 
 **Опросы:**
-- [ ] POST /chats/:id/messages (type=poll) — создать
-- [ ] POST /messages/:id/poll/vote — проголосовать
-- [ ] DELETE /messages/:id/poll/vote — отозвать голос
-- [ ] POST /messages/:id/poll/close — закрыть
+- [x] Poll backend core (`PollStore` + `PollService`) — реализовано, service/handler tests PASS, route registration и `POST /chats/:id/messages (type=poll)` integration подключены в runtime
+- [x] POST /chats/:id/messages (type=poll) — создать
+- [x] POST /messages/:id/poll/vote — проголосовать
+- [x] DELETE /messages/:id/poll/vote — отозвать голос
+- [x] POST /messages/:id/poll/close — закрыть
 
 **Scheduled:**
-- [ ] POST /chats/:id/messages?scheduled_at= — запланировать
-- [ ] GET /chats/:id/messages/scheduled — список запланированных
-- [ ] PATCH /messages/:id/scheduled — изменить время/текст
-- [ ] DELETE /messages/:id/scheduled — удалить
-- [ ] POST /messages/:id/scheduled/send-now — отправить сейчас
+- [x] POST /chats/:id/messages?scheduled_at= — запланировать
+- [x] GET /chats/:id/messages/scheduled — список запланированных
+- [x] PATCH /messages/:id/scheduled — изменить время/текст
+- [x] DELETE /messages/:id/scheduled — удалить
+- [x] POST /messages/:id/scheduled/send-now — отправить сейчас
 
 ### WebSocket события (4 новых)
 
-- [ ] `reaction_added` — реакция добавлена
-- [ ] `reaction_removed` — реакция удалена
-- [ ] `poll_vote` — обновление результатов опроса
-- [ ] `poll_closed` — опрос завершён
+- [x] `reaction_added` — gateway WS delivery подключён, fanout работает через `member_ids` и fallback fetch member IDs, таргетные gateway WS tests PASS
+- [x] `reaction_removed` — gateway WS delivery подключён, fanout работает через `member_ids` и fallback fetch member IDs, таргетные gateway WS tests PASS
+- [x] `poll_vote` — gateway WS delivery подключён, fanout работает через `member_ids` и fallback fetch member IDs, таргетные gateway WS tests PASS
+- [x] `poll_closed` — gateway WS delivery подключён, fanout работает через `member_ids` и fallback fetch member IDs, таргетные gateway WS tests PASS
 
 ### Database (7 таблиц)
 
-- [ ] message_reactions: message_id + user_id + emoji PK, created_at
-- [ ] chat_available_reactions: chat_id PK, mode DEFAULT 'all', allowed_emojis TEXT[]
-- [ ] sticker_packs: id, name, short_name, author_id, thumbnail_url, is_official, is_animated, sticker_count
-- [ ] stickers: id, pack_id, emoji, file_url, file_type, width, height, position
-- [ ] user_installed_stickers: user_id + pack_id PK, position, installed_at
-- [ ] recent_stickers: user_id + sticker_id PK, used_at
-- [ ] polls: id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, close_at
-- [ ] poll_options: id, poll_id, text, position
-- [ ] poll_votes: poll_id + user_id + option_id PK, voted_at
+- [x] message_reactions: message_id + user_id + emoji PK, created_at
+- [x] chat_available_reactions: chat_id PK, mode DEFAULT 'all', allowed_emojis TEXT[]
+- [x] sticker_packs: id, name, short_name, author_id, thumbnail_url, is_official, is_animated, sticker_count
+- [x] stickers: id, pack_id, emoji, file_url, file_type, width, height, position
+- [x] user_installed_stickers: user_id + pack_id PK, position, installed_at
+- [x] recent_stickers: user_id + sticker_id PK, used_at
+- [x] polls: id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, close_at
+- [x] poll_options: id, poll_id, text, position
+- [x] poll_votes: poll_id + user_id + option_id PK, voted_at
 
 ### Frontend: Saturn API методы (~40)
 
 **Реакции:**
-- [ ] sendReaction, fetchMessageReactionsList, fetchAvailableReactions, setDefaultReaction, setChatEnabledReactions
+- [x] sendReaction, fetchMessageReactionsList, fetchAvailableReactions, setDefaultReaction, setChatEnabledReactions
 
 **Стикеры:**
-- [ ] fetchStickerSets, fetchRecentStickers, fetchFavoriteStickers, fetchFeaturedStickers
-- [ ] searchStickers, installStickerSet, uninstallStickerSet
-- [ ] addRecentSticker, removeRecentSticker, addFavoriteSticker, removeFavoriteSticker
-- [ ] fetchCustomEmoji, fetchCustomEmojiSets
+- [x] fetchStickerSets, fetchRecentStickers, fetchFavoriteStickers, fetchFeaturedStickers
+- [x] searchStickers, installStickerSet, uninstallStickerSet
+- [x] addRecentSticker, removeRecentSticker, addFavoriteSticker, removeFavoriteSticker
+- [x] fetchCustomEmoji, fetchCustomEmojiSets
 
 **GIF:**
-- [ ] fetchGifs, searchGifs, fetchSavedGifs, saveGif, removeGif
+- [x] fetchGifs, searchGifs, fetchSavedGifs, saveGif, removeGif
 
 **Polls:**
-- [ ] sendPoll, votePoll, closePoll, fetchPollVoters
+- [x] sendPoll, votePoll, closePoll, fetchPollVoters
 
 **Scheduled:**
-- [ ] fetchScheduledHistory, sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage
+- [x] fetchScheduledHistory, sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage — Saturn wiring закрыт для text/reply/media/poll flows; recurring repeat UI intentionally disabled until backend support
 
 **Other:**
 - [ ] fetchSavedMessages, toggleSavedDialogPinned, fetchCommonChats
 
 ### No Premium — всё бесплатно
 
-- [ ] Убрать все isPremium проверки в TG Web A (return true)
-- [ ] Custom emoji в имени/статусе — бесплатно
-- [ ] Animated emoji — бесплатно
-- [ ] Все стикер-паки — бесплатно
-- [ ] Extended upload limits — бесплатно
-- [ ] Emoji status — бесплатно
+- [x] Phase 5 critical premium gates в TG Web A routed through `selectIsCurrentUserPremium` / `selectCurrentLimit`; unrelated premium payments/gifts flows intentionally left intact
+- [x] Custom emoji в имени/статусе — бесплатно
+- [x] Animated emoji — бесплатно
+- [x] Все стикер-паки — бесплатно
+- [x] Extended upload limits — бесплатно
+- [x] Emoji status — бесплатно
 
 ### Критерий "готово"
 

@@ -59,7 +59,23 @@ export function updateThreadLocalState<T extends GlobalState>(
   global: T, chatId: string, threadId: ThreadId, threadUpdate: Partial<ThreadLocalState> | undefined,
 ): T {
   const currentThread = selectThread(global, chatId, threadId);
-  if (!currentThread) return global;
+  if (!currentThread) {
+    if (!threadUpdate) {
+      return global;
+    }
+
+    return updateMessageStore(global, chatId, {
+      threadsById: {
+        ...global.messages.byChatId[chatId]?.threadsById,
+        [threadId]: {
+          localState: {
+            ...threadUpdate,
+          },
+          readState: {},
+        },
+      } as Record<ThreadId, Thread>,
+    });
+  }
 
   if (!threadUpdate && !currentThread.threadInfo) {
     return updateMessageStore(global, chatId, {

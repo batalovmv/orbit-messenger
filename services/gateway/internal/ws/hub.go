@@ -17,6 +17,7 @@ type Conn struct {
 	UserID string
 	mu     sync.Mutex
 	done   chan struct{}
+	sendFn func(interface{}) error
 
 	// Per-connection typing rate limit fields (protected by mu)
 	lastTyping  time.Time
@@ -25,6 +26,10 @@ type Conn struct {
 
 // Send sends a JSON message to the client, thread-safe.
 func (c *Conn) Send(msg interface{}) error {
+	if c.sendFn != nil {
+		return c.sendFn(msg)
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	data, err := json.Marshal(msg)

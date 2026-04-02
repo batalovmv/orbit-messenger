@@ -163,6 +163,16 @@ const AttachMenu = ({
     onFileSelect([file]);
   });
 
+  const handlePollCreate = useLastCallback(() => {
+    closeAttachMenu();
+    onPollCreate();
+  });
+
+  const handleTodoListCreate = useLastCallback(() => {
+    closeAttachMenu();
+    onTodoListCreate();
+  });
+
   const bots = useMemo(() => {
     return attachBots
       ? Object.values(attachBots).filter((bot) => {
@@ -262,10 +272,10 @@ const AttachMenu = ({
           </>
         )}
         {canAttachPolls && !editingMessage && (
-          <MenuItem icon="poll" onClick={onPollCreate}>{oldLang('Poll')}</MenuItem>
+          <MenuItem icon="poll" onClick={handlePollCreate}>{oldLang('Poll')}</MenuItem>
         )}
         {canAttachToDoLists && !editingMessage && (
-          <MenuItem icon="select" onClick={onTodoListCreate}>{lang('TitleToDoList')}</MenuItem>
+          <MenuItem icon="select" onClick={handleTodoListCreate}>{lang('TitleToDoList')}</MenuItem>
         )}
 
         {!editingMessage && !canEditMedia && !isScheduled && bots?.map((bot) => (
