@@ -35,6 +35,12 @@ type ProxyConfig struct {
 	InternalSecret      string
 }
 
+type AuthProxyMiddlewares struct {
+	Sensitive        fiber.Handler
+	InviteValidation fiber.Handler
+	Session          fiber.Handler
+}
+
 // doProxy performs a manual reverse proxy: sends request to upstream, copies
 // status + body + safe headers back, then sets CORS headers from gateway config.
 // This avoids proxy.DoRedirects which overwrites the entire fasthttp raw response
@@ -123,6 +129,64 @@ func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 	}
 }
 
+// AuthProxyHandler returns a handler that proxies auth routes to the auth service.
+func AuthProxyHandler(cfg ProxyConfig) fiber.Handler {
+	client := &fasthttp.Client{
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	return func(c *fiber.Ctx) error {
+		url := cfg.AuthServiceURL + sanitizeProxyPath(c.Path())
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, client, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("auth proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
+}
+
+func routeHandlers(proxy fiber.Handler, middlewares ...fiber.Handler) []fiber.Handler {
+	handlers := make([]fiber.Handler, 0, len(middlewares)+1)
+	for _, middleware := range middlewares {
+		if middleware != nil {
+			handlers = append(handlers, middleware)
+		}
+	}
+	handlers = append(handlers, proxy)
+	return handlers
+}
+
+// RegisterAuthProxyRoutes configures auth proxy routes with per-endpoint middleware chains.
+func RegisterAuthProxyRoutes(authGroup fiber.Router, cfg ProxyConfig, middlewares AuthProxyMiddlewares) {
+	authProxy := AuthProxyHandler(cfg)
+
+	authGroup.Post("/bootstrap", routeHandlers(authProxy, middlewares.Sensitive)...)
+	authGroup.Post("/register", routeHandlers(authProxy, middlewares.Sensitive)...)
+	authGroup.Post("/login", routeHandlers(authProxy, middlewares.Sensitive)...)
+	authGroup.Post("/reset-admin", routeHandlers(authProxy, middlewares.Sensitive)...)
+	authGroup.Post("/invite/validate", routeHandlers(authProxy, middlewares.InviteValidation)...)
+
+	authGroup.Post("/refresh", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Get("/me", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Post("/logout", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Get("/sessions", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Delete("/sessions/:id", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Post("/2fa/setup", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Post("/2fa/verify", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Post("/2fa/disable", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Post("/invites", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Get("/invites", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Delete("/invites/:id", routeHandlers(authProxy, middlewares.Session)...)
+
+	authGroup.All("/*", routeHandlers(authProxy, middlewares.Sensitive)...)
+}
+
 // PublicMediaProxy returns a handler that proxies media GET requests without JWT.
 // Media service streams files directly from S3 (no redirects), so standard proxy works.
 func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
@@ -144,30 +208,11 @@ func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
 }
 
 // SetupProxy configures reverse proxy routes.
-func SetupProxy(app *fiber.App, authGroup fiber.Router, apiGroup fiber.Router, cfg ProxyConfig) {
-	authClient := &fasthttp.Client{
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
+func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 	msgClient := &fasthttp.Client{
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
-
-	// Auth routes: proxy without JWT validation
-	authGroup.All("/*", func(c *fiber.Ctx) error {
-		url := cfg.AuthServiceURL + sanitizeProxyPath(c.Path())
-		if q := c.Request().URI().QueryString(); len(q) > 0 {
-			url += "?" + string(q)
-		}
-		if err := doProxy(c, url, authClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
-			slog.Error("auth proxy error", "error", err, "url", url)
-			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
-				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
-			})
-		}
-		return nil
-	})
 
 	// Media routes: proxy with JWT, higher timeouts for uploads
 	mediaClient := &fasthttp.Client{

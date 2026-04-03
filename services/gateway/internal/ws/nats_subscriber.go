@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,10 @@ import (
 
 const maxConcurrentFetches = 50 // Bound goroutines spawned for fallback member-ID fetches
 
+type pushSender interface {
+	SendToUsers(userIDs []string, payload []byte) error
+}
+
 // Subscriber listens for NATS events and routes them to WebSocket clients.
 type Subscriber struct {
 	hub                 *Hub
@@ -24,16 +29,23 @@ type Subscriber struct {
 	messagingServiceURL string
 	internalSecret      string
 	httpClient          *http.Client
+	pushDispatcher      pushSender
 	sem                 chan struct{} // semaphore to bound concurrent goroutines
 }
 
-func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string) *Subscriber {
+func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string, pushDispatchers ...pushSender) *Subscriber {
+	var pushDispatcher pushSender
+	if len(pushDispatchers) > 0 {
+		pushDispatcher = pushDispatchers[0]
+	}
+
 	return &Subscriber{
 		hub:                 hub,
 		nc:                  nc,
 		messagingServiceURL: messagingServiceURL,
 		internalSecret:      internalSecret,
 		httpClient:          &http.Client{Timeout: 5 * time.Second},
+		pushDispatcher:      pushDispatcher,
 		sem:                 make(chan struct{}, maxConcurrentFetches),
 	}
 }
@@ -74,6 +86,227 @@ func (s *Subscriber) Stop() {
 	}
 }
 
+type pushMessageData struct {
+	ID         string  `json:"id"`
+	ChatID     string  `json:"chat_id"`
+	Type       string  `json:"type"`
+	Content    *string `json:"content"`
+	SenderName string  `json:"sender_name"`
+}
+
+type pushPayload struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+	Data  struct {
+		ChatID    string `json:"chat_id"`
+		MessageID string `json:"message_id"`
+		Type      string `json:"type"`
+	} `json:"data"`
+}
+
+func (s *Subscriber) handleNewMessageEvent(subject string, event NATSEvent, envelope Envelope) {
+	if len(event.MemberIDs) > 0 {
+		s.hub.SendToUsers(event.MemberIDs, envelope, "")
+		s.enqueuePushDispatch(event, event.MemberIDs)
+		return
+	}
+
+	chatID := extractChatIDFromSubject(subject)
+	if chatID == "" {
+		return
+	}
+
+	s.runAsync(
+		"new_message_fallback",
+		func() {
+			memberIDs := s.fetchChatMemberIDs(chatID)
+			if len(memberIDs) == 0 {
+				return
+			}
+
+			s.hub.SendToUsers(memberIDs, envelope, "")
+			s.dispatchPushNotifications(event, memberIDs)
+		},
+	)
+}
+
+func (s *Subscriber) enqueuePushDispatch(event NATSEvent, memberIDs []string) {
+	if s.pushDispatcher == nil || len(memberIDs) == 0 {
+		return
+	}
+
+	s.runAsync(
+		"push_dispatch",
+		func() {
+			s.dispatchPushNotifications(event, memberIDs)
+		},
+	)
+}
+
+func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []string) {
+	if s.pushDispatcher == nil || len(memberIDs) == 0 {
+		return
+	}
+
+	var msg pushMessageData
+	if err := json.Unmarshal(event.Data, &msg); err != nil {
+		slog.Warn("nats: failed to decode new_message payload for push", "error", err)
+		return
+	}
+	if msg.ChatID == "" || msg.ID == "" {
+		slog.Warn("nats: skipping push for malformed new_message payload", "chat_id", msg.ChatID, "message_id", msg.ID)
+		return
+	}
+
+	recipients := make([]string, 0, len(memberIDs))
+	for _, userID := range memberIDs {
+		if userID == "" || userID == event.SenderID {
+			continue
+		}
+		if s.hub.IsOnline(userID) {
+			continue
+		}
+		recipients = append(recipients, userID)
+	}
+	if len(recipients) == 0 {
+		return
+	}
+
+	mutedUserIDs, err := s.fetchMutedUserIDs(msg.ChatID, recipients)
+	if err != nil {
+		slog.Warn("nats: failed to fetch muted users, skipping push", "chat_id", msg.ChatID, "error", err)
+		return
+	}
+
+	if len(mutedUserIDs) > 0 {
+		mutedSet := make(map[string]struct{}, len(mutedUserIDs))
+		for _, userID := range mutedUserIDs {
+			mutedSet[userID] = struct{}{}
+		}
+
+		filtered := recipients[:0]
+		for _, userID := range recipients {
+			if _, muted := mutedSet[userID]; muted {
+				continue
+			}
+			filtered = append(filtered, userID)
+		}
+		recipients = filtered
+	}
+	if len(recipients) == 0 {
+		return
+	}
+
+	payload, err := buildPushPayload(msg)
+	if err != nil {
+		slog.Warn("nats: failed to marshal push payload", "error", err, "chat_id", msg.ChatID, "message_id", msg.ID)
+		return
+	}
+
+	if err := s.pushDispatcher.SendToUsers(recipients, payload); err != nil {
+		slog.Error("nats: push dispatch failed", "error", err, "chat_id", msg.ChatID)
+	}
+}
+
+func (s *Subscriber) fetchMutedUserIDs(chatID string, userIDs []string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	body, err := json.Marshal(map[string]any{
+		"chat_id":  chatID,
+		"user_ids": userIDs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("%s/internal/notification-settings/muted-users", s.messagingServiceURL),
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", s.internalSecret)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+
+	var result struct {
+		MutedUserIDs []string `json:"muted_user_ids"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return result.MutedUserIDs, nil
+}
+
+func (s *Subscriber) runAsync(label string, fn func()) {
+	select {
+	case s.sem <- struct{}{}:
+		go func() {
+			defer func() { <-s.sem }()
+			fn()
+		}()
+	default:
+		slog.Warn("nats: goroutine limit reached, dropping async task", "task", label)
+	}
+}
+
+func buildPushPayload(msg pushMessageData) ([]byte, error) {
+	payload := pushPayload{
+		Title: strings.TrimSpace(msg.SenderName),
+		Body:  buildMessagePreview(msg.Content, msg.Type),
+	}
+	if payload.Title == "" {
+		payload.Title = "Новое сообщение"
+	}
+	payload.Data.ChatID = msg.ChatID
+	payload.Data.MessageID = msg.ID
+	payload.Data.Type = "new_message"
+
+	return json.Marshal(payload)
+}
+
+func buildMessagePreview(content *string, messageType string) string {
+	if content != nil {
+		trimmed := strings.TrimSpace(*content)
+		if trimmed != "" {
+			runes := []rune(trimmed)
+			if len(runes) > 100 {
+				return string(runes[:100]) + "..."
+			}
+			return trimmed
+		}
+	}
+
+	switch messageType {
+	case "photo":
+		return "Фото"
+	case "video":
+		return "Видео"
+	case "voice":
+		return "Голосовое сообщение"
+	case "file":
+		return "Файл"
+	case "gif":
+		return "GIF"
+	default:
+		return "Новое сообщение"
+	}
+}
+
 func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	var event NATSEvent
 	if err := json.Unmarshal(msg.Data, &event); err != nil {
@@ -87,6 +320,11 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	envelope := Envelope{
 		Type: event.Event,
 		Data: event.Data,
+	}
+
+	if event.Event == EventNewMessage {
+		s.handleNewMessageEvent(msg.Subject, event, envelope)
+		return
 	}
 
 	// Route to specific members (messaging service provides member_ids for chat events).

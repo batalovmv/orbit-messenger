@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
+
+type mockPushSender struct {
+	sendToUsersFn func(userIDs []string, payload []byte) error
+}
+
+func (m *mockPushSender) SendToUsers(userIDs []string, payload []byte) error {
+	if m.sendToUsersFn != nil {
+		return m.sendToUsersFn(userIDs, payload)
+	}
+	return nil
+}
 
 func TestSubscriber_HandleEvent_RichMessageEventsDeliverWithMemberIDs(t *testing.T) {
 	tests := []struct {
@@ -186,6 +198,158 @@ func TestSubscriber_HandleEvent_RichMessageEventsFallbackToMemberFetch(t *testin
 	}
 }
 
+func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t *testing.T) {
+	senderID := uuid.New().String()
+	onlineRecipient := uuid.New().String()
+	offlineRecipient := uuid.New().String()
+	mutedRecipient := uuid.New().String()
+	chatID := uuid.New().String()
+	messageID := uuid.New().String()
+
+	var pushedUserIDs []string
+	var pushedPayload []byte
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/notification-settings/muted-users" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if got := r.Header.Get("X-Internal-Token"); got != "internal-secret" {
+			t.Fatalf("unexpected internal token: %s", got)
+		}
+
+		var body struct {
+			ChatID  string   `json:"chat_id"`
+			UserIDs []string `json:"user_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.ChatID != chatID {
+			t.Fatalf("unexpected chat id: %s", body.ChatID)
+		}
+		if !reflect.DeepEqual(body.UserIDs, []string{offlineRecipient, mutedRecipient}) {
+			t.Fatalf("unexpected offline user ids: %+v", body.UserIDs)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"muted_user_ids":["%s"]}`, mutedRecipient)
+	}))
+	defer server.Close()
+
+	hub := NewHub()
+	deliveries := make(chan Envelope, 1)
+	hub.Register(newCapturingConn(onlineRecipient, deliveries))
+
+	pushSender := &mockPushSender{
+		sendToUsersFn: func(userIDs []string, payload []byte) error {
+			pushedUserIDs = append([]string(nil), userIDs...)
+			pushedPayload = append([]byte(nil), payload...)
+			return nil
+		},
+	}
+
+	subscriber := NewSubscriber(hub, nil, server.URL, "internal-secret", pushSender)
+	subscriber.httpClient = server.Client()
+
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event: EventNewMessage,
+		Data: json.RawMessage(fmt.Sprintf(
+			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`,
+			messageID,
+			chatID,
+			"Привет, команда",
+			"Алиса",
+		)),
+		MemberIDs: []string{senderID, onlineRecipient, offlineRecipient, mutedRecipient},
+		SenderID:  senderID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	subscriber.handleEvent(&nats.Msg{Subject: fmt.Sprintf("orbit.chat.%s.message.new", chatID), Data: payload})
+
+	assertEnvelope(
+		t,
+		waitForEnvelope(t, deliveries),
+		EventNewMessage,
+		fmt.Sprintf(`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`, messageID, chatID, "Привет, команда", "Алиса"),
+	)
+
+	waitForCondition(t, func() bool { return len(pushedUserIDs) == 1 }, "push dispatch")
+
+	if !reflect.DeepEqual(pushedUserIDs, []string{offlineRecipient}) {
+		t.Fatalf("unexpected push recipients: %+v", pushedUserIDs)
+	}
+
+	var pushBody struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Data  struct {
+			ChatID    string `json:"chat_id"`
+			MessageID string `json:"message_id"`
+			Type      string `json:"type"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(bytes.NewReader(pushedPayload)).Decode(&pushBody); err != nil {
+		t.Fatalf("decode push payload: %v", err)
+	}
+	if pushBody.Title != "Алиса" || pushBody.Body != "Привет, команда" {
+		t.Fatalf("unexpected push payload: %+v", pushBody)
+	}
+	if pushBody.Data.ChatID != chatID || pushBody.Data.MessageID != messageID || pushBody.Data.Type != "new_message" {
+		t.Fatalf("unexpected push data: %+v", pushBody.Data)
+	}
+}
+
+func TestSubscriber_HandleEvent_NewMessageSkipsPushWhenMuteLookupFails(t *testing.T) {
+	senderID := uuid.New().String()
+	offlineRecipient := uuid.New().String()
+	chatID := uuid.New().String()
+	pushCalls := 0
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	subscriber := NewSubscriber(
+		NewHub(),
+		nil,
+		server.URL,
+		"internal-secret",
+		&mockPushSender{
+			sendToUsersFn: func(userIDs []string, payload []byte) error {
+				pushCalls++
+				return nil
+			},
+		},
+	)
+	subscriber.httpClient = server.Client()
+
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event: EventNewMessage,
+		Data: json.RawMessage(fmt.Sprintf(
+			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`,
+			uuid.New(),
+			chatID,
+			"Сообщение",
+			"Боб",
+		)),
+		MemberIDs: []string{senderID, offlineRecipient},
+		SenderID:  senderID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	subscriber.handleEvent(&nats.Msg{Subject: fmt.Sprintf("orbit.chat.%s.message.new", chatID), Data: payload})
+
+	time.Sleep(150 * time.Millisecond)
+	if pushCalls != 0 {
+		t.Fatalf("expected no push calls when mute lookup fails, got %d", pushCalls)
+	}
+}
+
 func newCapturingConn(userID string, deliveries chan Envelope) *Conn {
 	return &Conn{
 		UserID: userID,
@@ -247,6 +411,20 @@ func assertEnvelope(t *testing.T, got Envelope, wantType, wantPayload string) {
 	if !jsonEqual(got.Data, []byte(wantPayload)) {
 		t.Fatalf("unexpected envelope payload: want %s, got %s", wantPayload, string(got.Data))
 	}
+}
+
+func waitForCondition(t *testing.T, check func() bool, label string) {
+	t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if check() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	t.Fatalf("timed out waiting for %s", label)
 }
 
 func jsonEqual(left, right []byte) bool {

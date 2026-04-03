@@ -114,6 +114,7 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBSCRIBER_EMAIL: ${VAPID_SUBSCRIBER_EMAIL:-mailto:push@orbit.local}
     depends_on:
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }

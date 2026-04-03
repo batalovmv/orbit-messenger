@@ -135,3 +135,54 @@ func TestRateLimit_DifferentKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestRateLimit_UsesCustomIdentifier(t *testing.T) {
+	const limit = 2
+	mr := miniredis.RunT(t)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	t.Cleanup(func() {
+		rdb.Close()
+	})
+
+	app := fiber.New()
+	app.Use(middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:     rdb,
+		MaxPerMin: limit,
+		KeyPrefix: "test_custom_identifier",
+		Identifier: func(c *fiber.Ctx) string {
+			return c.Get("X-Bucket")
+		},
+	}))
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	doRequestWithBucket := func(bucket string) *http.Response {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("X-Bucket", bucket)
+		resp, _ := app.Test(req, -1)
+		return resp
+	}
+
+	for i := 0; i < limit; i++ {
+		resp := doRequestWithBucket("alpha")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("alpha request %d: expected 200, got %d", i+1, resp.StatusCode)
+		}
+	}
+
+	blocked := doRequestWithBucket("alpha")
+	if blocked.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("alpha: expected 429 after exhausting limit, got %d", blocked.StatusCode)
+	}
+
+	for i := 0; i < limit; i++ {
+		resp := doRequestWithBucket("beta")
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("beta request %d: expected 200, got %d", i+1, resp.StatusCode)
+		}
+	}
+}

@@ -14,9 +14,10 @@ import (
 )
 
 type RateLimitConfig struct {
-	Redis     *redis.Client
-	MaxPerMin int
-	KeyPrefix string
+	Redis      *redis.Client
+	MaxPerMin  int
+	KeyPrefix  string
+	Identifier func(*fiber.Ctx) string
 }
 
 // rateLimitScript atomically increments the counter and sets TTL on first hit.
@@ -39,6 +40,11 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
 		// a Fiber local (not a header) so clients cannot spoof another user's bucket.
 		identifier := c.IP()
+		if cfg.Identifier != nil {
+			if customIdentifier := cfg.Identifier(c); customIdentifier != "" {
+				identifier = customIdentifier
+			}
+		}
 		if uid, ok := c.Locals("userID").(string); ok && uid != "" {
 			identifier = uid
 		}

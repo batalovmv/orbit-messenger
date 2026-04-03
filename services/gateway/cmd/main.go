@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"net/url"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/gateway/internal/handler"
 	"github.com/mst-corp/orbit/services/gateway/internal/middleware"
+	"github.com/mst-corp/orbit/services/gateway/internal/push"
 	"github.com/mst-corp/orbit/services/gateway/internal/ws"
 )
 
@@ -34,6 +37,9 @@ func main() {
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
 	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
+	vapidPublicKey := config.EnvOr("VAPID_PUBLIC_KEY", "")
+	vapidPrivateKey := config.EnvOr("VAPID_PRIVATE_KEY", "")
+	vapidSubscriber := config.EnvOr("VAPID_SUBSCRIBER_EMAIL", "mailto:push@orbit.local")
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)
@@ -63,7 +69,19 @@ func main() {
 
 	// NATS Subscriber
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
-	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret)
+	pushDispatcher := push.NewDispatcher(push.Config{
+		PublicKey:           vapidPublicKey,
+		PrivateKey:          vapidPrivateKey,
+		Subscriber:          vapidSubscriber,
+		MessagingServiceURL: messagingServiceURL,
+		InternalSecret:      internalSecret,
+		Logger:              logger,
+	})
+	if !pushDispatcher.Enabled() {
+		slog.Warn("web push dispatcher disabled: missing VAPID configuration")
+	}
+
+	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret, pushDispatcher)
 	if err := subscriber.Start(); err != nil {
 		slog.Error("failed to start NATS subscriber", "error", err)
 		os.Exit(1)
@@ -100,10 +118,29 @@ func main() {
 
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")
-	authRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 10, KeyPrefix: "auth",
+	authSensitiveRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 5, KeyPrefix: "auth_sensitive",
 	})
-	authGroup.Use(authRateLimit)
+	authInviteValidationRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 20, KeyPrefix: "auth_invite_validation",
+	})
+	authSessionRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  60,
+		KeyPrefix:  "auth_session",
+		Identifier: authSessionRateLimitIdentifier,
+	})
+	handler.RegisterAuthProxyRoutes(authGroup, handler.ProxyConfig{
+		AuthServiceURL:      authServiceURL,
+		MessagingServiceURL: messagingServiceURL,
+		MediaServiceURL:     mediaServiceURL,
+		FrontendURL:         frontendURL,
+		InternalSecret:      internalSecret,
+	}, handler.AuthProxyMiddlewares{
+		Sensitive:        authSensitiveRateLimit,
+		InviteValidation: authInviteValidationRateLimit,
+		Session:          authSessionRateLimit,
+	})
 
 	// API routes with JWT validation
 	jwtMW := middleware.JWTMiddleware(middleware.JWTConfig{
@@ -140,7 +177,7 @@ func main() {
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
 
 	// Setup proxy routes
-	handler.SetupProxy(app, authGroup, apiGroup, handler.ProxyConfig{
+	handler.SetupProxy(app, apiGroup, handler.ProxyConfig{
 		AuthServiceURL:      authServiceURL,
 		MessagingServiceURL: messagingServiceURL,
 		MediaServiceURL:     mediaServiceURL,
@@ -174,4 +211,29 @@ func redactURL(raw string) string {
 		return "***"
 	}
 	return u.Redacted()
+}
+
+func authSessionRateLimitIdentifier(c *fiber.Ctx) string {
+	if token := bearerToken(c.Get("Authorization")); token != "" {
+		return "access:" + hashIdentifier(token)
+	}
+
+	if refreshToken := c.Cookies("refresh_token"); refreshToken != "" {
+		return "refresh:" + hashIdentifier(refreshToken)
+	}
+
+	return c.IP()
+}
+
+func bearerToken(header string) string {
+	if !strings.HasPrefix(header, "Bearer ") {
+		return ""
+	}
+
+	return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+}
+
+func hashIdentifier(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:8])
 }
