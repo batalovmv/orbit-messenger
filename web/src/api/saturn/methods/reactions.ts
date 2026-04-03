@@ -162,17 +162,15 @@ export async function sendReaction({
   chat,
   messageId,
   reactions,
+  saturnId,
 }: {
   chat: ApiChat;
   messageId: number;
   reactions?: ApiReaction[];
   shouldAddToRecent?: boolean;
+  saturnId?: string;
 }) {
-  // eslint-disable-next-line no-console
-  console.warn('[Saturn] sendReaction called', { chatId: chat.id, messageId, reactions });
-  const uuid = resolveMessageUuid(chat.id, messageId);
-  // eslint-disable-next-line no-console
-  console.warn('[Saturn] resolveMessageUuid result:', uuid);
+  const uuid = saturnId || resolveMessageUuid(chat.id, messageId);
   if (!uuid) return undefined;
 
   const desiredEmojiSet = new Set(
@@ -191,9 +189,6 @@ export async function sendReaction({
 
   const removals = [...currentEmojiSet].filter((emoji) => !desiredEmojiSet.has(emoji));
   const additions = [...desiredEmojiSet].filter((emoji) => !currentEmojiSet.has(emoji));
-  // eslint-disable-next-line no-console
-  console.warn('[Saturn] sendReaction', { desiredEmojiSet: [...desiredEmojiSet], currentEmojiSet: [...currentEmojiSet], additions, removals });
-
   await Promise.all([
     ...removals.map((emoji) => client.request('DELETE', `/messages/${uuid}/reactions`, { emoji })),
     ...additions.map((emoji) => client.request('POST', `/messages/${uuid}/reactions`, { emoji })),

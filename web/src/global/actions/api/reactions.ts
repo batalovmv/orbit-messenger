@@ -246,6 +246,7 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
       messageId,
       reactions: trimmedRegularReactions,
       shouldAddToRecent,
+      saturnId: message.saturnId,
     });
 
     if (isInSaved) {
