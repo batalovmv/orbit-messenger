@@ -14,6 +14,7 @@ import { getMessageKey } from '../../../util/keys/messageKey';
 import * as mediaLoader from '../../../util/mediaLoader';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { callApi } from '../../../api/saturn';
+import { sendReaction as sendReactionApi } from '../../../api/saturn/methods/reactions';
 import {
   getDocumentMediaHash,
   getReactionKey,
@@ -241,7 +242,7 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
   setGlobal(global);
 
   try {
-    await callApi('sendReaction', {
+    await sendReactionApi({
       chat,
       messageId,
       reactions: trimmedRegularReactions,
