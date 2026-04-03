@@ -335,10 +335,15 @@ export interface SaturnSticker {
   pack_id: string;
   emoji?: string;
   file_url: string;
+  preview_url?: string;
+  thumbnail_url?: string;
   file_type: 'webp' | 'tgs' | 'webm' | 'svg';
   width?: number;
   height?: number;
   position: number;
+  is_custom_emoji?: boolean;
+  is_free?: boolean;
+  should_use_text_color?: boolean;
 }
 
 export interface SaturnStickerPack {

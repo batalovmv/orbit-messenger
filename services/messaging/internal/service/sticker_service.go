@@ -53,6 +53,20 @@ func NewStickerService(stickers store.StickerStore, logger *slog.Logger, options
 	return service
 }
 
+// GetByIDs returns stickers for document-based custom emoji resolution.
+func (s *StickerService) GetByIDs(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error) {
+	if len(stickerIDs) == 0 {
+		return []model.Sticker{}, nil
+	}
+
+	stickers, err := s.stickers.GetByIDs(ctx, stickerIDs)
+	if err != nil {
+		return nil, fmt.Errorf("get stickers by ids: %w", err)
+	}
+
+	return stickers, nil
+}
+
 // GetPack returns a sticker pack with its stickers.
 func (s *StickerService) GetPack(ctx context.Context, packID, userID uuid.UUID) (*model.StickerPack, error) {
 	pack, err := s.stickers.GetPack(ctx, packID)

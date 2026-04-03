@@ -29,6 +29,7 @@ func (h *StickerHandler) Register(app fiber.Router) {
 	app.Get("/stickers/featured", h.ListFeatured)
 	app.Get("/stickers/search", h.Search)
 	app.Get("/stickers/installed", h.ListInstalled)
+	app.Post("/stickers/documents", h.GetDocuments)
 	app.Get("/stickers/recent", h.ListRecent)
 	app.Post("/stickers/recent", h.AddRecent)
 	app.Delete("/stickers/recent/:id", h.RemoveRecent)
@@ -102,6 +103,44 @@ func (h *StickerHandler) ListInstalled(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, 200, packs)
+}
+
+func (h *StickerHandler) GetDocuments(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if len(body.IDs) == 0 {
+		return response.JSON(c, 200, []model.Sticker{})
+	}
+
+	stickerIDs := make([]uuid.UUID, 0, len(body.IDs))
+	seen := make(map[uuid.UUID]struct{}, len(body.IDs))
+	for _, rawID := range body.IDs {
+		stickerID, err := uuid.Parse(strings.TrimSpace(rawID))
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid sticker ID"))
+		}
+		if _, ok := seen[stickerID]; ok {
+			continue
+		}
+		seen[stickerID] = struct{}{}
+		stickerIDs = append(stickerIDs, stickerID)
+	}
+
+	stickers, err := h.svc.GetByIDs(c.Context(), stickerIDs)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, 200, stickers)
 }
 
 func (h *StickerHandler) ListRecent(c *fiber.Ctx) error {

@@ -192,3 +192,31 @@ func TestSearch_Success(t *testing.T) {
 		t.Fatalf("expected 1 pack, got %d", len(packs))
 	}
 }
+
+func TestGetByIDs_Success(t *testing.T) {
+	stickerID := uuid.New()
+	ss := &mockStickerStore{
+		getByIDsFn: func(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error) {
+			if len(stickerIDs) != 1 || stickerIDs[0] != stickerID {
+				t.Fatalf("unexpected sticker ids: %#v", stickerIDs)
+			}
+
+			return []model.Sticker{{
+				ID:       stickerID,
+				PackID:   uuid.New(),
+				FileURL:  "https://cdn.example.com/stickers/custom.webp",
+				FileType: "webp",
+				Position: 0,
+			}}, nil
+		},
+	}
+	svc := newTestStickerService(ss)
+
+	stickers, err := svc.GetByIDs(context.Background(), []uuid.UUID{stickerID})
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if len(stickers) != 1 || stickers[0].ID != stickerID {
+		t.Fatalf("unexpected stickers: %#v", stickers)
+	}
+}

@@ -153,6 +153,79 @@ func TestListInstalled_MissingUserID(t *testing.T) {
 	}
 }
 
+func TestGetDocuments_MissingUserID(t *testing.T) {
+	app := newStickerApp(&mockStickerStore{})
+	req, err := makeJSONRequest(http.MethodPost, "/stickers/documents", map[string]any{
+		"ids": []string{uuid.New().String()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetDocuments_InvalidStickerID(t *testing.T) {
+	app := newStickerApp(&mockStickerStore{})
+	req, err := makeJSONRequest(http.MethodPost, "/stickers/documents", map[string]any{
+		"ids": []string{"bad-id"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetDocuments_Success(t *testing.T) {
+	stickerID := uuid.New()
+	packID := uuid.New()
+	app := newStickerApp(&mockStickerStore{
+		getByIDsFn: func(_ context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error) {
+			if len(stickerIDs) != 1 || stickerIDs[0] != stickerID {
+				t.Fatalf("unexpected sticker ids: %#v", stickerIDs)
+			}
+
+			return []model.Sticker{{
+				ID:       stickerID,
+				PackID:   packID,
+				FileURL:  "https://cdn.example.com/stickers/ping.tgs",
+				FileType: "tgs",
+				Position: 0,
+			}}, nil
+		},
+	})
+
+	req, err := makeJSONRequest(http.MethodPost, "/stickers/documents", map[string]any{
+		"ids": []string{stickerID.String()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
 func TestListRecent_MissingUserID(t *testing.T) {
 	app := newStickerApp(&mockStickerStore{})
 	req, _ := http.NewRequest(http.MethodGet, "/stickers/recent", nil)

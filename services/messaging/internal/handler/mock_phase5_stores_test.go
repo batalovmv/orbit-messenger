@@ -235,6 +235,7 @@ func (m *mockPollStore) ListUserVotesByPollIDs(ctx context.Context, pollIDs []uu
 // ---------------------------------------------------------------------------
 
 type mockStickerStore struct {
+	getByIDsFn           func(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error)
 	getPackFn            func(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error)
 	getPackByShortNameFn func(ctx context.Context, shortName string) (*model.StickerPack, error)
 	listFeaturedFn       func(ctx context.Context, limit int) ([]model.StickerPack, error)
@@ -251,6 +252,13 @@ type mockStickerStore struct {
 	addStickerFn         func(ctx context.Context, packID uuid.UUID, sticker *model.Sticker) error
 	updatePackFn         func(ctx context.Context, pack *model.StickerPack) error
 	deletePackFn         func(ctx context.Context, packID uuid.UUID) error
+}
+
+func (m *mockStickerStore) GetByIDs(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error) {
+	if m.getByIDsFn != nil {
+		return m.getByIDsFn(ctx, stickerIDs)
+	}
+	return nil, nil
 }
 
 func (m *mockStickerStore) GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error) {

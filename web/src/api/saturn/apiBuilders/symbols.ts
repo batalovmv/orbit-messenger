@@ -14,8 +14,8 @@ import type {
   SaturnTenorGIF,
 } from '../types';
 
-import { getBaseUrl } from '../client';
 import { getEmojiImagePath } from '../../../util/emoji/emoji';
+import { getBaseUrl } from '../client';
 
 type AssetKind = 'avatar' | 'document' | 'photo' | 'profile' | 'sticker' | 'stickerSet';
 
@@ -126,7 +126,7 @@ function buildStickerSetInfo(
 }
 
 function buildStickerTitleDataUri(sticker: Pick<SaturnSticker, 'emoji'>) {
-  return makeSvgDataUri(sticker.emoji || '🙂', '#f8fafc');
+  return makeSvgDataUri(sticker.emoji || '🙂', 'transparent');
 }
 
 type StickerAssetFormat = 'static' | 'animated' | 'video';
@@ -213,6 +213,20 @@ function getMimeTypeForStickerFormat(format?: StickerAssetFormat, url?: string) 
   }
 }
 
+function getStickerPreviewUrl(
+  sticker: Pick<SaturnSticker, 'file_type' | 'preview_url' | 'thumbnail_url'>,
+  fullUrl?: string,
+) {
+  const explicitPreviewUrl = toAbsoluteUrl(sticker.preview_url || sticker.thumbnail_url);
+  if (explicitPreviewUrl) {
+    return explicitPreviewUrl;
+  }
+
+  return sticker.file_type === 'webp' || sticker.file_type === 'svg'
+    ? fullUrl
+    : undefined;
+}
+
 function registerStickerAsset(
   id: string,
   fileType: SaturnSticker['file_type'],
@@ -238,8 +252,10 @@ function registerStickerAsset(
 
 function getStickerSetCoverAsset(pack: SaturnStickerPack) {
   const thumbnailUrl = toAbsoluteUrl(pack.thumbnail_url);
-  const format = getStickerFormatHintFromUrl(pack.thumbnail_url)
-    || getStickerAssetFormatFromType(pack.stickers?.[0]?.file_type);
+  const thumbnailFormat = getStickerFormatHintFromUrl(pack.thumbnail_url);
+  const format = thumbnailUrl
+    ? (thumbnailFormat || 'static')
+    : getStickerAssetFormatFromType(pack.stickers?.[0]?.file_type);
 
   if (thumbnailUrl) {
     return {
@@ -254,7 +270,8 @@ function getStickerSetCoverAsset(pack: SaturnStickerPack) {
   }
 
   const [firstSticker] = pack.stickers;
-  const stickerAsset = getRegisteredAsset(firstSticker.id, 'sticker') || getRegisteredAsset(firstSticker.id, 'document');
+  const stickerAsset = getRegisteredAsset(firstSticker.id, 'sticker')
+    || getRegisteredAsset(firstSticker.id, 'document');
   const stickerFormat = getStickerAssetFormatFromType(firstSticker.file_type);
   const stickerUrl = stickerAsset?.fullUrl || toAbsoluteUrl(firstSticker.file_url);
   if (!stickerUrl) {
@@ -338,11 +355,14 @@ export function buildStaticAssetDocument(id: string, emoji: string, title?: stri
 export function buildApiSticker(
   sticker: SaturnSticker,
   pack?: Pick<SaturnStickerPack, 'id' | 'short_name'>,
-  options?: { isCustomEmoji?: boolean },
+  options?: { isCustomEmoji?: boolean; isFree?: boolean; shouldUseTextColor?: boolean },
 ): ApiSticker {
   const fullUrl = toAbsoluteUrl(sticker.file_url);
-  const previewUrl = fullUrl;
+  const previewUrl = getStickerPreviewUrl(sticker, fullUrl);
   const thumbnailDataUri = buildStickerTitleDataUri(sticker);
+  const isCustomEmoji = options?.isCustomEmoji ?? sticker.is_custom_emoji;
+  const isFree = options?.isFree ?? sticker.is_free ?? true;
+  const shouldUseTextColor = options?.shouldUseTextColor ?? sticker.should_use_text_color;
 
   registerStickerAsset(sticker.id, sticker.file_type, fullUrl, previewUrl, thumbnailDataUri);
 
@@ -351,13 +371,15 @@ export function buildApiSticker(
     id: sticker.id,
     stickerSetInfo: buildStickerSetInfo(pack?.id || sticker.pack_id, pack?.short_name),
     emoji: sticker.emoji,
-    isCustomEmoji: options?.isCustomEmoji || undefined,
+    isCustomEmoji: isCustomEmoji || undefined,
     isLottie: sticker.file_type === 'tgs',
     isVideo: sticker.file_type === 'webm',
     width: sticker.width || undefined,
     height: sticker.height || undefined,
     thumbnail: buildThumbnail(thumbnailDataUri, sticker.width || 128, sticker.height || 128),
     previewPhotoSizes: buildPreviewSizes(sticker.width || undefined, sticker.height || undefined),
+    isFree,
+    shouldUseTextColor: shouldUseTextColor || undefined,
   };
 }
 
@@ -495,14 +517,17 @@ export function parseRichMessageContent(raw?: string): SerializedRichMessageCont
 }
 
 export function buildStickerFromSerializedMessage(payload: SerializedStickerMessage['sticker']): ApiSticker {
-  const thumbnailDataUri = makeSvgDataUri(payload.emoji || '🙂', '#f8fafc');
+  const previewUrl = toAbsoluteUrl(payload.preview_url || (
+    !payload.is_lottie && !payload.is_video ? payload.url : undefined
+  ));
+  const thumbnailDataUri = makeSvgDataUri(payload.emoji || '🙂', 'transparent');
   const fileType = payload.is_lottie ? 'tgs' : payload.is_video ? 'webm' : 'webp';
 
   registerStickerAsset(
     payload.id,
     fileType,
     toAbsoluteUrl(payload.url),
-    toAbsoluteUrl(payload.preview_url || payload.url),
+    previewUrl,
     thumbnailDataUri,
   );
 
@@ -518,6 +543,7 @@ export function buildStickerFromSerializedMessage(payload: SerializedStickerMess
     height: payload.height || undefined,
     thumbnail: buildThumbnail(thumbnailDataUri, payload.width || 128, payload.height || 128),
     previewPhotoSizes: buildPreviewSizes(payload.width, payload.height),
+    isFree: true,
   };
 }
 

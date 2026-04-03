@@ -1623,10 +1623,14 @@ addActionHandler('loadCustomEmojis', async (global, actions, payload): Promise<v
   const { ids, ignoreCache } = payload;
   const newCustomEmojiIds = ignoreCache ? ids
     : unique(ids.filter((documentId) => !selectCustomEmoji(global, documentId)));
+  if (!newCustomEmojiIds.length) {
+    return;
+  }
+
   const customEmoji = await callApi('fetchCustomEmoji', {
     documentId: newCustomEmojiIds,
   });
-  if (!customEmoji) return;
+  if (!customEmoji?.length) return;
 
   global = getGlobal();
   global = {

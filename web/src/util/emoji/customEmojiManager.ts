@@ -61,9 +61,14 @@ const callInputRenderHandlers = throttle(renderCallbacks.runCallbacks, DOM_PROCE
 function processDomForCustomEmoji() {
   const emojis = document.querySelectorAll<HTMLImageElement>('.custom-emoji.placeholder');
   emojis.forEach((emoji) => {
-    const customEmoji = selectCustomEmoji(getGlobal(), emoji.dataset.documentId!);
+    const documentId = emoji.dataset.documentId;
+    if (!documentId) {
+      return;
+    }
+
+    const customEmoji = selectCustomEmoji(getGlobal(), documentId);
     if (!customEmoji) {
-      INPUT_WAITING_CUSTOM_EMOJI_IDS.add(emoji.dataset.documentId!);
+      INPUT_WAITING_CUSTOM_EMOJI_IDS.add(documentId);
       return;
     }
     const [isPlaceholder, src, uniqueId] = getInputCustomEmojiParams(customEmoji);
@@ -78,9 +83,13 @@ function processDomForCustomEmoji() {
       requestMutation(() => {
         emoji.src = src;
         emoji.classList.remove('placeholder');
-        if (uniqueId) emoji.dataset.uniqueId = uniqueId;
+        if (uniqueId) {
+          emoji.dataset.uniqueId = uniqueId;
+        } else {
+          delete emoji.dataset.uniqueId;
+        }
 
-        callInputRenderHandlers(customEmoji.id);
+        callInputRenderHandlers(documentId);
       });
     }
   });

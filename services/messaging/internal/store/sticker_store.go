@@ -12,6 +12,8 @@ import (
 
 // StickerStore manages sticker packs and user sticker collections.
 type StickerStore interface {
+	// GetByIDs returns stickers for the provided IDs in the same order.
+	GetByIDs(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error)
 	// GetPack returns a sticker pack by ID with all its stickers.
 	GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error)
 	// GetPackByShortName returns a sticker pack by its short name.
@@ -52,6 +54,48 @@ type stickerStore struct {
 
 func NewStickerStore(pool *pgxpool.Pool) StickerStore {
 	return &stickerStore{pool: pool}
+}
+
+func (s *stickerStore) GetByIDs(ctx context.Context, stickerIDs []uuid.UUID) ([]model.Sticker, error) {
+	if len(stickerIDs) == 0 {
+		return []model.Sticker{}, nil
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, pack_id, emoji, file_url, file_type, width, height, position
+		FROM stickers
+		WHERE id = ANY($1)
+		ORDER BY array_position($1::uuid[], id) ASC`,
+		stickerIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get stickers by ids: %w", err)
+	}
+	defer rows.Close()
+
+	stickers := make([]model.Sticker, 0, len(stickerIDs))
+	for rows.Next() {
+		var sticker model.Sticker
+		if err := rows.Scan(
+			&sticker.ID,
+			&sticker.PackID,
+			&sticker.Emoji,
+			&sticker.FileURL,
+			&sticker.FileType,
+			&sticker.Width,
+			&sticker.Height,
+			&sticker.Position,
+		); err != nil {
+			return nil, fmt.Errorf("scan sticker by id: %w", err)
+		}
+		stickers = append(stickers, sticker)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate stickers by id: %w", err)
+	}
+
+	return stickers, nil
 }
 
 func (s *stickerStore) GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error) {

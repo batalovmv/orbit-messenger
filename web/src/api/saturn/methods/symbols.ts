@@ -91,6 +91,14 @@ function buildEmojiSets(packs: SaturnStickerPack[]) {
   return packs.map((pack) => buildApiStickerSet(pack, { isEmoji: true, isCustomEmoji: true }));
 }
 
+function normalizeCustomEmoji(sticker: ApiSticker): ApiSticker {
+  return {
+    ...sticker,
+    isCustomEmoji: true,
+    isFree: sticker.isFree ?? true,
+  };
+}
+
 async function listInstalledStickerPacks() {
   return client.request<SaturnStickerPack[]>('GET', '/stickers/installed');
 }
@@ -237,15 +245,36 @@ export async function faveSticker({
     : addFavoriteSticker({ sticker });
 }
 
-export function fetchCustomEmoji({ documentId }: { documentId: string[] }) {
+export async function fetchCustomEmoji({ documentId }: { documentId: string[] }) {
+  const requestedIds = [...new Set(documentId.filter(Boolean))];
+  if (!requestedIds.length) {
+    return [];
+  }
+
   const stickerById = getKnownStickerMaps();
-  return Promise.resolve(documentId
-    .map((id) => stickerById[id])
+  const missingIds = requestedIds.filter((id) => !stickerById[id]);
+  let fetchedById: Record<string, ApiSticker> = {};
+
+  if (missingIds.length) {
+    try {
+      const fetched = await client.deduplicateRequest(
+        `custom-emoji:${missingIds.join(',')}`,
+        () => client.request<SaturnSticker[]>('POST', '/stickers/documents', { ids: missingIds }),
+      );
+
+      fetchedById = buildCollectionByKey(
+        fetched.map((sticker) => buildApiSticker(sticker, undefined, { isCustomEmoji: true })),
+        'id',
+      ) as Record<string, ApiSticker>;
+    } catch {
+      fetchedById = {};
+    }
+  }
+
+  return requestedIds
+    .map((id) => stickerById[id] || fetchedById[id])
     .filter((sticker): sticker is ApiSticker => Boolean(sticker))
-    .map((sticker) => ({
-      ...sticker,
-      isCustomEmoji: true as const,
-    })));
+    .map(normalizeCustomEmoji);
 }
 
 export async function fetchCustomEmojiSets({ hash }: { hash?: string }) {

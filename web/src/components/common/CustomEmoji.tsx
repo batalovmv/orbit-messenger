@@ -81,8 +81,10 @@ const CustomEmoji = ({
     containerRef = ref;
   }
 
+  const resolvedDocumentId = documentId || sticker?.id;
+
   // An alternative to `withGlobal` to avoid adding numerous global containers
-  const { customEmoji: customEmojiFromDocumentId, canPlay } = useCustomEmoji(documentId);
+  const { customEmoji: customEmojiFromDocumentId, canPlay } = useCustomEmoji(resolvedDocumentId);
   const customEmoji = customEmojiFromDocumentId || sticker;
 
   const loopCountRef = useRef(0);
@@ -129,7 +131,7 @@ const CustomEmoji = ({
       onClick={onClick}
       onAnimationEnd={onAnimationEnd}
       data-entity-type={ApiMessageEntityTypes.CustomEmoji}
-      data-document-id={documentId}
+      data-document-id={resolvedDocumentId}
       data-alt={customEmoji?.emoji}
       style={style}
     >
@@ -139,7 +141,7 @@ const CustomEmoji = ({
           src={blankImg}
           alt={customEmoji?.emoji}
           data-entity-type={ApiMessageEntityTypes.CustomEmoji}
-          data-document-id={documentId}
+          data-document-id={resolvedDocumentId}
           draggable={false}
         />
       )}

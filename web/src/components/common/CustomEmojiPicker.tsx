@@ -327,7 +327,11 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
   }, [areAddedLoaded, activeSetIndex]);
 
   const handleEmojiSelect = useLastCallback((emoji: ApiSticker) => {
-    onCustomEmojiSelect(emoji);
+    onCustomEmojiSelect({
+      ...emoji,
+      isCustomEmoji: true,
+      isFree: emoji.isFree ?? true,
+    });
   });
 
   function renderCover(stickerSet: StickerSetOrReactionsSetOrRecent, index: number) {
