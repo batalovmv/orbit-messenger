@@ -598,6 +598,42 @@ var completeChunkedScript = redis.NewScript(`
 	return raw
 `)
 
+var abortChunkedScript = redis.NewScript(`
+	local raw = redis.call('GET', KEYS[1])
+	if not raw then return redis.error_reply('not_found') end
+	local meta = cjson.decode(raw)
+	if meta.uploader_id ~= ARGV[1] then return redis.error_reply('forbidden') end
+	redis.call('DEL', KEYS[1])
+	return raw
+`)
+
+// AbortChunkedUpload cancels an in-progress multipart upload.
+func (s *MediaService) AbortChunkedUpload(ctx context.Context, uploadID string, uploaderID uuid.UUID) error {
+	key := chunkedKeyPrefix + uploadID
+	rawStr, err := abortChunkedScript.Run(ctx, s.rdb, []string{key}, uploaderID.String()).Text()
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "not_found") {
+			return model.ErrUploadNotFound
+		}
+		if strings.Contains(errMsg, "forbidden") {
+			return model.ErrUploadForbidden
+		}
+		return fmt.Errorf("abort chunked script: %w", err)
+	}
+
+	var meta model.ChunkedUploadMeta
+	if err := json.Unmarshal([]byte(rawStr), &meta); err != nil {
+		return fmt.Errorf("parse chunked meta: %w", err)
+	}
+
+	if err := s.r2.AbortMultipartUpload(ctx, meta.R2Key, meta.R2UploadID); err != nil {
+		return fmt.Errorf("abort multipart: %w", err)
+	}
+
+	return nil
+}
+
 // CompleteChunkedUpload finishes the multipart upload.
 func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID string, uploaderID uuid.UUID, isOneTime bool) (*model.Media, error) {
 	// Lua script: atomically GET + verify owner + DEL — prevents destroying
@@ -748,6 +784,8 @@ func extensionFromMIME(mime string) string {
 		return ".png"
 	case "image/webp":
 		return ".webp"
+	case "image/svg+xml":
+		return ".svg"
 	case "image/gif":
 		return ".gif"
 	case "image/heic":

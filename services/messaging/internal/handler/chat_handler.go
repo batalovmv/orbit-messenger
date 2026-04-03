@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"crypto/subtle"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -24,15 +23,6 @@ func NewChatHandler(svc *service.ChatService, logger *slog.Logger, internalSecre
 		h.internalSecret = internalSecret[0]
 	}
 	return h
-}
-
-// isInternalRequest checks if the request carries a valid X-Internal-Token header.
-func (h *ChatHandler) isInternalRequest(c *fiber.Ctx) bool {
-	if h.internalSecret == "" {
-		return false
-	}
-	token := c.Get("X-Internal-Token")
-	return token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) == 1
 }
 
 func (h *ChatHandler) Register(app fiber.Router) {
@@ -470,7 +460,7 @@ func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
 	}
 
 	// Internal service-to-service calls (with valid X-Internal-Token) skip membership check
-	if !h.isInternalRequest(c) {
+	if !isInternalRequest(c, h.internalSecret) {
 		callerID, err := getUserID(c)
 		if err != nil {
 			return response.Error(c, err)

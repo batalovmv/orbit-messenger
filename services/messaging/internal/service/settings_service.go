@@ -228,3 +228,13 @@ func (s *SettingsService) DeleteNotificationSettings(ctx context.Context, userID
 	}
 	return nil
 }
+
+// GetMutedUserIDs returns the subset of user IDs that currently have chat notifications muted.
+func (s *SettingsService) GetMutedUserIDs(ctx context.Context, chatID uuid.UUID, userIDs []string) ([]string, error) {
+	mutedUserIDs, err := s.notifStore.ListMutedUserIDs(ctx, chatID, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list muted user ids: %w", err)
+	}
+
+	return mutedUserIDs, nil
+}

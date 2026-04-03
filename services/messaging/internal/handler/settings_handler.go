@@ -17,24 +17,33 @@ import (
 )
 
 type SettingsHandler struct {
-	settingsSvc  *service.SettingsService
-	pushStore    store.PushSubscriptionStore
-	logger       *slog.Logger
+	settingsSvc    *service.SettingsService
+	pushStore      store.PushSubscriptionStore
+	logger         *slog.Logger
+	internalSecret string
 }
 
 func NewSettingsHandler(
 	settingsSvc *service.SettingsService,
 	pushStore store.PushSubscriptionStore,
 	logger *slog.Logger,
+	internalSecret ...string,
 ) *SettingsHandler {
-	return &SettingsHandler{
+	h := &SettingsHandler{
 		settingsSvc: settingsSvc,
 		pushStore:   pushStore,
 		logger:      logger,
 	}
+	if len(internalSecret) > 0 {
+		h.internalSecret = internalSecret[0]
+	}
+	return h
 }
 
 func (h *SettingsHandler) Register(app fiber.Router) {
+	app.Get("/internal/push-subscriptions/:userId", h.GetInternalPushSubscriptions)
+	app.Delete("/internal/push-subscriptions/:userId", h.DeleteInternalPushSubscription)
+	app.Post("/internal/notification-settings/muted-users", h.ListMutedUsers)
 	app.Get("/users/me/settings/privacy", h.GetPrivacySettings)
 	app.Put("/users/me/settings/privacy", h.UpdatePrivacySettings)
 	app.Get("/users/me/settings/appearance", h.GetUserSettings)
@@ -326,4 +335,78 @@ func (h *SettingsHandler) UnsubscribePush(c *fiber.Ctx) error {
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *SettingsHandler) GetInternalPushSubscriptions(c *fiber.Ctx) error {
+	if err := requireInternalRequest(c, h.internalSecret); err != nil {
+		return response.Error(c, err)
+	}
+
+	userID, err := uuid.Parse(c.Params("userId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	subscriptions, err := h.pushStore.ListByUser(c.Context(), userID)
+	if err != nil {
+		h.logger.Error("list internal push subscriptions", "error", err, "user_id", userID)
+		return response.Error(c, apperror.Internal("failed to load push subscriptions"))
+	}
+
+	return response.JSON(c, fiber.StatusOK, subscriptions)
+}
+
+func (h *SettingsHandler) DeleteInternalPushSubscription(c *fiber.Ctx) error {
+	if err := requireInternalRequest(c, h.internalSecret); err != nil {
+		return response.Error(c, err)
+	}
+
+	userID, err := uuid.Parse(c.Params("userId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	endpoint := c.Query("endpoint")
+	if endpoint == "" {
+		return response.Error(c, apperror.BadRequest("endpoint is required"))
+	}
+
+	if err := h.pushStore.Delete(c.Context(), userID, endpoint); err != nil {
+		return response.Error(c, err)
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *SettingsHandler) ListMutedUsers(c *fiber.Ctx) error {
+	if err := requireInternalRequest(c, h.internalSecret); err != nil {
+		return response.Error(c, err)
+	}
+
+	var req struct {
+		ChatID  string   `json:"chat_id"`
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	for _, userID := range req.UserIDs {
+		if _, err := uuid.Parse(userID); err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid user ID"))
+		}
+	}
+
+	mutedUserIDs, err := h.settingsSvc.GetMutedUserIDs(c.Context(), chatID, req.UserIDs)
+	if err != nil {
+		h.logger.Error("list muted users", "error", err, "chat_id", chatID)
+		return response.Error(c, apperror.Internal("failed to load notification settings"))
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"muted_user_ids": mutedUserIDs})
 }

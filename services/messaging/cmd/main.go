@@ -228,7 +228,7 @@ func main() {
 	msgHandler := handler.NewMessageHandler(msgSvc, pollSvc, scheduledSvc, linkPreviewSvc, logger).SetReactionService(reactionSvc)
 	userHandler := handler.NewUserHandler(userSvc, logger)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
-	settingsHandler := handler.NewSettingsHandler(settingsSvc, pushStore, logger)
+	settingsHandler := handler.NewSettingsHandler(settingsSvc, pushStore, logger, internalSecret)
 	searchHandler := handler.NewSearchHandler(searchSvc, logger)
 	reactionHandler := handler.NewReactionHandler(reactionSvc, logger)
 	stickerHandler := handler.NewStickerHandler(stickerSvc, logger)

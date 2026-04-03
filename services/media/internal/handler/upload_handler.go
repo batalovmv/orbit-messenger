@@ -50,6 +50,7 @@ func (h *UploadHandler) Register(app *fiber.App) {
 	upload.Post("/media/upload/chunked/init", h.ChunkedInit)
 	upload.Post("/media/upload/chunked/:uploadId", h.ChunkedUploadPart)
 	upload.Post("/media/upload/chunked/:uploadId/complete", h.ChunkedComplete)
+	upload.Delete("/media/upload/chunked/:uploadId", h.ChunkedAbort)
 }
 
 // Upload handles simple file upload via multipart/form-data.
@@ -197,6 +198,25 @@ func (h *UploadHandler) ChunkedComplete(c *fiber.Ctx) error {
 
 	resp := h.svc.BuildMediaResponse(c.Context(), media)
 	return response.JSON(c, fiber.StatusCreated, resp)
+}
+
+// ChunkedAbort cancels a chunked upload and aborts the underlying multipart upload.
+func (h *UploadHandler) ChunkedAbort(c *fiber.Ctx) error {
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	uploadID := c.Params("uploadId")
+	if uploadID == "" {
+		return response.Error(c, apperror.BadRequest("Missing upload ID"))
+	}
+
+	if err := h.svc.AbortChunkedUpload(c.Context(), uploadID, uid); err != nil {
+		return h.mapChunkedError(c, err, "chunked abort")
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // mapChunkedError converts service errors to HTTP responses.
