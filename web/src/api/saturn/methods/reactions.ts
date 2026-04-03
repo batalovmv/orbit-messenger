@@ -171,6 +171,8 @@ export async function sendReaction({
   saturnId?: string;
 }) {
   const uuid = saturnId || resolveMessageUuid(chat.id, messageId);
+  // eslint-disable-next-line no-console
+  console.log('[Saturn] sendReaction uuid:', uuid, 'saturnId:', saturnId, 'msgId:', messageId);
   if (!uuid) return undefined;
 
   const desiredEmojiSet = new Set(
@@ -181,6 +183,8 @@ export async function sendReaction({
 
   const summaries = await loadReactionSummaries(uuid);
   const currentUserId = getCurrentUserId();
+  // eslint-disable-next-line no-console
+  console.log('[Saturn] sendReaction summaries:', JSON.stringify(summaries).substring(0, 200), 'userId:', currentUserId);
   const currentEmojiSet = new Set(
     summaries
       .filter((summary) => currentUserId && summary.user_ids.includes(currentUserId))
@@ -189,6 +193,8 @@ export async function sendReaction({
 
   const removals = [...currentEmojiSet].filter((emoji) => !desiredEmojiSet.has(emoji));
   const additions = [...desiredEmojiSet].filter((emoji) => !currentEmojiSet.has(emoji));
+  // eslint-disable-next-line no-console
+  console.log('[Saturn] sendReaction desired:', [...desiredEmojiSet], 'current:', [...currentEmojiSet], 'add:', additions, 'rm:', removals);
   await Promise.all([
     ...removals.map((emoji) => client.request('DELETE', `/messages/${uuid}/reactions`, { emoji })),
     ...additions.map((emoji) => client.request('POST', `/messages/${uuid}/reactions`, { emoji })),
