@@ -292,6 +292,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 **Compat / wiring:**
 - [x] TG Web A ↔ Saturn parity for chat/profile photo flows and archive toggle (`editChatPhoto`, `updateProfilePhoto`/`uploadProfilePhoto`, `toggleChatArchived`), avatar hash media resolution, `settingsApi` debug logging, passcode timeout fix
+- [x] Guard notification settings Saturn calls against missing `chat.id` in wrappers and chat actions
 
 **Messages:**
 - [x] fetchMessages, sendMessage, editMessage, deleteMessages

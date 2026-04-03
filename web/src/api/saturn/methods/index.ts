@@ -877,6 +877,8 @@ export async function updateChatNotifySettings({
   chat: { id: string };
   settings: { mutedUntil?: number; shouldShowPreviews?: boolean; isSilentPosting?: boolean };
 }) {
+  if (!chat?.id) return undefined;
+
   const { updateChatNotifySettings: update } = await import('./settingsApi');
   return update({
     chatId: chat.id,
@@ -887,11 +889,15 @@ export async function updateChatNotifySettings({
 }
 
 export async function getChatNotifySettings({ chat }: { chat: { id: string } }) {
+  if (!chat?.id) return undefined;
+
   const { getChatNotifySettings: get } = await import('./settingsApi');
   return get({ chatId: chat.id });
 }
 
 export async function deleteChatNotifySettings({ chat }: { chat: { id: string } }) {
+  if (!chat?.id) return undefined;
+
   const { deleteChatNotifySettings: del } = await import('./settingsApi');
   return del({ chatId: chat.id });
 }

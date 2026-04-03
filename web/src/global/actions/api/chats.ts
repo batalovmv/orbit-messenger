@@ -732,6 +732,7 @@ addActionHandler('updateChatMutedState', (global, actions, payload): ActionRetur
   if (!chat) {
     return;
   }
+  if (!chat?.id) return;
 
   void callApi('updateChatNotifySettings', { chat, settings: { mutedUntil } });
 });
@@ -743,6 +744,7 @@ addActionHandler('updateChatSilentPosting', (global, actions, payload): ActionRe
   if (!chat) {
     return;
   }
+  if (!chat?.id) return;
 
   void callApi('updateChatNotifySettings', { chat, settings: { isSilentPosting: isEnabled } });
 });
