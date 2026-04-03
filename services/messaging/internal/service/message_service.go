@@ -73,6 +73,27 @@ func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID
 	return msg, nil
 }
 
+func (s *MessageService) ViewOneTimeMessage(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+	msg, err := s.messages.MarkOneTimeViewed(ctx, msgID, userID)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil, apperror.NotFound("Message not found")
+		case errors.Is(err, store.ErrMessageForbidden):
+			return nil, apperror.Forbidden("Not a member of this chat")
+		case errors.Is(err, store.ErrMessageNotOneTime):
+			return nil, apperror.BadRequest("Message is not one-time media")
+		default:
+			return nil, fmt.Errorf("view one-time message: %w", err)
+		}
+	}
+
+	s.enrichMessageMedia(ctx, msg)
+	s.publishMessageUpdated(ctx, msg)
+
+	return msg, nil
+}
+
 func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
@@ -457,6 +478,20 @@ func (s *MessageService) ListPinned(ctx context.Context, chatID, userID uuid.UUI
 	}
 
 	return s.messages.ListPinned(ctx, chatID)
+}
+
+func (s *MessageService) publishMessageUpdated(ctx context.Context, msg *model.Message) {
+	if msg == nil {
+		return
+	}
+
+	memberIDs, err := s.chats.GetMemberIDs(ctx, msg.ChatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for NATS publish", "chat_id", msg.ChatID, "error", err)
+	}
+
+	subject := fmt.Sprintf("orbit.chat.%s.message.updated", msg.ChatID.String())
+	s.nats.Publish(subject, "message_updated", msg, memberIDs)
 }
 
 // SendMediaMessage creates a message with media attachments.

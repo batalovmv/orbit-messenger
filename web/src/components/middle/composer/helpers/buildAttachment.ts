@@ -13,6 +13,11 @@ import {
   preloadVideo,
 } from '../../../../util/files';
 import { scaleImage } from '../../../../util/imageResize';
+import {
+  createPdfPreviewBlobUrl,
+  PDF_PREVIEW_IMAGE_HEIGHT,
+  PDF_PREVIEW_IMAGE_WIDTH,
+} from '../../../../util/pdf';
 
 const MAX_STANDARD_QUALITY_IMG_SIZE = 1280; // px
 const MAX_HIGH_QUALITY_IMG_SIZE = 2560;
@@ -28,6 +33,7 @@ export default async function buildAttachment(
   let quick;
   let audio;
   let previewBlobUrl;
+  let pageCount;
   let shouldSendAsFile;
   const shouldSendInHighQuality = options?.shouldSendInHighQuality;
 
@@ -79,6 +85,14 @@ export default async function buildAttachment(
     }
 
     previewBlobUrl = await createPosterForVideo(blobUrl);
+  } else if (mimeType === 'application/pdf') {
+    const pdfPreview = await createPdfPreviewBlobUrl(blobUrl, {
+      width: PDF_PREVIEW_IMAGE_WIDTH,
+      height: PDF_PREVIEW_IMAGE_HEIGHT,
+    });
+
+    previewBlobUrl = pdfPreview?.previewBlobUrl;
+    pageCount = pdfPreview?.pageCount;
   } else if (SUPPORTED_AUDIO_CONTENT_TYPES.has(mimeType)) {
     const {
       duration, title, performer, coverUrl,
@@ -97,6 +111,7 @@ export default async function buildAttachment(
     filename,
     mimeType,
     size,
+    pageCount,
     quick,
     audio,
     previewBlobUrl,

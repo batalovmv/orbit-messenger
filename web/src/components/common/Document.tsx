@@ -104,12 +104,16 @@ const Document = ({
   );
 
   const shouldDownload = Boolean(isDownloading || (isLoadAllowed && wasIntersected));
+  const isLocalDocument = document.id?.startsWith('local-');
+  const isPdf = mimeType === 'application/pdf' || extension.toLowerCase() === 'pdf';
 
   const documentHash = getDocumentMediaHash(document, 'download');
+  const shouldLoadPdfPreview = isPdf && wasIntersected && !isLocalDocument;
   const { loadProgress: downloadProgress, mediaData } = useMediaWithLoadProgress(
-    documentHash, !shouldDownload, getMediaFormat(document, 'download'), undefined, true,
+    documentHash, !(shouldDownload || shouldLoadPdfPreview), getMediaFormat(document, 'download'), undefined, true,
   );
-  const isLoaded = Boolean(mediaData);
+  const resolvedMediaData = mediaData || document.blobUrl;
+  const isLoaded = Boolean(resolvedMediaData);
 
   const {
     isUploading, isTransferring, transferProgress,
@@ -124,16 +128,15 @@ const Document = ({
   const localBlobUrl = hasPreview ? document.previewBlobUrl : undefined;
   const previewData = useMedia(getDocumentMediaHash(document, 'pictogram'), !isIntersecting);
 
-  const isPdf = mimeType === 'application/pdf' || extension.toLowerCase() === 'pdf';
   const [isPdfPendingOpen, setIsPdfPendingOpen] = useState(false);
 
   // Auto-open PDF viewer once download completes after user click
   useEffect(() => {
-    if (isPdf && isPdfPendingOpen && isLoaded && mediaData) {
+    if (isPdf && isPdfPendingOpen && isLoaded && resolvedMediaData) {
       setIsPdfPendingOpen(false);
       openPdfViewer();
     }
-  }, [isPdf, isPdfPendingOpen, isLoaded, mediaData, openPdfViewer]);
+  }, [isPdf, isPdfPendingOpen, isLoaded, openPdfViewer, resolvedMediaData]);
 
   const shouldForceDownload = document.innerMediaType === 'photo' && document.mediaSize
     && !document.mediaSize.fromDocumentAttribute && !document.mediaSize.fromPreload;
@@ -177,7 +180,7 @@ const Document = ({
       return;
     }
 
-    if (isPdf && isLoaded && mediaData) {
+    if (isPdf && isLoaded && resolvedMediaData) {
       openPdfViewer();
       return;
     }
@@ -221,10 +224,13 @@ const Document = ({
     <>
       {isPdf ? (
         <PdfPreview
+          ref={ref}
           id={id}
           name={fileName}
           extension={extension}
           size={size}
+          pageCount={document.pageCount}
+          pdfUrl={resolvedMediaData}
           timestamp={datetime}
           thumbnailDataUri={thumbDataUri}
           previewData={localBlobUrl || previewData}
@@ -263,9 +269,9 @@ const Document = ({
           onDateClick={onDateClick ? handleDateClick : undefined}
         />
       )}
-      {isPdfViewerOpen && mediaData && (
+      {isPdfViewerOpen && resolvedMediaData && (
         <PdfViewer
-          url={mediaData}
+          url={resolvedMediaData}
           fileName={fileName}
           onClose={closePdfViewer}
         />

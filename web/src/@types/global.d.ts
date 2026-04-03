@@ -127,6 +127,10 @@ declare module 'opus-recorder' {
   export default recorder;
 }
 
+declare module 'pdfjs-dist/legacy/webpack.mjs' {
+  export const getDocument: any;
+}
+
 interface TEncodedImage {
   result: Uint8ClampedArray;
   width: number;

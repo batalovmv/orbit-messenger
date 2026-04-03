@@ -82,6 +82,7 @@ export interface SaturnMediaAttachment {
   media_id: string;
   type: 'photo' | 'video' | 'file' | 'voice' | 'videonote' | 'gif' | 'sticker';
   mime_type: string;
+  page_count?: number;
   url?: string;
   thumbnail_url?: string;
   medium_url?: string;

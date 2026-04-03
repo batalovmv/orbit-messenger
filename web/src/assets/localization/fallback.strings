@@ -1812,6 +1812,11 @@
 "SearchContextCaption" = "From {type}";
 "SearchFilterFrom" = "From:";
 "SearchFilterDate" = "Date:";
+"SearchFilterType" = "Type:";
+"SearchFilterTypePhoto" = "Photos";
+"SearchFilterTypeVideo" = "Videos";
+"SearchFilterTypeFile" = "Files";
+"SearchFilterTypeLink" = "Links";
 "SearchFilterDateFrom" = "Date from";
 "SearchFilterDateTo" = "Date to";
 "SearchFilterDateFromValue" = "from {date}";
@@ -2807,4 +2812,6 @@
 "DoNotReply" = "Cancel Reply";
 "ChannelInfo" = "Channel Info";
 "OpenInNewTab" = "Open in New Tab";
+"PdfPageCount_one" = "{count} page";
+"PdfPageCount_other" = "{count} pages";
 "PdfCannotPreview" = "PDF preview is not available in this browser";

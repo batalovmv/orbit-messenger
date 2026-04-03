@@ -32,13 +32,26 @@ func (s *messageStore) CreateWithMedia(ctx context.Context, msg *model.Message, 
 		return fmt.Errorf("get sequence: %w", err)
 	}
 
+	var isOneTime bool
 	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, grouped_id, sequence_number)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, sequence_number, created_at`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.GroupedID, seq,
-	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded,
-		&msg.SequenceNumber, &msg.CreatedAt)
+		`SELECT COALESCE(bool_or(is_one_time), false)
+		 FROM media
+		 WHERE id = ANY($1)`,
+		mediaIDs,
+	).Scan(&isOneTime)
+	if err != nil {
+		return fmt.Errorf("resolve one-time media state: %w", err)
+	}
+	msg.IsOneTime = isOneTime
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, grouped_id, sequence_number, is_one_time)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
+		           sequence_number, created_at, viewed_at, viewed_by`,
+		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.GroupedID, seq, isOneTime,
+	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
+		&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}

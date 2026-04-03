@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
+	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
 // ---------------------------------------------------------------------------
@@ -365,6 +366,49 @@ func (m *mockStickerStore) DeletePack(ctx context.Context, packID uuid.UUID) err
 		return m.deletePackFn(ctx, packID)
 	}
 	return nil
+}
+
+type mockTelegramStickerClient struct {
+	getStickerSetFn func(ctx context.Context, shortName string) (*service.TelegramStickerSet, error)
+	getFileFn       func(ctx context.Context, fileID string) (*service.TelegramFile, error)
+	downloadFileFn  func(ctx context.Context, filePath string) ([]byte, error)
+}
+
+func (m *mockTelegramStickerClient) GetStickerSet(ctx context.Context, shortName string) (*service.TelegramStickerSet, error) {
+	if m.getStickerSetFn != nil {
+		return m.getStickerSetFn(ctx, shortName)
+	}
+	return nil, nil
+}
+
+func (m *mockTelegramStickerClient) GetFile(ctx context.Context, fileID string) (*service.TelegramFile, error) {
+	if m.getFileFn != nil {
+		return m.getFileFn(ctx, fileID)
+	}
+	return nil, nil
+}
+
+func (m *mockTelegramStickerClient) DownloadFile(ctx context.Context, filePath string) ([]byte, error) {
+	if m.downloadFileFn != nil {
+		return m.downloadFileFn(ctx, filePath)
+	}
+	return nil, nil
+}
+
+type mockStickerMediaUploader struct {
+	uploadStickerFn func(ctx context.Context, uploaderID uuid.UUID, fileName string, data []byte) (*service.UploadedStickerMedia, error)
+}
+
+func (m *mockStickerMediaUploader) UploadSticker(
+	ctx context.Context,
+	uploaderID uuid.UUID,
+	fileName string,
+	data []byte,
+) (*service.UploadedStickerMedia, error) {
+	if m.uploadStickerFn != nil {
+		return m.uploadStickerFn(ctx, uploaderID, fileName, data)
+	}
+	return nil, nil
 }
 
 // ---------------------------------------------------------------------------

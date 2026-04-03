@@ -391,6 +391,78 @@ func TestMarkRead_InvalidMsgID(t *testing.T) {
 	}
 }
 
+func TestViewOneTimeMessage_AuthFail(t *testing.T) {
+	messageID := uuid.New()
+
+	app := newMessageApp(&mockMessageStore{}, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodPost, "/messages/"+messageID.String()+"/view", nil)
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without user context, got %d", resp.StatusCode)
+	}
+}
+
+func TestViewOneTimeMessage_InvalidMessageID(t *testing.T) {
+	userID := uuid.New()
+
+	app := newMessageApp(&mockMessageStore{}, defaultMemberChatStore())
+	req, _ := http.NewRequest(http.MethodPost, "/messages/not-a-uuid/view", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid message ID, got %d", resp.StatusCode)
+	}
+}
+
+func TestViewOneTimeMessage_Success(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	messageID := uuid.New()
+
+	app := newMessageApp(&mockMessageStore{
+		markOneTimeViewedFn: func(_ context.Context, msgID, viewerID uuid.UUID) (*model.Message, error) {
+			if msgID != messageID {
+				t.Fatalf("unexpected message id: %s", msgID)
+			}
+			if viewerID != userID {
+				t.Fatalf("unexpected viewer id: %s", viewerID)
+			}
+
+			now := time.Now()
+			return &model.Message{
+				ID:         messageID,
+				ChatID:     chatID,
+				SenderID:   &viewerID,
+				Type:       "photo",
+				IsOneTime:  true,
+				ViewedAt:   &now,
+				ViewedBy:   &viewerID,
+				CreatedAt:  now,
+				SenderName: "Viewer",
+			}, nil
+		},
+	}, defaultMemberChatStore())
+
+	req, _ := http.NewRequest(http.MethodPost, "/messages/"+messageID.String()+"/view", nil)
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ListMessages
 // ---------------------------------------------------------------------------

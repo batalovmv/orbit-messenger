@@ -80,6 +80,7 @@ func (h *MessageHandler) Register(app fiber.Router) {
 
 	// Read receipts
 	app.Patch("/chats/:id/read", h.MarkRead)
+	app.Post("/messages/:id/view", h.ViewOneTimeMessage)
 
 	// Message actions (no chat prefix)
 	app.Patch("/messages/:id", h.EditMessage)
@@ -657,6 +658,30 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Read pointer updated"})
+}
+
+func (h *MessageHandler) ViewOneTimeMessage(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid message ID"))
+	}
+
+	msg, err := h.svc.ViewOneTimeMessage(c.Context(), msgID, uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	msgs := []model.Message{*msg}
+	if err := h.hydrateMessages(c.Context(), uid, msgs); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, msgs[0])
 }
 
 func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {

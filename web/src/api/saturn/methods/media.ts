@@ -9,6 +9,7 @@ interface MediaUploadResponse {
   id: string;
   type: string;
   mime_type: string;
+  page_count?: number;
   original_filename?: string;
   size_bytes: number;
   url?: string;

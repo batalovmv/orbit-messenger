@@ -84,14 +84,14 @@ type natsEvent struct {
 
 // messageData is the subset of message fields needed for indexing.
 type messageData struct {
-	ID             string    `json:"id"`
-	ChatID         string    `json:"chat_id"`
-	SenderID       *string   `json:"sender_id"`
-	Content        *string   `json:"content"`
+	ID             string          `json:"id"`
+	ChatID         string          `json:"chat_id"`
+	SenderID       *string         `json:"sender_id"`
+	Content        *string         `json:"content"`
 	Entities       json.RawMessage `json:"entities"`
-	Type           string    `json:"type"`
-	SequenceNumber int64     `json:"sequence_number"`
-	CreatedAt      time.Time `json:"created_at"`
+	Type           string          `json:"type"`
+	SequenceNumber int64           `json:"sequence_number"`
+	CreatedAt      time.Time       `json:"created_at"`
 	// MediaAttachments presence is inferred from has_media flag in the event data,
 	// or by checking if the slice is non-nil/non-empty after unmarshalling.
 	MediaAttachments []json.RawMessage `json:"media_attachments"`

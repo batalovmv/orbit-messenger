@@ -214,6 +214,7 @@ type mockMessageStore struct {
 	findByChatAndDateFn    func(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
 	updateFn               func(ctx context.Context, msg *model.Message) error
 	softDeleteFn           func(ctx context.Context, id uuid.UUID) error
+	markOneTimeViewedFn    func(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error)
 	softDeleteAuthorizedFn func(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error)
 	listPinnedFn           func(ctx context.Context, chatID uuid.UUID) ([]model.Message, error)
 	pinFn                  func(ctx context.Context, chatID, msgID uuid.UUID) error
@@ -282,6 +283,13 @@ func (m *mockMessageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 		return m.softDeleteFn(ctx, id)
 	}
 	return nil
+}
+
+func (m *mockMessageStore) MarkOneTimeViewed(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+	if m.markOneTimeViewedFn != nil {
+		return m.markOneTimeViewedFn(ctx, msgID, userID)
+	}
+	return nil, nil
 }
 
 func (m *mockMessageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error) {

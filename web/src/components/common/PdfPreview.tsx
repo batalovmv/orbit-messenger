@@ -1,11 +1,18 @@
+import type { ElementRef } from '../../lib/teact/teact';
 import {
-  memo, useMemo,
+  memo, useEffect, useRef, useState,
 } from '../../lib/teact/teact';
 
 import type { IconName } from '../../types/icons';
 
 import buildClassName from '../../util/buildClassName';
 import { formatMediaDateTime, formatPastTimeShort } from '../../util/dates/dateFormat';
+import {
+  PDF_PREVIEW_ASPECT_RATIO,
+  PDF_PREVIEW_SMALL_WIDTH_REM,
+  PDF_PREVIEW_WIDTH_REM,
+  renderPdfPreviewToCanvas,
+} from '../../util/pdf';
 import renderText from './helpers/renderText';
 
 import useLang from '../../hooks/useLang';
@@ -19,10 +26,13 @@ import Icon from './icons/Icon';
 import styles from './PdfPreview.module.scss';
 
 type OwnProps = {
+  ref?: ElementRef<HTMLDivElement>;
   id?: string;
   name: string;
   extension?: string;
   size: number;
+  pageCount?: number;
+  pdfUrl?: string;
   timestamp?: number;
   sender?: string;
   thumbnailDataUri?: string;
@@ -40,10 +50,13 @@ type OwnProps = {
 };
 
 const PdfPreview = ({
+  ref,
   id,
   name,
   extension = 'pdf',
   size,
+  pageCount,
+  pdfUrl,
   timestamp,
   sender,
   thumbnailDataUri,
@@ -61,11 +74,54 @@ const PdfPreview = ({
 }: OwnProps) => {
   const oldLang = useOldLang();
   const lang = useLang();
+  let elementRef = useRef<HTMLDivElement>();
+  if (ref) {
+    elementRef = ref;
+  }
+  const canvasRef = useRef<HTMLCanvasElement>();
+
+  const [isPdfRendered, setIsPdfRendered] = useState(false);
+  const [resolvedPageCount, setResolvedPageCount] = useState(pageCount);
+
+  useEffect(() => {
+    setResolvedPageCount(pageCount);
+  }, [pageCount]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!pdfUrl || !canvas) {
+      setIsPdfRendered(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsPdfRendered(false);
+
+    void renderPdfPreviewToCanvas(pdfUrl, canvas, getCanvasDimensions(smaller)).then((result) => {
+      if (isCancelled) {
+        return;
+      }
+
+      if (!result) {
+        setIsPdfRendered(false);
+        return;
+      }
+
+      setResolvedPageCount(pageCount ?? result.pageCount);
+      setIsPdfRendered(true);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pageCount, pdfUrl, smaller]);
 
   const previewSource = previewData || thumbnailDataUri;
-  const extensionLabel = useMemo(() => (
-    extension ? extension.slice(0, 4).toUpperCase() : 'PDF'
-  ), [extension]);
+  const extensionLabel = extension ? extension.slice(0, 4).toUpperCase() : 'PDF';
+  const pageCountLabel = resolvedPageCount !== undefined
+    ? lang('PdfPageCount', { count: resolvedPageCount }, { pluralValue: resolvedPageCount })
+    : undefined;
 
   const rootClassName = buildClassName(
     styles.root,
@@ -81,7 +137,7 @@ const PdfPreview = ({
   );
 
   return (
-    <div id={id} className={rootClassName} dir={lang.isRtl ? 'rtl' : undefined}>
+    <div id={id} ref={elementRef} className={rootClassName} dir={lang.isRtl ? 'rtl' : undefined}>
       {isSelectable && (
         <div className="message-select-control no-selection">
           {isSelected && <Icon name="check" className="message-select-control-icon" />}
@@ -90,30 +146,41 @@ const PdfPreview = ({
 
       <div className={styles.previewColumn}>
         <div className={styles.preview} onClick={isUploading ? undefined : onClick}>
-          {previewSource ? (
-            <img
-              src={previewSource}
-              className={styles.previewImage}
-              draggable={false}
-              alt=""
+          {pdfUrl && (
+            <canvas
+              ref={canvasRef}
+              className={buildClassName(
+                styles.previewCanvas,
+                !isPdfRendered && styles.hiddenCanvas,
+              )}
             />
-          ) : (
-            <div className={styles.paperStack}>
-              <div className={styles.paperShadow} />
-              <div className={styles.paper}>
-                <div className={styles.paperHeader}>
-                  <span className={styles.paperTitle}>Orbit PDF</span>
-                  <span className={styles.paperExtension}>{extensionLabel}</span>
-                </div>
-                <div className={styles.paperLines}>
-                  <span className={styles.paperLine} />
-                  <span className={styles.paperLine} />
-                  <span className={styles.paperLine} />
-                  <span className={styles.paperLine} />
-                  <span className={styles.paperLineShort} />
+          )}
+          {!isPdfRendered && (
+            previewSource ? (
+              <img
+                src={previewSource}
+                className={styles.previewImage}
+                draggable={false}
+                alt=""
+              />
+            ) : (
+              <div className={styles.paperStack}>
+                <div className={styles.paperShadow} />
+                <div className={styles.paper}>
+                  <div className={styles.paperHeader}>
+                    <span className={styles.paperTitle}>PDF</span>
+                    <span className={styles.paperExtension}>{extensionLabel}</span>
+                  </div>
+                  <div className={styles.paperLines}>
+                    <span className={styles.paperLine} />
+                    <span className={styles.paperLine} />
+                    <span className={styles.paperLine} />
+                    <span className={styles.paperLine} />
+                    <span className={styles.paperLineShort} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )
           )}
 
           <span className={styles.pdfBadge}>PDF</span>
@@ -143,6 +210,12 @@ const PdfPreview = ({
           <span className={styles.fileType}>PDF</span>
           <span className={styles.bullet}>&bull;</span>
           <AnimatedFileSize size={size} progress={isTransferring ? transferProgress : undefined} />
+          {pageCountLabel && (
+            <>
+              <span className={styles.bullet}>&bull;</span>
+              <span>{pageCountLabel}</span>
+            </>
+          )}
           {sender && (
             <>
               <span className={styles.bullet}>&bull;</span>
@@ -166,3 +239,14 @@ const PdfPreview = ({
 };
 
 export default memo(PdfPreview);
+
+function getCanvasDimensions(smaller?: boolean) {
+  const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.round((smaller ? PDF_PREVIEW_SMALL_WIDTH_REM : PDF_PREVIEW_WIDTH_REM) * rootFontSize * dpr);
+
+  return {
+    width,
+    height: Math.round((width / PDF_PREVIEW_ASPECT_RATIO)),
+  };
+}

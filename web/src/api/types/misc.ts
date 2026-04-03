@@ -51,6 +51,7 @@ export interface ApiAttachment {
   filename: string;
   mimeType: string;
   size: number;
+  pageCount?: number;
   quick?: {
     width: number;
     height: number;

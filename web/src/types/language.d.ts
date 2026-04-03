@@ -1464,6 +1464,11 @@ export interface LangPair {
   'ChannelsSearchContext': undefined;
   'SearchFilterFrom': undefined;
   'SearchFilterDate': undefined;
+  'SearchFilterType': undefined;
+  'SearchFilterTypePhoto': undefined;
+  'SearchFilterTypeVideo': undefined;
+  'SearchFilterTypeFile': undefined;
+  'SearchFilterTypeLink': undefined;
   'SearchFilterDateFrom': undefined;
   'SearchFilterDateTo': undefined;
   'FolderLinkSubtitleNew': undefined;
@@ -4066,6 +4071,9 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'GiftPreviewCountBackdrops': {
+    'count': V;
+  };
+  'PdfPageCount': {
     'count': V;
   };
 }

@@ -10,7 +10,7 @@ import type {
   ApiChat, ApiMessage, ApiReaction, ApiReactionKey, ApiSavedReactionTag,
 } from '../../../api/types';
 import type {
-  CustomPeer, MiddleSearchParams, MiddleSearchType, ThreadId,
+  CustomPeer, MiddleSearchMessageType, MiddleSearchParams, MiddleSearchType, ThreadId,
 } from '../../../types';
 
 import { ANONYMOUS_USER_ID } from '../../../config';
@@ -88,6 +88,7 @@ type StateProps = {
   fromPeerId?: string;
   dateFrom?: string;
   dateTo?: string;
+  messageType?: MiddleSearchMessageType;
   isGroupChat?: boolean;
 };
 
@@ -101,6 +102,7 @@ const HIDE_TIMEOUT = 200;
 const RESULT_ITEM_CLASS_NAME = 'MiddleSearchResult';
 const FROM_FILTER_PREFIX = 'from:';
 const INLINE_MEMBER_COUNT = 5;
+const MESSAGE_TYPE_FILTERS: MiddleSearchMessageType[] = ['photo', 'video', 'file', 'link'];
 
 const runDebouncedForSearch = debounce((cb) => cb(), 200, false);
 
@@ -140,6 +142,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   fromPeerId,
   dateFrom,
   dateTo,
+  messageType,
   isGroupChat,
 }) => {
   const {
@@ -192,6 +195,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
 
   const hasMemberDropdown = isFromFilterMode && !fromPeerId;
   const hasDateFilters = Boolean(dateFrom || dateTo);
+  const hasMessageTypeFilter = Boolean(messageType);
   const selectedDatePickerAt = dateFilterBoundary === 'to'
     ? getSearchDateTimestamp(dateTo) || getSearchDateTimestamp(dateFrom)
     : getSearchDateTimestamp(dateFrom);
@@ -210,11 +214,11 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   });
   useClickOutside([ref], handleClickOutside);
 
-  const hasResultsContainer = Boolean(((query || fromPeerId || hasDateFilters) && foundIds) || isHashtagQuery);
+  const hasResultsContainer = Boolean(((query || fromPeerId || hasDateFilters || hasMessageTypeFilter) && foundIds) || isHashtagQuery);
   const isOnlyHash = isHashtagQuery && !query;
   const isNonFocusedDropdownForced = searchType === 'myChats' || searchType === 'channels';
   const hasMemberResults = !isHashtagQuery && Boolean(memberSearchResults?.length);
-  const hasQueryData = Boolean((query && !isOnlyHash) || savedTag || fromPeerId || hasDateFilters);
+  const hasQueryData = Boolean((query && !isOnlyHash) || savedTag || fromPeerId || hasDateFilters || hasMessageTypeFilter);
   const hasNavigationButtons = searchType === 'chat' && Boolean(foundIds?.length);
 
   const handleClose = useLastCallback(() => {
@@ -317,7 +321,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   }, [isActive, lastSearchQuery, query]);
 
   const handleReset = useLastCallback(() => {
-    if (!query?.length && !savedTag && !fromPeerId && !isFromFilterMode && !hasDateFilters) {
+    if (!query?.length && !savedTag && !fromPeerId && !isFromFilterMode && !hasDateFilters && !hasMessageTypeFilter) {
       handleClose();
       return;
     }
@@ -329,6 +333,13 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     setDateFilterBoundary(undefined);
     shouldCancelSearchRef.current = false;
     shouldPromptDateToRef.current = false;
+    updateMiddleSearch({
+      chatId: chat!.id,
+      threadId,
+      update: {
+        messageType: undefined,
+      },
+    });
     resetMiddleSearch();
     focusInput();
   });
@@ -385,7 +396,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     // Normal query update (including when fromPeerId is set - query is separate)
     setQuery(newQuery);
 
-    if (!newQuery && !fromPeerId && !dateFrom && !dateTo) {
+    if (!newQuery && !fromPeerId && !dateFrom && !dateTo && !messageType) {
       setIsLoading(false);
       resetMiddleSearch();
       shouldCancelSearchRef.current = true;
@@ -393,10 +404,10 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   });
 
   useEffect(() => {
-    if (isActive && (query || fromPeerId || dateFrom || dateTo)) {
+    if (isActive && (query || fromPeerId || dateFrom || dateTo || messageType)) {
       handleSearch();
     }
-  }, [isActive, query, fromPeerId, dateFrom, dateTo]);
+  }, [isActive, query, fromPeerId, dateFrom, dateTo, messageType]);
 
   useEffect(() => {
     setIsLoading(Boolean(fetchingQuery));
@@ -462,7 +473,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     && (hasMemberDropdown ? viewportMemberIds : memberSearchResults.slice(0, INLINE_MEMBER_COUNT))) || undefined;
 
   const viewportResults = useMemo(() => {
-    if ((!query && !savedTag && !fromPeerId && !hasDateFilters) || !viewportIds?.length) {
+    if ((!query && !savedTag && !fromPeerId && !hasDateFilters && !hasMessageTypeFilter) || !viewportIds?.length) {
       return MEMO_EMPTY_ARRAY;
     }
     const global = getGlobal();
@@ -488,19 +499,20 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
         senderPeer,
       };
     }).filter(Boolean);
-  }, [query, savedTag, fromPeerId, hasDateFilters, viewportIds, isSavedMessages]);
+  }, [query, savedTag, fromPeerId, hasDateFilters, hasMessageTypeFilter, viewportIds, isSavedMessages]);
 
   const areResultsEmpty = Boolean(
-    (query || fromPeerId || hasDateFilters)
+    (query || fromPeerId || hasDateFilters || hasMessageTypeFilter)
     && !isLoading
     && !viewportResults.length
     && !isOnlyHash
     && !hasMemberResults,
   );
   const hasResultsPlaceholder = areResultsEmpty || isOnlyHash;
+  const hasDropdownFilters = !hasMemberDropdown;
   const hasResultsDropdown = isActive && (isViewAsList || !isMobile) && (isFocused || isNonFocusedDropdownForced)
     && Boolean(
-      hasResultsContainer || hasResultsPlaceholder || savedTags || hasMemberResults,
+      hasResultsContainer || hasResultsPlaceholder || savedTags || hasMemberResults || hasDropdownFilters,
     );
 
   const handleMessageClick = useLastCallback((message: ApiMessage) => {
@@ -560,6 +572,14 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
 
     handleSearch();
   });
+
+  const messageTypeLabel = useMemo(() => {
+    if (!messageType) {
+      return undefined;
+    }
+
+    return lang(getMessageTypeLangKey(messageType));
+  }, [lang, messageType]);
 
   const dateFilterLabel = useMemo(() => {
     if (!hasDateFilters) {
@@ -681,6 +701,11 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
       return;
     }
 
+    if (messageType) {
+      updateSearchParams({ messageType: undefined });
+      return;
+    }
+
     if (hasDateFilters) {
       handleClearDateFilter();
     }
@@ -694,6 +719,13 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   const handleFromFilterClick = useLastCallback(() => {
     setIsFromFilterMode(true);
     setMemberSearchQuery('');
+    focusInput();
+  });
+
+  const handleToggleMessageType = useLastCallback((nextType: MiddleSearchMessageType) => {
+    updateSearchParams({
+      messageType: messageType === nextType ? undefined : nextType,
+    });
     focusInput();
   });
 
@@ -780,6 +812,22 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     );
   }
 
+  function renderMessageTypeButton(type: MiddleSearchMessageType) {
+    const isSelected = messageType === type;
+
+    return (
+      <button
+        key={type}
+        type="button"
+        className={buildClassName(styles.messageTypeButton, isSelected && styles.messageTypeButtonActive)}
+        aria-pressed={isSelected}
+        onClick={() => handleToggleMessageType(type)}
+      >
+        {lang(getMessageTypeLangKey(type))}
+      </button>
+    );
+  }
+
   function renderDropdown() {
     return (
       <div className={buildClassName(styles.dropdown, !hasResultsDropdown && styles.dropdownHidden)}>
@@ -807,6 +855,13 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
                 />
               );
             })}
+          </div>
+        )}
+        {!hasMemberDropdown && (
+          <div
+            className={buildClassName(styles.messageTypeFilters, 'no-scrollbar')}
+          >
+            {MESSAGE_TYPE_FILTERS.map(renderMessageTypeButton)}
           </div>
         )}
         {isHashtagQuery && !hasMemberDropdown && (
@@ -952,6 +1007,25 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
                 </button>
               </div>
             )}
+            {messageTypeLabel && (
+              <div className={styles.filterChip}>
+                <span className={styles.filterChipLabel}>
+                  {lang('SearchFilterType')}
+                  {' '}
+                  {messageTypeLabel}
+                </span>
+                <button
+                  type="button"
+                  className={styles.filterChipClose}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    updateSearchParams({ messageType: undefined });
+                  }}
+                >
+                  <Icon name="close" className={styles.filterChipCloseIcon} />
+                </button>
+              </div>
+            )}
           </div>
           {!isMobile && renderDropdown()}
         </SearchInput>
@@ -1075,7 +1149,7 @@ export default memo(withGlobal<OwnProps>(
     }
 
     const {
-      requestedQuery, savedTag, results, fetchingQuery, isHashtag, type, fromPeerId, dateFrom, dateTo,
+      requestedQuery, savedTag, results, fetchingQuery, isHashtag, type, fromPeerId, dateFrom, dateTo, messageType,
     } = selectCurrentMiddleSearch(global) || {};
     const { totalCount, foundIds, query: lastSearchQuery } = results || {};
 
@@ -1106,7 +1180,23 @@ export default memo(withGlobal<OwnProps>(
       fromPeerId,
       dateFrom,
       dateTo,
+      messageType,
       isGroupChat: isChatGroup(chat),
     };
   },
 )(MiddleSearch));
+
+function getMessageTypeLangKey(type: MiddleSearchMessageType) {
+  switch (type) {
+    case 'photo':
+      return 'SearchFilterTypePhoto';
+    case 'video':
+      return 'SearchFilterTypeVideo';
+    case 'file':
+      return 'SearchFilterTypeFile';
+    case 'link':
+      return 'SearchFilterTypeLink';
+    default:
+      return 'SearchFilterType';
+  }
+}

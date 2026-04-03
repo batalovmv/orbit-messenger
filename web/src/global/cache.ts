@@ -834,6 +834,7 @@ function omitLocalMedia(message: ApiMessage): ApiMessage {
       },
       document: document && {
         ...document,
+        blobUrl: undefined,
         previewBlobUrl: undefined,
       },
       sticker: sticker && {

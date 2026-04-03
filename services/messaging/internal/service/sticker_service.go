@@ -22,17 +22,35 @@ var stickerPackShortNamePattern = regexp.MustCompile(`^[a-z0-9_]{3,64}$`)
 
 // StickerService handles business logic for sticker packs.
 type StickerService struct {
-	stickers store.StickerStore
-	logger   *slog.Logger
+	stickers      store.StickerStore
+	logger        *slog.Logger
+	telegram      TelegramStickerClient
+	mediaUploader StickerMediaUploader
+}
+
+// StickerServiceOption configures optional integrations.
+type StickerServiceOption func(*StickerService)
+
+// WithStickerImportClients wires Telegram import dependencies into StickerService.
+func WithStickerImportClients(telegram TelegramStickerClient, mediaUploader StickerMediaUploader) StickerServiceOption {
+	return func(service *StickerService) {
+		service.telegram = telegram
+		service.mediaUploader = mediaUploader
+	}
 }
 
 // NewStickerService creates a new StickerService.
-func NewStickerService(stickers store.StickerStore, logger *slog.Logger) *StickerService {
+func NewStickerService(stickers store.StickerStore, logger *slog.Logger, options ...StickerServiceOption) *StickerService {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &StickerService{stickers: stickers, logger: logger}
+	service := &StickerService{stickers: stickers, logger: logger}
+	for _, option := range options {
+		option(service)
+	}
+
+	return service
 }
 
 // GetPack returns a sticker pack with its stickers.
@@ -346,6 +364,9 @@ func normalizeStickerPackShortName(value string) string {
 
 func inferStickerFileType(fileURL string, isAnimated bool) string {
 	lowerURL := strings.ToLower(strings.TrimSpace(fileURL))
+	if hintedType := extractStickerFormatHint(lowerURL); hintedType != "" {
+		return hintedType
+	}
 
 	if strings.HasPrefix(lowerURL, "data:") {
 		switch {
@@ -380,6 +401,26 @@ func inferStickerFileType(fileURL string, isAnimated bool) string {
 	return "webp"
 }
 
+func extractStickerFormatHint(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	matches := regexp.MustCompile(`[?#&]orbit-format=(tgs|webm|webp|svg|png|jpe?g)\b`).FindStringSubmatch(raw)
+	if len(matches) < 2 {
+		return ""
+	}
+
+	switch matches[1] {
+	case "tgs":
+		return "tgs"
+	case "webm":
+		return "webm"
+	default:
+		return "webp"
+	}
+}
+
 func isAllowedStickerURL(raw string) bool {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -396,6 +437,10 @@ func isAllowedStickerURL(raw string) bool {
 	parsed, err := url.Parse(raw)
 	if err != nil {
 		return false
+	}
+
+	if parsed.Scheme == "" && parsed.Host == "" {
+		return strings.HasPrefix(parsed.Path, "/media/")
 	}
 
 	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""

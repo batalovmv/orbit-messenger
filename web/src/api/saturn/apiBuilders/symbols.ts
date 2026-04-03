@@ -129,9 +129,143 @@ function buildStickerTitleDataUri(sticker: Pick<SaturnSticker, 'emoji'>) {
   return makeSvgDataUri(sticker.emoji || '🙂', '#f8fafc');
 }
 
-function buildPackCoverDataUri(pack: SaturnStickerPack) {
-  const label = pack.title.trim().slice(0, 2).toUpperCase() || 'ST';
-  return makeSvgDataUri(label, '#e5eef9', '#1d3557');
+type StickerAssetFormat = 'static' | 'animated' | 'video';
+
+function normalizeStickerFormatHint(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+
+  switch (value.toLowerCase()) {
+    case 'tgs':
+      return 'animated' as const;
+    case 'webm':
+      return 'video' as const;
+    case 'webp':
+    case 'svg':
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+      return 'static' as const;
+    default:
+      return undefined;
+  }
+}
+
+function getStickerFormatHintFromUrl(url?: string) {
+  if (!url) {
+    return undefined;
+  }
+
+  const directMatch = url.match(/[?#&]orbit-format=(tgs|webm|webp|svg|png|jpe?g)\b/i);
+  if (directMatch) {
+    return normalizeStickerFormatHint(directMatch[1]);
+  }
+
+  try {
+    const parsed = new URL(url, 'https://orbit.local');
+    const queryHint = parsed.searchParams.get('orbit-format');
+    const hashHint = parsed.hash.match(/orbit-format=(tgs|webm|webp|svg|png|jpe?g)\b/i)?.[1];
+    const hint = normalizeStickerFormatHint(queryHint || hashHint || undefined);
+    if (hint) {
+      return hint;
+    }
+
+    return normalizeStickerFormatHint(parsed.pathname.match(/\.([a-z0-9]+)$/i)?.[1]);
+  } catch {
+    return normalizeStickerFormatHint(url.match(/\.([a-z0-9]+)(?:$|[?#])/i)?.[1]);
+  }
+}
+
+function getStickerAssetFormatFromType(fileType?: SaturnSticker['file_type']) {
+  switch (fileType) {
+    case 'tgs':
+      return 'animated';
+    case 'webm':
+      return 'video';
+    case 'webp':
+    case 'svg':
+      return 'static';
+    default:
+      return undefined;
+  }
+}
+
+function getMimeTypeForStickerFormat(format?: StickerAssetFormat, url?: string) {
+  switch (format) {
+    case 'animated':
+      return 'application/x-tgsticker';
+    case 'video':
+      return 'video/webm';
+    case 'static':
+      if (url?.match(/\.png(?:$|[?#])/i)) {
+        return 'image/png';
+      }
+      if (url?.match(/\.jpe?g(?:$|[?#])/i)) {
+        return 'image/jpeg';
+      }
+      if (url?.match(/\.svg(?:$|[?#])/i)) {
+        return 'image/svg+xml';
+      }
+      return 'image/webp';
+    default:
+      return undefined;
+  }
+}
+
+function registerStickerAsset(
+  id: string,
+  fileType: SaturnSticker['file_type'],
+  fullUrl?: string,
+  previewUrl?: string,
+  thumbnailDataUri?: string,
+  kinds: readonly AssetKind[] = ['document', 'sticker'],
+) {
+  registerAsset(id, {
+    fileName: `${id}.${fileType}`,
+    fullUrl,
+    mimeType: fileType === 'tgs'
+      ? 'application/x-tgsticker'
+      : fileType === 'webm'
+        ? 'video/webm'
+        : fileType === 'svg'
+          ? 'image/svg+xml'
+          : 'image/webp',
+    previewUrl,
+    thumbnailDataUri,
+  }, kinds);
+}
+
+function getStickerSetCoverAsset(pack: SaturnStickerPack) {
+  const thumbnailUrl = toAbsoluteUrl(pack.thumbnail_url);
+  const format = getStickerFormatHintFromUrl(pack.thumbnail_url)
+    || getStickerAssetFormatFromType(pack.stickers?.[0]?.file_type);
+
+  if (thumbnailUrl) {
+    return {
+      url: thumbnailUrl,
+      format,
+      mimeType: getMimeTypeForStickerFormat(format, pack.thumbnail_url),
+    };
+  }
+
+  if (!pack.stickers?.length) {
+    return undefined;
+  }
+
+  const [firstSticker] = pack.stickers;
+  const stickerAsset = getRegisteredAsset(firstSticker.id, 'sticker') || getRegisteredAsset(firstSticker.id, 'document');
+  const stickerFormat = getStickerAssetFormatFromType(firstSticker.file_type);
+  const stickerUrl = stickerAsset?.fullUrl || toAbsoluteUrl(firstSticker.file_url);
+  if (!stickerUrl) {
+    return undefined;
+  }
+
+  return {
+    url: stickerUrl,
+    format: stickerFormat,
+    mimeType: stickerAsset?.mimeType || getMimeTypeForStickerFormat(stickerFormat, firstSticker.file_url),
+  };
 }
 
 function groupStickerPacks(stickers: ApiSticker[]) {
@@ -210,19 +344,7 @@ export function buildApiSticker(
   const previewUrl = fullUrl;
   const thumbnailDataUri = buildStickerTitleDataUri(sticker);
 
-  registerAsset(sticker.id, {
-    fileName: `${sticker.id}.${sticker.file_type}`,
-    fullUrl,
-    mimeType: sticker.file_type === 'tgs'
-      ? 'application/x-tgsticker'
-      : sticker.file_type === 'webm'
-        ? 'video/webm'
-        : sticker.file_type === 'svg'
-          ? 'image/svg+xml'
-          : 'image/webp',
-    previewUrl,
-    thumbnailDataUri,
-  }, ['document', 'sticker']);
+  registerStickerAsset(sticker.id, sticker.file_type, fullUrl, previewUrl, thumbnailDataUri);
 
   return {
     mediaType: 'sticker',
@@ -246,16 +368,23 @@ export function buildApiStickerSet(
   const stickers = pack.stickers?.map((sticker) => buildApiSticker(sticker, pack, {
     isCustomEmoji: options?.isCustomEmoji || options?.isEmoji,
   }));
-  const coverUrl = toAbsoluteUrl(pack.thumbnail_url);
-  const coverDataUri = pack.thumbnail_url ? undefined : buildPackCoverDataUri(pack);
+  const coverAsset = getStickerSetCoverAsset(pack);
+  const hasStaticThumb = coverAsset?.format === 'static';
+  const hasAnimatedThumb = coverAsset?.format === 'animated';
+  const hasVideoThumb = coverAsset?.format === 'video';
 
-  registerAsset(pack.id, {
-    fileName: `${pack.short_name || pack.id}.png`,
-    fullUrl: coverUrl || coverDataUri,
-    mimeType: coverUrl ? 'image/png' : 'image/svg+xml',
-    previewUrl: coverUrl || coverDataUri,
-    thumbnailDataUri: coverDataUri,
-  }, ['stickerSet']);
+  if (coverAsset?.url) {
+    registerAsset(pack.id, {
+      fileName: `${pack.short_name || pack.id}.${coverAsset.format === 'animated'
+        ? 'tgs'
+        : coverAsset.format === 'video'
+          ? 'webm'
+          : 'webp'}`,
+      fullUrl: coverAsset.url,
+      mimeType: coverAsset.mimeType,
+      previewUrl: coverAsset.url,
+    }, ['stickerSet']);
+  }
 
   return {
     id: pack.id,
@@ -266,8 +395,10 @@ export function buildApiStickerSet(
     installedDate: pack.is_installed ? Math.floor(new Date(pack.updated_at).getTime() / 1000) : undefined,
     isArchived: pack.is_installed ? undefined : true,
     isEmoji: options?.isEmoji || undefined,
-    hasThumbnail: Boolean(pack.thumbnail_url || coverDataUri),
-    hasStaticThumb: Boolean(pack.thumbnail_url || coverDataUri),
+    hasThumbnail: Boolean(coverAsset?.url),
+    hasStaticThumb: hasStaticThumb || undefined,
+    hasAnimatedThumb: hasAnimatedThumb || undefined,
+    hasVideoThumb: hasVideoThumb || undefined,
     stickers,
     packs: stickers ? groupStickerPacks(stickers) : undefined,
     covers: stickers?.length ? stickers.slice(0, 5) : undefined,
@@ -365,18 +496,15 @@ export function parseRichMessageContent(raw?: string): SerializedRichMessageCont
 
 export function buildStickerFromSerializedMessage(payload: SerializedStickerMessage['sticker']): ApiSticker {
   const thumbnailDataUri = makeSvgDataUri(payload.emoji || '🙂', '#f8fafc');
+  const fileType = payload.is_lottie ? 'tgs' : payload.is_video ? 'webm' : 'webp';
 
-  registerAsset(payload.id, {
-    fileName: `${payload.id}.${payload.is_lottie ? 'tgs' : payload.is_video ? 'webm' : 'webp'}`,
-    fullUrl: toAbsoluteUrl(payload.url),
-    mimeType: payload.is_lottie
-      ? 'application/x-tgsticker'
-      : payload.is_video
-        ? 'video/webm'
-        : 'image/webp',
-    previewUrl: toAbsoluteUrl(payload.preview_url || payload.url),
+  registerStickerAsset(
+    payload.id,
+    fileType,
+    toAbsoluteUrl(payload.url),
+    toAbsoluteUrl(payload.preview_url || payload.url),
     thumbnailDataUri,
-  }, ['document', 'sticker']);
+  );
 
   return {
     mediaType: 'sticker',

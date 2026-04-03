@@ -542,14 +542,14 @@ r2://orbit-media/
 - [x] Albums (несколько фото в одном сообщении) — grouped_id маппится в groupedId/isInAlbum и рендерится через Album
 - [ ] Media gallery tab в чате — fetchSharedMedia endpoint ready, UI deferred
 - [~] GIF: Tenor API прокси — defer to Phase 5 (Rich Messaging)
-- [x] PDF preview — inline viewer + dedicated preview card in chat
+- [x] PDF preview — first-page canvas render in chat + page count + dedicated inline viewer
 
 ### Известные отложения и решения
 
 - **Thumbnails в JPEG** (не WebP) — Go не имеет стабильного WebP encoder. JPEG для thumb/medium
 - **ClamAV** → Phase 7 (Security). Invite-only, 150 юзеров
 - **GIF Tenor API** → Phase 5 (Rich Messaging). GIF→MP4 конвертация работает
-- **PDF preview** → Done — отдельная preview-card для PDF в сообщении, inline iframe viewer, fallback to new tab
+- **PDF preview** → Done — первая страница PDF рендерится в canvas прямо в сообщении, показываются filename/size/page count, полный просмотр через inline browser viewer с fallback в новую вкладку
 - **Frontend UI wiring** — TG Web A компоненты (AttachMenu, MediaViewer, VoiceRecorder) существуют, нужна интеграция с Saturn API. Backend полностью готов
 - **Chunked upload state** — Redis с TTL 24h (не DB), автоочистка
 
@@ -693,6 +693,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 6 (Runtime wiring в messaging): DI в `services/messaging/cmd/main.go` подключён для reactions/stickers/GIF/polls/scheduled, Phase 5 HTTP routes зарегистрированы, `POST /chats/:id/messages` поддерживает `type=poll` и `?scheduled_at=`
 - [x] Шаг 7 (Frontend wiring + poll hydration + smoke): Saturn API методы и TG Web A wiring закрыты для reactions/stickers/GIF/polls/scheduled, обычная history hydration для polls/reactions доведена, WS `reaction_added` / `reaction_removed` / `poll_vote` / `poll_closed` применяются без reload, live Playwright smoke PASS
 - [x] Шаг 8 (Frontend polish follow-up): локальные animated reaction assets подключены в Saturn fallback, composer GIF tab получил trending + inline search, saved reaction tags получили localStorage fallback
+- [x] Шаг 8.2 (Search polish): middle search получил фильтры по типу сообщения, дате и отправителю; `/search` принимает alias-параметры `from/after/before` и типы `links/files`; клик по `#hashtag` открывает чистый поиск по тегу
 - [x] Шаг 8.1 (Reaction emoji parity): picker / reaction bubbles / selector используют Apple-style emoji-data-ios assets для static reaction render, Unicode fallback остаётся только для неподдержанных glyphs
 - [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI подогнан под TG Web A (radio/checkbox до голосования, общая кнопка Vote, толстые result bars), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата

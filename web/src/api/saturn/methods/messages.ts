@@ -249,8 +249,11 @@ function buildAttachmentContent(content: ApiMessage['content'], attachment: ApiA
       content.document = {
         mediaType: 'document',
         id: localId,
+        blobUrl: attachment.blobUrl,
         mimeType: attachment.mimeType || 'application/octet-stream',
         fileName: attachment.filename || 'file',
+        pageCount: attachment.pageCount,
+        previewBlobUrl: attachment.previewBlobUrl,
         size: attachment.size,
       };
       break;

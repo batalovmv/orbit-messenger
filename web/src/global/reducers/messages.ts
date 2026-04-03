@@ -121,6 +121,8 @@ function mergeDocumentContent(existingDocument?: ApiDocument, incomingDocument?:
 
   return omitUndefined({
     ...incomingDocument,
+    blobUrl: incomingDocument.blobUrl ?? existingDocument.blobUrl,
+    pageCount: incomingDocument.pageCount ?? existingDocument.pageCount,
     previewBlobUrl: incomingDocument.previewBlobUrl ?? existingDocument.previewBlobUrl,
     thumbnail: incomingDocument.thumbnail ?? existingDocument.thumbnail,
   });

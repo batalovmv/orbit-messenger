@@ -157,9 +157,11 @@ export interface ApiDocument {
   size: number;
   timestamp?: number;
   mimeType: string;
+  blobUrl?: string;
   thumbnail?: ApiThumbnail;
   previewPhotoSizes?: ApiPhotoSize[];
   previewBlobUrl?: string;
+  pageCount?: number;
   innerMediaType?: 'photo' | 'video';
   mediaSize?: ApiDimensions & { fromDocumentAttribute?: boolean; fromPreload?: true };
 }

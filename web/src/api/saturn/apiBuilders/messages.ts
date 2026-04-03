@@ -124,6 +124,26 @@ function guessFileExtension(mimeType?: string) {
   return subtype ? `.${subtype}` : '';
 }
 
+function inferStickerAttachmentFileType(att: Pick<SaturnMediaAttachment, 'mime_type' | 'url' | 'original_filename'>) {
+  const mimeType = att.mime_type.toLowerCase();
+  const fileSource = `${att.original_filename || ''} ${att.url || ''}`.toLowerCase();
+
+  if (mimeType === 'video/webm' || fileSource.includes('.webm')) {
+    return 'webm' as const;
+  }
+
+  if (
+    mimeType === 'application/x-tgsticker'
+    || mimeType === 'application/x-gzip'
+    || mimeType === 'application/gzip'
+    || fileSource.includes('.tgs')
+  ) {
+    return 'tgs' as const;
+  }
+
+  return 'webp' as const;
+}
+
 function getOrCreateScheduledMessageId(chatId: string, uuid: string) {
   const key = getScheduledMapKey(chatId, uuid);
   const existing = scheduledUuidToIdMap.get(key);
@@ -265,9 +285,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         pack_id: '',
         emoji: undefined,
         file_url: fullMediaUrl(first.url) || fullMediaUrl(`/media/${first.media_id}`) || '',
-        file_type: first.mime_type === 'video/webm' ? 'webm' : first.mime_type.includes('tg')
-          ? 'tgs'
-          : 'webp',
+        file_type: inferStickerAttachmentFileType(first),
         width: first.width || undefined,
         height: first.height || undefined,
         position: first.position,
@@ -291,6 +309,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         id: first.media_id,
         mimeType: first.mime_type || 'application/octet-stream',
         fileName: first.original_filename || 'file',
+        pageCount: first.page_count || undefined,
         size: first.size_bytes,
       };
       break;

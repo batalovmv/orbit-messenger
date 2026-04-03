@@ -95,9 +95,12 @@ type Message struct {
 	IsForwarded    bool            `json:"is_forwarded"`
 	ForwardedFrom  *uuid.UUID      `json:"forwarded_from,omitempty"`
 	GroupedID      *string         `json:"grouped_id,omitempty"`
+	IsOneTime      bool            `json:"is_one_time"`
 	SequenceNumber int64           `json:"sequence_number"`
 	CreatedAt      time.Time       `json:"created_at"`
 	EditedAt       *time.Time      `json:"edited_at,omitempty"`
+	ViewedAt       *time.Time      `json:"viewed_at,omitempty"`
+	ViewedBy       *uuid.UUID      `json:"viewed_by,omitempty"`
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`

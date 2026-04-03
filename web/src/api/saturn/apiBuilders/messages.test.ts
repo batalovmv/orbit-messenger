@@ -162,6 +162,45 @@ describe('buildApiMessage', () => {
     }));
   });
 
+  it('keeps webm sticker attachments as video stickers', () => {
+    const apiMessage = buildApiMessage({
+      id: 'message-sticker-video',
+      chat_id: 'chat-1',
+      sender_id: 'user-1',
+      type: 'sticker',
+      content: '',
+      is_edited: false,
+      is_deleted: false,
+      is_pinned: false,
+      is_forwarded: false,
+      sequence_number: 13,
+      created_at: '2026-04-03T10:07:00.000Z',
+      sender_name: 'Orbit',
+      media_attachments: [{
+        media_id: 'sticker-video-1',
+        type: 'sticker',
+        mime_type: 'video/webm',
+        url: '/media/sticker-video-1',
+        size_bytes: 4096,
+        width: 512,
+        height: 512,
+        position: 0,
+        is_spoiler: false,
+        is_one_time: false,
+        processing_status: 'ready',
+      }],
+    } satisfies SaturnMessage);
+
+    expect(apiMessage.content.sticker).toEqual(expect.objectContaining({
+      id: 'sticker-video-1',
+      isVideo: true,
+      isLottie: false,
+    }));
+    expect(getRegisteredAsset('sticker-video-1', 'sticker')).toEqual(expect.objectContaining({
+      mimeType: 'video/webm',
+    }));
+  });
+
   it('preserves explicit poll booleans for anonymous and closed states', () => {
     const apiPoll = buildApiPoll({
       id: 'poll-2',

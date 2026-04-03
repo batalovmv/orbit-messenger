@@ -21,6 +21,7 @@ const PdfViewer = ({ url, fileName, onClose }: OwnProps) => {
   const lang = useLang();
   const oldLang = useOldLang();
   const [isFallback, setIsFallback] = useState(false);
+  const iframeUrl = `${url}#view=FitH`;
 
   useEffect(() => captureEscKeyListener(onClose), [onClose]);
 
@@ -85,7 +86,7 @@ const PdfViewer = ({ url, fileName, onClose }: OwnProps) => {
           ) : (
             <iframe
               className={styles.iframe}
-              src={url}
+              src={iframeUrl}
               title={fileName}
               onError={handleIframeError}
             />

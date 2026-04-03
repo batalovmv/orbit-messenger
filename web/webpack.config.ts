@@ -48,7 +48,7 @@ const CSP = `
   img-src 'self' data: blob:;
   media-src 'self' blob: data:;
   object-src 'none';
-  frame-src 'self' https:;
+  frame-src 'self' https: blob:;
   worker-src 'self' blob:;
   base-uri 'none';
   form-action 'none';`

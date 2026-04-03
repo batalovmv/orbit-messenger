@@ -35,6 +35,9 @@ func main() {
 	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
+	internalSecret := config.MustEnv("INTERNAL_SECRET")
+	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
+	telegramBotToken := config.EnvOr("TELEGRAM_BOT_TOKEN", "")
 
 	// PostgreSQL — try password as-is first, then without backslashes
 	ctx := context.Background()
@@ -148,7 +151,13 @@ func main() {
 	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
 	searchSvc := service.NewSearchService(searchClient, chatStore)
 	reactionSvc := service.NewReactionService(reactionStore, messageStore, chatStore, natsPublisher, logger)
-	stickerSvc := service.NewStickerService(stickerStore, logger)
+	telegramStickerClient := service.NewTelegramBotStickerClient(telegramBotToken, logger)
+	stickerMediaUploader := service.NewMediaServiceStickerUploader(mediaServiceURL, internalSecret, logger)
+	stickerSvc := service.NewStickerService(
+		stickerStore,
+		logger,
+		service.WithStickerImportClients(telegramStickerClient, stickerMediaUploader),
+	)
 	tenorClient := tenor.NewClientFromEnv(rdb, logger)
 	gifSvc := service.NewGIFService(gifStore, tenorClient, logger)
 	pollSvc := service.NewPollService(pollStore, messageStore, chatStore, natsPublisher, logger)
@@ -223,7 +232,6 @@ func main() {
 	go runScheduledDeliveryCron(cronCtx, scheduledSvc, logger)
 
 	// Handlers
-	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
 	msgHandler := handler.NewMessageHandler(msgSvc, pollSvc, scheduledSvc, linkPreviewSvc, logger).SetReactionService(reactionSvc)
 	userHandler := handler.NewUserHandler(userSvc, logger)

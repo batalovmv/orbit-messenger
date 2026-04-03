@@ -34,6 +34,7 @@ func (h *StickerHandler) Register(app fiber.Router) {
 	app.Delete("/stickers/recent/:id", h.RemoveRecent)
 	app.Delete("/stickers/recent", h.ClearRecent)
 	app.Get("/stickers/sets/:id", h.GetPack)
+	app.Post("/stickers/sets/import", h.ImportPack)
 	app.Post("/stickers/sets/:id/install", h.Install)
 	app.Delete("/stickers/sets/:id/install", h.Uninstall)
 
@@ -194,6 +195,44 @@ func (h *StickerHandler) Uninstall(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, 200, fiber.Map{"ok": true})
+}
+
+func (h *StickerHandler) ImportPack(c *fiber.Ctx) error {
+	if err := requireAdminRole(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	var req struct {
+		ShortName string `json:"short_name"`
+		Source    string `json:"source"`
+		URL       string `json:"url"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	source := strings.TrimSpace(req.ShortName)
+	if source == "" {
+		source = strings.TrimSpace(req.Source)
+	}
+	if source == "" {
+		source = strings.TrimSpace(req.URL)
+	}
+	if source == "" {
+		return response.Error(c, apperror.BadRequest("short_name or source is required"))
+	}
+
+	pack, err := h.svc.ImportTelegramPack(c.Context(), userID, source)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, pack)
 }
 
 func (h *StickerHandler) CreatePack(c *fiber.Ctx) error {

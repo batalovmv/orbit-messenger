@@ -1208,6 +1208,8 @@ export function updateWithLocalMedia(
     } else if (sticker && messageUpdate.content.sticker) {
       messageUpdate.content.sticker.isPreloadedGlobally ??= sticker.isPreloadedGlobally;
     } else if (document && messageUpdate.content.document) {
+      messageUpdate.content.document.blobUrl ??= document.blobUrl;
+      messageUpdate.content.document.pageCount ??= document.pageCount;
       messageUpdate.content.document.previewBlobUrl ??= document.previewBlobUrl;
     }
   }

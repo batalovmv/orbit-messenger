@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,6 +14,20 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
 
+var (
+	ErrMessageForbidden  = errors.New("forbidden")
+	ErrMessageNotOneTime = errors.New("message is not one-time media")
+)
+
+const messageSelectColumns = `
+	m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
+	m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
+	m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
+	m.is_one_time, m.viewed_at, m.viewed_by,
+	COALESCE(u.display_name, '') AS sender_name, u.avatar_url AS sender_avatar_url,
+	(SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) AS reply_to_seq
+`
+
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
 	CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error
@@ -22,6 +37,7 @@ type MessageStore interface {
 	FindByChatAndDate(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
 	Update(ctx context.Context, msg *model.Message) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
+	MarkOneTimeViewed(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error)
 	// SoftDeleteAuthorized atomically checks author/admin permission and soft-deletes.
 	// Returns (chatID, sequenceNumber, error). Uses apperror for not-found/forbidden.
 	SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error)
@@ -40,8 +56,22 @@ type messageStore struct {
 	pool *pgxpool.Pool
 }
 
+type messageScanner interface {
+	Scan(dest ...any) error
+}
+
 func NewMessageStore(pool *pgxpool.Pool) MessageStore {
 	return &messageStore{pool: pool}
+}
+
+func scanMessage(scanner messageScanner, msg *model.Message) error {
+	return scanner.Scan(
+		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
+		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
+		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
+		&msg.IsOneTime, &msg.ViewedAt, &msg.ViewedBy,
+		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum,
+	)
 }
 
 func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
@@ -51,7 +81,6 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// Atomically increment per-chat sequence counter
 	var seq int64
 	err = tx.QueryRow(ctx,
 		`UPDATE chats SET next_sequence_number = next_sequence_number + 1
@@ -66,10 +95,11 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 	err = tx.QueryRow(ctx,
 		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, sequence_number)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, sequence_number, created_at`,
+		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
+		           sequence_number, created_at, viewed_at, viewed_by`,
 		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, seq,
-	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded,
-		&msg.SequenceNumber, &msg.CreatedAt)
+	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
+		&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
@@ -79,23 +109,18 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 
 func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
 	msg := &model.Message{}
-	err := s.pool.QueryRow(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
-		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
-		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
-		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
-		 FROM messages m
-		 LEFT JOIN users u ON u.id = m.sender_id
-		 WHERE m.id = $1`, id,
-	).Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
-		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
-		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
-		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum)
-	if err == pgx.ErrNoRows {
+	query := "SELECT " + messageSelectColumns + `
+		FROM messages m
+		LEFT JOIN users u ON u.id = m.sender_id
+		WHERE m.id = $1`
+	err := scanMessage(s.pool.QueryRow(ctx, query, id), msg)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return msg, err
+	if err != nil {
+		return nil, err
+	}
+	return msg, nil
 }
 
 func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error) {
@@ -103,14 +128,11 @@ func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.M
 		ids = ids[:200]
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
-		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
-		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
-		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
-		 FROM messages m
-		 LEFT JOIN users u ON u.id = m.sender_id
-		 WHERE m.id = ANY($1)`, ids,
+		"SELECT "+messageSelectColumns+`
+		FROM messages m
+		LEFT JOIN users u ON u.id = m.sender_id
+		WHERE m.id = ANY($1)`,
+		ids,
 	)
 	if err != nil {
 		return nil, err
@@ -119,15 +141,13 @@ func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.M
 
 	var messages []model.Message
 	for rows.Next() {
-		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
-			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
+		var msg model.Message
+		if err := scanMessage(rows, &msg); err != nil {
 			return nil, err
 		}
-		messages = append(messages, m)
+		messages = append(messages, msg)
 	}
+
 	return messages, rows.Err()
 }
 
@@ -147,12 +167,7 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 		}
 	}
 
-	query := `
-		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
-		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		       m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
-		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
-		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
+	query := "SELECT " + messageSelectColumns + `
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.chat_id = $1 AND m.is_deleted = false
@@ -168,14 +183,11 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 
 	var messages []model.Message
 	for rows.Next() {
-		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
-			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
+		var msg model.Message
+		if err := scanMessage(rows, &msg); err != nil {
 			return nil, "", false, err
 		}
-		messages = append(messages, m)
+		messages = append(messages, msg)
 	}
 
 	hasMore := len(messages) > limit
@@ -199,12 +211,7 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 		limit = 50
 	}
 
-	query := `
-		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
-		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		       m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
-		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
-		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
+	query := "SELECT " + messageSelectColumns + `
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.chat_id = $1 AND m.is_deleted = false AND m.created_at >= $2
@@ -219,14 +226,11 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 
 	var messages []model.Message
 	for rows.Next() {
-		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
-			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
+		var msg model.Message
+		if err := scanMessage(rows, &msg); err != nil {
 			return nil, "", false, err
 		}
-		messages = append(messages, m)
+		messages = append(messages, msg)
 	}
 
 	hasMore := len(messages) > limit
@@ -261,6 +265,62 @@ func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+func (s *messageStore) MarkOneTimeViewed(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+	var (
+		isMember  bool
+		isOneTime bool
+	)
+
+	err := s.pool.QueryRow(ctx,
+		`WITH candidate AS (
+		   SELECT m.id, m.is_one_time,
+		          EXISTS (
+		            SELECT 1
+		            FROM chat_members cm
+		            WHERE cm.chat_id = m.chat_id
+		              AND cm.user_id = $2
+		          ) AS is_member
+		   FROM messages m
+		   WHERE m.id = $1 AND m.is_deleted = false
+		 ),
+		 updated AS (
+		   UPDATE messages m
+		   SET viewed_at = CASE WHEN m.viewed_at IS NULL THEN now() ELSE m.viewed_at END,
+		       viewed_by = CASE WHEN m.viewed_at IS NULL THEN $2 ELSE m.viewed_by END
+		   FROM candidate c
+		   WHERE m.id = c.id
+		     AND c.is_member = true
+		     AND c.is_one_time = true
+		   RETURNING m.id
+		 )
+		 SELECT c.is_member, c.is_one_time
+		 FROM candidate c`,
+		msgID, userID,
+	).Scan(&isMember, &isOneTime)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, pgx.ErrNoRows
+	}
+	if err != nil {
+		return nil, fmt.Errorf("mark one-time viewed: %w", err)
+	}
+	if !isMember {
+		return nil, ErrMessageForbidden
+	}
+	if !isOneTime {
+		return nil, ErrMessageNotOneTime
+	}
+
+	msg, err := s.GetByID(ctx, msgID)
+	if err != nil {
+		return nil, fmt.Errorf("get viewed message: %w", err)
+	}
+	if msg == nil {
+		return nil, pgx.ErrNoRows
+	}
+
+	return msg, nil
+}
+
 // SoftDeleteAuthorized atomically verifies the user is either the message author
 // or an admin/owner of the chat, then soft-deletes the message in a single query.
 func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID uuid.UUID) (uuid.UUID, int, error) {
@@ -280,8 +340,7 @@ func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID u
 		 RETURNING m.chat_id, m.sequence_number`,
 		msgID, userID,
 	).Scan(&chatID, &seqNum)
-	if err == pgx.ErrNoRows {
-		// Distinguish "not found" from "forbidden"
+	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
 		if scanErr := s.pool.QueryRow(ctx,
 			`SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1 AND is_deleted = false)`, msgID,
@@ -289,10 +348,9 @@ func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID u
 			return uuid.Nil, 0, fmt.Errorf("check message existence: %w", scanErr)
 		}
 		if !exists {
-			return uuid.Nil, 0, pgx.ErrNoRows // message not found or already deleted
+			return uuid.Nil, 0, pgx.ErrNoRows
 		}
-		// Message exists but user has no permission
-		return uuid.Nil, 0, fmt.Errorf("forbidden")
+		return uuid.Nil, 0, ErrMessageForbidden
 	}
 	if err != nil {
 		return uuid.Nil, 0, fmt.Errorf("soft delete authorized: %w", err)
@@ -302,16 +360,13 @@ func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID u
 
 func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]model.Message, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
-		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
-		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
-		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
-		 FROM messages m
-		 LEFT JOIN users u ON u.id = m.sender_id
-		 WHERE m.chat_id = $1 AND m.is_pinned = true AND m.is_deleted = false
-		 ORDER BY m.created_at DESC
-		 LIMIT 200`, chatID,
+		"SELECT "+messageSelectColumns+`
+		FROM messages m
+		LEFT JOIN users u ON u.id = m.sender_id
+		WHERE m.chat_id = $1 AND m.is_pinned = true AND m.is_deleted = false
+		ORDER BY m.created_at DESC
+		LIMIT 200`,
+		chatID,
 	)
 	if err != nil {
 		return nil, err
@@ -320,15 +375,13 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 
 	var messages []model.Message
 	for rows.Next() {
-		var m model.Message
-		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
-			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
-			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
+		var msg model.Message
+		if err := scanMessage(rows, &msg); err != nil {
 			return nil, err
 		}
-		messages = append(messages, m)
+		messages = append(messages, msg)
 	}
+
 	return messages, rows.Err()
 }
 
@@ -360,7 +413,6 @@ func (s *messageStore) UnpinAll(ctx context.Context, chatID uuid.UUID) error {
 }
 
 func (s *messageStore) UpdateReadPointer(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error {
-	// Only advance forward — never regress the read pointer (race condition protection)
 	_, err := s.pool.Exec(ctx,
 		`UPDATE chat_members SET last_read_message_id = $1
 		 WHERE chat_id = $2 AND user_id = $3
@@ -383,14 +435,13 @@ func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message
 
 	var result []model.Message
 	for i := range msgs {
-		m := &msgs[i]
-		// Get per-chat sequence number
+		msg := &msgs[i]
 		var seq int64
 		err := tx.QueryRow(ctx,
 			`UPDATE chats SET next_sequence_number = next_sequence_number + 1
 			 WHERE id = $1
 			 RETURNING next_sequence_number - 1`,
-			m.ChatID,
+			msg.ChatID,
 		).Scan(&seq)
 		if err != nil {
 			return nil, fmt.Errorf("get sequence for forwarded: %w", err)
@@ -399,18 +450,22 @@ func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message
 		err = tx.QueryRow(ctx,
 			`INSERT INTO messages (chat_id, sender_id, type, content, entities, is_forwarded, forwarded_from, sequence_number)
 			 VALUES ($1, $2, $3, $4, $5, true, $6, $7)
-			 RETURNING id, is_edited, is_deleted, is_pinned, sequence_number, created_at`,
-			m.ChatID, m.SenderID, m.Type, m.Content, m.Entities, m.ForwardedFrom, seq,
-		).Scan(&m.ID, &m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.SequenceNumber, &m.CreatedAt)
+			 RETURNING id, is_edited, is_deleted, is_pinned, is_one_time,
+			           sequence_number, created_at, viewed_at, viewed_by`,
+			msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ForwardedFrom, seq,
+		).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsOneTime,
+			&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 		if err != nil {
 			return nil, fmt.Errorf("create forwarded message: %w", err)
 		}
-		m.IsForwarded = true
-		result = append(result, *m)
+
+		msg.IsForwarded = true
+		result = append(result, *msg)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
+
 	return result, nil
 }
