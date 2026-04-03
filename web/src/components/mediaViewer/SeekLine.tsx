@@ -147,19 +147,25 @@ const SeekLine = ({
   }, [isPlaying, playbackRate, duration]);
 
   useLayoutEffect(() => {
-    if (!progressRef.current) return;
     const progress = round((getSelectedTime() / duration) * 100, 2);
-    progressRef.current.style.width = `${progress}%`;
+    requestMutation(() => {
+      if (!progressRef.current) return;
+      progressRef.current.style.width = `${progress}%`;
+    });
   }, [getSelectedTime, duration]);
 
   useLayoutEffect(() => {
-    if (!previewRef.current) return;
-    previewRef.current.style.left = `${getPreviewOffset()}px`;
+    requestMutation(() => {
+      if (!previewRef.current) return;
+      previewRef.current.style.left = `${getPreviewOffset()}px`;
+    });
   }, [getPreviewOffset]);
 
   useLayoutEffect(() => {
-    if (!previewTimeRef.current) return;
-    previewTimeRef.current.innerText = formatMediaDuration(getPreviewTime());
+    requestMutation(() => {
+      if (!previewTimeRef.current) return;
+      previewTimeRef.current.innerText = formatMediaDuration(getPreviewTime());
+    });
   }, [getPreviewTime]);
 
   useEffect(() => {

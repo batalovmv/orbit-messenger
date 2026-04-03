@@ -2,7 +2,7 @@ import type { FC } from '../../../lib/teact/teact';
 import type React from '../../../lib/teact/teact';
 import { memo } from '../../../lib/teact/teact';
 
-import { IS_EMOJI_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { SHOULD_RENDER_EMOJI_IMAGES } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { handleEmojiLoad, LOADED_EMOJIS } from '../../../util/emoji/emoji';
 
@@ -40,7 +40,7 @@ const EmojiButton: FC<OwnProps> = ({
       onMouseDown={handleClick}
       title={`:${emoji.names[0]}:`}
     >
-      {IS_EMOJI_SUPPORTED ? emoji.native : (
+      {!SHOULD_RENDER_EMOJI_IMAGES ? emoji.native : (
         <img
           src={src}
           className={!isLoaded ? 'opacity-transition shown' : undefined}

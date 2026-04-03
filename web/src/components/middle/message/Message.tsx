@@ -844,7 +844,7 @@ const Message = ({
     && !isInDocumentGroupNotLast && !isStoryMention && !hasTtl && !isAccountFrozen;
 
   const hasOutsideReactions = !withVoiceTranscription && hasReactions
-    && (isCustomShape || isAlbum || photo || video || storyData || (location?.mediaType === 'geo'));
+    && Boolean(isCustomShape || isAlbum || photo || video || storyData || (location?.mediaType === 'geo'));
 
   const { className: peerColorClass, style: peerColorStyle } = usePeerColor({
     peer: messageColorPeer,
@@ -1518,6 +1518,7 @@ const Message = ({
             messageText={text?.text}
             photo={photo}
             isOwn={isOwn}
+            isOneTime={hasTtl}
             observeIntersection={observeIntersectionForLoading}
             noAvatars={noAvatars}
             canAutoLoad={canAutoLoadMedia}
@@ -1537,12 +1538,13 @@ const Message = ({
           <Video
             video={video}
             isOwn={isOwn}
+            isOneTime={hasTtl}
             observeIntersectionForLoading={observeIntersectionForLoading}
             observeIntersectionForPlaying={observeIntersectionForPlaying}
             forcedWidth={contentWidth}
             noAvatars={noAvatars}
             canAutoLoad={canAutoLoadMedia}
-            canAutoPlay={canAutoPlayMedia}
+            canAutoPlay={!hasTtl && canAutoPlayMedia}
             uploadProgress={uploadProgress}
             isDownloading={isDownloading}
             isProtected={isProtected}

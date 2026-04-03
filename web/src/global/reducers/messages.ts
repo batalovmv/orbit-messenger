@@ -1067,6 +1067,21 @@ export function updatePoll<T extends GlobalState>(
         isMin: undefined,
       };
     }
+
+    if (oldResults?.results && mergedResults.results) {
+      mergedResults = {
+        ...mergedResults,
+        results: mergedResults.results.map((result) => {
+          const previousResult = oldResults.results!.find((oldResult) => oldResult.option === result.option);
+
+          return {
+            ...result,
+            isChosen: result.isChosen ?? previousResult?.isChosen,
+            isCorrect: result.isCorrect ?? previousResult?.isCorrect,
+          };
+        }),
+      };
+    }
   }
 
   const mergedSummary: ApiPoll['summary'] = poll
@@ -1132,7 +1147,7 @@ export function updatePollVote<T extends GlobalState>(
       updatedOption.isChosen = true;
     }
 
-    if (targetOptionIndex) {
+    if (targetOptionIndex >= 0) {
       newResults[targetOptionIndex] = updatedOption;
     } else {
       newResults.push(updatedOption);

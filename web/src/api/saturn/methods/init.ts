@@ -5,6 +5,21 @@ import { DEBUG } from '../../../config';
 import { init as initClient } from './client';
 import * as methods from './index';
 
+const SILENCED_METHODS = new Set([
+  'acceptBotUrlAuth',
+  'acceptLinkUrlAuth',
+  'acceptPhoneCall',
+  'answerCallbackButton',
+  'checkChatInvite',
+  'fetchPremiumPromo',
+  'fetchSavedGifs',
+  'fetchStickerSetsForEmoji',
+  'fetchTopInlineBots',
+  'fetchTopReactions',
+  'requestMainWebView',
+  'requestSimpleWebView',
+]);
+
 export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
   initClient(initialArgs, onUpdate);
   return Promise.resolve();
@@ -15,7 +30,7 @@ export function callApi(fnName: string, ...args: any[]): any;
 export function callApi(fnName: string, ...args: any[]): any {
   const method = (methods as Record<string, (...args: any[]) => unknown>)[fnName];
   if (!method) {
-    if (DEBUG) {
+    if (DEBUG && !SILENCED_METHODS.has(fnName)) {
       // eslint-disable-next-line no-console
       console.warn(`[Saturn] Method not implemented: ${fnName}`);
     }

@@ -257,6 +257,15 @@ function buildAttachmentContent(content: ApiMessage['content'], attachment: ApiA
   }
 }
 
+function isAlbumAttachment(attachment?: ApiAttachment) {
+  if (!attachment) {
+    return false;
+  }
+
+  const mediaType = detectMediaType(attachment);
+  return mediaType === 'photo' || mediaType === 'video';
+}
+
 function buildSendBody({
   attachment,
   entities,
@@ -289,6 +298,12 @@ function buildSendBody({
     body.is_anonymous = poll.summary.isPublic ? false : true;
     body.is_multiple = Boolean(poll.summary.multipleChoice);
     body.is_quiz = Boolean(poll.summary.quiz);
+    if (poll.quiz?.solution) {
+      body.solution = poll.quiz.solution;
+    }
+    if (poll.quiz?.solutionEntities?.length) {
+      body.solution_entities = buildSaturnEntities(poll.quiz.solutionEntities);
+    }
     if (poll.quiz?.correctAnswers?.length) {
       body.correct_option = poll.summary.answers.findIndex((answer) => (
         poll.quiz?.correctAnswers.includes(answer.option)
@@ -542,27 +557,31 @@ export async function fetchMessages({
     params.set('cursor', btoa(String(offsetId + forwardBuffer)));
   }
 
-  const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
-    'GET',
-    `/chats/${chatId}/messages?${params.toString()}`,
-  );
+  const requestPath = `/chats/${chatId}/messages?${params.toString()}`;
 
-  const messages = result.data.map((message) => {
-    const apiMessage = buildApiMessage(message);
-    if (currentUserId) {
-      apiMessage.isOutgoing = message.sender_id === currentUserId;
-    }
-    return apiMessage;
+  return client.deduplicateRequest(`messages:${chatId}:${params.toString()}`, async () => {
+    const result = await client.request<SaturnPaginatedResponse<SaturnMessage>>(
+      'GET',
+      requestPath,
+    );
+
+    const messages = result.data.map((message) => {
+      const apiMessage = buildApiMessage(message);
+      if (currentUserId) {
+        apiMessage.isOutgoing = message.sender_id === currentUserId;
+      }
+      return apiMessage;
+    });
+
+    return {
+      messages,
+      polls: extractApiPolls(result.data),
+      count: messages.length,
+      topics: [] as any[],
+      hasMore: result.has_more,
+      nextCursor: result.cursor,
+    };
   });
-
-  return {
-    messages,
-    polls: extractApiPolls(result.data),
-    count: messages.length,
-    topics: [] as any[],
-    hasMore: result.has_more,
-    nextCursor: result.cursor,
-  };
 }
 
 export async function fetchMessagesByDate({
@@ -697,6 +716,7 @@ export async function sendMessage({
     }),
     sendingState: 'messageSendingStatePending',
     groupedId,
+    isInAlbum: groupedId && isAlbumAttachment(attachment) ? true : undefined,
   };
 
   if (localPoll) {
@@ -970,29 +990,32 @@ export async function fetchPinnedMessages({
   chatId?: string;
 }) {
   const chatId = chat?.id || chatIdDirect!;
-  const result = await client.request<{ messages: SaturnMessage[] }>('GET', `/chats/${chatId}/pinned`);
-  const pinnedMessages = result.messages || [];
 
-  const messages = pinnedMessages.map((message) => {
-    const apiMessage = buildApiMessage(message);
-    if (currentUserId) {
-      apiMessage.isOutgoing = message.sender_id === currentUserId;
-    }
-    return apiMessage;
+  return client.deduplicateRequest(`pinned:${chatId}`, async () => {
+    const result = await client.request<{ messages: SaturnMessage[] }>('GET', `/chats/${chatId}/pinned`);
+    const pinnedMessages = result.messages || [];
+
+    const messages = pinnedMessages.map((message) => {
+      const apiMessage = buildApiMessage(message);
+      if (currentUserId) {
+        apiMessage.isOutgoing = message.sender_id === currentUserId;
+      }
+      return apiMessage;
+    });
+    const pinnedIds = messages.map((message) => message.id);
+
+    sendApiUpdate({
+      '@type': 'updatePinnedIds',
+      chatId,
+      messageIds: pinnedIds,
+    });
+
+    return {
+      messages,
+      pinnedIds,
+      polls: extractApiPolls(pinnedMessages),
+    };
   });
-  const pinnedIds = messages.map((message) => message.id);
-
-  sendApiUpdate({
-    '@type': 'updatePinnedIds',
-    chatId,
-    messageIds: pinnedIds,
-  });
-
-  return {
-    messages,
-    pinnedIds,
-    polls: extractApiPolls(pinnedMessages),
-  };
 }
 
 export async function pinMessage({

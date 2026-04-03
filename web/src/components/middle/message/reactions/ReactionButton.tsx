@@ -103,11 +103,15 @@ const ReactionButton = ({
   }, [handleContextMenuClose, handleContextMenuHide, isContextMenuOpen]);
 
   useEffectWithPrevDeps(([prevReaction]) => {
-    const amount = reaction.localAmount;
     const button = ref.current;
-    if (!amount || !button || amount === prevReaction?.localAmount) return;
+    if (!button || !prevReaction) return;
 
-    if (reaction.localAmount) {
+    const isPaidCountChanged = reaction.localAmount !== prevReaction.localAmount;
+    const isReactionCountChanged = reaction.count !== prevReaction.count;
+
+    if (!isPaidCountChanged && !isReactionCountChanged) return;
+
+    if (isPaidCountChanged && reaction.localAmount) {
       const { left, top } = button.getBoundingClientRect();
       const startX = left + button.offsetWidth / 2;
       const startY = top + button.offsetHeight / 2;

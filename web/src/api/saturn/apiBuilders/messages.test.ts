@@ -78,6 +78,88 @@ describe('buildApiMessage', () => {
       previewUrl: expect.stringContaining('/media/photo-1/thumbnail'),
       mimeType: 'image/jpeg',
     }));
+    expect(getRegisteredAsset('photo-1', 'photo')).toEqual(expect.objectContaining({
+      fullUrl: expect.stringContaining('/media/photo-1'),
+      previewUrl: expect.stringContaining('/media/photo-1/thumbnail'),
+      mimeType: 'image/jpeg',
+    }));
+  });
+
+  it('marks grouped Saturn media messages as album items', () => {
+    const apiMessage = buildApiMessage({
+      id: 'message-3',
+      chat_id: 'chat-1',
+      sender_id: 'user-1',
+      type: 'message',
+      content: '',
+      is_edited: false,
+      is_deleted: false,
+      is_pinned: false,
+      is_forwarded: false,
+      grouped_id: 'group-1',
+      sequence_number: 12,
+      created_at: '2026-04-03T10:06:00.000Z',
+      sender_name: 'Orbit',
+      media_attachments: [{
+        media_id: 'photo-2',
+        type: 'photo',
+        mime_type: 'image/jpeg',
+        url: '/media/photo-2',
+        thumbnail_url: '/media/photo-2/thumbnail',
+        size_bytes: 1024,
+        width: 800,
+        height: 600,
+        position: 0,
+        is_spoiler: false,
+        is_one_time: false,
+        processing_status: 'ready',
+      }],
+    } satisfies SaturnMessage);
+
+    expect(apiMessage.groupedId).toBe('group-1');
+    expect(apiMessage.isInAlbum).toBe(true);
+  });
+
+  it('treats image attachments with file type as photos and registers them for photo loading', () => {
+    const apiMessage = buildApiMessage({
+      id: 'message-3',
+      chat_id: 'chat-1',
+      sender_id: 'user-1',
+      type: 'message',
+      content: 'caption',
+      is_edited: false,
+      is_deleted: false,
+      is_pinned: false,
+      is_forwarded: false,
+      sequence_number: 12,
+      created_at: '2026-04-03T10:06:00.000Z',
+      sender_name: 'Orbit',
+      media_attachments: [{
+        media_id: 'photo-caption-1',
+        type: 'file',
+        mime_type: 'image/jpeg',
+        url: 'https://r2.example.com/expired.jpg',
+        thumbnail_url: 'https://r2.example.com/expired-thumb.jpg',
+        size_bytes: 2048,
+        width: 1024,
+        height: 768,
+        position: 0,
+        is_spoiler: false,
+        is_one_time: false,
+        processing_status: 'ready',
+      }],
+    } satisfies SaturnMessage);
+
+    expect(apiMessage.content.photo).toEqual(expect.objectContaining({
+      id: 'photo-caption-1',
+      mediaType: 'photo',
+    }));
+    expect(apiMessage.content.document).toBeUndefined();
+    expect(getRegisteredAsset('photo-caption-1', 'photo')).toEqual(expect.objectContaining({
+      fullUrl: expect.stringContaining('/media/photo-caption-1'),
+      previewUrl: expect.stringContaining('/media/photo-caption-1/thumbnail'),
+      mimeType: 'image/jpeg',
+    }));
   });
 
   it('preserves explicit poll booleans for anonymous and closed states', () => {
@@ -108,6 +190,51 @@ describe('buildApiMessage', () => {
         quiz: false,
       }),
     }));
+  });
+
+  it('maps quiz solution and entities from Saturn polls', () => {
+    const apiPoll = buildApiPoll({
+      id: 'poll-3',
+      message_id: 'message-3',
+      question: '2+2?',
+      is_anonymous: true,
+      is_multiple: false,
+      is_quiz: true,
+      correct_option: 1,
+      solution: 'Because 2 plus 2 equals 4.',
+      solution_entities: [{
+        type: 'MessageEntityItalic',
+        offset: 0,
+        length: 7,
+      }],
+      is_closed: false,
+      options: [
+        {
+          id: 'option-1',
+          poll_id: 'poll-3',
+          text: '3',
+          position: 0,
+          voters: 0,
+        },
+        {
+          id: 'option-2',
+          poll_id: 'poll-3',
+          text: '4',
+          position: 1,
+          voters: 1,
+          is_correct: true,
+        },
+      ],
+      total_voters: 1,
+      created_at: '2026-04-03T10:00:00.000Z',
+    });
+
+    expect(apiPoll?.results.solution).toBe('Because 2 plus 2 equals 4.');
+    expect(apiPoll?.results.solutionEntities).toEqual([{
+      type: 'MessageEntityItalic',
+      offset: 0,
+      length: 7,
+    }]);
   });
 
   it('keeps scheduled poll booleans explicit', () => {

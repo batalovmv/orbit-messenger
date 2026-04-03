@@ -13,6 +13,7 @@ let accessToken: string | undefined;
 let tokenExpiresAt = 0;
 let refreshPromise: Promise<void> | undefined;
 let onUpdate: OnApiUpdate | undefined;
+const pendingRequests = new Map<string, Promise<unknown>>();
 
 // Auth readiness gate: requests wait until initial auth check completes
 let authReadyResolve: (() => void) | undefined;
@@ -158,6 +159,24 @@ export async function request<T>(
   }
 
   return response.json();
+}
+
+export function deduplicateRequest<T>(key: string, factory: () => Promise<T>): Promise<T> {
+  const pending = pendingRequests.get(key);
+  if (pending) {
+    return pending as Promise<T>;
+  }
+
+  const requestPromise = factory()
+    .finally(() => {
+      if (pendingRequests.get(key) === requestPromise) {
+        pendingRequests.delete(key);
+      }
+    });
+
+  pendingRequests.set(key, requestPromise);
+
+  return requestPromise;
 }
 
 export class ApiError extends Error {

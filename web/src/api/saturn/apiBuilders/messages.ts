@@ -64,18 +64,43 @@ function fullMediaUrl(relativePath?: string) {
   return `${getBaseUrl()}${relativePath}`;
 }
 
+function isImageMimeType(mimeType?: string) {
+  return Boolean(mimeType?.startsWith('image/'));
+}
+
+function isPhotoAttachment(att: Pick<SaturnMediaAttachment, 'type' | 'mime_type'>) {
+  return att.type === 'photo' || (att.type === 'file' && isImageMimeType(att.mime_type));
+}
+
+function getEffectiveAttachmentType(att: SaturnMediaAttachment) {
+  return isPhotoAttachment(att) ? 'photo' : att.type;
+}
+
+function getMediaAttachmentUrl(att: SaturnMediaAttachment, variant: 'full' | 'thumbnail' | 'medium') {
+  switch (variant) {
+    case 'thumbnail':
+      return att.thumbnail_url ? fullMediaUrl(`/media/${att.media_id}/thumbnail`) : undefined;
+    case 'medium':
+      return att.medium_url ? fullMediaUrl(`/media/${att.media_id}/medium`) : undefined;
+    case 'full':
+    default:
+      return fullMediaUrl(`/media/${att.media_id}`);
+  }
+}
+
 function registerMediaAttachmentAsset(att: SaturnMediaAttachment) {
-  const fullUrl = fullMediaUrl(att.url) || fullMediaUrl(`/media/${att.media_id}`);
-  const previewUrl = fullMediaUrl(att.thumbnail_url)
-    || fullMediaUrl(att.medium_url)
-    || (att.type === 'photo' ? fullUrl : undefined);
+  const fullUrl = getMediaAttachmentUrl(att, 'full');
+  const previewUrl = getMediaAttachmentUrl(att, 'thumbnail')
+    || getMediaAttachmentUrl(att, 'medium')
+    || (isPhotoAttachment(att) ? fullUrl : undefined);
+  const assetKinds = isPhotoAttachment(att) ? ['photo', 'document'] as const : ['document'] as const;
 
   registerAsset(att.media_id, {
     fileName: att.original_filename || `${att.media_id}${guessFileExtension(att.mime_type)}`,
     fullUrl,
     previewUrl,
     mimeType: att.mime_type,
-  }, ['document']);
+  }, assetKinds);
 }
 
 function guessFileExtension(mimeType?: string) {
@@ -166,23 +191,37 @@ function buildApiPollOptionResult(poll: SaturnPoll, option: SaturnPoll['options'
   };
 }
 
+function buildApiEntity(entity: SaturnMessageEntity): ApiMessageEntity {
+  const base = { type: entity.type as ApiMessageEntity['type'], offset: entity.offset, length: entity.length };
+  if (entity.url) return { ...base, type: ApiMessageEntityTypes.TextUrl, url: entity.url };
+  if (entity.language) return { ...base, type: ApiMessageEntityTypes.Pre, language: entity.language };
+  if (entity.user_id) return { ...base, type: ApiMessageEntityTypes.MentionName, userId: entity.user_id };
+  return base as ApiMessageEntity;
+}
+
 function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMediaAttachment[]) {
   const first = attachments[0];
   if (!first) return;
+  const effectiveFirstType = getEffectiveAttachmentType(first);
 
   if (first.is_one_time) {
     content.ttlSeconds = 1;
   }
 
   const albumAttachments = attachments.filter(
-    (attachment) => attachment.type === 'photo' || attachment.type === 'video',
+    (attachment) => {
+      const type = getEffectiveAttachmentType(attachment);
+      return type === 'photo' || type === 'video';
+    },
   );
   if (albumAttachments.length > 1) {
     content.albumMedia = albumAttachments.map((attachment) => (
-      attachment.type === 'photo' ? buildSaturnPhoto(attachment) : buildSaturnVideo(attachment)
+      getEffectiveAttachmentType(attachment) === 'photo'
+        ? buildSaturnPhoto(attachment)
+        : buildSaturnVideo(attachment)
     ));
 
-    if (first.type === 'photo') {
+    if (effectiveFirstType === 'photo') {
       content.photo = content.albumMedia[0] as ApiPhoto;
     } else {
       content.video = content.albumMedia[0] as ApiVideo;
@@ -190,7 +229,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
     return;
   }
 
-  switch (first.type) {
+  switch (effectiveFirstType) {
     case 'photo':
       content.photo = buildSaturnPhoto(first);
       break;
@@ -256,6 +295,13 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
       };
       break;
   }
+}
+
+function isGroupedAlbumMessage(content: ApiMessage['content'], groupedId?: string) {
+  return Boolean(
+    groupedId
+    && (content.photo || (content.video && !content.video.isGif && !content.video.isRound)),
+  );
 }
 
 type SaturnReplyMessage = Pick<SaturnMessage, 'chat_id' | 'reply_to_id' | 'reply_to_sequence_number'>
@@ -354,6 +400,8 @@ export function buildApiPoll(poll?: SaturnPoll): ApiPoll | undefined {
         .sort((left, right) => left.position - right.position)
         .map((option) => buildApiPollOptionResult(poll, option)),
       totalVoters: poll.total_voters,
+      solution: poll.solution,
+      solutionEntities: poll.solution_entities?.map(buildApiEntity),
     },
   };
 }
@@ -391,6 +439,8 @@ export function buildApiScheduledPoll(msg: SaturnScheduledMessage): ApiPoll | un
         votersCount: 0,
       })),
       totalVoters: 0,
+      solution: msg.poll.solution,
+      solutionEntities: msg.poll.solution_entities?.map(buildApiEntity),
     },
   };
 }
@@ -429,6 +479,8 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     }
   }
 
+  const isInAlbum = isGroupedAlbumMessage(content, msg.grouped_id);
+
   return {
     id: msg.sequence_number,
     chatId: msg.chat_id,
@@ -447,6 +499,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     reactions: buildApiReactions(msg.reactions, currentUserId),
     areReactionsPossible: msg.is_deleted ? undefined : true,
     groupedId: msg.grouped_id,
+    isInAlbum: isInAlbum || undefined,
   };
 }
 
@@ -493,14 +546,6 @@ export function buildApiScheduledMessage(msg: SaturnScheduledMessage): ApiMessag
     isScheduled: true,
     isDeleting: msg.is_sent,
   };
-}
-
-function buildApiEntity(entity: SaturnMessageEntity): ApiMessageEntity {
-  const base = { type: entity.type as ApiMessageEntity['type'], offset: entity.offset, length: entity.length };
-  if (entity.url) return { ...base, type: ApiMessageEntityTypes.TextUrl, url: entity.url };
-  if (entity.language) return { ...base, type: ApiMessageEntityTypes.Pre, language: entity.language };
-  if (entity.user_id) return { ...base, type: ApiMessageEntityTypes.MentionName, userId: entity.user_id };
-  return base as ApiMessageEntity;
 }
 
 export function buildSaturnEntities(entities: ApiMessageEntity[]): SaturnMessageEntity[] {

@@ -111,6 +111,14 @@
 
 .headerActionButton {
   flex-shrink: 0;
+  width: 2rem !important;
+  height: 2rem !important;
+  border-radius: 50%;
+}
+
+.headerActionButtonActive {
+  color: var(--color-primary) !important;
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent) !important;
 }
 
 .attachments-bottom-padding {

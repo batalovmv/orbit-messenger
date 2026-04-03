@@ -39,6 +39,7 @@ import { destroySharedStatePort, initSharedState } from '../../shared/sharedStat
 
 const HISTORY_ANIMATION_DURATION = 450;
 const MAX_NOTIFICATION_BANNERS = 3;
+const NOTIFICATION_PROMPT_STORAGE_KEY = 'orbit_notification_prompted';
 
 setSystemThemeChangeCallback((theme) => {
   let global = getGlobal();
@@ -115,14 +116,42 @@ addActionHandler('initShared', (): ActionReturnType => {
 
 addActionHandler('initMain', (global): ActionReturnType => {
   const { hasWebNotifications, hasPushNotifications } = selectSettingsKeys(global);
-  if (hasWebNotifications && hasPushNotifications) {
+  const shouldPromptForNotifications = (
+    typeof Notification !== 'undefined'
+    && Notification.permission === 'default'
+    && !hasWebNotifications
+    && !hasPushNotifications
+    && localStorage.getItem(NOTIFICATION_PROMPT_STORAGE_KEY) !== '1'
+  );
+  const shouldRestorePushSubscription = (
+    typeof Notification !== 'undefined'
+    && 'serviceWorker' in navigator
+    && Notification.permission === 'granted'
+    && !hasWebNotifications
+    && !hasPushNotifications
+  );
+
+  if ((hasWebNotifications && hasPushNotifications) || shouldPromptForNotifications || shouldRestorePushSubscription) {
     // Most of the browsers only show the notifications permission prompt after the first user gesture.
     const events = ['click', 'keypress'];
-    const subscribeAfterUserGesture = () => {
-      void subscribe();
+    const subscribeAfterUserGesture = async () => {
       events.forEach((event) => {
         document.removeEventListener(event, subscribeAfterUserGesture);
       });
+
+      if (shouldPromptForNotifications) {
+        localStorage.setItem(NOTIFICATION_PROMPT_STORAGE_KEY, '1');
+      }
+
+      if (shouldRestorePushSubscription) {
+        const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+        const existingSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
+        if (!existingSubscription) {
+          return;
+        }
+      }
+
+      await subscribe();
     };
     events.forEach((event) => {
       document.addEventListener(event, subscribeAfterUserGesture, { once: true });

@@ -6,7 +6,12 @@ import type {
 } from '../api/types';
 import { ApiMediaFormat } from '../api/types';
 
-import { APP_NAME, DEBUG, IS_TEST } from '../config';
+import {
+  APP_NAME,
+  DEBUG,
+  IS_TEST,
+  VAPID_PUBLIC_KEY,
+} from '../config';
 import {
   getChatAvatarHash,
   getChatTitle,
@@ -39,12 +44,64 @@ import { getServerTime } from './serverTime';
 
 import MessageSummary from '../components/common/MessageSummary';
 
-function getDeviceToken(subscription: PushSubscription) {
+type PushSubscriptionData = {
+  auth: string;
+  endpoint: string;
+  p256dh: string;
+};
+
+function serializePushSubscription(data: PushSubscriptionData) {
+  return JSON.stringify(data);
+}
+
+function getPushSubscriptionData(subscription: PushSubscription): PushSubscriptionData {
   const data = subscription.toJSON();
-  return JSON.stringify({
-    endpoint: data.endpoint,
-    keys: data.keys,
-  });
+  const endpoint = data.endpoint;
+  const p256dh = data.keys?.p256dh;
+  const auth = data.keys?.auth;
+
+  if (!endpoint || !p256dh || !auth) {
+    throw new Error('Incomplete push subscription payload');
+  }
+
+  return {
+    endpoint,
+    p256dh,
+    auth,
+  };
+}
+
+function getDeviceToken(subscription: PushSubscription) {
+  return serializePushSubscription(getPushSubscriptionData(subscription));
+}
+
+function parseStoredPushSubscription(deviceToken: string): Partial<PushSubscriptionData> | undefined {
+  try {
+    const parsed = JSON.parse(deviceToken);
+    const endpoint = parsed.endpoint;
+    const p256dh = parsed.p256dh || parsed.keys?.p256dh;
+    const auth = parsed.auth || parsed.keys?.auth;
+
+    if (!endpoint) return undefined;
+
+    return {
+      endpoint,
+      p256dh,
+      auth,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const normalized = `${base64String}${padding}`
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+  const rawData = atob(normalized);
+
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
 }
 
 function checkIfPushSupported() {
@@ -169,8 +226,8 @@ async function unsubscribeFromPush(subscription: PushSubscription | null) {
   const { deleteDeviceToken } = getActions();
   if (subscription) {
     try {
-      const deviceToken = getDeviceToken(subscription);
-      await callApi('unregisterDevice', deviceToken);
+      const { endpoint } = getPushSubscriptionData(subscription);
+      await callApi('unregisterDevice', { endpoint });
       await subscription.unsubscribe();
       deleteDeviceToken();
       return;
@@ -183,7 +240,10 @@ async function unsubscribeFromPush(subscription: PushSubscription | null) {
   }
   const global = getGlobal();
   if (global.push) {
-    await callApi('unregisterDevice', global.push.deviceToken);
+    const pushSubscription = parseStoredPushSubscription(global.push.deviceToken);
+    if (pushSubscription?.endpoint) {
+      await callApi('unregisterDevice', { endpoint: pushSubscription.endpoint });
+    }
     deleteDeviceToken();
   }
 }
@@ -238,19 +298,44 @@ export async function subscribe() {
   }
   const serviceWorkerRegistration = await navigator.serviceWorker.ready;
   let subscription = await serviceWorkerRegistration.pushManager.getSubscription();
-  if (!checkIfShouldResubscribe(subscription)) return;
+  if (!checkIfShouldResubscribe(subscription) && subscription) {
+    setDeviceToken({ token: getDeviceToken(subscription) });
+    updateWebNotificationSettings({
+      hasWebNotifications: true,
+      hasPushNotifications: true,
+    });
+    return;
+  }
   await unsubscribeFromPush(subscription);
+
+  if (!VAPID_PUBLIC_KEY) {
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.warn('[PUSH] VAPID public key is not configured, falling back to local notifications.');
+    }
+    isSubscriptionFailed = true;
+    hasWebNotifications = await requestPermission();
+    updateWebNotificationSettings({
+      hasWebNotifications,
+      hasPushNotifications,
+    });
+    return;
+  }
+
   try {
     subscription = await serviceWorkerRegistration.pushManager.subscribe({
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       userVisibleOnly: true,
     });
-    const deviceToken = getDeviceToken(subscription);
+    const pushSubscription = getPushSubscriptionData(subscription);
+    const deviceToken = serializePushSubscription(pushSubscription);
     if (DEBUG) {
       // eslint-disable-next-line no-console
       console.log('[PUSH] Received push subscription: ', deviceToken);
     }
-    await callApi('registerDevice', deviceToken);
+    await callApi('registerDevice', pushSubscription);
     setDeviceToken({ token: deviceToken });
+    isSubscriptionFailed = false;
     hasPushNotifications = true;
     hasWebNotifications = true;
   } catch (error: any) {
@@ -271,12 +356,8 @@ export async function subscribe() {
         // eslint-disable-next-line no-console
         console.log('[PUSH] Unable to subscribe to push.', error);
       }
-      // Request permissions and fall back to local notifications
-      // if pushManager.subscribe was aborted due to invalid VAPID key.
-      if ([DOMException.ABORT_ERR, DOMException.NOT_SUPPORTED_ERR].includes(error.code)) {
-        isSubscriptionFailed = true;
-        hasWebNotifications = await requestPermission();
-      }
+      isSubscriptionFailed = true;
+      hasWebNotifications = Notification.permission === 'granted' || await requestPermission();
     }
   }
   updateWebNotificationSettings({

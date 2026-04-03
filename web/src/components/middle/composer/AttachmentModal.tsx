@@ -628,10 +628,13 @@ const AttachmentModal = ({
               ripple={!isMobile}
               size="tiny"
               color="translucent"
-              className={buildClassName(styles.headerActionButton, isOneTimeMediaEnabled && 'active')}
+              className={buildClassName(
+                styles.headerActionButton,
+                isOneTimeMediaEnabled && styles.headerActionButtonActive,
+              )}
               onClick={onToggleOneTimeMedia}
               ariaLabel={lang('OneTimeMedia')}
-              iconName="timer"
+              iconName="view-once"
             />
           )}
           {notEditingFile && !isInAlbum

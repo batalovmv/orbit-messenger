@@ -4,7 +4,7 @@ import type { TextPart } from '../../../types';
 
 import { RE_LINK_TEMPLATE, RE_MENTION_TEMPLATE } from '../../../config';
 import EMOJI_REGEX from '../../../lib/twemojiRegex';
-import { IS_EMOJI_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { SHOULD_RENDER_EMOJI_IMAGES } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { isDeepLink } from '../../../util/deepLinkParser';
 import {
@@ -103,7 +103,7 @@ function replaceEmojis(
 ): TextPart[] {
   const postProcess = postProcessor || ((part: string) => part);
 
-  if (IS_EMOJI_SUPPORTED) {
+  if (!SHOULD_RENDER_EMOJI_IMAGES) {
     return textParts.map((part) => typeof part === 'string' ? postProcess(part) : part);
   }
 

@@ -31,7 +31,14 @@ function handleWorkerMessage(e: MessageEvent) {
   const payload = action.payload;
   switch (action.type) {
     case 'focusMessage':
-      dispatch.focusMessage?.(payload as any);
+      if (payload.messageId) {
+        dispatch.focusMessage?.(payload as any);
+      } else if (payload.chatId) {
+        dispatch.openChat?.({
+          id: payload.chatId,
+          shouldReplaceHistory: payload.shouldReplaceHistory,
+        });
+      }
       break;
     case 'playNotificationSound':
       playNotifySoundDebounced(action.payload.id);

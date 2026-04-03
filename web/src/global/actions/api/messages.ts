@@ -167,6 +167,7 @@ import { deleteMessages } from '../apiUpdaters/messages';
 const AUTOLOGIN_TOKEN_KEY = 'autologin_token';
 
 const uploadProgressCallbacks = new Map<MessageKey, ApiOnProgress>();
+const pendingPinnedMessageLoads = new Map<string, Promise<void>>();
 
 const runDebouncedForMarkRead = debounce((cb) => cb(), 500, false);
 
@@ -2095,23 +2096,42 @@ addActionHandler('loadPinnedMessages', async (global, actions, payload): Promise
     return;
   }
 
-  const result = await callApi('fetchPinnedMessages', { chat, threadId });
-  if (!result) {
+  const requestKey = `${chatId}:${threadId}`;
+  const pending = pendingPinnedMessageLoads.get(requestKey);
+  if (pending) {
+    await pending;
     return;
   }
 
-  const { messages } = result;
+  const requestPromise = (async () => {
+    const result = await callApi('fetchPinnedMessages', { chat, threadId });
+    if (!result) {
+      return;
+    }
 
-  const byId = buildCollectionByKey(messages, 'id');
-  const ids = Object.keys(byId).map(Number).sort((a, b) => b - a);
+    const { messages } = result;
 
-  global = getGlobal();
-  global = addChatMessagesById(global, chat.id, byId as Record<number, ApiMessage>);
-  result.polls?.forEach((poll: ApiPoll) => {
-    global = updatePoll(global, poll.id, poll);
-  });
-  global = safeReplacePinnedIds(global, chat.id, threadId, ids);
-  setGlobal(global);
+    const byId = buildCollectionByKey(messages, 'id');
+    const ids = Object.keys(byId).map(Number).sort((a, b) => b - a);
+
+    global = getGlobal();
+    global = addChatMessagesById(global, chat.id, byId as Record<number, ApiMessage>);
+    result.polls?.forEach((poll: ApiPoll) => {
+      global = updatePoll(global, poll.id, poll);
+    });
+    global = safeReplacePinnedIds(global, chat.id, threadId, ids);
+    setGlobal(global);
+  })();
+
+  pendingPinnedMessageLoads.set(requestKey, requestPromise);
+
+  try {
+    await requestPromise;
+  } finally {
+    if (pendingPinnedMessageLoads.get(requestKey) === requestPromise) {
+      pendingPinnedMessageLoads.delete(requestKey);
+    }
+  }
 });
 
 addActionHandler('loadSeenBy', async (global, actions, payload): Promise<void> => {

@@ -9,6 +9,7 @@ import {
   checkIfNotificationsSupported,
   checkIfOfflinePushFailed,
   playNotifySound,
+  subscribe,
 } from '../../../util/notifications';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -55,6 +56,19 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
 
   const areNotificationsSupported = checkIfNotificationsSupported();
   const areOfflineNotificationsSupported = areNotificationsSupported && !checkIfOfflinePushFailed();
+
+  useEffect(() => {
+    if (
+      !isActive
+      || hasWebNotifications
+      || !areNotificationsSupported
+      || Notification.permission !== 'default'
+    ) {
+      return;
+    }
+
+    void subscribe();
+  }, [areNotificationsSupported, hasWebNotifications, isActive]);
 
   const areChannelsMuted = Boolean(notifyDefaults?.channels?.mutedUntil);
   const areGroupsMuted = Boolean(notifyDefaults?.groups?.mutedUntil);

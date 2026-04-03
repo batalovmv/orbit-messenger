@@ -1,6 +1,8 @@
 import type { ApiUser, ApiUserFullInfo, ApiUserStatus } from '../../types';
 import type { SaturnUser } from '../types';
 
+import { buildAvatarPhoto, getAvatarPhotoId } from './avatars';
+
 export function buildApiUser(user: SaturnUser): ApiUser {
   const nameParts = (user.display_name || '').split(' ');
   const firstName = nameParts[0] || '';
@@ -13,6 +15,7 @@ export function buildApiUser(user: SaturnUser): ApiUser {
     firstName,
     lastName,
     phoneNumber: user.phone || '',
+    avatarPhotoId: getAvatarPhotoId(user.id, user.avatar_url),
     hasUsername: Boolean(user.email),
     usernames: user.email ? [{ username: user.email, isActive: true, isEditable: true }] : undefined,
   };
@@ -47,5 +50,6 @@ export function buildApiUserStatus(user: SaturnUser): ApiUserStatus {
 export function buildApiUserFullInfo(user: SaturnUser): ApiUserFullInfo {
   return {
     bio: user.bio || undefined,
+    profilePhoto: buildAvatarPhoto(user.id, user.avatar_url),
   };
 }

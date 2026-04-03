@@ -33,10 +33,6 @@ export function fetchNearestCountry() {
   return Promise.resolve('US');
 }
 
-export function uploadProfilePhoto() {
-  return Promise.resolve(undefined);
-}
-
 export function requestChannelDifference() {
   return Promise.resolve(undefined);
 }
@@ -55,6 +51,7 @@ export async function downloadMedia(
   try {
     const token = await ensureAuth();
     let asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
+    const fallbackEndpoint = buildMediaEndpoint(assetRef.id, isPreview);
 
     if (!asset && assetRef.kind === 'stickerSet') {
       await hydrateStickerSetAsset(assetRef.id);
@@ -62,22 +59,21 @@ export async function downloadMedia(
     }
 
     if (asset) {
-      return fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress);
+      const result = await fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress);
+      if (result) {
+        return result;
+      }
     }
 
     if (assetRef.kind === 'stickerSet') {
       return undefined;
     }
 
-    if (!/^[0-9a-f-]{36}$/i.test(assetRef.id)) {
+    if (!fallbackEndpoint) {
       return undefined;
     }
 
-    const endpoint = isPreview
-      ? `/media/${assetRef.id}/thumbnail`
-      : `/media/${assetRef.id}`;
-
-    return fetchBinary(`${getBaseUrl()}${endpoint}`, mediaFormat, token, undefined, onProgress);
+    return fetchBinary(`${getBaseUrl()}${fallbackEndpoint}`, mediaFormat, token, asset?.mimeType, onProgress);
   } catch {
     return undefined;
   }
@@ -266,6 +262,7 @@ export function fetchGenericEmojiEffects() {
 }
 
 export {
+  fetchAvailableEffects,
   fetchAvailableReactions,
   fetchDefaultTagReactions,
   fetchMessageReactions,
@@ -275,11 +272,9 @@ export {
   setDefaultReaction,
   setChatEnabledReactions,
   fetchTopReactions,
+  fetchSavedReactionTags,
+  updateSavedReactionTag,
 } from './reactions';
-
-export function fetchAvailableEffects() {
-  return Promise.resolve(undefined);
-}
 
 export function fetchDefaultReactions() {
   return Promise.resolve(undefined);
@@ -292,12 +287,9 @@ export function fetchPremiumPromo(): Promise<{ promo: ApiPremiumPromo } | undefi
 }
 
 export { subscribePush as registerDevice } from './settingsApi';
+export { unsubscribePush as unregisterDevice } from './settingsApi';
 
 export function updateIsOnline() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchSavedReactionTags() {
   return Promise.resolve(undefined);
 }
 
@@ -864,6 +856,14 @@ export {
 } from './media';
 
 export {
+  editChatPhoto,
+  fetchProfilePhotos,
+  toggleChatArchived,
+  updateProfilePhoto,
+  uploadProfilePhoto,
+} from './compat';
+
+export {
   getUserSettings, updateUserSettings,
   fetchBlockedUsersList,
   getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings,
@@ -888,7 +888,7 @@ export {
 
 function parseAssetRef(url: string) {
   const normalizedUrl = url.replace(/^\.\//, '');
-  const match = normalizedUrl.match(/(?:progressive\/)?(photo|video|document|stickerSet|sticker)([^/?&#]+)/);
+  const match = normalizedUrl.match(/(?:progressive\/)?(avatar|profile|photo|video|document|stickerSet|sticker)([^/?&#]+)/);
   if (!match) {
     return undefined;
   }
@@ -899,11 +899,27 @@ function parseAssetRef(url: string) {
   };
 }
 
+function buildMediaEndpoint(id: string, isPreview: boolean) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return undefined;
+  }
+
+  return isPreview
+    ? `/media/${id}/thumbnail`
+    : `/media/${id}`;
+}
+
 function resolveRegisteredAsset(kind: string, id: string, isPreview: boolean) {
   const asset = kind === 'stickerSet'
     ? getRegisteredAsset(id, 'stickerSet')
     : kind === 'sticker'
       ? getRegisteredAsset(id, 'sticker') || getRegisteredAsset(id, 'document')
+      : kind === 'avatar'
+        ? getRegisteredAsset(id, 'avatar') || getRegisteredAsset(id, 'profile')
+      : kind === 'profile'
+        ? getRegisteredAsset(id, 'profile') || getRegisteredAsset(id, 'avatar')
+      : kind === 'photo'
+        ? getRegisteredAsset(id, 'photo') || getRegisteredAsset(id, 'document')
       : getRegisteredAsset(id, 'document');
 
   if (!asset) {

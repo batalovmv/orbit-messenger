@@ -51,6 +51,7 @@ export type OwnProps<T> = {
   className?: string;
   clickArg?: T;
   isMediaNsfw?: boolean;
+  isOneTime?: boolean;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
   onClick?: (arg: T, e: React.MouseEvent<HTMLElement>) => void;
@@ -79,6 +80,7 @@ const Video = <T,>({
   lastPlaybackTimestamp,
   clickArg,
   isMediaNsfw,
+  isOneTime,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
   onClick,
@@ -128,7 +130,7 @@ const Video = <T,>({
   const { isMobile } = useAppLayout();
   const [isLoadAllowed, setIsLoadAllowed] = useState(canAutoLoad);
   const shouldLoad = Boolean(isLoadAllowed && isIntersectingForLoading && !isPaidPreview);
-  const [isPlayAllowed, setIsPlayAllowed] = useState(Boolean(canAutoPlay && !isSpoilerShown));
+  const [isPlayAllowed, setIsPlayAllowed] = useState(Boolean(canAutoPlay && !isSpoilerShown && !isOneTime));
 
   const fullMediaHash = !isPaidPreview ? getVideoMediaHash(video, 'inline') : undefined;
   const [isFullMediaPreloaded] = useState(Boolean(fullMediaHash && mediaLoader.getFromMemory(fullMediaHash)));
@@ -224,6 +226,11 @@ const Video = <T,>({
       return;
     }
 
+    if (isOneTime) {
+      onClick?.(clickArg!, e);
+      return;
+    }
+
     if (!fullMediaData) {
       setIsLoadAllowed((isAllowed) => !isAllowed);
       return;
@@ -254,6 +261,8 @@ const Video = <T,>({
 
     onClick?.(clickArg!, e);
   });
+
+  const shouldShowOverlay = isSpoilerShown || isOneTime;
 
   const handleClickOnSpinner = useLastCallback(
     (e: React.MouseEvent<HTMLElement, MouseEvent>) => {
@@ -311,16 +320,21 @@ const Video = <T,>({
         <canvas ref={thumbRef} className="thumbnail" />
       )}
       {isProtected && <span className="protector" />}
-      <Icon ref={playButtonRef} name="large-play" />
+      {!isOneTime && <Icon ref={playButtonRef} name="large-play" />}
       <MediaSpoiler
-        isVisible={isSpoilerShown}
-        withAnimation
+        isVisible={Boolean(shouldShowOverlay)}
+        withAnimation={!isOneTime}
         thumbDataUri={thumbDataUri}
-        isNsfw={isMediaNsfw}
+        isNsfw={Boolean(isMediaNsfw)}
         width={width}
         height={height}
         className="media-spoiler"
       />
+      {isOneTime && (
+        <div className="one-time-media-badge">
+          <Icon name="view-once" />
+        </div>
+      )}
       {shouldRenderSpinner && (
         <div ref={spinnerRef} className="media-loading">
           <ProgressSpinner

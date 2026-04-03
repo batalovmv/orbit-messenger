@@ -8,16 +8,27 @@ import type {
   SaturnUserSettings,
 } from '../types';
 
-import { request } from '../client';
+import { DEBUG } from '../../../config';
+import { deduplicateRequest, request } from '../client';
+
+function logSettingsApiError(methodName: string, err: unknown) {
+  if (DEBUG) {
+    // eslint-disable-next-line no-console
+    console.error(`[Saturn] ${methodName} failed:`, err);
+  }
+}
 
 // ─── Privacy Settings ──────────────────────────────────────────────────────
 
 export async function getPrivacySettings(): Promise<SaturnPrivacySettings | undefined> {
-  try {
-    return await request<SaturnPrivacySettings>('GET', '/users/me/settings/privacy');
-  } catch {
-    return undefined;
-  }
+  return deduplicateRequest('privacy', async () => {
+    try {
+      return await request<SaturnPrivacySettings>('GET', '/users/me/settings/privacy');
+    } catch (err) {
+      logSettingsApiError('getPrivacySettings', err);
+      return undefined;
+    }
+  });
 }
 
 export async function setPrivacySettings({
@@ -39,7 +50,8 @@ export async function setPrivacySettings({
       groups,
       forwarded,
     });
-  } catch {
+  } catch (err) {
+    logSettingsApiError('setPrivacySettings', err);
     return undefined;
   }
 }
@@ -49,7 +61,8 @@ export async function setPrivacySettings({
 export async function getUserSettings(): Promise<SaturnUserSettings | undefined> {
   try {
     return await request<SaturnUserSettings>('GET', '/users/me/settings/appearance');
-  } catch {
+  } catch (err) {
+    logSettingsApiError('getUserSettings', err);
     return undefined;
   }
 }
@@ -73,7 +86,8 @@ export async function updateUserSettings({
       dnd_from: dndFrom,
       dnd_until: dndUntil,
     });
-  } catch {
+  } catch (err) {
+    logSettingsApiError('updateUserSettings', err);
     return undefined;
   }
 }
@@ -87,7 +101,8 @@ export async function fetchBlockedUsersList({ limit }: {
     return await request<{ blocked_users: SaturnBlockedUser[] }>(
       'GET', `/users/me/blocked?limit=${limit || 50}`,
     );
-  } catch {
+  } catch (err) {
+    logSettingsApiError('fetchBlockedUsersList', err);
     return undefined;
   }
 }
@@ -96,7 +111,8 @@ export async function blockUser({ userId }: { userId: string }): Promise<boolean
   try {
     await request('POST', `/users/me/blocked/${userId}`);
     return true;
-  } catch {
+  } catch (err) {
+    logSettingsApiError('blockUser', err);
     return false;
   }
 }
@@ -105,7 +121,8 @@ export async function unblockUser({ userId }: { userId: string }): Promise<boole
   try {
     await request('DELETE', `/users/me/blocked/${userId}`);
     return true;
-  } catch {
+  } catch (err) {
+    logSettingsApiError('unblockUser', err);
     return false;
   }
 }
@@ -117,7 +134,8 @@ export async function getChatNotifySettings({ chatId }: {
 }): Promise<SaturnNotificationSettings | undefined> {
   try {
     return await request<SaturnNotificationSettings>('GET', `/chats/${chatId}/notifications`);
-  } catch {
+  } catch (err) {
+    logSettingsApiError('getChatNotifySettings', err);
     return undefined;
   }
 }
@@ -136,7 +154,8 @@ export async function updateChatNotifySettings({
       sound: sound || 'default',
       show_preview: showPreview !== false,
     });
-  } catch {
+  } catch (err) {
+    logSettingsApiError('updateChatNotifySettings', err);
     return undefined;
   }
 }
@@ -147,7 +166,8 @@ export async function deleteChatNotifySettings({ chatId }: {
   try {
     await request('DELETE', `/chats/${chatId}/notifications`);
     return true;
-  } catch {
+  } catch (err) {
+    logSettingsApiError('deleteChatNotifySettings', err);
     return false;
   }
 }
@@ -167,7 +187,8 @@ export async function subscribePush({
       p256dh,
       auth,
     });
-  } catch {
+  } catch (err) {
+    logSettingsApiError('subscribePush', err);
     return undefined;
   }
 }
@@ -176,7 +197,8 @@ export async function unsubscribePush({ endpoint }: { endpoint: string }): Promi
   try {
     await request('DELETE', '/push/subscribe', { endpoint });
     return true;
-  } catch {
+  } catch (err) {
+    logSettingsApiError('unsubscribePush', err);
     return false;
   }
 }

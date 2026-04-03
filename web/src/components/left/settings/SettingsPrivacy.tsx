@@ -94,7 +94,7 @@ const SettingsPrivacy = ({
   useEffect(() => {
     if (!isCurrentUserFrozen) {
       loadBlockedUsers();
-      loadPrivacySettings({});
+      loadPrivacySettings({ skipIfCached: true });
       loadWebAuthorizations();
       loadPasskeys();
     }

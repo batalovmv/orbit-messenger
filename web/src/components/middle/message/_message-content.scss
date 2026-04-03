@@ -845,6 +845,30 @@
     margin-inline-start: 0.125rem;
     font-size: 0.875rem;
   }
+
+  .one-time-media-badge {
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+
+    font-size: 1rem;
+    color: #fff;
+
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(0.5rem);
+  }
 }
 
 .message-content.story {

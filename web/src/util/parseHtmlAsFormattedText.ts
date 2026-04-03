@@ -3,7 +3,7 @@ import { ApiMessageEntityTypes } from '../api/types';
 
 import { RE_LINK_TEMPLATE } from '../config';
 import { ensureProtocol } from './browser/url';
-import { IS_EMOJI_SUPPORTED } from './browser/windowEnvironment';
+import { SHOULD_RENDER_EMOJI_IMAGES } from './browser/windowEnvironment';
 
 export const ENTITY_CLASS_BY_NODE_NAME: Record<string, ApiMessageEntityTypes> = {
   B: ApiMessageEntityTypes.Bold,
@@ -105,7 +105,7 @@ function parseMarkdown(html: string) {
   );
 
   // Custom Emoji markdown tag
-  if (!IS_EMOJI_SUPPORTED) {
+  if (SHOULD_RENDER_EMOJI_IMAGES) {
     // Prepare alt text for custom emoji
     parsedHtml = parsedHtml.replace(/\[<img[^>]+alt="([^"]+)"[^>]*>]/gm, '[$1]');
   }

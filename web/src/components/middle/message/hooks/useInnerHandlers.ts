@@ -59,7 +59,7 @@ export default function useInnerHandlers({
   const {
     openChat, openChatWithDraft, showNotification, focusMessage, openMediaViewer, openAudioPlayer,
     markMessagesRead, cancelUploadMedia, sendPollVote, openForwardMenu,
-    openChatLanguageModal, openThread, searchChatMediaMessages,
+    openChatLanguageModal, openThread, searchChatMediaMessages, openOneTimeMediaModal,
   } = getActions();
 
   const {
@@ -142,11 +142,16 @@ export default function useInnerHandlers({
   const shouldMarkOneTimeMediaAsRead = hasMessageTtl(message)
     && (!message.isOutgoing || isSavedMessages)
     && !isScheduled;
+  const shouldOpenOneTimeMedia = hasMessageTtl(message) && !isScheduled;
 
   const openMediaViewerWithPhotoOrVideo = useLastCallback((withDynamicLoading: boolean): void => {
     if (paidMedia && !paidMedia.isBought) return;
-    if (shouldMarkOneTimeMediaAsRead) {
-      handleReadMedia();
+    if (shouldOpenOneTimeMedia) {
+      openOneTimeMediaModal({ message });
+      if (shouldMarkOneTimeMediaAsRead) {
+        handleReadMedia();
+      }
+      return;
     }
     if (withDynamicLoading) {
       searchChatMediaMessages({ chatId, threadId, currentMediaMessageId: messageId });

@@ -19,6 +19,7 @@ import {
 } from '../../util/captureEvents';
 import { clamp, isBetween, round } from '../../util/math';
 import { debounce } from '../../util/schedulers';
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 
 import useTimeout from '../../hooks/schedulers/useTimeout';
 import useDebouncedCallback from '../../hooks/useDebouncedCallback';
@@ -167,15 +168,17 @@ const MediaViewerSlides: FC<OwnProps> = ({
   useLayoutEffect(() => {
     const { x, y, scale } = getTransform();
     lockControls(scale !== 1);
-    if (leftSlideRef.current) {
-      leftSlideRef.current.style.transform = getTransformStyle(-windowWidth + x - SLIDES_GAP);
-    }
-    if (activeSlideRef.current) {
-      activeSlideRef.current.style.transform = getTransformStyle(x, y, scale);
-    }
-    if (rightSlideRef.current) {
-      rightSlideRef.current.style.transform = getTransformStyle(windowWidth + x + SLIDES_GAP);
-    }
+    requestMutation(() => {
+      if (leftSlideRef.current) {
+        leftSlideRef.current.style.transform = getTransformStyle(-windowWidth + x - SLIDES_GAP);
+      }
+      if (activeSlideRef.current) {
+        activeSlideRef.current.style.transform = getTransformStyle(x, y, scale);
+      }
+      if (rightSlideRef.current) {
+        rightSlideRef.current.style.transform = getTransformStyle(windowWidth + x + SLIDES_GAP);
+      }
+    });
   }, [getTransform, lockControls, windowWidth]);
 
   useEffect(() => {

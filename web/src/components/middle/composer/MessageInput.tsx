@@ -21,7 +21,7 @@ import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { selectDraft } from '../../../global/selectors/threads';
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import {
-  IS_ANDROID, IS_EMOJI_SUPPORTED, IS_IOS, IS_TOUCH_ENV,
+  IS_ANDROID, IS_IOS, IS_TOUCH_ENV, SHOULD_RENDER_EMOJI_IMAGES,
 } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import captureKeyboardListeners, { hasActiveHandler } from '../../../util/captureKeyboardListeners';
@@ -417,8 +417,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     if (
       !IS_TOUCH_ENV
       && (!textContent || !textContent.length)
-      // When emojis are not supported, innerHTML contains an emoji img tag that doesn't exist in the textContext
-      && !(!IS_EMOJI_SUPPORTED && innerHTML.includes('emoji-small'))
+      // When the composer stores emojis as <img> tags, textContent stays empty even though the input has content.
+      && !(SHOULD_RENDER_EMOJI_IMAGES && innerHTML.includes('emoji-small'))
       && !(innerHTML.includes('custom-emoji'))
     ) {
       const selection = window.getSelection()!;

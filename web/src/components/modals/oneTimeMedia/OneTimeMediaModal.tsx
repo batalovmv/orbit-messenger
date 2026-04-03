@@ -4,7 +4,7 @@ import { getActions, getGlobal } from '../../../global';
 import type { TabState } from '../../../global/types';
 import { AudioOrigin } from '../../../types';
 
-import { isOwnMessage } from '../../../global/helpers';
+import { getMessagePhoto, isOwnMessage } from '../../../global/helpers';
 import { selectTheme } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 
@@ -14,7 +14,9 @@ import useOldLang from '../../../hooks/useOldLang';
 import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDeprecated';
 
 import Audio from '../../common/Audio';
+import Photo from '../../middle/message/Photo';
 import RoundVideo from '../../middle/message/RoundVideo';
+import Video from '../../middle/message/Video';
 import Button from '../../ui/Button';
 
 import styles from './OneTimeMediaModal.module.scss';
@@ -59,6 +61,7 @@ const OneTimeMediaModal = ({
       return undefined;
     }
     const { voice, video } = message.content;
+    const photo = getMessagePhoto(message);
     if (voice) {
       return (
         <Audio
@@ -78,6 +81,27 @@ const OneTimeMediaModal = ({
           message={message}
           origin="oneTimeModal"
           onStop={handleClose}
+        />
+      );
+    } else if (photo) {
+      return (
+        <Photo
+          className={styles.media}
+          photo={photo}
+          theme={theme}
+          isOwn={isOwn}
+          canAutoLoad
+          nonInteractive
+        />
+      );
+    } else if (video) {
+      return (
+        <Video
+          className={styles.media}
+          video={video}
+          isOwn={isOwn}
+          canAutoLoad
+          canAutoPlay
         />
       );
     }

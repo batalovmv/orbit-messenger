@@ -104,7 +104,7 @@ addActionHandler('unlockScreen', (global, actions, payload): ActionReturnType =>
 });
 
 const MAX_INVALID_ATTEMPTS = 5;
-const TIMEOUT_RESET_INVALID_ATTEMPTS_MS = 1000 * 15;// 180000; // 3 minutes
+const TIMEOUT_RESET_INVALID_ATTEMPTS_MS = 180000; // 3 minutes
 
 addActionHandler('logInvalidUnlockAttempt', (global): ActionReturnType => {
   const invalidAttemptsCount = (global.passcode?.invalidAttemptsCount ?? 0) + 1;

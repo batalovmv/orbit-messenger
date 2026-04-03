@@ -45,104 +45,10 @@
 
   .poll-answers,
   .poll-results {
-    margin-bottom: 0.5rem;
-  }
-
-  .poll-results {
     display: flex;
     flex-direction: column;
-    gap: 0.5625rem;
-  }
-
-  .Checkbox,
-  .Radio {
-    min-height: 2.25rem;
-    padding: 0.125rem 0 0.5rem 2.125rem;
-    border-radius: 0.625rem;
-
-    &.disabled {
-      cursor: var(--custom-cursor, not-allowed);
-      opacity: 1 !important;
-    }
-
-    &:hover {
-      background: none;
-    }
-
-    .Checkbox-main,
-    .Radio-main {
-
-      &::before {
-        --color-borders-input: var(--poll-input-border-color);
-
-        top: 0.625rem;
-        left: 0;
-        background-color: transparent;
-      }
-
-      &::after {
-        top: 0.625rem;
-        left: 0.3125rem;
-        background-color: var(--poll-primary-color);
-      }
-
-      .label {
-        line-height: 1.25rem;
-      }
-
-      .subLabel {
-        color: var(--poll-secondary-color);
-      }
-    }
-
-    /* stylelint-disable-next-line selector-max-type */
-    input:checked ~ .Radio-main,
-    /* stylelint-disable-next-line selector-max-type */
-    input:checked ~ .Checkbox-main {
-      &::before {
-        border-color: var(--poll-primary-color);
-      }
-    }
-
-    .Spinner {
-      top: 0.625rem;
-      left: 0;
-    }
-  }
-
-  .Checkbox {
-    &.loading {
-      .Spinner {
-        top: 0;
-      }
-    }
-    .Checkbox-main {
-      &::after {
-        left: 0;
-        background-color: var(--poll-primary-color);
-
-        .theme-dark .Message.own & {
-          color: var(--color-primary);
-        }
-      }
-    }
-  }
-
-  .Spinner .Spinner__inner {
-    // gray spinner
-    background-image: var(--spinner-gray-data);
-
-    .theme-dark & {
-      background-image: var(--spinner-white-data);
-    }
-
-    .Message.own & {
-      // green spinner
-      background-image: var(--spinner-green-data);
-      .theme-dark & {
-        background-image: var(--spinner-white-data);
-      }
-    }
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
   }
 
   .poll-recent-voters {
@@ -204,11 +110,23 @@
 
   .poll-action-button,
   > .Button {
-    width: auto;
-    min-width: 4.5rem;
-    height: 2rem;
-    margin: 0 auto 0.125rem;
-    padding-inline: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    padding-inline: 0;
+  }
+
+  .poll-action-button {
+    display: block;
+    margin-bottom: 0.125rem;
+
+    &.Button.text {
+      justify-content: center;
+      padding: 0.5rem 0;
+      color: var(--poll-button-color);
+      font-weight: var(--font-weight-medium);
+    }
   }
 
   .poll-action-button.disabled {

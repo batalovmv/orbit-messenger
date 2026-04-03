@@ -57,6 +57,7 @@ export type OwnProps<T> = {
   className?: string;
   clickArg?: T;
   isMediaNsfw?: boolean;
+  isOneTime?: boolean;
   observeIntersection?: ObserveFn;
   onClick?: (arg: T, e: React.MouseEvent<HTMLElement>) => void;
   onCancelUpload?: (arg: T) => void;
@@ -89,6 +90,7 @@ const Photo = <T,>({
   clickArg,
   className,
   isMediaNsfw,
+  isOneTime,
   observeIntersection,
   onClick,
   onCancelUpload,
@@ -195,6 +197,11 @@ const Photo = <T,>({
       return;
     }
 
+    if (isOneTime) {
+      onClick?.(clickArg!, e);
+      return;
+    }
+
     if (!fullMediaData) {
       setIsLoadAllowed((isAllowed) => !isAllowed);
       return;
@@ -215,6 +222,8 @@ const Photo = <T,>({
 
     onClick?.(clickArg!, e);
   });
+
+  const shouldShowOverlay = isSpoilerShown || isOneTime;
 
   useLayoutEffectWithPrevDeps(([prevShouldAffectAppendix]) => {
     if (!shouldAffectAppendix) {
@@ -299,14 +308,19 @@ const Photo = <T,>({
       )}
       {shouldRenderDownloadButton && <Icon ref={downloadButtonRef} name="download" />}
       <MediaSpoiler
-        isVisible={isSpoilerShown}
-        withAnimation
+        isVisible={Boolean(shouldShowOverlay)}
+        withAnimation={!isOneTime}
         thumbDataUri={thumbDataUri}
         width={width}
         height={height}
         className="media-spoiler"
-        isNsfw={isMediaNsfw}
+        isNsfw={Boolean(isMediaNsfw)}
       />
+      {isOneTime && (
+        <div className="one-time-media-badge">
+          <Icon name="view-once" />
+        </div>
+      )}
       {shouldRenderTransferProgress && (
         <span ref={transferProgressRef} className="message-transfer-progress">
           {`${Math.round(transferProgress * 100)}%`}

@@ -27,6 +27,7 @@ import useOldLang from '../../hooks/useOldLang';
 import Checkbox from '../ui/Checkbox';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import File from './File';
+import PdfPreview from './PdfPreview';
 import PdfViewer from './PdfViewer';
 
 type OwnProps = {
@@ -214,29 +215,54 @@ const Document = ({
     onDateClick?.(message);
   });
 
+  const actionIcon = isPdf ? 'eye' : withMediaViewer ? (isDocumentVideo(document) ? 'play' : 'eye') : 'download';
+
   return (
     <>
-      <File
-        ref={ref}
-        id={id}
-        name={fileName}
-        extension={extension}
-        size={size}
-        timestamp={datetime}
-        thumbnailDataUri={thumbDataUri}
-        previewData={localBlobUrl || previewData}
-        smaller={smaller}
-        isTransferring={isTransferring}
-        isUploading={isUploading}
-        transferProgress={transferProgress}
-        className={className}
-        sender={sender}
-        isSelectable={isSelectable}
-        isSelected={isSelected}
-        actionIcon={isPdf ? 'eye' : withMediaViewer ? (isDocumentVideo(document) ? 'play' : 'eye') : 'download'}
-        onClick={handleClick}
-        onDateClick={onDateClick ? handleDateClick : undefined}
-      />
+      {isPdf ? (
+        <PdfPreview
+          id={id}
+          name={fileName}
+          extension={extension}
+          size={size}
+          timestamp={datetime}
+          thumbnailDataUri={thumbDataUri}
+          previewData={localBlobUrl || previewData}
+          smaller={smaller}
+          isTransferring={isTransferring}
+          isUploading={isUploading}
+          transferProgress={transferProgress}
+          className={className}
+          sender={sender}
+          isSelectable={isSelectable}
+          isSelected={isSelected}
+          actionIcon={actionIcon}
+          onClick={handleClick}
+          onDateClick={onDateClick ? handleDateClick : undefined}
+        />
+      ) : (
+        <File
+          ref={ref}
+          id={id}
+          name={fileName}
+          extension={extension}
+          size={size}
+          timestamp={datetime}
+          thumbnailDataUri={thumbDataUri}
+          previewData={localBlobUrl || previewData}
+          smaller={smaller}
+          isTransferring={isTransferring}
+          isUploading={isUploading}
+          transferProgress={transferProgress}
+          className={className}
+          sender={sender}
+          isSelectable={isSelectable}
+          isSelected={isSelected}
+          actionIcon={actionIcon}
+          onClick={handleClick}
+          onDateClick={onDateClick ? handleDateClick : undefined}
+        />
+      )}
       {isPdfViewerOpen && mediaData && (
         <PdfViewer
           url={mediaData}

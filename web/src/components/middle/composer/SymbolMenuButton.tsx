@@ -18,6 +18,7 @@ import Spinner from '../../ui/Spinner';
 import SymbolMenu from './SymbolMenu.async';
 
 const MOBILE_KEYBOARD_HIDE_DELAY_MS = 100;
+const REOPEN_GUARD_MS = 300;
 
 type OwnProps = {
   chatId: string;
@@ -86,6 +87,7 @@ const SymbolMenuButton: FC<OwnProps> = ({
   } = getActions();
 
   const triggerRef = useRef<HTMLDivElement>();
+  const ignoreReopenUntilRef = useRef(0);
 
   const [isSymbolMenuLoaded, onSymbolMenuLoadingComplete] = useFlag();
   const [contextMenuAnchor, setContextMenuAnchor] = useState<IAnchorPosition | undefined>(undefined);
@@ -99,6 +101,10 @@ const SymbolMenuButton: FC<OwnProps> = ({
   );
 
   const handleActivateSymbolMenu = useLastCallback(() => {
+    if (Date.now() < ignoreReopenUntilRef.current) {
+      return;
+    }
+
     closeBotCommandMenu?.();
     closeSendAsMenu?.();
     openSymbolMenu();
@@ -106,6 +112,11 @@ const SymbolMenuButton: FC<OwnProps> = ({
     if (!triggerEl) return;
     const { x, y } = triggerEl.getBoundingClientRect();
     setContextMenuAnchor({ x, y });
+  });
+
+  const handleCloseSymbolMenu = useLastCallback(() => {
+    ignoreReopenUntilRef.current = Date.now() + REOPEN_GUARD_MS;
+    closeSymbolMenu();
   });
 
   const handleSearchOpen = useLastCallback((type: 'stickers' | 'gifs') => {
@@ -119,6 +130,10 @@ const SymbolMenuButton: FC<OwnProps> = ({
   });
 
   const handleSymbolMenuOpen = useLastCallback(() => {
+    if (Date.now() < ignoreReopenUntilRef.current) {
+      return;
+    }
+
     const messageInput = document.querySelector<HTMLDivElement>(
       isAttachmentModal ? EDITABLE_INPUT_MODAL_CSS_SELECTOR : inputCssSelector,
     );
@@ -147,7 +162,7 @@ const SymbolMenuButton: FC<OwnProps> = ({
           className={symbolMenuButtonClassName}
           round
           color="translucent"
-          onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
+          onClick={isSymbolMenuOpen ? handleCloseSymbolMenu : handleSymbolMenuOpen}
           ariaLabel="Choose emoji, sticker or GIF"
         >
           <Icon name="smile" />
@@ -176,7 +191,7 @@ const SymbolMenuButton: FC<OwnProps> = ({
         isMessageComposer={isMessageComposer}
         idPrefix={idPrefix}
         onLoad={onSymbolMenuLoadingComplete}
-        onClose={closeSymbolMenu}
+        onClose={handleCloseSymbolMenu}
         onEmojiSelect={onEmojiSelect}
         onStickerSelect={onStickerSelect}
         onCustomEmojiSelect={onCustomEmojiSelect}

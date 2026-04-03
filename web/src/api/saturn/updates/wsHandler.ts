@@ -1,4 +1,4 @@
-import type { SaturnChat, SaturnMessage, SaturnWsMessage } from '../types';
+import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll, getMessageSeqNum } from '../apiBuilders/messages';
@@ -338,22 +338,22 @@ async function handleReactionChanged(data: Record<string, unknown>) {
 function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
   const poll = data.poll as Record<string, unknown> | undefined;
   const pollId = (poll?.id || data.poll_id) as string | undefined;
+  const peerId = data.user_id as string | undefined;
   if (!pollId) {
     return;
   }
 
   sendApiUpdate({
-    '@type': 'updateMessagePoll',
-    pollId,
-    pollUpdate: {
-      id: pollId,
-      mediaType: 'poll',
-      summary: isClosed ? { closed: true } : undefined,
-      ...buildApiPollFromWs(poll, isClosed),
-    } as any,
+      '@type': 'updateMessagePoll',
+      pollId,
+      pollUpdate: {
+        id: pollId,
+        mediaType: 'poll',
+        summary: isClosed ? { closed: true } : undefined,
+        ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId),
+      } as any,
   });
 
-  const peerId = data.user_id as string | undefined;
   const options = Array.isArray(data.option_ids)
     ? data.option_ids.filter((optionId): optionId is string => typeof optionId === 'string')
     : undefined;
@@ -368,7 +368,11 @@ function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
   }
 }
 
-function buildApiPollFromWs(poll?: Record<string, unknown>, isClosed = false) {
+function buildApiPollFromWs(
+  poll?: Record<string, unknown>,
+  isClosed = false,
+  shouldKeepChoiceState = false,
+) {
   if (!poll) {
     return isClosed ? { summary: { closed: true } } : undefined;
   }
@@ -380,6 +384,11 @@ function buildApiPollFromWs(poll?: Record<string, unknown>, isClosed = false) {
   const closeAt = typeof poll.close_at === 'string' ? poll.close_at : undefined;
   const createdAtTs = createdAt ? Math.floor(new Date(createdAt).getTime() / 1000) : undefined;
   const closeAtTs = closeAt ? Math.floor(new Date(closeAt).getTime() / 1000) : undefined;
+  const solutionEntities = Array.isArray(poll.solution_entities)
+    ? poll.solution_entities
+      .filter((entity): entity is SaturnMessageEntity => Boolean(entity))
+      .map(buildWsPollEntity)
+    : undefined;
 
   return {
     id: poll.id as string,
@@ -413,10 +422,34 @@ function buildApiPollFromWs(poll?: Record<string, unknown>, isClosed = false) {
         .map((option) => ({
           option: option.id as string,
           votersCount: Number(option.voters || 0),
-          isChosen: Boolean(option.is_chosen) || undefined,
-          isCorrect: Boolean(option.is_correct) || undefined,
+          isChosen: shouldKeepChoiceState && Boolean(option.is_chosen) || undefined,
+          isCorrect: shouldKeepChoiceState && Boolean(option.is_correct) || undefined,
         })),
       totalVoters: Number(poll.total_voters || 0),
+      solution: typeof poll.solution === 'string' ? poll.solution : undefined,
+      solutionEntities,
     },
   };
+}
+
+function buildWsPollEntity(entity: SaturnMessageEntity) {
+  const base = {
+    type: entity.type as any,
+    offset: entity.offset,
+    length: entity.length,
+  };
+
+  if (entity.url) {
+    return { ...base, type: 'MessageEntityTextUrl', url: entity.url };
+  }
+
+  if (entity.language) {
+    return { ...base, type: 'MessageEntityPre', language: entity.language };
+  }
+
+  if (entity.user_id) {
+    return { ...base, type: 'MessageEntityMentionName', userId: entity.user_id };
+  }
+
+  return base;
 }

@@ -63,6 +63,8 @@ export const IS_VOICE_RECORDING_SUPPORTED = Boolean(
   ),
 );
 export const IS_EMOJI_SUPPORTED = PLATFORM_ENV && (IS_MAC_OS || IS_IOS) && isLastEmojiVersionSupported();
+// Orbit keeps emoji visuals consistent across platforms by rendering Apple-style image assets in UI.
+export const SHOULD_RENDER_EMOJI_IMAGES = true;
 
 export const IS_SERVICE_WORKER_SUPPORTED = 'serviceWorker' in navigator;
 

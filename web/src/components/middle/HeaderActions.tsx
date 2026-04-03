@@ -8,7 +8,7 @@ import type { IAnchorPosition, MessageListType, ThreadId } from '../../types';
 import { MAIN_THREAD_ID } from '../../api/types';
 import { ManagementScreens } from '../../types';
 
-import { COCOON_EMOJI_ID } from '../../config';
+import { COCOON_EMOJI_ID, IS_CALLS_ENABLED } from '../../config';
 import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
 import {
   getIsSavedDialog,
@@ -515,7 +515,8 @@ export default memo(withGlobal<OwnProps>(
       (isMainThread || chat.isForum) && (isChannel || isSuperGroup) && chat.isNotJoined && !chat.isMonoforum,
     );
     const canSearch = isMainThread || isDiscussionThread;
-    const canCall = ARE_CALLS_SUPPORTED && isUserId(chat.id) && !isChatWithSelf && !bot && !chat.isSupport
+    const canCall = IS_CALLS_ENABLED && ARE_CALLS_SUPPORTED && isUserId(chat.id) && !isChatWithSelf && !bot
+      && !chat.isSupport
       && !isAnonymousForwardsChat(chat.id);
     const canMute = isMainThread && !isChatWithSelf && !canSubscribe;
     const canLeave = isSavedDialog || (isMainThread && !canSubscribe);

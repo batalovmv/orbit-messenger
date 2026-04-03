@@ -6,7 +6,6 @@ import type { Signal } from '../../../../util/signals';
 
 import { EMOJI_IMG_REGEX } from '../../../../config';
 import twemojiRegex from '../../../../lib/twemojiRegex';
-import { IS_EMOJI_SUPPORTED } from '../../../../util/browser/windowEnvironment';
 import parseEmojiOnlyString from '../../../../util/emoji/parseEmojiOnlyString';
 import { prepareForRegExp } from '../helpers/prepareForRegExp';
 
@@ -28,19 +27,23 @@ export default function useStickerTooltip(
 
   const getSingleEmoji = useDerivedSignal(() => {
     const html = getHtml();
-    if (!isEnabled || !html || (IS_EMOJI_SUPPORTED && html.length > MAX_LENGTH)) return undefined;
+    if (!isEnabled || !html) return undefined;
 
-    const hasEmoji = html.match(IS_EMOJI_SUPPORTED ? twemojiRegex : EMOJI_IMG_REGEX);
+    const emojiImages = html.match(EMOJI_IMG_REGEX);
+    const hasEmoji = emojiImages || html.match(twemojiRegex);
     if (!hasEmoji) return undefined;
+
+    const hasEmojiImages = Boolean(emojiImages);
+    if (!hasEmojiImages && html.length > MAX_LENGTH) return undefined;
 
     const cleanHtml = prepareForRegExp(html);
     const isSingleEmoji = cleanHtml && (
-      (IS_EMOJI_SUPPORTED && parseEmojiOnlyString(cleanHtml) === 1)
-      || (!IS_EMOJI_SUPPORTED && Boolean(html.match(STARTS_ENDS_ON_EMOJI_IMG_REGEX)))
+      (!hasEmojiImages && parseEmojiOnlyString(cleanHtml) === 1)
+      || (hasEmojiImages && Boolean(html.match(STARTS_ENDS_ON_EMOJI_IMG_REGEX)))
     );
 
     return isSingleEmoji
-      ? (IS_EMOJI_SUPPORTED ? cleanHtml : cleanHtml.match(/alt="(.+)"/)?.[1])
+      ? (hasEmojiImages ? cleanHtml.match(/alt="(.+)"/)?.[1] : cleanHtml)
       : undefined;
   }, [getHtml, isEnabled]);
 

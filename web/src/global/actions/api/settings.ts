@@ -34,6 +34,28 @@ import {
 } from '../../selectors';
 import { selectSharedSettings } from '../../selectors/sharedState';
 
+const PRIVACY_KEYS_TO_LOAD = [
+  'phoneNumber',
+  'addByPhone',
+  'lastSeen',
+  'profilePhoto',
+  'forwards',
+  'chatInvite',
+  'phoneCall',
+  'phoneP2P',
+  'voiceMessages',
+  'bio',
+  'birthday',
+  'gifts',
+  'noPaidMessages',
+] as const;
+
+let pendingPrivacySettingsLoad: Promise<void> | undefined;
+
+function hasLoadedAllPrivacySettings(privacy: Record<string, ApiPrivacySettings | undefined>) {
+  return PRIVACY_KEYS_TO_LOAD.every((privacyKey) => Boolean(privacy[privacyKey]));
+}
+
 addActionHandler('updateProfile', async (global, actions, payload): Promise<void> => {
   const {
     photo, firstName, lastName, bio: about, username,
@@ -401,74 +423,79 @@ addActionHandler('loadLanguages', async (global): Promise<void> => {
 
 addActionHandler('loadPrivacySettings', async (global, actions, payload): Promise<void> => {
   const { skipIfCached } = payload;
-  if (skipIfCached && Object.keys(global.settings.privacy).length > 0) {
+  if (skipIfCached && hasLoadedAllPrivacySettings(global.settings.privacy)) {
     return;
   }
 
   if (selectIsCurrentUserFrozen(global)) return;
 
-  const result = await Promise.all([
-    callApi('fetchPrivacySettings', 'phoneNumber'),
-    callApi('fetchPrivacySettings', 'addByPhone'),
-    callApi('fetchPrivacySettings', 'lastSeen'),
-    callApi('fetchPrivacySettings', 'profilePhoto'),
-    callApi('fetchPrivacySettings', 'forwards'),
-    callApi('fetchPrivacySettings', 'chatInvite'),
-    callApi('fetchPrivacySettings', 'phoneCall'),
-    callApi('fetchPrivacySettings', 'phoneP2P'),
-    callApi('fetchPrivacySettings', 'voiceMessages'),
-    callApi('fetchPrivacySettings', 'bio'),
-    callApi('fetchPrivacySettings', 'birthday'),
-    callApi('fetchPrivacySettings', 'gifts'),
-    callApi('fetchPrivacySettings', 'noPaidMessages'),
-  ]);
-
-  if (result.some((e) => e === undefined)) {
+  if (pendingPrivacySettingsLoad) {
+    await pendingPrivacySettingsLoad;
     return;
   }
 
-  const [
-    phoneNumberSettings,
-    addByPhoneSettings,
-    lastSeenSettings,
-    profilePhotoSettings,
-    forwardsSettings,
-    chatInviteSettings,
-    phoneCallSettings,
-    phoneP2PSettings,
-    voiceMessagesSettings,
-    bioSettings,
-    birthdaySettings,
-    giftsSettings,
-    noPaidMessagesSettings,
-  ] = result as {
-    rules: ApiPrivacySettings;
-  }[];
+  const requestPromise = (async () => {
+    const result = await Promise.all(PRIVACY_KEYS_TO_LOAD.map((privacyKey) => (
+      callApi('fetchPrivacySettings', privacyKey)
+    )));
 
-  global = getGlobal();
-  global = {
-    ...global,
-    settings: {
-      ...global.settings,
-      privacy: {
-        ...global.settings.privacy,
-        phoneNumber: phoneNumberSettings.rules,
-        addByPhone: addByPhoneSettings.rules,
-        lastSeen: lastSeenSettings.rules,
-        profilePhoto: profilePhotoSettings.rules,
-        forwards: forwardsSettings.rules,
-        chatInvite: chatInviteSettings.rules,
-        phoneCall: phoneCallSettings.rules,
-        phoneP2P: phoneP2PSettings.rules,
-        voiceMessages: voiceMessagesSettings.rules,
-        bio: bioSettings.rules,
-        birthday: birthdaySettings.rules,
-        gifts: giftsSettings.rules,
-        noPaidMessages: noPaidMessagesSettings.rules,
+    if (result.some((entry) => entry === undefined)) {
+      return;
+    }
+
+    const [
+      phoneNumberSettings,
+      addByPhoneSettings,
+      lastSeenSettings,
+      profilePhotoSettings,
+      forwardsSettings,
+      chatInviteSettings,
+      phoneCallSettings,
+      phoneP2PSettings,
+      voiceMessagesSettings,
+      bioSettings,
+      birthdaySettings,
+      giftsSettings,
+      noPaidMessagesSettings,
+    ] = result as {
+      rules: ApiPrivacySettings;
+    }[];
+
+    global = getGlobal();
+    global = {
+      ...global,
+      settings: {
+        ...global.settings,
+        privacy: {
+          ...global.settings.privacy,
+          phoneNumber: phoneNumberSettings.rules,
+          addByPhone: addByPhoneSettings.rules,
+          lastSeen: lastSeenSettings.rules,
+          profilePhoto: profilePhotoSettings.rules,
+          forwards: forwardsSettings.rules,
+          chatInvite: chatInviteSettings.rules,
+          phoneCall: phoneCallSettings.rules,
+          phoneP2P: phoneP2PSettings.rules,
+          voiceMessages: voiceMessagesSettings.rules,
+          bio: bioSettings.rules,
+          birthday: birthdaySettings.rules,
+          gifts: giftsSettings.rules,
+          noPaidMessages: noPaidMessagesSettings.rules,
+        },
       },
-    },
-  };
-  setGlobal(global);
+    };
+    setGlobal(global);
+  })();
+
+  pendingPrivacySettingsLoad = requestPromise;
+
+  try {
+    await requestPromise;
+  } finally {
+    if (pendingPrivacySettingsLoad === requestPromise) {
+      pendingPrivacySettingsLoad = undefined;
+    }
+  }
 });
 
 addActionHandler('setPrivacyVisibility', async (global, actions, payload): Promise<void> => {

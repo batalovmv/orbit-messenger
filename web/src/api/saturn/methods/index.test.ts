@@ -1,8 +1,17 @@
 import type { SaturnChatListItem, SaturnStickerPack } from '../types';
 
+import { buildApiUser } from '../apiBuilders/users';
 import { registerAsset } from '../apiBuilders/symbols';
 import * as client from '../client';
-import { downloadMedia, fetchAuthorizations, fetchChat } from './index';
+import {
+  downloadMedia,
+  fetchAuthorizations,
+  fetchAvailableEffects,
+  fetchAvailableReactions,
+  fetchChat,
+  fetchSavedReactionTags,
+  updateSavedReactionTag,
+} from './index';
 
 describe('downloadMedia', () => {
   afterEach(() => {
@@ -68,6 +77,97 @@ describe('downloadMedia', () => {
       mimeType: 'image/svg+xml',
     }));
 
+    expect(result!.dataBlob!.size).toBe(Buffer.byteLength(svg, 'utf8'));
+  });
+
+  it('falls back to stable media endpoints when a registered photo URL is stale', async () => {
+    const mediaId = '5f52fd0a-8c59-4f3b-a9b3-6c26e3e95c51';
+    const originalFetch = globalThis.fetch;
+
+    client.init('https://orbit.example/api/v1', jest.fn());
+    jest.spyOn(client, 'ensureAuth').mockResolvedValue('token');
+
+    registerAsset(mediaId, {
+      fileName: 'photo.jpg',
+      fullUrl: 'https://r2.example.com/expired.jpg',
+      previewUrl: 'https://r2.example.com/expired-thumb.jpg',
+      mimeType: 'image/jpeg',
+    }, ['photo', 'document']);
+
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        headers: new Headers(),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'image/jpeg' }),
+        blob: async () => new Blob(['image-data'], { type: 'image/jpeg' }),
+      } as Response);
+    Object.defineProperty(globalThis, 'fetch', {
+      configurable: true,
+      value: fetchMock,
+      writable: true,
+    });
+
+    try {
+      const result = await downloadMedia({ url: `photo${mediaId}` });
+
+      expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://r2.example.com/expired.jpg', {
+        headers: {},
+        redirect: 'follow',
+      });
+      expect(fetchMock).toHaveBeenNthCalledWith(2, `https://orbit.example/api/v1/media/${mediaId}`, {
+        headers: {
+          Authorization: 'Bearer token',
+        },
+        redirect: 'follow',
+      });
+      expect(result).toEqual(expect.objectContaining({
+        dataBlob: expect.any(Blob),
+        mimeType: 'image/jpeg',
+      }));
+    } finally {
+      if (originalFetch) {
+        Object.defineProperty(globalThis, 'fetch', {
+          configurable: true,
+          value: originalFetch,
+          writable: true,
+        });
+      } else {
+        Object.defineProperty(globalThis, 'fetch', {
+          configurable: true,
+          value: undefined,
+          writable: true,
+        });
+      }
+    }
+  });
+
+  it('resolves avatar hashes through the registered Saturn avatar assets', async () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"></svg>';
+    const dataUri = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    const user = buildApiUser({
+      id: 'user-42',
+      email: 'orbit@example.com',
+      display_name: 'Orbit QA',
+      avatar_url: dataUri,
+      status: 'online',
+      role: 'member',
+      created_at: '2026-04-03T10:00:00.000Z',
+      updated_at: '2026-04-03T10:00:00.000Z',
+    });
+
+    jest.spyOn(client, 'ensureAuth').mockResolvedValue('token');
+
+    const result = await downloadMedia({
+      url: `avatar${user.id}?${user.avatarPhotoId}`,
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      dataBlob: expect.any(Blob),
+      mimeType: 'image/svg+xml',
+    }));
     expect(result!.dataBlob!.size).toBe(Buffer.byteLength(svg, 'utf8'));
   });
 });
@@ -160,5 +260,73 @@ describe('fetchAuthorizations', () => {
         }),
       },
     });
+  });
+});
+
+describe('reaction animation fallbacks', () => {
+  it('hydrates available reactions with local animated assets', async () => {
+    const reactions = await fetchAvailableReactions();
+    const firstReaction = reactions?.[0];
+
+    expect(firstReaction).toEqual(expect.objectContaining({
+      centerIcon: expect.objectContaining({
+        mimeType: 'application/x-tgsticker',
+      }),
+      aroundAnimation: expect.objectContaining({
+        mimeType: 'application/x-tgsticker',
+      }),
+      selectAnimation: expect.objectContaining({
+        mimeType: 'application/x-tgsticker',
+      }),
+      appearAnimation: expect.objectContaining({
+        mimeType: 'application/x-tgsticker',
+      }),
+    }));
+  });
+
+  it('exposes local effect metadata for composer effects', async () => {
+    const result = await fetchAvailableEffects();
+
+    expect(result?.effects[0]).toEqual(expect.objectContaining({
+      emoticon: expect.any(String),
+      effectAnimationId: expect.any(String),
+      effectStickerId: expect.any(String),
+    }));
+  });
+});
+
+describe('saved reaction tags fallback', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('stores and returns saved reaction tags from local storage', async () => {
+    await updateSavedReactionTag({
+      reaction: {
+        type: 'emoji',
+        emoticon: '🔥',
+      },
+      title: 'Urgent',
+    });
+
+    const result = await fetchSavedReactionTags();
+
+    expect(result).toEqual({
+      hash: expect.stringContaining('orbit-saved-reaction-tags-v1'),
+      tags: [{
+        reaction: {
+          type: 'emoji',
+          emoticon: '🔥',
+        },
+        title: 'Urgent',
+        count: 1,
+      }],
+    });
+
+    await expect(fetchSavedReactionTags({ hash: result!.hash })).resolves.toBeUndefined();
   });
 });

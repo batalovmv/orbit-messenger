@@ -2,6 +2,7 @@ import type {
   ApiChat,
   ApiChatReactions,
   ApiReaction,
+  ApiSavedReactionTag,
 } from '../../types';
 import type {
   SaturnPaginatedResponse,
@@ -10,6 +11,7 @@ import type {
 } from '../types';
 
 import {
+  buildAvailableEffects,
   buildApiEmojiReaction,
   buildApiPeerReactions,
   buildApiReactions,
@@ -24,6 +26,13 @@ const DEFAULT_TOP_REACTION_EMOJIS = DEFAULT_AVAILABLE_REACTION_EMOJIS.slice(0, 7
 const DEFAULT_TOP_REACTIONS_HASH = 'orbit-top-reactions-v1';
 const DEFAULT_RECENT_REACTIONS_HASH = 'orbit-recent-reactions-v1';
 const DEFAULT_DEFAULT_TAG_REACTIONS_HASH = 'orbit-default-tag-reactions-v1';
+const SAVED_REACTION_TAGS_STORAGE_KEY = 'orbit-saved-reaction-tags';
+const SAVED_REACTION_TAGS_HASH_PREFIX = 'orbit-saved-reaction-tags-v1';
+
+type SavedReactionTagStorageRecord = Record<string, {
+  reaction: ApiReaction;
+  title?: string;
+}>;
 
 function getCurrentUserId() {
   return (window as any).getGlobal?.()?.currentUserId as string | undefined;
@@ -35,6 +44,14 @@ async function loadReactionSummaries(uuid: string) {
 
 export function fetchAvailableReactions() {
   return Promise.resolve(buildAvailableReactions());
+}
+
+export function fetchAvailableEffects() {
+  return Promise.resolve({
+    effects: buildAvailableEffects(),
+    emojis: [],
+    stickers: [],
+  });
 }
 
 export function fetchTopReactions({ hash }: { hash?: string } = {}) {
@@ -68,6 +85,45 @@ export function fetchDefaultTagReactions({ hash }: { hash?: string } = {}) {
     hash: DEFAULT_DEFAULT_TAG_REACTIONS_HASH,
     reactions: DEFAULT_TOP_REACTION_EMOJIS.map(buildApiEmojiReaction),
   });
+}
+
+export function fetchSavedReactionTags({ hash }: { hash?: string } = {}) {
+  const tags = readSavedReactionTags();
+  const nextHash = buildSavedReactionTagsHash(tags);
+
+  if (hash === nextHash) {
+    return Promise.resolve(undefined);
+  }
+
+  return Promise.resolve({
+    hash: nextHash,
+    tags,
+  });
+}
+
+export function updateSavedReactionTag({
+  reaction,
+  title,
+}: {
+  reaction: ApiReaction;
+  title?: string;
+}) {
+  const tagsByKey = loadSavedReactionTagsStore();
+  const key = getSavedReactionTagKey(reaction);
+  const normalizedTitle = title?.trim();
+
+  if (normalizedTitle) {
+    tagsByKey[key] = {
+      reaction,
+      title: normalizedTitle,
+    };
+  } else {
+    delete tagsByKey[key];
+  }
+
+  saveSavedReactionTagsStore(tagsByKey);
+
+  return Promise.resolve(true);
 }
 
 export async function fetchMessageReactions({
@@ -233,4 +289,73 @@ export async function setChatEnabledReactions({
   });
 
   return true;
+}
+
+function readSavedReactionTags() {
+  return Object.values(loadSavedReactionTagsStore())
+    .map((tag): ApiSavedReactionTag => ({
+      reaction: tag.reaction,
+      title: tag.title,
+      // Saturn does not persist saved tag counts yet, so keep local tags visible with a synthetic count.
+      count: 1,
+    }))
+    .sort((left, right) => getSavedReactionTagKey(left.reaction).localeCompare(getSavedReactionTagKey(right.reaction)));
+}
+
+function buildSavedReactionTagsHash(tags: ApiSavedReactionTag[]) {
+  const serialized = tags
+    .map((tag) => `${getSavedReactionTagKey(tag.reaction)}:${tag.title || ''}`)
+    .join('|');
+
+  return `${SAVED_REACTION_TAGS_HASH_PREFIX}:${serialized}`;
+}
+
+function loadSavedReactionTagsStore(): SavedReactionTagStorageRecord {
+  try {
+    const raw = window.localStorage?.getItem(SAVED_REACTION_TAGS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as SavedReactionTagStorageRecord;
+    if (!parsed || typeof parsed !== 'object') {
+      return {};
+    }
+
+    return Object.entries(parsed).reduce<SavedReactionTagStorageRecord>((acc, [key, value]) => {
+      if (!value || typeof value !== 'object' || !value.reaction) {
+        return acc;
+      }
+
+      acc[key] = {
+        reaction: value.reaction,
+        title: typeof value.title === 'string' ? value.title : undefined,
+      };
+
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+function saveSavedReactionTagsStore(tagsByKey: SavedReactionTagStorageRecord) {
+  const keys = Object.keys(tagsByKey);
+  if (!keys.length) {
+    window.localStorage?.removeItem(SAVED_REACTION_TAGS_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage?.setItem(SAVED_REACTION_TAGS_STORAGE_KEY, JSON.stringify(tagsByKey));
+}
+
+function getSavedReactionTagKey(reaction: ApiReaction) {
+  switch (reaction.type) {
+    case 'emoji':
+      return `emoji-${reaction.emoticon}`;
+    case 'custom':
+      return `custom-${reaction.documentId}`;
+    default:
+      return 'unsupported';
+  }
 }

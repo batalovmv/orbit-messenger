@@ -2,6 +2,7 @@ import 'webpack-dev-server';
 import 'dotenv/config';
 
 import WatchFilePlugin from '@mytonwallet/webpack-watch-file-plugin';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
 import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
 import { statSync } from 'fs';
 import { GitRevisionPlugin } from 'git-revision-webpack-plugin';
@@ -227,6 +228,13 @@ export default function createConfig(
         csp: CSP,
         template: 'src/index.html',
       }),
+      new CopyWebpackPlugin({
+        patterns: [
+          { from: path.resolve(__dirname, 'public'), to: '.' },
+          { from: path.resolve(__dirname, 'node_modules/emoji-data-ios/img-apple-64'), to: 'img-apple-64' },
+          { from: path.resolve(__dirname, 'node_modules/emoji-data-ios/img-apple-160'), to: 'img-apple-160' },
+        ],
+      }),
       new MiniCssExtractPlugin({
         filename: '[name].[contenthash].css',
         chunkFilename: '[name].[chunkhash].css',
@@ -238,6 +246,7 @@ export default function createConfig(
         // eslint-disable-next-line no-null/no-null
         APP_NAME: null,
         APP_TITLE,
+        VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY || '',
         TELEGRAM_API_ID: '0', // Not used by Saturn API layer
         TELEGRAM_API_HASH: '0', // Not used by Saturn API layer
         // eslint-disable-next-line no-null/no-null

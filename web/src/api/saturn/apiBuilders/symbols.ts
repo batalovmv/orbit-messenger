@@ -16,7 +16,7 @@ import type {
 
 import { getBaseUrl } from '../client';
 
-type AssetKind = 'document' | 'sticker' | 'stickerSet';
+type AssetKind = 'avatar' | 'document' | 'photo' | 'profile' | 'sticker' | 'stickerSet';
 
 export type RegisteredAsset = {
   fileName?: string;
@@ -144,7 +144,7 @@ function groupStickerPacks(stickers: ApiSticker[]) {
   }, {});
 }
 
-export function registerAsset(id: string, asset: RegisteredAsset, kinds: AssetKind[] = ['document']) {
+export function registerAsset(id: string, asset: RegisteredAsset, kinds: readonly AssetKind[] = ['document']) {
   kinds.forEach((kind) => {
     assetRegistry.set(toAssetKey(kind, id), asset);
   });

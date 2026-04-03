@@ -632,6 +632,7 @@ const Composer = ({
   const hasWebPagePreview = !hasAttachments && canAttachEmbedLinks && !noWebPage
     && webPagePreview?.webpageType === 'full';
   const isComposerBlocked = isSendTextBlocked && !editingMessage;
+  const isAwaitingChatHydration = !chat && Boolean(chatId) && !isInStoryViewer;
 
   useEffect(() => {
     if (!hasWebPagePreview) {
@@ -2233,7 +2234,8 @@ const Composer = ({
               )}
             </>
           )}
-          {((!isComposerBlocked || canSendGifs || canSendStickers) && !isNeedPremium && !isAccountFrozen) && (
+          {((!isComposerBlocked || canSendGifs || canSendStickers || isAwaitingChatHydration)
+            && !isNeedPremium && !isAccountFrozen) && (
             <SymbolMenuButton
               chatId={chatId}
               threadId={threadId}
@@ -2253,7 +2255,7 @@ const Composer = ({
               closeBotCommandMenu={closeBotCommandMenu}
               closeSendAsMenu={closeSendAsMenu}
               isSymbolMenuForced={isSymbolMenuForced}
-              canSendPlainText={!isComposerBlocked}
+              canSendPlainText={!isComposerBlocked || isAwaitingChatHydration}
               inputCssSelector={editableInputCssSelector}
               idPrefix={type}
               forceDarkTheme={isInStoryViewer}

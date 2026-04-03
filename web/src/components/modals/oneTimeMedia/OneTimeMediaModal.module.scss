@@ -27,6 +27,20 @@
   padding: 0.6875rem;
   border-radius: 1rem;
   background-color: var(--color-background);
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.25);
+}
+
+.media {
+  overflow: hidden;
+  border-radius: 1rem;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.25);
+
+  :global {
+    .thumbnail,
+    .full-media {
+      border-radius: 1rem;
+    }
+  }
 }
 
 .video {

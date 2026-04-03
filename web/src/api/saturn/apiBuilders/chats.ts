@@ -6,7 +6,9 @@ import type {
   SaturnChatMember,
 } from '../types';
 
+import { ARCHIVED_FOLDER_ID } from '../../../config';
 import { registerChatId } from '../../../util/entities/ids';
+import { buildAvatarPhoto, getAvatarPhotoId } from './avatars';
 import { buildApiChatReactions } from './reactions';
 
 const PERM = {
@@ -56,12 +58,16 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
 
   const apiChat: ApiChat = {
     id: chat.id,
+    folderId: chat.is_archived ? ARCHIVED_FOLDER_ID : undefined,
     type: chat.type === 'direct' ? 'chatTypePrivate'
       : chat.type === 'channel' ? 'chatTypeChannel'
         : 'chatTypeSuperGroup',
     title,
     creationDate: Math.floor(new Date(chat.created_at).getTime() / 1000),
     isMin: false,
+    avatarPhotoId: getAvatarPhotoId(chat.id, chat.avatar_url),
+    isPinned: typeof chat.is_pinned === 'boolean' ? chat.is_pinned : undefined,
+    isMuted: typeof chat.is_muted === 'boolean' ? chat.is_muted : undefined,
     areSignaturesShown: chat.type === 'channel' ? (chat as SaturnChat).is_signatures : undefined,
     defaultBannedRights: chat.type !== 'direct'
       ? decodeBannedRights((chat as SaturnChat).default_permissions ?? 255)
@@ -90,6 +96,7 @@ export function buildApiChatFullInfo(
 ): ApiChatFullInfo {
   return {
     about: chat.description || undefined,
+    profilePhoto: buildAvatarPhoto(chat.id, chat.avatar_url),
     members: members?.map(buildApiChatMember),
     canViewMembers: true,
     slowMode: chat.slow_mode_seconds ? { seconds: chat.slow_mode_seconds } : undefined,

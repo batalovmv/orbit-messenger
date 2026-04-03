@@ -32,6 +32,9 @@ export interface SaturnChat {
   default_permissions: number;
   slow_mode_seconds: number;
   is_signatures: boolean;
+  is_pinned?: boolean;
+  is_muted?: boolean;
+  is_archived?: boolean;
 }
 
 export interface SaturnChatListItem extends SaturnChat {
@@ -114,6 +117,9 @@ export interface SaturnChatMember {
   joined_at: string;
   muted_until?: string;
   notification_level: 'all' | 'mentions' | 'none';
+  is_pinned?: boolean;
+  is_muted?: boolean;
+  is_archived?: boolean;
   display_name: string;
   avatar_url?: string;
 }
@@ -376,6 +382,8 @@ export interface SaturnPoll {
   is_multiple: boolean;
   is_quiz: boolean;
   correct_option?: number;
+  solution?: string;
+  solution_entities?: SaturnMessageEntity[];
   is_closed: boolean;
   close_at?: string;
   options: SaturnPollOption[];
@@ -407,6 +415,8 @@ export interface SaturnScheduledPoll {
   is_multiple: boolean;
   is_quiz: boolean;
   correct_option?: number;
+  solution?: string;
+  solution_entities?: SaturnMessageEntity[];
 }
 
 export interface SaturnScheduledMessage {

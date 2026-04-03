@@ -29,8 +29,6 @@ import useOldLang from '../../../hooks/useOldLang';
 
 import AvatarList from '../../common/AvatarList';
 import Button from '../../ui/Button';
-import CheckboxGroup from '../../ui/CheckboxGroup';
-import RadioGroup from '../../ui/RadioGroup';
 import PollOption from './PollOption';
 
 import './Poll.scss';
@@ -76,30 +74,14 @@ const Poll: FC<OwnProps> = ({
   const countdownRef = useRef<HTMLDivElement>();
   const timerCircleRef = useRef<SVGCircleElement>();
   const { results: voteResults, totalVoters } = results;
-  const hasVoted = voteResults && voteResults.some((r) => r.isChosen);
+  const hasVoted = Boolean(voteResults && voteResults.some((r) => r.isChosen));
   const canVote = !summary.closed && !hasVoted;
   const canViewResult = !canVote && summary.isPublic && Number(results.totalVoters) > 0;
-  const isMultiple = canVote && summary.multipleChoice;
+  const isMultiple = Boolean(summary.multipleChoice);
   const recentVoterIds = results.recentVoterIds;
-  const maxVotersCount = voteResults?.length
-    ? Math.max(...voteResults.map((r) => r.votersCount))
-    : (totalVoters || 0);
   const correctResults = useMemo(() => {
     return voteResults?.filter((r) => r.isCorrect).map((r) => r.option) || [];
   }, [voteResults]);
-  const answers = useMemo(() => summaryAnswers.map((a) => ({
-    label: renderTextWithEntities({
-      text: a.text.text,
-      entities: a.text.entities,
-      observeIntersectionForLoading,
-      observeIntersectionForPlaying,
-    }),
-    value: a.option,
-    hidden: Boolean(summary.quiz && summary.closePeriod && closePeriod <= 0),
-  })), [
-    closePeriod, observeIntersectionForLoading, observeIntersectionForPlaying,
-    summary.closePeriod, summary.quiz, summaryAnswers,
-  ]);
 
   useEffect(() => {
     const chosen = poll.results.results?.find((result) => result.isChosen);
@@ -110,6 +92,12 @@ const Poll: FC<OwnProps> = ({
       setIsSubmitting(false);
     }
   }, [isSubmitting, poll.results.results, requestConfetti]);
+
+  useEffect(() => {
+    if (!canVote && chosenOptions.length) {
+      setChosenOptions([]);
+    }
+  }, [canVote, chosenOptions.length]);
 
   useLayoutEffect(() => {
     if (closePeriod > 0) {
@@ -163,18 +151,27 @@ const Poll: FC<OwnProps> = ({
     }, []) : [];
   }, [recentVoterIds]);
 
-  const handleRadioChange = useLastCallback((option: string) => {
-    setChosenOptions([option]);
-    setIsSubmitting(true);
-    setWasSubmitted(true);
-    onSendVote([option]);
-  });
+  const handleOptionClick = useLastCallback((option: string) => {
+    if (!canVote || message.isScheduled || isSubmitting) {
+      return;
+    }
 
-  const handleCheckboxChange = useLastCallback((options: string[]) => {
-    setChosenOptions(options);
+    setChosenOptions((current) => {
+      if (isMultiple) {
+        return current.includes(option)
+          ? current.filter((currentOption) => currentOption !== option)
+          : [...current, option];
+      }
+
+      return current[0] === option ? current : [option];
+    });
   });
 
   const handleVoteClick = useLastCallback(() => {
+    if (!chosenOptions.length || message.isScheduled || isSubmitting) {
+      return;
+    }
+
     setIsSubmitting(true);
     setWasSubmitted(true);
     onSendVote(chosenOptions);
@@ -214,8 +211,21 @@ const Poll: FC<OwnProps> = ({
         answer={answer}
         voteResults={voteResults}
         totalVoters={totalVoters}
-        maxVotersCount={maxVotersCount}
         correctResults={correctResults}
+      />
+    );
+  }
+
+  function renderVoteOption(answer: ApiPollAnswer) {
+    return (
+      <PollOption
+        key={answer.option}
+        mode="vote"
+        answer={answer}
+        isMultiple={isMultiple}
+        isSelected={chosenOptions.includes(answer.option)}
+        disabled={message.isScheduled || isSubmitting}
+        onClick={handleOptionClick}
       />
     );
   }
@@ -289,26 +299,9 @@ const Poll: FC<OwnProps> = ({
           className="poll-answers"
           onClick={stopPropagation}
         >
-          {isMultiple
-            ? (
-              <CheckboxGroup
-                options={answers}
-                selected={chosenOptions}
-                onChange={handleCheckboxChange}
-                disabled={message.isScheduled || isSubmitting}
-                loadingOptions={isSubmitting ? chosenOptions : undefined}
-                isRound
-              />
-            )
-            : (
-              <RadioGroup
-                name={`poll-${messageId}`}
-                options={answers}
-                onChange={handleRadioChange}
-                disabled={message.isScheduled || isSubmitting}
-                loadingOption={isSubmitting ? chosenOptions[0] : undefined}
-              />
-            )}
+          {summaryAnswers
+            .filter((answer) => !(summary.quiz && summary.closePeriod && closePeriod <= 0))
+            .map(renderVoteOption)}
         </div>
       )}
       {!canVote && (
@@ -316,23 +309,23 @@ const Poll: FC<OwnProps> = ({
           {summaryAnswers.map(renderResultOption)}
         </div>
       )}
-      {!canViewResult && !isMultiple && (
-        <div className="poll-voters-count">{getReadableVotersCount(lang, summary.quiz, results.totalVoters)}</div>
-      )}
-      {isMultiple && (
+      {canVote && (
         <Button
-          className="poll-action-button"
+          className={buildClassName('poll-action-button', chosenOptions.length > 0 && 'active')}
           isText
-          disabled={chosenOptions.length === 0}
+          disabled={chosenOptions.length === 0 || message.isScheduled || isSubmitting}
           size="tiny"
           onClick={handleVoteClick}
         >
           {lang('PollSubmitVotes')}
         </Button>
       )}
+      {!canViewResult && !canVote && (
+        <div className="poll-voters-count">{getReadableVotersCount(lang, summary.quiz, results.totalVoters)}</div>
+      )}
       {canViewResult && (
         <Button
-          className="poll-action-button"
+          className="poll-action-button active"
           isText
           size="tiny"
           onClick={handleViewResultsClick}

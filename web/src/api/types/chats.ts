@@ -45,6 +45,8 @@ export interface ApiChat {
   isMin?: boolean;
   hasVideoAvatar?: boolean;
   avatarPhotoId?: string;
+  isPinned?: boolean;
+  isMuted?: boolean;
   usernames?: ApiUsername[];
   hasUsername?: boolean;
   membersCount?: number;

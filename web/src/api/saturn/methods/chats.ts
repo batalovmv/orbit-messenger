@@ -8,6 +8,7 @@ import type {
   SaturnUser,
 } from '../types';
 
+import { ARCHIVED_FOLDER_ID } from '../../../config';
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll } from '../apiBuilders/messages';
 import { buildApiUser, buildApiUserStatus } from '../apiBuilders/users';
@@ -334,6 +335,24 @@ export function getChatInviteLink({ chatId }: { chatId: string }) {
   return undefined;
 }
 
+async function updateMemberPreferences(chatId: string, prefs: {
+  is_pinned?: boolean;
+  is_muted?: boolean;
+  is_archived?: boolean;
+}) {
+  return client.request<SaturnChatMember>('PATCH', `/chats/${chatId}/members/me`, prefs);
+}
+
+function resolveChatId({ chatId, chat }: { chatId?: string; chat?: Pick<ApiChat, 'id'> }) {
+  const resolvedChatId = chatId || chat?.id;
+
+  if (!resolvedChatId) {
+    throw new Error('chatId is required');
+  }
+
+  return resolvedChatId;
+}
+
 export async function createChannel({
   title,
   about,
@@ -525,16 +544,17 @@ export async function deleteExportedChatInvite({ chatId, link }: { chatId: strin
   await client.request('DELETE', `/invite-links/${link}`);
 }
 
-export function archiveChat({ chatId }: { chatId: string }) {
-  // Client-side only — move chat to archived folder in local state
+export async function archiveChat({ chatId }: { chatId: string }) {
+  await updateMemberPreferences(chatId, { is_archived: true });
   sendApiUpdate({
     '@type': 'updateChatListType',
     id: chatId,
-    folderId: 1, // ARCHIVED_FOLDER_ID
+    folderId: ARCHIVED_FOLDER_ID,
   });
 }
 
-export function unarchiveChat({ chatId }: { chatId: string }) {
+export async function unarchiveChat({ chatId }: { chatId: string }) {
+  await updateMemberPreferences(chatId, { is_archived: false });
   sendApiUpdate({
     '@type': 'updateChatListType',
     id: chatId,
@@ -542,20 +562,52 @@ export function unarchiveChat({ chatId }: { chatId: string }) {
   });
 }
 
-export function toggleChatPinned({ chatId, isPinned }: { chatId: string; isPinned: boolean }) {
-  // Client-side only — pinned state stored locally
+export async function toggleChatArchived({ chat, folderId }: { chat: ApiChat; folderId: number }) {
+  if (folderId === ARCHIVED_FOLDER_ID) {
+    await archiveChat({ chatId: chat.id });
+    return;
+  }
+
+  await unarchiveChat({ chatId: chat.id });
+}
+
+export async function toggleChatPinned({
+  chatId,
+  isPinned,
+  chat,
+  shouldBePinned,
+}: {
+  chatId?: string;
+  isPinned?: boolean;
+  chat?: ApiChat;
+  shouldBePinned?: boolean;
+}) {
+  const resolvedChatId = resolveChatId({ chatId, chat });
+  const nextPinned = isPinned ?? shouldBePinned ?? false;
+
+  await updateMemberPreferences(resolvedChatId, { is_pinned: nextPinned });
   sendApiUpdate({
     '@type': 'updateChat',
-    id: chatId,
-    chat: { isPinned } as any,
+    id: resolvedChatId,
+    chat: { isPinned: nextPinned } as any,
   });
 }
 
-export function setChatMuted({ chatId, isMuted }: { chatId: string; isMuted: boolean }) {
-  // Client-side toggle — future: PATCH /chats/:id/members/me with notification_level
+export async function setChatMuted({
+  chatId,
+  isMuted,
+  chat,
+}: {
+  chatId?: string;
+  isMuted: boolean;
+  chat?: ApiChat;
+}) {
+  const resolvedChatId = resolveChatId({ chatId, chat });
+
+  await updateMemberPreferences(resolvedChatId, { is_muted: isMuted });
   sendApiUpdate({
     '@type': 'updateChat',
-    id: chatId,
+    id: resolvedChatId,
     chat: { isMuted } as any,
   });
 }
