@@ -3,6 +3,7 @@ import { addExtraClass } from '../../lib/teact/teact-dom';
 import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import { removeVS16s } from '../../lib/twemojiRegex';
 import withCache from '../withCache';
+import fixNonStandardEmoji from './fixNonStandardEmoji';
 
 // Due to the fact that emoji from Apple do not contain some characters, it is necessary to remove them from emoji-data
 // https://github.com/iamcal/emoji-data/issues/136
@@ -26,6 +27,17 @@ function unifiedToNative(unified: string) {
 }
 
 export const LOADED_EMOJIS = new Set<string>();
+
+export function getEmojiImagePath(emoji: string, size: 'small' | 'big' = 'small') {
+  const normalizedEmoji = fixNonStandardEmoji(emoji);
+  const code = nativeToUnifiedExtendedWithCache(normalizedEmoji);
+
+  if (!code) {
+    return undefined;
+  }
+
+  return `./img-apple-${size === 'big' ? '160' : '64'}/${code}.png`;
+}
 
 export function handleEmojiLoad(event: React.SyntheticEvent<HTMLImageElement>) {
   const emoji = event.currentTarget;

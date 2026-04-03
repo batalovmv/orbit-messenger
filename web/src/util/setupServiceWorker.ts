@@ -59,6 +59,31 @@ function subscribeToWorker() {
   notifyClientReady();
 }
 
+async function waitForServiceWorkerController(timeout = 5000) {
+  if (navigator.serviceWorker.controller) {
+    return navigator.serviceWorker.controller;
+  }
+
+  return new Promise<ServiceWorker | null>((resolve) => {
+    const cleanup = () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      window.clearTimeout(timeoutId);
+    };
+
+    const handleControllerChange = () => {
+      cleanup();
+      resolve(navigator.serviceWorker.controller);
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      resolve(navigator.serviceWorker.controller);
+    }, timeout);
+
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange, { once: true });
+  });
+}
+
 if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
   window.addEventListener('load', async () => {
     try {
@@ -87,7 +112,9 @@ if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
       // Wait for registration to be available
       await navigator.serviceWorker.getRegistration();
 
-      if (navigator.serviceWorker.controller) {
+      const activeController = navigator.serviceWorker.controller || await waitForServiceWorkerController();
+
+      if (activeController) {
         if (DEBUG) {
           // eslint-disable-next-line no-console
           console.log('[SW] ServiceWorker ready');

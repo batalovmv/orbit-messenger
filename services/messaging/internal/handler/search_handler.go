@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -71,37 +72,38 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 		}
 
 		var fromUserID *uuid.UUID
-		if raw := c.Query("from_user_id"); raw != "" {
+		if raw := firstNonEmpty(c.Query("from"), c.Query("from_user_id")); raw != "" {
 			id, err := uuid.Parse(raw)
 			if err != nil {
-				return response.Error(c, apperror.BadRequest("Invalid from_user_id"))
+				return response.Error(c, apperror.BadRequest("Invalid from"))
 			}
 			fromUserID = &id
 		}
 
 		var dateFrom *time.Time
-		if raw := c.Query("date_from"); raw != "" {
-			t, err := time.Parse(time.RFC3339, raw)
+		if raw := firstNonEmpty(c.Query("after"), c.Query("date_from")); raw != "" {
+			t, err := parseSearchTime(raw, false)
 			if err != nil {
-				return response.Error(c, apperror.BadRequest("Invalid date_from: use RFC3339 format"))
+				return response.Error(c, apperror.BadRequest("Invalid after: use RFC3339 or YYYY-MM-DD format"))
 			}
 			dateFrom = &t
 		}
 
 		var dateTo *time.Time
-		if raw := c.Query("date_to"); raw != "" {
-			t, err := time.Parse(time.RFC3339, raw)
+		if raw := firstNonEmpty(c.Query("before"), c.Query("date_to")); raw != "" {
+			t, err := parseSearchTime(raw, true)
 			if err != nil {
-				return response.Error(c, apperror.BadRequest("Invalid date_to: use RFC3339 format"))
+				return response.Error(c, apperror.BadRequest("Invalid before: use RFC3339 or YYYY-MM-DD format"))
 			}
 			dateTo = &t
 		}
 
 		var msgType *string
 		if raw := c.Query("type"); raw != "" {
-			switch raw {
-			case "text", "photo", "video", "file", "voice", "video_note", "sticker", "gif", "system":
-				msgType = &raw
+			switch strings.ToLower(raw) {
+			case "text", "photo", "video", "file", "files", "voice", "video_note", "sticker", "gif", "system", "link", "links":
+				canonicalType := canonicalizeMessageType(raw)
+				msgType = &canonicalType
 			default:
 				return response.Error(c, apperror.BadRequest("Invalid message type"))
 			}
@@ -147,4 +149,42 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 		"query":   query,
 		"scope":   scope,
 	})
+}
+
+func canonicalizeMessageType(value string) string {
+	switch strings.ToLower(value) {
+	case "files":
+		return "file"
+	case "links":
+		return "link"
+	default:
+		return strings.ToLower(value)
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
+}
+
+func parseSearchTime(value string, shouldUseEndOfDay bool) (time.Time, error) {
+	if timestamp, err := time.Parse(time.RFC3339, value); err == nil {
+		return timestamp, nil
+	}
+
+	dateOnly, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if shouldUseEndOfDay {
+		return dateOnly.Add(24*time.Hour - time.Millisecond), nil
+	}
+
+	return dateOnly, nil
 }

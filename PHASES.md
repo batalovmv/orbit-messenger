@@ -693,7 +693,9 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 6 (Runtime wiring в messaging): DI в `services/messaging/cmd/main.go` подключён для reactions/stickers/GIF/polls/scheduled, Phase 5 HTTP routes зарегистрированы, `POST /chats/:id/messages` поддерживает `type=poll` и `?scheduled_at=`
 - [x] Шаг 7 (Frontend wiring + poll hydration + smoke): Saturn API методы и TG Web A wiring закрыты для reactions/stickers/GIF/polls/scheduled, обычная history hydration для polls/reactions доведена, WS `reaction_added` / `reaction_removed` / `poll_vote` / `poll_closed` применяются без reload, live Playwright smoke PASS
 - [x] Шаг 8 (Frontend polish follow-up): локальные animated reaction assets подключены в Saturn fallback, composer GIF tab получил trending + inline search, saved reaction tags получили localStorage fallback
+- [x] Шаг 8.1 (Reaction emoji parity): picker / reaction bubbles / selector используют Apple-style emoji-data-ios assets для static reaction render, Unicode fallback остаётся только для неподдержанных glyphs
 - [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI подогнан под TG Web A (radio/checkbox до голосования, общая кнопка Vote, толстые result bars), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
+- [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
 
 ### Проработка (Шаг 0)
 

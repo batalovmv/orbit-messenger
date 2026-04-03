@@ -1123,7 +1123,7 @@ function shouldShowInAppNotificationBanner<T extends GlobalState>(
   }
 
   const currentChatId = selectCurrentMessageList(global, getCurrentTabId())?.chatId;
-  if (!currentChatId || currentChatId === chat.id) {
+  if (currentChatId === chat.id) {
     return false;
   }
 

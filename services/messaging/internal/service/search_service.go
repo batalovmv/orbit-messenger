@@ -77,7 +77,11 @@ func (s *SearchService) SearchMessages(
 		filters = append(filters, fmt.Sprintf("created_at_ts <= %d", dateTo.Unix()))
 	}
 	if msgType != nil {
-		filters = append(filters, fmt.Sprintf("type = '%s'", *msgType))
+		if *msgType == "link" {
+			filters = append(filters, "has_links = true")
+		} else {
+			filters = append(filters, fmt.Sprintf("type = '%s'", *msgType))
+		}
 	}
 	if hasMedia != nil {
 		if *hasMedia {
@@ -140,15 +144,17 @@ func (s *SearchService) IndexMessage(msg *model.Message) error {
 	if msg.Content != nil {
 		content = *msg.Content
 	}
-	doc := map[string]interface{}{
-		"id":            msg.ID.String(),
-		"chat_id":       msg.ChatID.String(),
-		"sender_id":     senderID,
-		"content":       content,
-		"type":          msg.Type,
-		"has_media":     len(msg.MediaAttachments) > 0,
-		"created_at_ts": msg.CreatedAt.Unix(),
-	}
+	doc := search.BuildMessageDocument(
+		msg.ID.String(),
+		msg.ChatID.String(),
+		senderID,
+		content,
+		msg.Type,
+		len(msg.MediaAttachments) > 0,
+		search.HasLinks(content, msg.Entities),
+		msg.CreatedAt,
+		msg.SequenceNumber,
+	)
 	if err := s.client.IndexDocuments(indexMessages, []interface{}{doc}); err != nil {
 		return fmt.Errorf("index message: %w", err)
 	}

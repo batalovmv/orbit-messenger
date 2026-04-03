@@ -19,6 +19,7 @@ import useMediaTransitionDeprecated from '../../../hooks/useMediaTransitionDepre
 
 import AnimatedIconWithPreview from '../AnimatedIconWithPreview';
 import CustomEmoji from '../CustomEmoji';
+import ReactionStaticEmoji from './ReactionStaticEmoji';
 
 import styles from './ReactionEmoji.module.scss';
 
@@ -55,18 +56,11 @@ const ReactionEmoji: FC<OwnProps> = ({
   ), [availableReactions, reaction]);
   const thumbDataUri = availableReaction?.staticIcon?.thumbnail?.dataUri;
   const animationId = availableReaction?.selectAnimation?.id;
-  const staticIcon = availableReaction?.staticIcon;
-  const staticIconId = staticIcon?.id;
-  const shouldUseEmojiFallback = reaction.type === 'emoji' && !animationId;
-  const shouldLoadStaticIcon = Boolean(!shouldUseEmojiFallback && staticIconId && !thumbDataUri);
+  const shouldUseStaticReaction = reaction.type === 'emoji' && !animationId;
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
     availableReaction?.selectAnimation ? getDocumentMediaHash(availableReaction.selectAnimation, 'full') : undefined,
     !animationId,
-  );
-  const staticIconData = useMedia(
-    shouldLoadStaticIcon && staticIcon ? getDocumentMediaHash(staticIcon, 'full') : undefined,
-    !shouldLoadStaticIcon,
   );
 
   const {
@@ -87,8 +81,6 @@ const ReactionEmoji: FC<OwnProps> = ({
   }, [handleContextMenuClose, onContextMenu, handleContextMenuHide, isContextMenuOpen, reaction]);
 
   const tgsUrl = reaction.type === 'paid' ? LOCAL_TGS_URLS.StarReaction : mediaData;
-  const shouldUseStaticIcon = reaction.type !== 'paid' && !shouldUseEmojiFallback && !animationId
-    && Boolean(staticIconData || thumbDataUri);
   const handleClick = useLastCallback(() => {
     onClick(reaction);
   });
@@ -122,32 +114,25 @@ const ReactionEmoji: FC<OwnProps> = ({
           withTranslucentThumb
           forceAlways={forcePlayback}
         />
-      ) : shouldUseEmojiFallback ? (
-        <span className={styles.emojiFallback} aria-hidden="true">
-          {reaction.emoticon}
-        </span>
+      ) : shouldUseStaticReaction ? (
+        <ReactionStaticEmoji
+          reaction={reaction}
+          availableReaction={availableReaction}
+          size={EMOJI_SIZE_PICKER}
+        />
       ) : (
-        shouldUseStaticIcon ? (
-          <img
-            className={styles.staticIcon}
-            src={staticIconData || thumbDataUri}
-            alt={availableReaction?.title || ''}
-            draggable={false}
-          />
-        ) : (
-          <AnimatedIconWithPreview
-            tgsUrl={tgsUrl}
-            thumbDataUri={thumbDataUri}
-            play={loadAndPlay}
-            noLoop={false}
-            size={EMOJI_SIZE_PICKER}
-            isLowPriority
-            className={transitionClassNames}
-            sharedCanvas={sharedCanvasRef!.current || undefined}
-            sharedCanvasCoords={coords}
-            forceAlways={forcePlayback}
-          />
-        )
+        <AnimatedIconWithPreview
+          tgsUrl={tgsUrl}
+          thumbDataUri={thumbDataUri}
+          play={loadAndPlay}
+          noLoop={false}
+          size={EMOJI_SIZE_PICKER}
+          isLowPriority
+          className={transitionClassNames}
+          sharedCanvas={sharedCanvasRef!.current || undefined}
+          sharedCanvasCoords={coords}
+          forceAlways={forcePlayback}
+        />
       )}
     </div>
   );

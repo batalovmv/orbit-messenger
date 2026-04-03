@@ -87,20 +87,22 @@ func (s *Subscriber) Stop() {
 }
 
 type pushMessageData struct {
-	ID         string  `json:"id"`
-	ChatID     string  `json:"chat_id"`
-	Type       string  `json:"type"`
-	Content    *string `json:"content"`
-	SenderName string  `json:"sender_name"`
+	ID             string  `json:"id"`
+	ChatID         string  `json:"chat_id"`
+	Type           string  `json:"type"`
+	Content        *string `json:"content"`
+	SenderName     string  `json:"sender_name"`
+	SequenceNumber int64   `json:"sequence_number"`
 }
 
 type pushPayload struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
 	Data  struct {
-		ChatID    string `json:"chat_id"`
-		MessageID string `json:"message_id"`
-		Type      string `json:"type"`
+		ChatID               string `json:"chat_id"`
+		MessageID            int64  `json:"message_id"`
+		Type                 string `json:"type"`
+		ShouldReplaceHistory bool   `json:"should_replace_history"`
 	} `json:"data"`
 }
 
@@ -161,9 +163,6 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 	recipients := make([]string, 0, len(memberIDs))
 	for _, userID := range memberIDs {
 		if userID == "" || userID == event.SenderID {
-			continue
-		}
-		if s.hub.IsOnline(userID) {
 			continue
 		}
 		recipients = append(recipients, userID)
@@ -265,6 +264,10 @@ func (s *Subscriber) runAsync(label string, fn func()) {
 }
 
 func buildPushPayload(msg pushMessageData) ([]byte, error) {
+	if msg.SequenceNumber <= 0 {
+		return nil, fmt.Errorf("invalid sequence number: %d", msg.SequenceNumber)
+	}
+
 	payload := pushPayload{
 		Title: strings.TrimSpace(msg.SenderName),
 		Body:  buildMessagePreview(msg.Content, msg.Type),
@@ -273,8 +276,9 @@ func buildPushPayload(msg pushMessageData) ([]byte, error) {
 		payload.Title = "Новое сообщение"
 	}
 	payload.Data.ChatID = msg.ChatID
-	payload.Data.MessageID = msg.ID
+	payload.Data.MessageID = msg.SequenceNumber
 	payload.Data.Type = "new_message"
+	payload.Data.ShouldReplaceHistory = true
 
 	return json.Marshal(payload)
 }

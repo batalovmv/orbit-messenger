@@ -50,7 +50,7 @@ interface SearchResults {
   nextOffsetId?: number;
 }
 
-type SearchMessageFilterType = 'text' | 'photo' | 'video' | 'file' | 'voice' | 'poll';
+type SearchMessageFilterType = 'text' | 'photo' | 'video' | 'file' | 'link';
 
 export function setCurrentUserId(userId: string) {
   currentUserId = userId;
@@ -87,11 +87,21 @@ export async function searchMessagesGlobal({
   maxDate?: number;
   context?: string;
 }): Promise<SearchResults | undefined> {
-  if (!query) return undefined;
+  const normalizedQuery = normalizeSearchQuery(query, {
+    chatId,
+    fromUserId,
+    dateFrom,
+    dateTo,
+    type,
+    hasMedia,
+    minDate,
+    maxDate,
+  });
+  if (!normalizedQuery) return undefined;
 
   const normalizedOffset = offset ?? offsetId ?? 0;
   const params = buildSearchParams({
-    query,
+    query: normalizedQuery,
     scope: 'messages',
     limit,
     offset: normalizedOffset,
@@ -157,7 +167,7 @@ export async function searchMessagesInChatWithFilters({
   fromUserId,
   dateFrom,
   dateTo,
-  type = 'text',
+  type,
   hasMedia,
   limit = DEFAULT_SEARCH_LIMIT,
   offset = 0,
@@ -177,7 +187,7 @@ export async function searchMessagesInChatWithFilters({
   maxDate?: number;
 }): Promise<SearchResults | undefined> {
   const normalizedQuery = query?.trim()
-    || (fromUserId || dateFrom || dateTo || hasMedia !== undefined ? ' ' : undefined);
+    || (fromUserId || dateFrom || dateTo || type || hasMedia !== undefined ? ' ' : undefined);
   const normalizedOffset = offset || 0;
   if (!chatId || !normalizedQuery) {
     return undefined;
@@ -364,9 +374,9 @@ function buildSearchParams({
   }
 
   appendSearchParam(params, 'chat_id', chatId);
-  appendSearchParam(params, 'from_user_id', fromUserId);
-  appendSearchParam(params, 'date_from', dateFrom);
-  appendSearchParam(params, 'date_to', dateTo);
+  appendSearchParam(params, 'from', fromUserId);
+  appendSearchParam(params, 'after', dateFrom);
+  appendSearchParam(params, 'before', dateTo);
   appendSearchParam(params, 'type', type);
 
   if (hasMedia !== undefined) {
@@ -404,6 +414,35 @@ function formatSearchDate(timestamp?: number) {
   }
 
   return new Date(normalizeTimestamp(timestamp)).toISOString();
+}
+
+function normalizeSearchQuery(query: string | undefined, filters: {
+  chatId?: string;
+  fromUserId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: string;
+  hasMedia?: boolean;
+  minDate?: number;
+  maxDate?: number;
+}) {
+  const normalizedQuery = query?.trim();
+  if (normalizedQuery) {
+    return normalizedQuery;
+  }
+
+  const hasFilterOnlySearch = Boolean(
+    filters.chatId
+    || filters.fromUserId
+    || filters.dateFrom
+    || filters.dateTo
+    || filters.type
+    || filters.hasMedia !== undefined
+    || filters.minDate
+    || filters.maxDate,
+  );
+
+  return hasFilterOnlySearch ? ' ' : undefined;
 }
 
 async function fetchUsersByIds(userIds: string[]) {
@@ -677,6 +716,10 @@ function normalizeChatHit(hit: SaturnChatSearchHit) {
 export async function searchPublicPosts({
   hashtag,
   query,
+  fromUserId,
+  dateFrom,
+  dateTo,
+  type,
   limit,
   offsetId,
   offsetRate,
@@ -684,6 +727,10 @@ export async function searchPublicPosts({
 }: {
   hashtag?: string;
   query?: string;
+  fromUserId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: string;
   limit?: number;
   offsetId?: number;
   offsetRate?: number;
@@ -694,6 +741,10 @@ export async function searchPublicPosts({
 
   return searchMessagesGlobal({
     query: searchQuery,
+    fromUserId,
+    dateFrom,
+    dateTo,
+    type,
     limit,
     offsetId,
   });

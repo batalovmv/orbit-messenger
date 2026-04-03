@@ -88,6 +88,7 @@ type messageData struct {
 	ChatID         string    `json:"chat_id"`
 	SenderID       *string   `json:"sender_id"`
 	Content        *string   `json:"content"`
+	Entities       json.RawMessage `json:"entities"`
 	Type           string    `json:"type"`
 	SequenceNumber int64     `json:"sequence_number"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -127,16 +128,17 @@ func (idx *Indexer) indexMessageEvent(msg *nats.Msg) {
 		content = *m.Content
 	}
 
-	doc := map[string]interface{}{
-		"id":              m.ID,
-		"chat_id":         m.ChatID,
-		"sender_id":       senderID,
-		"content":         content,
-		"type":            m.Type,
-		"has_media":       len(m.MediaAttachments) > 0,
-		"created_at_ts":   m.CreatedAt.Unix(),
-		"sequence_number": m.SequenceNumber,
-	}
+	doc := BuildMessageDocument(
+		m.ID,
+		m.ChatID,
+		senderID,
+		content,
+		m.Type,
+		len(m.MediaAttachments) > 0,
+		HasLinks(content, m.Entities),
+		m.CreatedAt,
+		m.SequenceNumber,
+	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

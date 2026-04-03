@@ -83,6 +83,7 @@ export function updateMiddleSearch<T extends GlobalState>(
     || currentSearch.fromPeerId !== updated.fromPeerId
     || currentSearch.dateFrom !== updated.dateFrom
     || currentSearch.dateTo !== updated.dateTo
+    || currentSearch.messageType !== updated.messageType
   )) {
     updated.results = undefined;
   }

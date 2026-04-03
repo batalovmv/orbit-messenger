@@ -64,7 +64,7 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
   currentSearch = selectCurrentMiddleSearch(global, tabId)!;
 
   const {
-    results, savedTag, type, isHashtag, fromPeerId, dateFrom, dateTo,
+    results, savedTag, type, isHashtag, fromPeerId, dateFrom, dateTo, messageType,
   } = currentSearch;
   const shouldReuseParams = results?.query === query;
   const fromPeer = fromPeerId ? selectPeer(global, fromPeerId) : undefined;
@@ -74,7 +74,7 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
   const offsetPeerId = shouldReuseParams ? results?.nextOffsetPeerId : undefined;
   const offsetPeer = shouldReuseParams && offsetPeerId ? selectChat(global, offsetPeerId) : undefined;
 
-  const hasFilterOnlySearch = Boolean(fromPeerId || dateFrom || dateTo);
+  const hasFilterOnlySearch = Boolean(fromPeerId || dateFrom || dateTo || messageType);
   const shouldHaveQuery = isHashtag || (!savedTag && !hasFilterOnlySearch);
   if (shouldHaveQuery && !query) {
     global = updateMiddleSearch(global, realChatId, threadId, {
@@ -109,7 +109,7 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
         fromUserId: fromPeerId,
         dateFrom,
         dateTo,
-        type: 'text',
+        type: messageType,
         limit: MESSAGE_SEARCH_SLICE,
         offset: offsetId,
       });
@@ -117,8 +117,11 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
 
   if (type === 'myChats') {
     result = await callApi('searchMessagesGlobal', {
-      type: 'text',
       query: isHashtag ? `#${query}` : query!,
+      fromUserId: fromPeerId,
+      dateFrom,
+      dateTo,
+      type: messageType,
       limit: MESSAGE_SEARCH_SLICE,
       offsetId,
       offsetRate,
@@ -129,6 +132,10 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
   if (type === 'channels') {
     result = await callApi('searchPublicPosts', {
       hashtag: query!,
+      fromUserId: fromPeerId,
+      dateFrom,
+      dateTo,
+      type: messageType,
       limit: MESSAGE_SEARCH_SLICE,
       offsetId,
       offsetPeer,
@@ -154,6 +161,7 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
     || currentSearch?.fromPeerId !== fromPeerId
     || currentSearch?.dateFrom !== dateFrom
     || currentSearch?.dateTo !== dateTo
+    || currentSearch?.messageType !== messageType
     || currentSearch?.type !== type
     || Boolean(currentSearch?.isHashtag) !== Boolean(isHashtag);
   if (!currentSearch || hasSearchChanged || hasTagChanged) {
@@ -192,7 +200,13 @@ addActionHandler('searchHashtag', (global, actions, payload): ActionReturnType =
     chatId: messageList.chatId,
     threadId: messageList.threadId,
     update: {
+      type: 'chat',
+      savedTag: undefined,
       isHashtag: true,
+      fromPeerId: undefined,
+      dateFrom: undefined,
+      dateTo: undefined,
+      messageType: undefined,
       requestedQuery: cleanQuery,
     },
     tabId,

@@ -57,7 +57,7 @@ func configureIndexes(client meilisearch.ServiceManager) error {
 		{
 			name:       "messages",
 			searchable: []string{"content"},
-			filterable: []interface{}{"chat_id", "sender_id", "type", "has_media", "created_at_ts"},
+			filterable: []interface{}{"chat_id", "sender_id", "type", "has_media", "has_links", "created_at_ts"},
 			sortable:   []string{"created_at_ts", "sequence_number"},
 		},
 		{

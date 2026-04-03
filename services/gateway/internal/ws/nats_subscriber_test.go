@@ -205,6 +205,7 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 	mutedRecipient := uuid.New().String()
 	chatID := uuid.New().String()
 	messageID := uuid.New().String()
+	sequenceNumber := int64(4242)
 
 	var pushedUserIDs []string
 	var pushedPayload []byte
@@ -230,8 +231,8 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 		if body.ChatID != chatID {
 			t.Fatalf("unexpected chat id: %s", body.ChatID)
 		}
-		if !reflect.DeepEqual(body.UserIDs, []string{offlineRecipient, mutedRecipient}) {
-			t.Fatalf("unexpected offline user ids: %+v", body.UserIDs)
+		if !reflect.DeepEqual(body.UserIDs, []string{onlineRecipient, offlineRecipient, mutedRecipient}) {
+			t.Fatalf("unexpected recipient user ids: %+v", body.UserIDs)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -257,11 +258,12 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 	payload := marshalTestNATSEvent(t, NATSEvent{
 		Event: EventNewMessage,
 		Data: json.RawMessage(fmt.Sprintf(
-			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`,
+			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s","sequence_number":%d}`,
 			messageID,
 			chatID,
 			"Привет, команда",
 			"Алиса",
+			sequenceNumber,
 		)),
 		MemberIDs: []string{senderID, onlineRecipient, offlineRecipient, mutedRecipient},
 		SenderID:  senderID,
@@ -274,12 +276,19 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 		t,
 		waitForEnvelope(t, deliveries),
 		EventNewMessage,
-		fmt.Sprintf(`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`, messageID, chatID, "Привет, команда", "Алиса"),
+		fmt.Sprintf(
+			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s","sequence_number":%d}`,
+			messageID,
+			chatID,
+			"Привет, команда",
+			"Алиса",
+			sequenceNumber,
+		),
 	)
 
-	waitForCondition(t, func() bool { return len(pushedUserIDs) == 1 }, "push dispatch")
+	waitForCondition(t, func() bool { return len(pushedUserIDs) == 2 }, "push dispatch")
 
-	if !reflect.DeepEqual(pushedUserIDs, []string{offlineRecipient}) {
+	if !reflect.DeepEqual(pushedUserIDs, []string{onlineRecipient, offlineRecipient}) {
 		t.Fatalf("unexpected push recipients: %+v", pushedUserIDs)
 	}
 
@@ -287,9 +296,10 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 		Title string `json:"title"`
 		Body  string `json:"body"`
 		Data  struct {
-			ChatID    string `json:"chat_id"`
-			MessageID string `json:"message_id"`
-			Type      string `json:"type"`
+			ChatID               string `json:"chat_id"`
+			MessageID            int64  `json:"message_id"`
+			Type                 string `json:"type"`
+			ShouldReplaceHistory bool   `json:"should_replace_history"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(bytes.NewReader(pushedPayload)).Decode(&pushBody); err != nil {
@@ -298,8 +308,11 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 	if pushBody.Title != "Алиса" || pushBody.Body != "Привет, команда" {
 		t.Fatalf("unexpected push payload: %+v", pushBody)
 	}
-	if pushBody.Data.ChatID != chatID || pushBody.Data.MessageID != messageID || pushBody.Data.Type != "new_message" {
+	if pushBody.Data.ChatID != chatID || pushBody.Data.MessageID != sequenceNumber || pushBody.Data.Type != "new_message" {
 		t.Fatalf("unexpected push data: %+v", pushBody.Data)
+	}
+	if !pushBody.Data.ShouldReplaceHistory {
+		t.Fatalf("expected should_replace_history to be true")
 	}
 }
 
@@ -331,11 +344,12 @@ func TestSubscriber_HandleEvent_NewMessageSkipsPushWhenMuteLookupFails(t *testin
 	payload := marshalTestNATSEvent(t, NATSEvent{
 		Event: EventNewMessage,
 		Data: json.RawMessage(fmt.Sprintf(
-			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s"}`,
+			`{"id":"%s","chat_id":"%s","type":"text","content":"%s","sender_name":"%s","sequence_number":%d}`,
 			uuid.New(),
 			chatID,
 			"Сообщение",
 			"Боб",
+			101,
 		)),
 		MemberIDs: []string{senderID, offlineRecipient},
 		SenderID:  senderID,

@@ -2,12 +2,25 @@ import { APP_NAME, DEBUG, DEBUG_MORE } from '../config';
 
 declare const self: ServiceWorkerGlobalScope;
 
-enum Boolean {
+enum LegacyBoolean {
   True = '1',
   False = '0',
 }
 
 type PushData = {
+  title?: string;
+  body?: string;
+  icon?: string;
+  is_silent?: boolean;
+  data?: {
+    chat_id?: string;
+    message_id?: number | string;
+    should_replace_history?: boolean;
+    is_silent?: boolean;
+  };
+};
+
+type LegacyPushData = {
   custom: {
     msg_id?: string;
     silent?: string;
@@ -15,8 +28,8 @@ type PushData = {
     chat_id?: string;
     from_id?: string;
   };
-  mute: Boolean;
-  badge: Boolean;
+  mute: LegacyBoolean;
+  badge: LegacyBoolean;
   loc_key: string;
   loc_args: string[];
   random_id: number;
@@ -48,10 +61,14 @@ type CloseNotificationData = {
 };
 
 let lastSyncAt = new Date().valueOf();
-const shownNotifications = new Set();
-const clickBuffer: Record<string, NotificationData> = {};
+const shownNotifications = new Set<string>();
+const clickBuffer: Record<string, FocusMessageData> = {};
 
-function getPushData(e: PushEvent | Notification): PushData | undefined {
+function getPushData(e: PushEvent): PushData | LegacyPushData | undefined {
+  if (!e.data) {
+    return undefined;
+  }
+
   try {
     return e.data.json();
   } catch (error) {
@@ -63,7 +80,11 @@ function getPushData(e: PushEvent | Notification): PushData | undefined {
   }
 }
 
-function getChatId(data: PushData) {
+function isLegacyPushData(data: PushData | LegacyPushData): data is LegacyPushData {
+  return 'custom' in data;
+}
+
+function getChatId(data: LegacyPushData) {
   if (data.custom.from_id) {
     return data.custom.from_id;
   }
@@ -76,17 +97,50 @@ function getChatId(data: PushData) {
   return undefined;
 }
 
-function getMessageId(data: PushData) {
+function getMessageId(data: LegacyPushData) {
   if (!data.custom.msg_id) return undefined;
   return parseInt(data.custom.msg_id, 10);
 }
 
-function getNotificationData(data: PushData): NotificationData {
+function normalizeMessageId(messageId: unknown) {
+  if (typeof messageId === 'number' && Number.isFinite(messageId)) {
+    return messageId;
+  }
+
+  if (typeof messageId === 'string' && /^\d+$/.test(messageId)) {
+    return Number(messageId);
+  }
+
+  return undefined;
+}
+
+function getNotificationKey({ chatId, messageId }: Pick<NotificationData, 'chatId' | 'messageId'>) {
+  if (!chatId || messageId === undefined) {
+    return undefined;
+  }
+
+  return `${chatId}:${messageId}`;
+}
+
+function getNotificationData(data: PushData | LegacyPushData): NotificationData {
+  if (!isLegacyPushData(data)) {
+    return {
+      chatId: data.data?.chat_id,
+      messageId: normalizeMessageId(data.data?.message_id),
+      body: data.body || '',
+      icon: data.icon,
+      isSilent: data.data?.is_silent === true || data.is_silent === true,
+      shouldReplaceHistory: data.data?.should_replace_history !== false,
+      title: data.title || APP_NAME,
+    };
+  }
+
   let title = data.title || APP_NAME;
-  const isSilent = data.custom?.silent === Boolean.True;
+  const isSilent = data.custom.silent === LegacyBoolean.True;
   if (isSilent) {
     title += ' 🔕';
   }
+
   return {
     chatId: getChatId(data),
     messageId: getMessageId(data),
@@ -165,6 +219,20 @@ async function closeNotifications({
   });
 }
 
+async function hasMatchingNotification({
+  chatId,
+  messageId,
+}: Pick<NotificationData, 'chatId' | 'messageId'>) {
+  if (!chatId || messageId === undefined) {
+    return false;
+  }
+
+  const notifications = await self.registration.getNotifications();
+  return notifications.some((notification) => {
+    return notification.data?.chatId === chatId && notification.data?.messageId === messageId;
+  });
+}
+
 export function handlePush(e: PushEvent) {
   if (DEBUG) {
     // eslint-disable-next-line no-console
@@ -176,15 +244,15 @@ export function handlePush(e: PushEvent) {
   }
 
   const data = getPushData(e);
-
-  // Do not show muted notifications
-  if (!data || data.mute === Boolean.True) return;
+  if (!data) return;
+  if (isLegacyPushData(data) && data.mute === LegacyBoolean.True) return;
 
   const notification = getNotificationData(data);
+  const notificationKey = getNotificationKey(notification);
 
   // Don't show already triggered notification
-  if (shownNotifications.has(notification.messageId)) {
-    shownNotifications.delete(notification.messageId);
+  if (notificationKey && shownNotifications.has(notificationKey)) {
+    shownNotifications.delete(notificationKey);
     return;
   }
 
@@ -261,13 +329,20 @@ export function handleClientMessage(e: ExtendableMessageEvent) {
     // store messageId for already shown notification
     const notification: NotificationData = e.data.payload;
     e.waitUntil((async () => {
+      if (await hasMatchingNotification(notification)) {
+        return undefined;
+      }
+
       // Close existing notification if it is already shown
       if (notification.chatId) {
         const notifications = await self.registration.getNotifications({ tag: notification.chatId });
         notifications.forEach((n) => n.close());
       }
       // Mark this notification as shown if it was handled locally
-      shownNotifications.add(notification.messageId);
+      const notificationKey = getNotificationKey(notification);
+      if (notificationKey) {
+        shownNotifications.add(notificationKey);
+      }
       return showNotification(notification);
     })());
   }

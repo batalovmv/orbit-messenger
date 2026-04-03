@@ -11,6 +11,7 @@ import useMedia from '../../../../hooks/useMedia';
 
 import AnimatedSticker from '../../../common/AnimatedSticker';
 import Icon from '../../../common/icons/Icon';
+import ReactionStaticEmoji from '../../../common/reactions/ReactionStaticEmoji';
 
 import styles from './ReactionSelectorReaction.module.scss';
 
@@ -37,18 +38,9 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
 }) => {
   const hasAnimatedAppear = Boolean(reaction.appearAnimation?.id);
   const hasAnimatedSelect = Boolean(reaction.selectAnimation?.id);
-  const staticIconThumbDataUri = reaction.staticIcon?.thumbnail?.dataUri;
   const shouldUseStaticIcon = noAppearAnimation || !hasAnimatedAppear || !hasAnimatedSelect;
-  const shouldUseEmojiFallback = shouldUseStaticIcon && reaction.reaction.type === 'emoji';
-  const shouldLoadStaticIcon = Boolean(
-    shouldUseStaticIcon && !shouldUseEmojiFallback && reaction.staticIcon?.id && !staticIconThumbDataUri,
-  );
   const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || shouldUseStaticIcon);
   const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || shouldUseStaticIcon);
-  const staticIconData = useMedia(
-    shouldLoadStaticIcon ? `document${reaction.staticIcon?.id}` : undefined,
-    !isReady || !shouldLoadStaticIcon,
-  );
   const [isAnimationLoaded, markAnimationLoaded] = useFlag();
 
   const [isFirstPlay, , unmarkIsFirstPlay] = useFlag(true);
@@ -65,17 +57,12 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
       onMouseEnter={isReady && !isFirstPlay ? activate : undefined}
       style={style}
     >
-      {shouldUseEmojiFallback && (
-        <span className={styles.emojiFallback} aria-hidden="true">
-          {reaction.reaction.emoticon}
-        </span>
-      )}
-      {shouldUseStaticIcon && !shouldUseEmojiFallback && (
-        <img
+      {shouldUseStaticIcon && (
+        <ReactionStaticEmoji
           className={styles.staticIcon}
-          src={staticIconThumbDataUri || staticIconData}
-          alt={reaction.reaction.emoticon}
-          draggable={false}
+          reaction={reaction.reaction}
+          availableReaction={reaction}
+          size={REACTION_SIZE}
         />
       )}
       {!isAnimationLoaded && !shouldUseStaticIcon && (

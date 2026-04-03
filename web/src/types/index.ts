@@ -405,6 +405,7 @@ export type ProfileTabType =
   | 'gifts';
 export type SharedMediaType = 'media' | 'documents' | 'links' | 'audio' | 'voice' | 'gif';
 export type MiddleSearchType = 'chat' | 'myChats' | 'channels';
+export type MiddleSearchMessageType = 'photo' | 'video' | 'file' | 'link';
 export type MiddleSearchParams = {
   requestedQuery?: string;
   savedTag?: ApiReaction;
@@ -412,6 +413,7 @@ export type MiddleSearchParams = {
   fromPeerId?: string;
   dateFrom?: string;
   dateTo?: string;
+  messageType?: MiddleSearchMessageType;
   fetchingQuery?: string;
   type: MiddleSearchType;
   results?: MiddleSearchResults;

@@ -6,6 +6,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
 import { isSameReaction } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
+import { getEmojiImagePath } from '../../../util/emoji/emoji';
 
 import useThumbnail from '../../../hooks/media/useThumbnail';
 import useMedia from '../../../hooks/useMedia';
@@ -20,6 +21,7 @@ import blankUrl from '../../../assets/blank.png';
 
 type OwnProps = {
   reaction: ApiReaction;
+  availableReaction?: ApiAvailableReaction;
   availableReactions?: ApiAvailableReaction[];
   className?: string;
   size?: number;
@@ -29,29 +31,33 @@ type OwnProps = {
 
 const ReactionStaticEmoji: FC<OwnProps> = ({
   reaction,
+  availableReaction,
   availableReactions,
   className,
   size,
   withIconHeart,
   observeIntersection,
 }) => {
-  const availableReaction = useMemo(() => (
-    availableReactions?.find((available) => isSameReaction(available.reaction, reaction))
-  ), [availableReactions, reaction]);
-  const staticIcon = availableReaction?.staticIcon;
-  const shouldUseEmojiFallback = reaction.type === 'emoji' && !availableReaction?.centerIcon?.id
-    && !availableReaction?.selectAnimation?.id;
+  const resolvedAvailableReaction = useMemo(() => (
+    availableReaction || availableReactions?.find((availableItem) => isSameReaction(availableItem.reaction, reaction))
+  ), [availableReaction, availableReactions, reaction]);
+  const staticIcon = resolvedAvailableReaction?.staticIcon;
   const staticIconId = staticIcon?.id;
-  const mediaHash = !shouldUseEmojiFallback && staticIconId ? `document${staticIconId}` : undefined;
-  const cacheBuster = availableReaction?.isLocalCache ? 0 : 1;
+  const mediaHash = staticIconId ? `document${staticIconId}` : undefined;
+  const cacheBuster = resolvedAvailableReaction?.isLocalCache ? 0 : 1;
   const mediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
   const thumbDataUri = useThumbnail(staticIcon?.thumbnail);
+  const emojiImagePath = reaction.type === 'emoji'
+    ? getEmojiImagePath(reaction.emoticon, size && size > 32 ? 'big' : 'small')
+    : undefined;
+  const fallbackImagePath = thumbDataUri || emojiImagePath;
+  const shouldUseEmojiFallback = reaction.type === 'emoji' && !fallbackImagePath && !mediaData;
 
   const { ref: thumbRef } = useMediaTransition<HTMLImageElement>({
     hasMediaData: Boolean(thumbDataUri && !mediaData),
   });
   const { ref: mediaRef } = useMediaTransition<HTMLImageElement>({
-    hasMediaData: Boolean(mediaData),
+    hasMediaData: Boolean(mediaData || (!thumbDataUri && emojiImagePath)),
   });
 
   const shouldApplySizeFix = reaction.type === 'emoji' && reaction.emoticon === '🦄';
@@ -84,20 +90,22 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
           {reaction.emoticon}
         </span>
       )}
-      {!shouldUseEmojiFallback && (
+      {!shouldUseEmojiFallback && thumbDataUri && !mediaData && (
+        <img
+          ref={thumbRef}
+          className="thumb"
+          src={thumbDataUri}
+          alt=""
+          draggable={false}
+        />
+      )}
+      {!shouldUseEmojiFallback && (mediaData || (!thumbDataUri && fallbackImagePath)) && (
         <>
-          <img
-            ref={thumbRef}
-            className="thumb"
-            src={thumbDataUri}
-            alt=""
-            draggable={false}
-          />
           <img
             ref={mediaRef}
             className={buildClassName('media', shouldApplySizeFix && 'with-unicorn-fix')}
-            src={mediaData || blankUrl}
-            alt={availableReaction?.title}
+            src={mediaData || fallbackImagePath || blankUrl}
+            alt={resolvedAvailableReaction?.title || (reaction.type === 'emoji' ? reaction.emoticon : '')}
             draggable={false}
           />
         </>

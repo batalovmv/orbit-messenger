@@ -15,6 +15,7 @@ import type {
 } from '../types';
 
 import { getBaseUrl } from '../client';
+import { getEmojiImagePath } from '../../../util/emoji/emoji';
 
 type AssetKind = 'avatar' | 'document' | 'photo' | 'profile' | 'sticker' | 'stickerSet';
 
@@ -155,6 +156,31 @@ export function getRegisteredAsset(id: string, kind: AssetKind = 'document') {
 }
 
 export function buildStaticAssetDocument(id: string, emoji: string, title?: string): ApiDocument {
+  const previewUrl = getEmojiImagePath(emoji, 'small');
+  const fullUrl = getEmojiImagePath(emoji, 'big');
+
+  if (previewUrl || fullUrl) {
+    const resolvedPreviewUrl = previewUrl || fullUrl!;
+    const resolvedFullUrl = fullUrl || resolvedPreviewUrl;
+
+    registerAsset(id, {
+      fileName: `${title || 'emoji'}.png`,
+      fullUrl: resolvedFullUrl,
+      mimeType: 'image/png',
+      previewUrl: resolvedPreviewUrl,
+      thumbnailDataUri: resolvedPreviewUrl,
+    }, ['document']);
+
+    return {
+      mediaType: 'document',
+      id,
+      fileName: `${title || 'emoji'}.png`,
+      mimeType: 'image/png',
+      size: resolvedFullUrl.length,
+      thumbnail: buildThumbnail(resolvedPreviewUrl),
+    };
+  }
+
   const dataUri = makeSvgDataUri(emoji, 'transparent');
 
   registerAsset(id, {
