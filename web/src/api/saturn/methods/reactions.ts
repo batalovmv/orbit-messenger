@@ -189,8 +189,6 @@ export async function sendReaction({
 
   const removals = [...currentEmojiSet].filter((emoji) => !desiredEmojiSet.has(emoji));
   const additions = [...desiredEmojiSet].filter((emoji) => !currentEmojiSet.has(emoji));
-  // eslint-disable-next-line no-console
-  console.log('[Saturn] sendReaction desired:', [...desiredEmojiSet], 'current:', [...currentEmojiSet], 'add:', additions, 'rm:', removals);
   await Promise.all([
     ...removals.map((emoji) => client.request('DELETE', `/messages/${uuid}/reactions`, { emoji })),
     ...additions.map((emoji) => client.request('POST', `/messages/${uuid}/reactions`, { emoji })),
