@@ -5,15 +5,20 @@ export default function focusEditableElement(element: HTMLElement, force?: boole
     return;
   }
 
-  const selection = window.getSelection()!;
-  const range = document.createRange();
   const lastChild = element.lastChild || element;
 
-  if (!IS_TOUCH_ENV && !forcePlaceCaretAtEnd && (!lastChild || !lastChild.nodeValue)) {
-    element.focus();
+  element.focus();
+
+  const selection = window.getSelection();
+  if (!selection) {
     return;
   }
 
+  if (!IS_TOUCH_ENV && !forcePlaceCaretAtEnd && (!lastChild || !lastChild.nodeValue)) {
+    return;
+  }
+
+  const range = document.createRange();
   range.selectNodeContents(forcePlaceCaretAtEnd ? element : lastChild);
   // `false` means collapse to the end rather than the start
   range.collapse(false);

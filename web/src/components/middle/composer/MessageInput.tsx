@@ -31,6 +31,7 @@ import focusEditableElement from '../../../util/focusEditableElement';
 import { debounce, fastRaf } from '../../../util/schedulers';
 import renderText from '../../common/helpers/renderText';
 import { isSelectionInsideInput } from './helpers/selection';
+import syncContentEditableHtml from './helpers/syncContentEditableHtml';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useDerivedState from '../../../hooks/useDerivedState';
@@ -232,14 +233,17 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   const htmlRef = useRef(getHtml());
   useLayoutEffect(() => {
     const html = isActive ? getHtml() : '';
+    const input = inputRef.current!;
 
-    if (!isActive && inputRef.current) {
-      inputRef.current.blur();
+    if (!isActive && input) {
+      input.blur();
     }
 
-    if (html !== inputRef.current!.innerHTML) {
-      inputRef.current!.innerHTML = html;
-    }
+    syncContentEditableHtml({
+      element: input,
+      html,
+      inputId: editableInputId || EDITABLE_INPUT_ID,
+    });
 
     if (html !== cloneRef.current!.innerHTML) {
       cloneRef.current!.innerHTML = html;
