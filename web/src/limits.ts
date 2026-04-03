@@ -32,7 +32,7 @@ export const DEFAULT_LIMITS: Record<ApiLimitType, readonly [number, number]> = {
   chatlistJoined: [2, 20],
   recommendedChannels: [10, 100],
   savedDialogsPinned: [5, 100],
-  maxReactions: [1, 3],
+  maxReactions: [1, 1],
   moreAccounts: [3, MULTIACCOUNT_MAX_SLOTS],
 };
 

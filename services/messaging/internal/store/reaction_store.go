@@ -19,6 +19,8 @@ type ReactionStore interface {
 	Add(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	// Remove removes an emoji reaction from a message.
 	Remove(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	// RemoveAllByUser removes all reactions by a user from a message.
+	RemoveAllByUser(ctx context.Context, messageID, userID uuid.UUID) error
 	// ListByMessage returns all reactions for a message grouped by emoji.
 	ListByMessage(ctx context.Context, messageID uuid.UUID) ([]model.ReactionSummary, error)
 	// ListByMessageIDs returns grouped reactions for many messages in one query.
@@ -62,6 +64,18 @@ func (s *reactionStore) Remove(ctx context.Context, messageID, userID uuid.UUID,
 	)
 	if err != nil {
 		return fmt.Errorf("remove reaction: %w", err)
+	}
+	return nil
+}
+
+func (s *reactionStore) RemoveAllByUser(ctx context.Context, messageID, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM message_reactions
+		 WHERE message_id = $1 AND user_id = $2`,
+		messageID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("remove all reactions by user: %w", err)
 	}
 	return nil
 }

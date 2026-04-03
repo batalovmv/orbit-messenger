@@ -15,6 +15,7 @@ import (
 type mockReactionStore struct {
 	addFn                   func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	removeFn                func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	removeAllByUserFn       func(ctx context.Context, messageID, userID uuid.UUID) error
 	listByMessageFn         func(ctx context.Context, messageID uuid.UUID) ([]model.ReactionSummary, error)
 	listByMessageIDsFn      func(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.ReactionSummary, error)
 	listUsersByEmojiFn      func(ctx context.Context, messageID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error)
@@ -33,6 +34,13 @@ func (m *mockReactionStore) Add(ctx context.Context, messageID, userID uuid.UUID
 func (m *mockReactionStore) Remove(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
 	if m.removeFn != nil {
 		return m.removeFn(ctx, messageID, userID, emoji)
+	}
+	return nil
+}
+
+func (m *mockReactionStore) RemoveAllByUser(ctx context.Context, messageID, userID uuid.UUID) error {
+	if m.removeAllByUserFn != nil {
+		return m.removeAllByUserFn(ctx, messageID, userID)
 	}
 	return nil
 }
