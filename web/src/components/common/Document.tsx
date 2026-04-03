@@ -27,6 +27,7 @@ import useOldLang from '../../hooks/useOldLang';
 import Checkbox from '../ui/Checkbox';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import File from './File';
+import PdfViewer from './PdfViewer';
 
 type OwnProps = {
   document: ApiDocument;
@@ -82,6 +83,7 @@ const Document = ({
 
   const lang = useOldLang();
   const [isFileIpDialogOpen, openFileIpDialog, closeFileIpDialog] = useFlag();
+  const [isPdfViewerOpen, openPdfViewer, closePdfViewer] = useFlag();
   const [shouldNotWarnAboutFiles, setShouldNotWarnAboutFiles] = useState(false);
 
   const { fileName, size, mimeType } = document;
@@ -120,6 +122,17 @@ const Document = ({
   const thumbDataUri = hasPreview ? getMediaThumbUri(document) : undefined;
   const localBlobUrl = hasPreview ? document.previewBlobUrl : undefined;
   const previewData = useMedia(getDocumentMediaHash(document, 'pictogram'), !isIntersecting);
+
+  const isPdf = mimeType === 'application/pdf' || extension.toLowerCase() === 'pdf';
+  const [isPdfPendingOpen, setIsPdfPendingOpen] = useState(false);
+
+  // Auto-open PDF viewer once download completes after user click
+  useEffect(() => {
+    if (isPdf && isPdfPendingOpen && isLoaded && mediaData) {
+      setIsPdfPendingOpen(false);
+      openPdfViewer();
+    }
+  }, [isPdf, isPdfPendingOpen, isLoaded, mediaData, openPdfViewer]);
 
   const shouldForceDownload = document.innerMediaType === 'photo' && document.mediaSize
     && !document.mediaSize.fromDocumentAttribute && !document.mediaSize.fromPreload;
@@ -160,6 +173,17 @@ const Document = ({
 
     if (isTransferring) {
       setIsLoadAllowed(false);
+      return;
+    }
+
+    if (isPdf && isLoaded && mediaData) {
+      openPdfViewer();
+      return;
+    }
+
+    if (isPdf && !isLoaded) {
+      setIsLoadAllowed(true);
+      setIsPdfPendingOpen(true);
       return;
     }
 
@@ -209,10 +233,17 @@ const Document = ({
         sender={sender}
         isSelectable={isSelectable}
         isSelected={isSelected}
-        actionIcon={withMediaViewer ? (isDocumentVideo(document) ? 'play' : 'eye') : 'download'}
+        actionIcon={isPdf ? 'eye' : withMediaViewer ? (isDocumentVideo(document) ? 'play' : 'eye') : 'download'}
         onClick={handleClick}
         onDateClick={onDateClick ? handleDateClick : undefined}
       />
+      {isPdfViewerOpen && mediaData && (
+        <PdfViewer
+          url={mediaData}
+          fileName={fileName}
+          onClose={closePdfViewer}
+        />
+      )}
       <ConfirmDialog
         isOpen={isFileIpDialogOpen}
         onClose={closeFileIpDialog}

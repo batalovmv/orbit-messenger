@@ -1,11 +1,12 @@
 import type React from '../../../../lib/teact/teact';
-import { memo, useEffect, useRef } from '../../../../lib/teact/teact';
+import {
+  memo, useEffect, useRef, useState,
+} from '../../../../lib/teact/teact';
 import { getActions } from '../../../../global';
 
 import type {
   ApiPeer, ApiReaction, ApiReactionCount,
 } from '../../../../api/types';
-import type { GlobalState } from '../../../../global/types';
 import type { ObserveFn } from '../../../../hooks/useIntersectionObserver';
 
 import { isReactionChosen } from '../../../../global/helpers';
@@ -30,7 +31,6 @@ import Button from '../../../ui/Button';
 import styles from './ReactionButton.module.scss';
 
 const REACTION_SIZE = 1.25 * REM;
-const MAX_SCALE = 3;
 
 type OwnProps = {
   chatId: string;
@@ -47,7 +47,6 @@ type OwnProps = {
   onPaidClick?: (count: number) => void;
 };
 
-
 const ReactionButton = ({
   reaction,
   containerId,
@@ -62,18 +61,16 @@ const ReactionButton = ({
   onClick,
   onPaidClick,
 }: OwnProps) => {
-  const {
-    resetLocalPaidReactions,
-    requestWave,
-  } = getActions();
+  const { requestWave } = getActions();
   const ref = useRef<HTMLButtonElement>();
   const counterRef = useRef<HTMLSpanElement>();
-  const animationRef = useRef<Animation>();
+
+  const [isBouncing, setIsBouncing] = useState(false);
+  const [isCountBumping, setIsCountBumping] = useState(false);
 
   const lang = useLang();
 
   const isPaid = reaction.reaction.type === 'paid';
-
 
   const handlePaidClick = useLastCallback((count = 1) => {
     onPaidClick?.(count);
@@ -117,18 +114,18 @@ const ReactionButton = ({
       requestWave({ startX, startY });
     }
 
-    const currentScale = Number(getComputedStyle(button).scale) || 1;
-    animationRef.current?.cancel();
-    // Animate scaling by 20%, and then returning to 1
-    animationRef.current = button.animate([
-      { scale: currentScale },
-      { scale: Math.min(currentScale * 1.2, MAX_SCALE), offset: 0.2 },
-      { scale: 1 },
-    ], {
-      duration: 500 * currentScale,
-      easing: 'ease-out',
-    });
+    setIsBouncing(true);
+    setIsCountBumping(true);
   }, [reaction, chatId, messageId]);
+
+  useEffect(() => {
+    if (!isBouncing) return undefined;
+    const timer = setTimeout(() => {
+      setIsBouncing(false);
+      setIsCountBumping(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [isBouncing]);
 
   const prevAmount = usePrevious(reaction.localAmount);
 
@@ -145,11 +142,13 @@ const ReactionButton = ({
     <Button
       className={buildClassName(
         styles.root,
+        styles.popIn,
         isOwnMessage && styles.own,
         isPaid && styles.paid,
         isOutside && styles.outside,
         isReactionChosen(reaction) && styles.chosen,
         isReactionChosen(reaction) && chosenClassName,
+        isBouncing && styles.bounce,
         className,
       )}
       size="tiny"
@@ -191,7 +190,7 @@ const ReactionButton = ({
       ) : (
         <AnimatedCounter
           text={formatIntegerCompact(lang, reaction.count + (reaction.localAmount || 0))}
-          className={styles.counter}
+          className={buildClassName(styles.counter, isCountBumping && styles.countBump)}
         />
       )}
     </Button>

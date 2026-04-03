@@ -15,14 +15,13 @@ import type {
 import type { IAnchorPosition } from '../../../../types';
 import { MAIN_THREAD_ID } from '../../../../api/types';
 
-import { getReactionKey, getStoryKey } from '../../../../global/helpers';
+import { getReactionKey } from '../../../../global/helpers';
 import {
   selectChat,
   selectChatFullInfo,
   selectChatMessage,
   selectIsContextMenuTranslucent,
   selectIsCurrentUserPremium,
-
   selectTabState,
 } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
@@ -152,8 +151,6 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   const handleStoryReactionSelect = useLastCallback((item: ApiReactionWithPaid | ApiSticker) => {
     if ('type' in item && item.type === 'paid') return; // Not supported for stories
 
-    const reaction = 'id' in item ? { type: 'custom', documentId: item.id } as const : item;
-
     const sticker = 'type' in item && item.type === 'custom' ? getGlobal().customEmojis.byId[item.documentId]
       : 'id' in item ? item : undefined;
 
@@ -171,7 +168,6 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
 
       return;
     }
-
 
     let text: string | undefined;
     let entities: ApiMessageEntity[] | undefined;

@@ -53,7 +53,7 @@ type OwnProps = {
 
 const cn = createClassNameBuilder('ReactionSelector');
 const REACTIONS_AMOUNT = 7;
-const FADE_IN_DELAY = 20;
+const FADE_IN_DELAY = 30;
 
 const ReactionSelector: FC<OwnProps> = ({
   allAvailableReactions,
@@ -196,6 +196,7 @@ const ReactionSelector: FC<OwnProps> = ({
                   noAppearAnimation={!canPlayAnimatedEmojis}
                   chosen={userReactionIndexes.has(i)}
                   isLocked={areReactionsLocked}
+                  style={`--_appear-delay: ${i * FADE_IN_DELAY}ms`}
                 />
               ) : (
                 <ReactionSelectorCustomReaction

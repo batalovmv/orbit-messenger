@@ -1,5 +1,5 @@
 import type {
-  ApiMediaExtendedPreview, ApiMessage, ApiReactions,
+  ApiChat, ApiMediaExtendedPreview, ApiMessage, ApiReactions,
   MediaContent,
 } from '../../../api/types';
 import type { ActiveEmojiInteraction, ThreadId } from '../../../types';
@@ -17,7 +17,7 @@ import {
   buildCollectionByKey, omit, unique,
 } from '../../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
-import { notifyAboutMessage } from '../../../util/notifications';
+import { notifyAboutMessage, playNotifySoundDebounced } from '../../../util/notifications';
 import { onTickEnd } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { callApi } from '../../../api/saturn';
@@ -32,6 +32,10 @@ import {
   isActionMessage,
   isMessageLocal,
 } from '../../helpers';
+import {
+  getIsChatMuted,
+  getIsChatSilent,
+} from '../../helpers/notifications';
 import { getMessageReplyInfo, getStoryReplyInfo } from '../../helpers/replies';
 import {
   addActionHandler,
@@ -43,6 +47,7 @@ import {
   addViewportId,
   clearMessageSummary,
   clearMessageTranslation,
+  clearUploadByMessage,
   deleteChatMessages,
   deleteChatScheduledMessages,
   deletePeerPhoto,
@@ -51,6 +56,7 @@ import {
   deleteTopic,
   removeChatFromChatLists,
   replaceWebPage,
+  updateChat,
   updateChatLastMessageId,
   updateChatMediaLoadingState,
   updateChatMessage,
@@ -89,10 +95,13 @@ import {
   selectIsServiceChatReady,
   selectIsViewportNewest,
   selectListedIds,
+  selectNotifyDefaults,
+  selectNotifyException,
   selectPerformanceSettingsValue,
   selectPinnedIds,
   selectScheduledIds,
   selectScheduledMessage,
+  selectSettingsKeys,
   selectTabState,
   selectTopic,
   selectTopicFromMessage,
@@ -202,6 +211,32 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       setGlobal(global);
+
+      if (!isLocal && !newMessage.isOutgoing) {
+        onTickEnd(() => {
+          const currentGlobal = getGlobal();
+          const currentChat = selectChat(currentGlobal, chatId);
+          const currentMessage = selectChatMessage(currentGlobal, chatId, id);
+
+          if (!currentChat || !currentMessage) {
+            return;
+          }
+
+          if (!shouldShowInAppNotificationBanner(currentGlobal, currentChat, currentMessage)) {
+            return;
+          }
+
+          actions.showNotificationBanner({
+            chatId,
+            messageId: currentMessage.id,
+            tabId: getCurrentTabId(),
+          });
+
+          if (shouldPlayInAppNotificationBannerSound(currentGlobal, currentChat, currentMessage)) {
+            playNotifySoundDebounced(String(currentMessage.id));
+          }
+        });
+      }
 
       // Reload dialogs if chat is not present in the list
       if (!isLocal && !chat?.isNotJoined && !selectIsChatListed(global, chatId)) {
@@ -441,6 +476,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       } = update;
 
       global = deleteChatMessages(global, chatId, [localId]);
+      global = clearUploadByMessage(global, {
+        chatId,
+        id: localId,
+      });
       global = updatePeerFullInfo(global, chatId, {
         hasScheduledMessages: true,
       });
@@ -505,12 +544,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.id, poll);
       }
 
-      global = {
-        ...global,
-        fileUploads: {
-          byMessageKey: omit(global.fileUploads.byMessageKey, [getMessageKey(message)]),
-        },
-      };
+      global = clearUploadByMessage(global, message, localId);
 
       const newMessage = selectChatMessage(global, chatId, message.id)!;
       global = updateChatLastMessage(global, chatId, newMessage);
@@ -581,6 +615,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (poll) {
         global = updatePoll(global, poll.id, poll);
       }
+
+      global = clearUploadByMessage(global, message, localId);
 
       setGlobal(global);
       break;
@@ -1077,6 +1113,73 @@ function updateReactions<T extends GlobalState>(
   return global;
 }
 
+function shouldShowInAppNotificationBanner<T extends GlobalState>(
+  global: T,
+  chat: ApiChat,
+  message: ApiMessage,
+) {
+  if (!document.hasFocus()) {
+    return false;
+  }
+
+  const currentChatId = selectCurrentMessageList(global, getCurrentTabId())?.chatId;
+  if (!currentChatId || currentChatId === chat.id) {
+    return false;
+  }
+
+  return shouldNotifyAboutIncomingMessage(global, chat, message);
+}
+
+function shouldPlayInAppNotificationBannerSound<T extends GlobalState>(
+  global: T,
+  chat: ApiChat,
+  message: ApiMessage,
+) {
+  if (!shouldNotifyAboutIncomingMessage(global, chat, message)) {
+    return false;
+  }
+
+  const { notificationSoundVolume } = selectSettingsKeys(global);
+  if (!notificationSoundVolume) {
+    return false;
+  }
+
+  const isChatSilent = getIsChatSilent(
+    chat,
+    selectNotifyDefaults(global),
+    selectNotifyException(global, chat.id),
+  );
+  const topic = selectTopicFromMessage(global, message);
+  const isSilent = topic?.notifySettings.hasSound === undefined ? isChatSilent : !topic.notifySettings.hasSound;
+
+  return !isSilent && !message.isSilent;
+}
+
+function shouldNotifyAboutIncomingMessage<T extends GlobalState>(
+  global: T,
+  chat: ApiChat,
+  message: ApiMessage,
+) {
+  const isChatMuted = getIsChatMuted(
+    chat,
+    selectNotifyDefaults(global),
+    selectNotifyException(global, chat.id),
+  );
+  const topic = selectTopicFromMessage(global, message);
+  const topicMutedUntil = topic?.notifySettings.mutedUntil;
+  const isMuted = topicMutedUntil === undefined ? isChatMuted : topicMutedUntil > getServerTime();
+  const shouldIgnoreMute = Boolean(message.isMentioned || message.hasUnreadMention);
+  const shouldNotifyAboutMessage = message.content?.action?.type !== 'phoneCall';
+
+  return !(
+    (isMuted && !shouldIgnoreMute)
+    || !shouldNotifyAboutMessage
+    || chat.isNotJoined
+    || !chat.isListed
+    || selectIsChatWithSelf(global, chat.id)
+  );
+}
+
 export function updateWithLocalMedia(
   global: RequiredGlobalState,
   chatId: string,
@@ -1202,6 +1305,7 @@ function updateChatLastMessage<T extends GlobalState>(
     }
   }
 
+  global = updateChat(global, chatId, { lastMessage: message });
   global = updateChatLastMessageId(global, chatId, message.id);
 
   return global;
@@ -1413,5 +1517,25 @@ function deleteScheduledMessages<T extends GlobalState>(
     global = getGlobal();
     global = deleteChatScheduledMessages(global, chatId, ids);
     setGlobal(global);
+
+    global = getGlobal();
+    Object.values(global.byTabId).forEach(({ id: tabId }) => {
+      const currentMessageList = selectCurrentMessageList(global, tabId);
+      if (!currentMessageList || currentMessageList.chatId !== chatId || currentMessageList.type !== 'scheduled') {
+        return;
+      }
+
+      if (selectScheduledIds(global, chatId, currentMessageList.threadId)?.length) {
+        return;
+      }
+
+      actions.openThread({
+        chatId,
+        threadId: currentMessageList.threadId,
+        type: 'thread',
+        shouldReplaceLast: true,
+        tabId,
+      });
+    });
   }, isAnimatingAsSnap ? SNAP_ANIMATION_DELAY : ANIMATION_DELAY);
 }

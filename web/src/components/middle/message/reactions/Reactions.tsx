@@ -79,14 +79,14 @@ const Reactions: FC<OwnProps> = ({
 
     return recentReactions?.reduce((acc, recentReaction) => {
       const { reaction, peerId } = recentReaction;
-      const key = getReactionKey(reaction);
+      const reactionKey = getReactionKey(reaction);
       const peer = selectPeer(global, peerId);
 
       if (!peer) return acc;
 
-      const peers = acc[key] || [];
+      const peers = acc[reactionKey] || [];
       peers.push(peer);
-      acc[key] = peers;
+      acc[reactionKey] = peers;
       return acc;
     }, {} as Record<ApiReactionKey, ApiPeer[]>);
   }, [recentReactions]);

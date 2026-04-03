@@ -22,6 +22,7 @@ type OwnProps = {
   chosen?: boolean;
   noAppearAnimation?: boolean;
   isLocked?: boolean;
+  style?: string;
   onToggleReaction: (reaction: ApiReaction) => void;
 };
 
@@ -31,14 +32,23 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
   noAppearAnimation,
   chosen,
   isLocked,
+  style,
   onToggleReaction,
 }) => {
   const hasAnimatedAppear = Boolean(reaction.appearAnimation?.id);
   const hasAnimatedSelect = Boolean(reaction.selectAnimation?.id);
+  const staticIconThumbDataUri = reaction.staticIcon?.thumbnail?.dataUri;
   const shouldUseStaticIcon = noAppearAnimation || !hasAnimatedAppear || !hasAnimatedSelect;
+  const shouldUseEmojiFallback = shouldUseStaticIcon && reaction.reaction.type === 'emoji';
+  const shouldLoadStaticIcon = Boolean(
+    shouldUseStaticIcon && !shouldUseEmojiFallback && reaction.staticIcon?.id && !staticIconThumbDataUri,
+  );
   const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || shouldUseStaticIcon);
   const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || shouldUseStaticIcon);
-  const staticIconData = useMedia(`document${reaction.staticIcon?.id}`, !shouldUseStaticIcon);
+  const staticIconData = useMedia(
+    shouldLoadStaticIcon ? `document${reaction.staticIcon?.id}` : undefined,
+    !isReady || !shouldLoadStaticIcon,
+  );
   const [isAnimationLoaded, markAnimationLoaded] = useFlag();
 
   const [isFirstPlay, , unmarkIsFirstPlay] = useFlag(true);
@@ -53,11 +63,17 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
       className={buildClassName(styles.root, chosen && styles.chosen)}
       onClick={handleClick}
       onMouseEnter={isReady && !isFirstPlay ? activate : undefined}
+      style={style}
     >
-      {shouldUseStaticIcon && (
+      {shouldUseEmojiFallback && (
+        <span className={styles.emojiFallback} aria-hidden="true">
+          {reaction.reaction.emoticon}
+        </span>
+      )}
+      {shouldUseStaticIcon && !shouldUseEmojiFallback && (
         <img
           className={styles.staticIcon}
-          src={staticIconData}
+          src={staticIconThumbDataUri || staticIconData}
           alt={reaction.reaction.emoticon}
           draggable={false}
         />

@@ -57,14 +57,16 @@ const ReactionEmoji: FC<OwnProps> = ({
   const animationId = availableReaction?.selectAnimation?.id;
   const staticIcon = availableReaction?.staticIcon;
   const staticIconId = staticIcon?.id;
+  const shouldUseEmojiFallback = reaction.type === 'emoji' && !animationId;
+  const shouldLoadStaticIcon = Boolean(!shouldUseEmojiFallback && staticIconId && !thumbDataUri);
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
     availableReaction?.selectAnimation ? getDocumentMediaHash(availableReaction.selectAnimation, 'full') : undefined,
     !animationId,
   );
   const staticIconData = useMedia(
-    staticIconId ? getDocumentMediaHash(staticIcon, 'full') : undefined,
-    !staticIconId,
+    shouldLoadStaticIcon && staticIcon ? getDocumentMediaHash(staticIcon, 'full') : undefined,
+    !shouldLoadStaticIcon,
   );
 
   const {
@@ -85,7 +87,8 @@ const ReactionEmoji: FC<OwnProps> = ({
   }, [handleContextMenuClose, onContextMenu, handleContextMenuHide, isContextMenuOpen, reaction]);
 
   const tgsUrl = reaction.type === 'paid' ? LOCAL_TGS_URLS.StarReaction : mediaData;
-  const shouldUseStaticIcon = reaction.type !== 'paid' && !animationId && Boolean(staticIconData || thumbDataUri);
+  const shouldUseStaticIcon = reaction.type !== 'paid' && !shouldUseEmojiFallback && !animationId
+    && Boolean(staticIconData || thumbDataUri);
   const handleClick = useLastCallback(() => {
     onClick(reaction);
   });
@@ -119,6 +122,10 @@ const ReactionEmoji: FC<OwnProps> = ({
           withTranslucentThumb
           forceAlways={forcePlayback}
         />
+      ) : shouldUseEmojiFallback ? (
+        <span className={styles.emojiFallback} aria-hidden="true">
+          {reaction.emoticon}
+        </span>
       ) : (
         shouldUseStaticIcon ? (
           <img

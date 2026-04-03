@@ -25,4 +25,17 @@
       transform: scale(2);
     }
   }
+
+  .emoji-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 100%;
+    height: 100%;
+
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    font-size: 85%;
+    line-height: 1;
+  }
 }

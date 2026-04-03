@@ -45,7 +45,6 @@ addActionHandler('openMessageReactionPicker', (global, actions, payload): Action
   }, tabId);
 });
 
-
 addActionHandler('openEffectPicker', (global, actions, payload): ActionReturnType => {
   const {
     position,

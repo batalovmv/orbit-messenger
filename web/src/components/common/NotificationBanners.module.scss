@@ -1,0 +1,15 @@
+.root {
+  pointer-events: none;
+
+  position: fixed;
+  z-index: var(--z-notification);
+  top: max(0.75rem, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  width: min(28rem, calc(100vw - 1rem));
+}

@@ -39,8 +39,10 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
     availableReactions?.find((available) => isSameReaction(available.reaction, reaction))
   ), [availableReactions, reaction]);
   const staticIcon = availableReaction?.staticIcon;
+  const shouldUseEmojiFallback = reaction.type === 'emoji' && !availableReaction?.centerIcon?.id
+    && !availableReaction?.selectAnimation?.id;
   const staticIconId = staticIcon?.id;
-  const mediaHash = staticIconId ? `document${staticIconId}` : undefined;
+  const mediaHash = !shouldUseEmojiFallback && staticIconId ? `document${staticIconId}` : undefined;
   const cacheBuster = availableReaction?.isLocalCache ? 0 : 1;
   const mediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
   const thumbDataUri = useThumbnail(staticIcon?.thumbnail);
@@ -77,20 +79,29 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
       className={buildClassName('ReactionStaticEmoji', className)}
       style={size ? `width: ${size}px; height: ${size}px` : undefined}
     >
-      <img
-        ref={thumbRef}
-        className="thumb"
-        src={thumbDataUri}
-        alt=""
-        draggable={false}
-      />
-      <img
-        ref={mediaRef}
-        className={buildClassName('media', shouldApplySizeFix && 'with-unicorn-fix')}
-        src={mediaData || blankUrl}
-        alt={availableReaction?.title}
-        draggable={false}
-      />
+      {shouldUseEmojiFallback && (
+        <span className="emoji-fallback" aria-hidden="true">
+          {reaction.emoticon}
+        </span>
+      )}
+      {!shouldUseEmojiFallback && (
+        <>
+          <img
+            ref={thumbRef}
+            className="thumb"
+            src={thumbDataUri}
+            alt=""
+            draggable={false}
+          />
+          <img
+            ref={mediaRef}
+            className={buildClassName('media', shouldApplySizeFix && 'with-unicorn-fix')}
+            src={mediaData || blankUrl}
+            alt={availableReaction?.title}
+            draggable={false}
+          />
+        </>
+      )}
     </div>
   );
 };
