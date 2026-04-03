@@ -9,6 +9,12 @@ import type {
 } from '../../api/types';
 import type { GlobalState } from '../types';
 
+import { removeVS16s } from '../../lib/twemojiRegex';
+
+export function normalizeReactionEmoticon(emoticon: string) {
+  return removeVS16s(emoticon);
+}
+
 export function getMessageRecentReaction(message: Partial<ApiMessage>) {
   return message.isOutgoing ? message.reactions?.recentReactions?.[0] : undefined;
 }
@@ -26,7 +32,7 @@ export function areReactionsEmpty(reactions: ApiReactions) {
 export function getReactionKey(reaction: ApiReactionWithPaid): ApiReactionKey {
   switch (reaction.type) {
     case 'emoji':
-      return `emoji-${reaction.emoticon}`;
+      return `emoji-${normalizeReactionEmoticon(reaction.emoticon)}`;
     case 'custom':
       return `document-${reaction.documentId}`;
     case 'paid':

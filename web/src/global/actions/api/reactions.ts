@@ -1,6 +1,5 @@
 import type {
-  ApiAvailableEffect, ApiMessage, ApiReactionEmoji,
-  ApiSavedReactionTag, ApiSticker, ApiTopicWithState,
+  ApiAvailableEffect, ApiMessage, ApiReactionEmoji, ApiSticker, ApiTopicWithState,
 } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 import { ApiMediaFormat, MAIN_THREAD_ID } from '../../../api/types';
@@ -61,6 +60,10 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
 
   // Preload animations
   result.forEach((availableReaction) => {
+    if (availableReaction.isLocalCache) {
+      return;
+    }
+
     if (availableReaction.aroundAnimation) {
       mediaLoader.fetch(`sticker${availableReaction.aroundAnimation.id}`, ApiMediaFormat.BlobUrl);
     }
@@ -600,7 +603,7 @@ addActionHandler('loadSavedReactionTags', async (global): Promise<void> => {
   global = getGlobal();
 
   const tagsByKey = buildCollectionByCallback(
-    result.tags as ApiSavedReactionTag[],
+    result.tags,
     (tag) => ([getReactionKey(tag.reaction), tag]),
   );
 

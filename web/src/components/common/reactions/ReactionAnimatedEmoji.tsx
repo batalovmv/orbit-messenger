@@ -81,18 +81,28 @@ const ReactionAnimatedEmoji = ({
   const availableReaction = useMemo(() => (
     availableReactions?.find((r) => isSameReaction(r.reaction, reaction))
   ), [availableReactions, reaction]);
-  const centerIconId = availableReaction?.centerIcon?.id;
+  const hasLocalFallbackAnimation = Boolean(availableReaction?.isLocalCache);
+  const centerIconId = hasLocalFallbackAnimation ? undefined : availableReaction?.centerIcon?.id;
 
   const { customEmoji } = useCustomEmoji(isCustom ? reaction.documentId : undefined);
 
   const assignedEffectId = useMemo(() => {
-    if (!isCustom) return availableReaction?.aroundAnimation?.id;
+    if (!isCustom) {
+      return hasLocalFallbackAnimation ? undefined : availableReaction?.aroundAnimation?.id;
+    }
 
     if (!customEmoji) return undefined;
-    const assignedId = availableReactions?.find((available) => available.reaction.emoticon === customEmoji.emoji)
-      ?.aroundAnimation?.id;
+
+    const matchingAvailableReaction = availableReactions?.find((available) => isSameReaction(available.reaction, {
+      type: 'emoji',
+      emoticon: customEmoji.emoji,
+    }));
+    const assignedId = matchingAvailableReaction && !matchingAvailableReaction.isLocalCache
+      ? matchingAvailableReaction.aroundAnimation?.id
+      : undefined;
+
     return assignedId;
-  }, [availableReaction, availableReactions, customEmoji, isCustom]);
+  }, [availableReaction, availableReactions, customEmoji, hasLocalFallbackAnimation, isCustom]);
 
   const effectId = useMemo(() => {
     if (assignedEffectId) {

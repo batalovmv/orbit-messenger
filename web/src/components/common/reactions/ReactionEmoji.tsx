@@ -55,12 +55,14 @@ const ReactionEmoji: FC<OwnProps> = ({
     availableReactions?.find((available) => isSameReaction(available.reaction, reaction))
   ), [availableReactions, reaction]);
   const thumbDataUri = availableReaction?.staticIcon?.thumbnail?.dataUri;
-  const animationId = availableReaction?.selectAnimation?.id;
-  const shouldUseStaticReaction = reaction.type === 'emoji' && !animationId;
+  const hasAnimatedReaction = Boolean(availableReaction?.selectAnimation?.id) && !availableReaction?.isLocalCache;
+  const shouldUseStaticReaction = reaction.type === 'emoji' && !hasAnimatedReaction;
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
-    availableReaction?.selectAnimation ? getDocumentMediaHash(availableReaction.selectAnimation, 'full') : undefined,
-    !animationId,
+    hasAnimatedReaction && availableReaction?.selectAnimation
+      ? getDocumentMediaHash(availableReaction.selectAnimation, 'full')
+      : undefined,
+    !hasAnimatedReaction,
   );
 
   const {

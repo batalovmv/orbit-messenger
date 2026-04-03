@@ -4,7 +4,7 @@ import { memo, useMemo } from '../../../lib/teact/teact';
 import type { ApiAvailableReaction, ApiReaction } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
-import { isSameReaction } from '../../../global/helpers';
+import { isSameReaction, normalizeReactionEmoticon } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
 import { getEmojiImagePath } from '../../../util/emoji/emoji';
 
@@ -61,7 +61,9 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
   });
 
   const shouldApplySizeFix = reaction.type === 'emoji' && reaction.emoticon === '🦄';
-  const shouldReplaceWithHeartIcon = withIconHeart && reaction.type === 'emoji' && reaction.emoticon === '❤';
+  const shouldReplaceWithHeartIcon = withIconHeart
+    && reaction.type === 'emoji'
+    && normalizeReactionEmoticon(reaction.emoticon) === '❤';
 
   if (reaction.type === 'custom') {
     return (
