@@ -696,7 +696,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 8 (Frontend polish follow-up): локальные animated reaction assets подключены в Saturn fallback, composer GIF tab получил trending + inline search, saved reaction tags получили localStorage fallback
 - [x] Шаг 8.2 (Search polish): middle search получил фильтры по типу сообщения, дате и отправителю; `/search` принимает alias-параметры `from/after/before` и типы `links/files`; клик по `#hashtag` открывает чистый поиск по тегу
 - [x] Шаг 8.1 (Reaction emoji parity): picker / reaction bubbles / selector используют Apple-style emoji-data-ios assets для static reaction render, Unicode fallback остаётся только для неподдержанных glyphs
-- [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI подогнан под TG Web A (radio/checkbox до голосования, общая кнопка Vote, толстые result bars), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
+- [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI приведён к TG Web A 1-в-1 (radio/checkbox до голосования, оригинальные spacing/result lines/button), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
 
 ### Проработка (Шаг 0)
@@ -718,6 +718,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] POST /messages/:id/reactions — добавить
 - [x] DELETE /messages/:id/reactions — удалить
 - [x] GET /messages/:id/reactions — список
+- [x] GET /messages/:id/reactions/users — список реакторов с optional emoji filter + pagination
 - [x] PUT /chats/:id/available-reactions — настроить доступные
 
 **Стикеры:**
@@ -798,6 +799,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Custom emoji в имени/статусе — бесплатно
 - [x] Animated emoji — бесплатно
 - [x] Все стикер-паки — бесплатно
+- [x] Saturn custom emoji document lookup + frontend render guards for added emoji picker/composer
 - [x] Extended upload limits — бесплатно
 - [x] Emoji status — бесплатно
 

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"testing"
@@ -134,6 +136,75 @@ func TestListReactions_InvalidMessageID(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestListReactionUsers_AllReactions_OptionalEmoji(t *testing.T) {
+	msgID := uuid.New()
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	app := newReactionApp(&mockReactionStore{
+		listUsersByEmojiFn: func(ctx context.Context, messageID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error) {
+			if messageID != msgID {
+				t.Fatalf("unexpected message id: %s", messageID)
+			}
+			if emoji != "" {
+				t.Fatalf("expected empty emoji filter, got %q", emoji)
+			}
+			if cursor != "cursor-1" {
+				t.Fatalf("expected cursor-1, got %q", cursor)
+			}
+			if limit != 25 {
+				t.Fatalf("expected limit 25, got %d", limit)
+			}
+
+			return []model.Reaction{{
+				MessageID:   msgID,
+				UserID:      userID,
+				Emoji:       "👍",
+				DisplayName: "Orbit QA",
+			}}, "cursor-2", true, nil
+		},
+	}, &mockMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID}, nil
+		},
+	}, &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/messages/"+msgID.String()+"/reactions/users?cursor=cursor-1&limit=25", nil)
+	req.Header.Set("X-User-ID", userID.String())
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []model.Reaction `json:"data"`
+		Cursor  string           `json:"cursor"`
+		HasMore bool             `json:"has_more"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Data) != 1 {
+		t.Fatalf("expected 1 reaction, got %d", len(body.Data))
+	}
+	if body.Data[0].Emoji != "👍" {
+		t.Fatalf("expected 👍 emoji, got %q", body.Data[0].Emoji)
+	}
+	if body.Cursor != "cursor-2" {
+		t.Fatalf("expected cursor cursor-2, got %q", body.Cursor)
+	}
+	if !body.HasMore {
+		t.Fatal("expected has_more to be true")
 	}
 }
 

@@ -135,12 +135,9 @@ func (s *ReactionService) ListReactions(ctx context.Context, messageID, userID u
 	return reactions, nil
 }
 
-// ListReactionUsers returns users who reacted with a specific emoji.
+// ListReactionUsers returns users who reacted to a message, optionally filtered by emoji.
 func (s *ReactionService) ListReactionUsers(ctx context.Context, messageID, userID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error) {
 	emoji = strings.TrimSpace(emoji)
-	if emoji == "" {
-		return nil, "", false, apperror.BadRequest("Emoji is required")
-	}
 
 	if _, err := s.getAccessibleMessage(ctx, messageID, userID); err != nil {
 		return nil, "", false, err

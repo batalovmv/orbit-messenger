@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -272,4 +273,65 @@ func TestListReactions_NotMember(t *testing.T) {
 
 	_, err := svc.ListReactions(context.Background(), msgID, userID)
 	reactionAssertAppError(t, err, 403)
+}
+
+func TestListReactionUsers_AllReactions_AllowsEmptyEmoji(t *testing.T) {
+	chatID := uuid.New()
+	msgID := uuid.New()
+	userID := uuid.New()
+	expectedCreatedAt := time.Now().UTC()
+
+	ms := &mockMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID}, nil
+		},
+	}
+	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+	}
+	rs := &mockReactionStore{
+		listUsersByEmojiFn: func(ctx context.Context, messageID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error) {
+			if messageID != msgID {
+				t.Fatalf("unexpected message id: %s", messageID)
+			}
+			if emoji != "" {
+				t.Fatalf("expected empty emoji filter, got %q", emoji)
+			}
+			if cursor != "cursor-1" {
+				t.Fatalf("expected cursor-1, got %q", cursor)
+			}
+			if limit != 25 {
+				t.Fatalf("expected limit 25, got %d", limit)
+			}
+
+			return []model.Reaction{{
+				MessageID:   msgID,
+				UserID:      userID,
+				Emoji:       "👍",
+				CreatedAt:   expectedCreatedAt,
+				DisplayName: "Orbit QA",
+			}}, "cursor-2", true, nil
+		},
+	}
+	rec := &RecordingPublisher{}
+	svc := newTestReactionService(rs, ms, cs, rec)
+
+	reactions, nextCursor, hasMore, err := svc.ListReactionUsers(context.Background(), msgID, userID, "", "cursor-1", 25)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if len(reactions) != 1 {
+		t.Fatalf("expected 1 reaction, got %d", len(reactions))
+	}
+	if reactions[0].Emoji != "👍" {
+		t.Fatalf("expected 👍 emoji, got %q", reactions[0].Emoji)
+	}
+	if nextCursor != "cursor-2" {
+		t.Fatalf("expected next cursor cursor-2, got %q", nextCursor)
+	}
+	if !hasMore {
+		t.Fatal("expected hasMore to be true")
+	}
 }

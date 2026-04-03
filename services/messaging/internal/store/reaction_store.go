@@ -25,7 +25,7 @@ type ReactionStore interface {
 	ListByMessage(ctx context.Context, messageID uuid.UUID) ([]model.ReactionSummary, error)
 	// ListByMessageIDs returns grouped reactions for many messages in one query.
 	ListByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.ReactionSummary, error)
-	// ListUsersByEmoji returns users who reacted with a specific emoji, with pagination.
+	// ListUsersByEmoji returns users who reacted to a message, optionally filtered by emoji, with pagination.
 	ListUsersByEmoji(ctx context.Context, messageID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error)
 	// CountByMessage returns total reaction count for a message.
 	CountByMessage(ctx context.Context, messageID uuid.UUID) (int, error)
@@ -152,22 +152,32 @@ func (s *reactionStore) ListUsersByEmoji(ctx context.Context, messageID uuid.UUI
 		return nil, "", false, fmt.Errorf("decode reaction cursor: %w", err)
 	}
 
-	rows, err := s.pool.Query(ctx,
-		`SELECT mr.message_id, mr.user_id, mr.emoji, mr.created_at,
-		        COALESCE(u.display_name, '') AS display_name, u.avatar_url
-		 FROM message_reactions mr
-		 JOIN users u ON u.id = mr.user_id
-		 WHERE mr.message_id = $1
-		   AND mr.emoji = $2
-		   AND (
-		     $3::timestamptz IS NULL
-		     OR mr.created_at < $3
-		     OR (mr.created_at = $3 AND mr.user_id < $4::uuid)
-		   )
-		 ORDER BY mr.created_at DESC, mr.user_id DESC
-		 LIMIT $5`,
-		messageID, emoji, cursorCreatedAt, cursorUserID, limit+1,
-	)
+	query := `SELECT mr.message_id, mr.user_id, mr.emoji, mr.created_at,
+	        COALESCE(u.display_name, '') AS display_name, u.avatar_url
+	 FROM message_reactions mr
+	 JOIN users u ON u.id = mr.user_id
+	 WHERE mr.message_id = $1
+	   AND (
+	     $2::timestamptz IS NULL
+	     OR mr.created_at < $2
+	     OR (mr.created_at = $2 AND mr.user_id < $3::uuid)
+	   )`
+	args := []any{messageID, cursorCreatedAt, cursorUserID}
+
+	if emoji != "" {
+		query += `
+	   AND mr.emoji = $4
+	 ORDER BY mr.created_at DESC, mr.user_id DESC
+	 LIMIT $5`
+		args = append(args, emoji, limit+1)
+	} else {
+		query += `
+	 ORDER BY mr.created_at DESC, mr.user_id DESC
+	 LIMIT $4`
+		args = append(args, limit+1)
+	}
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, "", false, fmt.Errorf("list reaction users by emoji: %w", err)
 	}

@@ -34,6 +34,7 @@ import useScrollNotch from '../../hooks/useScrollNotch';
 import Avatar from '../common/Avatar';
 import FullNameTitle from '../common/FullNameTitle';
 import Icon from '../common/icons/Icon';
+import NothingFound from '../common/NothingFound';
 import PrivateChatInfo from '../common/PrivateChatInfo';
 import ReactionStaticEmoji from '../common/reactions/ReactionStaticEmoji';
 import Button from '../ui/Button';
@@ -103,6 +104,17 @@ const ReactorListModal: FC<OwnProps & StateProps> = ({
     }
   }, [isClosing, isOpen, stopClosing]);
 
+  useEffect(() => {
+    if (!isOpen || isClosing || !chatId || !messageId || reactors) {
+      return;
+    }
+
+    loadReactors({
+      chatId,
+      messageId,
+    });
+  }, [chatId, isClosing, isOpen, loadReactors, messageId, reactors]);
+
   const handleCloseAnimationEnd = useLastCallback(() => {
     if (chatIdRef.current) {
       openChat({ id: chatIdRef.current });
@@ -120,9 +132,13 @@ const ReactorListModal: FC<OwnProps & StateProps> = ({
   });
 
   const handleLoadMore = useLastCallback(() => {
+    if (!chatId || !messageId || !reactors?.nextOffset) {
+      return;
+    }
+
     loadReactors({
-      chatId: chatId!,
-      messageId: messageId!,
+      chatId,
+      messageId,
     });
   });
 
@@ -246,35 +262,37 @@ const ReactorListModal: FC<OwnProps & StateProps> = ({
                   const items: React.ReactNode[] = [];
                   const seenByUser = seenByDates?.[peerId];
 
-                  peerReactions?.forEach((r) => {
-                    if (chosenTab && !isSameReaction(r.reaction, chosenTab)) return;
+                  if (peer) {
+                    peerReactions?.forEach((r) => {
+                      if (chosenTab && !isSameReaction(r.reaction, chosenTab)) return;
 
-                    items.push(
-                      <ListItem
-                        key={`${peerId}-${getReactionKey(r.reaction)}`}
-                        className="chat-item-clickable reactors-list-item"
+                      items.push(
+                        <ListItem
+                          key={`${peerId}-${getReactionKey(r.reaction)}`}
+                          className="chat-item-clickable reactors-list-item"
 
-                        onClick={() => handleClick(peerId)}
-                      >
-                        <Avatar peer={peer} size="medium" />
-                        <div className="info">
-                          <FullNameTitle peer={peer} withEmojiStatus />
-                          <span className="status" dir="auto">
-                            <Icon name="heart-outline" className="status-icon" />
-                            {formatDateAtTime(oldLang, r.addedDate * 1000)}
-                          </span>
-                        </div>
-                        {r.reaction && (
-                          <ReactionStaticEmoji
-                            className="reactors-list-emoji"
-                            reaction={r.reaction}
-                            availableReactions={availableReactions}
-                            size={DEFAULT_REACTION_SIZE}
-                          />
-                        )}
-                      </ListItem>,
-                    );
-                  });
+                          onClick={() => handleClick(peerId)}
+                        >
+                          <Avatar peer={peer} size="medium" />
+                          <div className="info">
+                            <FullNameTitle peer={peer} withEmojiStatus />
+                            <span className="status" dir="auto">
+                              <Icon name="heart-outline" className="status-icon" />
+                              {formatDateAtTime(oldLang, r.addedDate * 1000)}
+                            </span>
+                          </div>
+                          {r.reaction && (
+                            <ReactionStaticEmoji
+                              className="reactors-list-emoji"
+                              reaction={r.reaction}
+                              availableReactions={availableReactions}
+                              size={DEFAULT_REACTION_SIZE}
+                            />
+                          )}
+                        </ListItem>,
+                      );
+                    });
+                  }
 
                   if (!chosenTab && !peerReactions?.length) {
                     items.push(
@@ -298,6 +316,8 @@ const ReactorListModal: FC<OwnProps & StateProps> = ({
                 },
               )}
             </InfiniteScroll>
+          ) : reactors ? (
+            <NothingFound text={oldLang('NothingFound')} />
           ) : <Loading />}
         </Transition>
       </div>

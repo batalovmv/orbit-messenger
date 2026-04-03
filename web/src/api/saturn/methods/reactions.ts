@@ -11,10 +11,11 @@ import type {
 } from '../types';
 
 import {
-  buildAvailableEffects,
   buildApiEmojiReaction,
   buildApiPeerReactions,
   buildApiReactions,
+  buildApiReactionUsers,
+  buildAvailableEffects,
   buildAvailableReactions,
   DEFAULT_AVAILABLE_REACTION_EMOJIS,
 } from '../apiBuilders/reactions';
@@ -209,11 +210,12 @@ export async function fetchMessageReactionsList({
   reaction?: ApiReaction;
   offset?: string;
 }) {
-  if (!reaction || reaction.type !== 'emoji') {
+  if (reaction && reaction.type !== 'emoji') {
     return {
       count: 0,
       reactions: [],
       nextOffset: undefined,
+      users: [],
     };
   }
 
@@ -223,9 +225,11 @@ export async function fetchMessageReactionsList({
   }
 
   const params = new URLSearchParams({
-    emoji: reaction.emoticon,
     limit: '50',
   });
+  if (reaction?.type === 'emoji') {
+    params.set('emoji', reaction.emoticon);
+  }
   if (offset) {
     params.set('cursor', offset);
   }
@@ -237,12 +241,15 @@ export async function fetchMessageReactionsList({
     ),
     loadReactionSummaries(uuid),
   ]);
-  const count = summaries.find((summary) => summary.emoji === reaction.emoticon)?.count || page.data.length;
+  const count = reaction?.type === 'emoji'
+    ? (summaries.find((summary) => summary.emoji === reaction.emoticon)?.count || page.data.length)
+    : (summaries.reduce((total, summary) => total + summary.count, 0) || page.data.length);
 
   return {
     count,
     reactions: buildApiPeerReactions(page.data, getCurrentUserId()),
     nextOffset: page.cursor,
+    users: buildApiReactionUsers(page.data),
   };
 }
 

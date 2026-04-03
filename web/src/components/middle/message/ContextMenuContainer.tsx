@@ -304,10 +304,10 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   }, [canLoadReadDate, isOpen, message.chatId, message.id, message.readDate]);
 
   useEffect(() => {
-    if (canShowReactionsCount && isOpen) {
+    if (canShowReactionsCount && isOpen && !message.reactors) {
       loadReactors({ chatId: message.chatId, messageId: message.id });
     }
-  }, [canShowReactionsCount, isOpen, loadReactors, message.chatId, message.id]);
+  }, [canShowReactionsCount, isOpen, loadReactors, message.chatId, message.id, message.reactors]);
 
   useEffect(() => {
     if (customEmojiSetsInfo?.length && customEmojiSets?.length !== customEmojiSetsInfo.length) {

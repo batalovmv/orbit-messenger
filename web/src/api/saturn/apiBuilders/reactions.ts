@@ -7,6 +7,7 @@ import type {
   ApiReactionCount,
   ApiReactionEmoji,
   ApiReactions,
+  ApiUser,
 } from '../../types';
 import type {
   SaturnChatAvailableReactions,
@@ -14,23 +15,25 @@ import type {
   SaturnReactionSummary,
 } from '../types';
 
+import { getAvatarPhotoId } from './avatars';
+import { buildStaticAssetDocument, registerAsset } from './symbols';
+
 import BrokenGift from '../../../assets/tgs/BrokenGift.tgs';
-import Diamond from '../../../assets/tgs/Diamond.tgs';
-import ReadTime from '../../../assets/tgs/ReadTime.tgs';
-import Report from '../../../assets/tgs/Report.tgs';
-import Search from '../../../assets/tgs/Search.tgs';
 import HandFilled from '../../../assets/tgs/calls/HandFilled.tgs';
 import HandOutline from '../../../assets/tgs/calls/HandOutline.tgs';
+import Diamond from '../../../assets/tgs/Diamond.tgs';
 import Flame from '../../../assets/tgs/general/Flame.tgs';
 import Fragment from '../../../assets/tgs/general/Fragment.tgs';
 import Mention from '../../../assets/tgs/general/Mention.tgs';
 import PartyPopper from '../../../assets/tgs/general/PartyPopper.tgs';
 import Invite from '../../../assets/tgs/invites/Invite.tgs';
+import ReadTime from '../../../assets/tgs/ReadTime.tgs';
+import Report from '../../../assets/tgs/Report.tgs';
+import Search from '../../../assets/tgs/Search.tgs';
 import DuckCake from '../../../assets/tgs/settings/DuckCake.tgs';
 import Passkeys from '../../../assets/tgs/settings/Passkeys.tgs';
 import StarReaction from '../../../assets/tgs/stars/StarReaction.tgs';
 import StarReactionEffect from '../../../assets/tgs/stars/StarReactionEffect.tgs';
-import { buildStaticAssetDocument, registerAsset } from './symbols';
 
 const REACTION_ANIMATION_ASSETS = {
   BrokenGift,
@@ -142,7 +145,8 @@ function buildReactionThumbnailDataUri(emoticon: string) {
   const svg = [
     '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">',
     '<rect width="128" height="128" rx="32" fill="transparent"/>',
-    `<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="72">${escapeXml(emoticon)}</text>`,
+    '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="72">'
+    + `${escapeXml(emoticon)}</text>`,
     '</svg>',
   ].join('');
 
@@ -348,4 +352,31 @@ export function buildApiPeerReactions(
     isOwn: reaction.user_id === currentUserId || undefined,
     addedDate: Math.floor(new Date(reaction.created_at).getTime() / 1000),
   }));
+}
+
+export function buildApiReactionUsers(reactions: SaturnReaction[]): ApiUser[] {
+  const uniqueUsers = new Map<string, ApiUser>();
+
+  reactions.forEach((reaction) => {
+    if (uniqueUsers.has(reaction.user_id)) {
+      return;
+    }
+
+    const displayName = reaction.display_name?.trim() || reaction.user_id;
+    const nameParts = displayName.split(/\s+/).filter(Boolean);
+    const firstName = nameParts[0] || displayName;
+    const lastName = nameParts.slice(1).join(' ') || undefined;
+
+    uniqueUsers.set(reaction.user_id, {
+      id: reaction.user_id,
+      isMin: true,
+      type: 'userTypeRegular',
+      firstName,
+      lastName,
+      phoneNumber: '',
+      avatarPhotoId: getAvatarPhotoId(reaction.user_id, reaction.avatar_url),
+    });
+  });
+
+  return [...uniqueUsers.values()];
 }
