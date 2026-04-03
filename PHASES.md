@@ -290,6 +290,9 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] fetchChats, fetchFullChat, createDirectChat, createGroupChat
 - [x] getChatInviteLink
 
+**Compat / wiring:**
+- [x] TG Web A ↔ Saturn parity for chat/profile photo flows and archive toggle (`editChatPhoto`, `updateProfilePhoto`/`uploadProfilePhoto`, `toggleChatArchived`), avatar hash media resolution, `settingsApi` debug logging, passcode timeout fix
+
 **Messages:**
 - [x] fetchMessages, sendMessage, editMessage, deleteMessages
 - [x] forwardMessages, fetchPinnedMessages, pinMessage, unpinAllMessages
@@ -433,7 +436,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [ ] toggleJoinToSend, toggleJoinRequest → covered by requires_approval on invite link
 - [x] exportChatInviteLink, editExportedChatInvite, deleteExportedChatInvite, joinChat, fetchChatInviteInfo
 - [x] toggleSlowMode
-- [x] archiveChat, unarchiveChat, toggleChatPinned, setChatMuted (client-side)
+- [x] archiveChat, unarchiveChat, toggleChatPinned, setChatMuted (persisted via `PATCH /chats/:id/members/me`)
 - [x] fetchChatInviteImporters, hideChatJoinRequest (join request management)
 - [ ] fetchTopics, createTopic, editTopic, deleteTopic → Nice to Have, deferred to Phase 5
 - [x] Frontend bug fix: isUserId для UUID — knownChatIds registry + cache restore
@@ -534,19 +537,19 @@ r2://orbit-media/
 - [ ] Drag & Drop в чат (TG Web A UI exists, needs Saturn API wiring)
 - [ ] Clipboard paste (Ctrl+V для скриншотов) (TG Web A UI exists, needs wiring)
 - [ ] Preview перед отправкой + caption (TG Web A UI exists, needs wiring)
-- [x] One-time media (self-destruct) — toggle в AttachmentModal, Saturn wiring и viewed placeholder готовы
+- [x] One-time media (self-destruct) — toggle в AttachmentModal, blur preview + one-time modal для photo/video, Saturn wiring и viewed placeholder готовы
 - [ ] Media spoiler (blur до клика) — DB flags ready, UI deferred
-- [x] Albums (несколько фото в одном сообщении) — grouped_id прокинут через Saturn API
+- [x] Albums (несколько фото в одном сообщении) — grouped_id маппится в groupedId/isInAlbum и рендерится через Album
 - [ ] Media gallery tab в чате — fetchSharedMedia endpoint ready, UI deferred
 - [~] GIF: Tenor API прокси — defer to Phase 5 (Rich Messaging)
-- [x] PDF preview — inline iframe viewer in chat
+- [x] PDF preview — inline viewer + dedicated preview card in chat
 
 ### Известные отложения и решения
 
 - **Thumbnails в JPEG** (не WebP) — Go не имеет стабильного WebP encoder. JPEG для thumb/medium
 - **ClamAV** → Phase 7 (Security). Invite-only, 150 юзеров
 - **GIF Tenor API** → Phase 5 (Rich Messaging). GIF→MP4 конвертация работает
-- **PDF preview** → Done — inline iframe viewer, fallback to new tab
+- **PDF preview** → Done — отдельная preview-card для PDF в сообщении, inline iframe viewer, fallback to new tab
 - **Frontend UI wiring** — TG Web A компоненты (AttachMenu, MediaViewer, VoiceRecorder) существуют, нужна интеграция с Saturn API. Backend полностью готов
 - **Chunked upload state** — Redis с TTL 24h (не DB), автоочистка
 
@@ -647,6 +650,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 - [x] In-app notification banners (сообщение в другом чате → баннер сверху)
 - [x] In-chat search (лупа → фильтры: from user, date, type) — frontend Saturn wiring for from user + date completed
+- [x] Web Push UX on frontend — permission prompt on first entry / Settings, VAPID subscribe-unsubscribe wiring, notification click fallback to chat when `message_id` is missing
 
 ### Frontend: Saturn API методы (~25)
 
@@ -663,7 +667,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [~] updateGlobalNotifySettings, resetNotifySettings — deferred
 
 **Settings:**
-- [x] getPrivacySettings, setPrivacySettings, fetchBlockedUsers, blockUser, unblockUser
+- [x] getPrivacySettings, setPrivacySettings, fetchBlockedUsers, blockUser, unblockUser (+ in-flight dedup для privacy requests)
 - [x] getUserSettings, updateUserSettings
 - [~] fetchActiveSessions, terminateSession — уже есть в auth service
 - [~] updateUsername, checkUsername — через updateProfile
@@ -688,6 +692,8 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 5 (Sticker import + seed): admin CRUD для sticker packs, idempotent seed CLI `scripts/seed-stickers`, deploy migration с 3 SVG pack'ами и R2-backed import
 - [x] Шаг 6 (Runtime wiring в messaging): DI в `services/messaging/cmd/main.go` подключён для reactions/stickers/GIF/polls/scheduled, Phase 5 HTTP routes зарегистрированы, `POST /chats/:id/messages` поддерживает `type=poll` и `?scheduled_at=`
 - [x] Шаг 7 (Frontend wiring + poll hydration + smoke): Saturn API методы и TG Web A wiring закрыты для reactions/stickers/GIF/polls/scheduled, обычная history hydration для polls/reactions доведена, WS `reaction_added` / `reaction_removed` / `poll_vote` / `poll_closed` применяются без reload, live Playwright smoke PASS
+- [x] Шаг 8 (Frontend polish follow-up): локальные animated reaction assets подключены в Saturn fallback, composer GIF tab получил trending + inline search, saved reaction tags получили localStorage fallback
+- [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI подогнан под TG Web A (radio/checkbox до голосования, общая кнопка Vote, толстые result bars), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
 
 ### Проработка (Шаг 0)
 

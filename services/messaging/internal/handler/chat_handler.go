@@ -8,6 +8,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
@@ -36,6 +37,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Get("/chats/:id/members", h.GetMembers)
 	app.Post("/chats/:id/members", h.AddMembers)
 	app.Delete("/chats/:id/members/:userId", h.RemoveMember)
+	app.Patch("/chats/:id/members/me", h.UpdateOwnMemberPreferences)
 	app.Patch("/chats/:id/members/:userId", h.UpdateMemberRole)
 	app.Get("/chats/:id/members/:userId", h.GetMember)
 	app.Get("/chats/:id/member-ids", h.GetMemberIDs)
@@ -239,6 +241,33 @@ func (h *ChatHandler) RemoveMember(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+}
+
+func (h *ChatHandler) UpdateOwnMemberPreferences(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req model.ChatMemberPreferences
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if req.IsPinned == nil && req.IsMuted == nil && req.IsArchived == nil {
+		return response.Error(c, apperror.BadRequest("At least one preference must be provided"))
+	}
+
+	member, err := h.svc.UpdateMemberPreferences(c.Context(), chatID, uid, req)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, member)
 }
 
 func (h *ChatHandler) UpdateMemberRole(c *fiber.Ctx) error {

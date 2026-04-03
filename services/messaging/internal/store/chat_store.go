@@ -35,6 +35,7 @@ type ChatStore interface {
 	UpdateMemberRole(ctx context.Context, chatID, userID uuid.UUID, role string, permissions int64, customTitle *string) error
 	UpdateDefaultPermissions(ctx context.Context, chatID uuid.UUID, perms int64) error
 	UpdateMemberPermissions(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
+	UpdateMemberPreferences(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error
 	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error
@@ -75,6 +76,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		        AND msg.sequence_number > COALESCE(
 		            (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id), 0
 		        )) as unread_count,
+		       cm.is_pinned, cm.is_muted, cm.is_archived,
 		       ou.id, ou.display_name, ou.avatar_url, ou.status, ou.last_seen_at
 		FROM chat_members cm
 		JOIN chats c ON c.id = cm.chat_id
@@ -130,6 +132,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
 			&msgSeq, &msgCreatedAt, &msgEditedAt,
 			&item.MemberCount, &item.UnreadCount,
+			&item.Chat.IsPinned, &item.Chat.IsMuted, &item.Chat.IsArchived,
 			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt,
 		)
 		if err != nil {
@@ -296,6 +299,7 @@ func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor str
 	query := `
 		SELECT cm.chat_id, cm.user_id, cm.role, cm.permissions, cm.custom_title,
 		       cm.last_read_message_id, cm.joined_at, cm.muted_until, cm.notification_level,
+		       cm.is_pinned, cm.is_muted, cm.is_archived,
 		       u.display_name, u.avatar_url
 		FROM chat_members cm
 		JOIN users u ON u.id = cm.user_id
@@ -326,6 +330,7 @@ func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor str
 		var m model.ChatMember
 		if err := rows.Scan(&m.ChatID, &m.UserID, &m.Role, &m.Permissions, &m.CustomTitle,
 			&m.LastReadMessageID, &m.JoinedAt, &m.MutedUntil, &m.NotificationLevel,
+			&m.IsPinned, &m.IsMuted, &m.IsArchived,
 			&m.DisplayName, &m.AvatarURL); err != nil {
 			return nil, "", false, err
 		}
@@ -423,6 +428,7 @@ func (s *chatStore) SearchMembers(ctx context.Context, chatID uuid.UUID, query s
 	rows, err := s.pool.Query(ctx,
 		`SELECT cm.chat_id, cm.user_id, cm.role, cm.permissions, cm.custom_title,
 		        cm.last_read_message_id, cm.joined_at, cm.muted_until, cm.notification_level,
+		        cm.is_pinned, cm.is_muted, cm.is_archived,
 		        u.display_name, u.avatar_url
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
@@ -440,6 +446,7 @@ func (s *chatStore) SearchMembers(ctx context.Context, chatID uuid.UUID, query s
 		var m model.ChatMember
 		if err := rows.Scan(&m.ChatID, &m.UserID, &m.Role, &m.Permissions, &m.CustomTitle,
 			&m.LastReadMessageID, &m.JoinedAt, &m.MutedUntil, &m.NotificationLevel,
+			&m.IsPinned, &m.IsMuted, &m.IsArchived,
 			&m.DisplayName, &m.AvatarURL); err != nil {
 			return nil, err
 		}
@@ -478,12 +485,14 @@ func (s *chatStore) GetMember(ctx context.Context, chatID, userID uuid.UUID) (*m
 	err := s.pool.QueryRow(ctx,
 		`SELECT cm.chat_id, cm.user_id, cm.role, cm.permissions, cm.custom_title,
 		        cm.last_read_message_id, cm.joined_at, cm.muted_until, cm.notification_level,
+		        cm.is_pinned, cm.is_muted, cm.is_archived,
 		        u.display_name, u.avatar_url
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
 		 WHERE cm.chat_id = $1 AND cm.user_id = $2`, chatID, userID,
 	).Scan(&m.ChatID, &m.UserID, &m.Role, &m.Permissions, &m.CustomTitle,
 		&m.LastReadMessageID, &m.JoinedAt, &m.MutedUntil, &m.NotificationLevel,
+		&m.IsPinned, &m.IsMuted, &m.IsArchived,
 		&m.DisplayName, &m.AvatarURL)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -495,6 +504,7 @@ func (s *chatStore) GetAdmins(ctx context.Context, chatID uuid.UUID) ([]model.Ch
 	rows, err := s.pool.Query(ctx,
 		`SELECT cm.chat_id, cm.user_id, cm.role, cm.permissions, cm.custom_title,
 		        cm.last_read_message_id, cm.joined_at, cm.muted_until, cm.notification_level,
+		        cm.is_pinned, cm.is_muted, cm.is_archived,
 		        u.display_name, u.avatar_url
 		 FROM chat_members cm
 		 JOIN users u ON u.id = cm.user_id
@@ -512,6 +522,7 @@ func (s *chatStore) GetAdmins(ctx context.Context, chatID uuid.UUID) ([]model.Ch
 		var m model.ChatMember
 		if err := rows.Scan(&m.ChatID, &m.UserID, &m.Role, &m.Permissions, &m.CustomTitle,
 			&m.LastReadMessageID, &m.JoinedAt, &m.MutedUntil, &m.NotificationLevel,
+			&m.IsPinned, &m.IsMuted, &m.IsArchived,
 			&m.DisplayName, &m.AvatarURL); err != nil {
 			return nil, err
 		}
@@ -589,6 +600,42 @@ func (s *chatStore) UpdateMemberPermissions(ctx context.Context, chatID, userID 
 		chatID, userID, perms,
 	)
 	return err
+}
+
+func (s *chatStore) UpdateMemberPreferences(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error) {
+	member := &model.ChatMember{}
+	err := s.pool.QueryRow(ctx,
+		`WITH updated AS (
+		    UPDATE chat_members
+		    SET is_pinned = COALESCE($3, is_pinned),
+		        is_muted = COALESCE($4, is_muted),
+		        is_archived = COALESCE($5, is_archived)
+		    WHERE chat_id = $1 AND user_id = $2
+		    RETURNING chat_id, user_id, role, permissions, custom_title,
+		              last_read_message_id, joined_at, muted_until, notification_level,
+		              is_pinned, is_muted, is_archived
+		)
+		SELECT u.chat_id, u.user_id, u.role, u.permissions, u.custom_title,
+		       u.last_read_message_id, u.joined_at, u.muted_until, u.notification_level,
+		       u.is_pinned, u.is_muted, u.is_archived,
+		       usr.display_name, usr.avatar_url
+		FROM updated u
+		JOIN users usr ON usr.id = u.user_id`,
+		chatID, userID, prefs.IsPinned, prefs.IsMuted, prefs.IsArchived,
+	).Scan(
+		&member.ChatID, &member.UserID, &member.Role, &member.Permissions, &member.CustomTitle,
+		&member.LastReadMessageID, &member.JoinedAt, &member.MutedUntil, &member.NotificationLevel,
+		&member.IsPinned, &member.IsMuted, &member.IsArchived,
+		&member.DisplayName, &member.AvatarURL,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update member preferences: %w", err)
+	}
+
+	return member, nil
 }
 
 func (s *chatStore) SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error {

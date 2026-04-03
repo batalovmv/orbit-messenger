@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -59,22 +60,27 @@ func (h *ScheduledHandler) Schedule(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
 	}
 	var body struct {
-		Content       string          `json:"content"`
-		Question      string          `json:"question"`
-		Entities      json.RawMessage `json:"entities"`
-		ReplyToID     *string         `json:"reply_to_id"`
-		Type          string          `json:"type"`
-		MediaIDs      []string        `json:"media_ids"`
-		IsSpoiler     bool            `json:"is_spoiler"`
-		Options       []string        `json:"options"`
-		IsAnonymous   *bool           `json:"is_anonymous"`
-		IsMultiple    bool            `json:"is_multiple"`
-		IsQuiz        bool            `json:"is_quiz"`
-		CorrectOption *int            `json:"correct_option"`
-		ScheduledAt   string          `json:"scheduled_at"`
+		Content          string          `json:"content"`
+		Question         string          `json:"question"`
+		Entities         json.RawMessage `json:"entities"`
+		Solution         string          `json:"solution"`
+		SolutionEntities json.RawMessage `json:"solution_entities"`
+		ReplyToID        *string         `json:"reply_to_id"`
+		Type             string          `json:"type"`
+		MediaIDs         []string        `json:"media_ids"`
+		IsSpoiler        bool            `json:"is_spoiler"`
+		Options          []string        `json:"options"`
+		IsAnonymous      *bool           `json:"is_anonymous"`
+		IsMultiple       bool            `json:"is_multiple"`
+		IsQuiz           bool            `json:"is_quiz"`
+		CorrectOption    *int            `json:"correct_option"`
+		ScheduledAt      string          `json:"scheduled_at"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if len(body.SolutionEntities) > 65536 {
+		return response.Error(c, apperror.BadRequest("solution_entities too large (max 64KB)"))
 	}
 	if body.ScheduledAt == "" {
 		return response.Error(c, apperror.BadRequest("scheduled_at is required"))
@@ -115,25 +121,32 @@ func (h *ScheduledHandler) Schedule(c *fiber.Ctx) error {
 		if body.IsAnonymous != nil {
 			isAnonymous = *body.IsAnonymous
 		}
+		solution := strings.TrimSpace(body.Solution)
+		var solutionPtr *string
+		if solution != "" {
+			solutionPtr = &solution
+		}
 		scheduledPoll = &model.ScheduledPollPayload{
-			Question:      question,
-			Options:       body.Options,
-			IsAnonymous:   isAnonymous,
-			IsMultiple:    body.IsMultiple,
-			IsQuiz:        body.IsQuiz,
-			CorrectOption: body.CorrectOption,
+			Question:         question,
+			Options:          body.Options,
+			IsAnonymous:      isAnonymous,
+			IsMultiple:       body.IsMultiple,
+			IsQuiz:           body.IsQuiz,
+			CorrectOption:    body.CorrectOption,
+			Solution:         solutionPtr,
+			SolutionEntities: body.SolutionEntities,
 		}
 	}
 
 	msg, err := h.svc.Schedule(c.Context(), chatID, userID, service.ScheduleMessageInput{
-		Content:       body.Content,
-		Entities:      body.Entities,
-		ReplyToID:     replyToID,
-		Type:          body.Type,
-		MediaIDs:      mediaIDs,
-		IsSpoiler:     body.IsSpoiler,
-		Poll:          scheduledPoll,
-		ScheduledAt:   scheduledAt,
+		Content:     body.Content,
+		Entities:    body.Entities,
+		ReplyToID:   replyToID,
+		Type:        body.Type,
+		MediaIDs:    mediaIDs,
+		IsSpoiler:   body.IsSpoiler,
+		Poll:        scheduledPoll,
+		ScheduledAt: scheduledAt,
 	})
 	if err != nil {
 		return response.Error(c, err)

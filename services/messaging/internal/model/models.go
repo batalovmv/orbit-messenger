@@ -41,6 +41,9 @@ type Chat struct {
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`
 	IsSignatures       bool       `json:"is_signatures"`
+	IsPinned           bool       `json:"is_pinned"`
+	IsMuted            bool       `json:"is_muted"`
+	IsArchived         bool       `json:"is_archived"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
@@ -63,9 +66,18 @@ type ChatMember struct {
 	JoinedAt          time.Time  `json:"joined_at"`
 	MutedUntil        *time.Time `json:"muted_until,omitempty"`
 	NotificationLevel string     `json:"notification_level"`
+	IsPinned          bool       `json:"is_pinned"`
+	IsMuted           bool       `json:"is_muted"`
+	IsArchived        bool       `json:"is_archived"`
 	// Joined user data
 	DisplayName string  `json:"display_name,omitempty"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
+}
+
+type ChatMemberPreferences struct {
+	IsPinned   *bool `json:"is_pinned,omitempty"`
+	IsMuted    *bool `json:"is_muted,omitempty"`
+	IsArchived *bool `json:"is_archived,omitempty"`
 }
 
 type Message struct {
@@ -294,18 +306,20 @@ type TenorGIF struct {
 
 // Poll represents a poll attached to a message.
 type Poll struct {
-	ID            uuid.UUID    `json:"id"`
-	MessageID     uuid.UUID    `json:"message_id"`
-	Question      string       `json:"question"`
-	IsAnonymous   bool         `json:"is_anonymous"`
-	IsMultiple    bool         `json:"is_multiple"`
-	IsQuiz        bool         `json:"is_quiz"`
-	CorrectOption *int         `json:"correct_option,omitempty"`
-	IsClosed      bool         `json:"is_closed"`
-	CloseAt       *time.Time   `json:"close_at,omitempty"`
-	Options       []PollOption `json:"options"`
-	TotalVoters   int          `json:"total_voters"`
-	CreatedAt     time.Time    `json:"created_at"`
+	ID               uuid.UUID       `json:"id"`
+	MessageID        uuid.UUID       `json:"message_id"`
+	Question         string          `json:"question"`
+	IsAnonymous      bool            `json:"is_anonymous"`
+	IsMultiple       bool            `json:"is_multiple"`
+	IsQuiz           bool            `json:"is_quiz"`
+	CorrectOption    *int            `json:"correct_option,omitempty"`
+	Solution         *string         `json:"solution,omitempty"`
+	SolutionEntities json.RawMessage `json:"solution_entities,omitempty"`
+	IsClosed         bool            `json:"is_closed"`
+	CloseAt          *time.Time      `json:"close_at,omitempty"`
+	Options          []PollOption    `json:"options"`
+	TotalVoters      int             `json:"total_voters"`
+	CreatedAt        time.Time       `json:"created_at"`
 }
 
 // PollOption represents a single option in a poll.
@@ -328,12 +342,14 @@ type PollVote struct {
 }
 
 type ScheduledPollPayload struct {
-	Question      string   `json:"question"`
-	Options       []string `json:"options"`
-	IsAnonymous   bool     `json:"is_anonymous"`
-	IsMultiple    bool     `json:"is_multiple"`
-	IsQuiz        bool     `json:"is_quiz"`
-	CorrectOption *int     `json:"correct_option,omitempty"`
+	Question         string          `json:"question"`
+	Options          []string        `json:"options"`
+	IsAnonymous      bool            `json:"is_anonymous"`
+	IsMultiple       bool            `json:"is_multiple"`
+	IsQuiz           bool            `json:"is_quiz"`
+	CorrectOption    *int            `json:"correct_option,omitempty"`
+	Solution         *string         `json:"solution,omitempty"`
+	SolutionEntities json.RawMessage `json:"solution_entities,omitempty"`
 }
 
 // ScheduledMessage represents a message scheduled for future delivery.

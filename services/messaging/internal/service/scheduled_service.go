@@ -348,6 +348,19 @@ func validateScheduledMessageInput(input ScheduleMessageInput) error {
 				return apperror.BadRequest("correct_option is out of range")
 			}
 		}
+		if input.Poll.Solution != nil {
+			trimmed := strings.TrimSpace(*input.Poll.Solution)
+			if trimmed == "" {
+				input.Poll.Solution = nil
+				input.Poll.SolutionEntities = nil
+			} else {
+				input.Poll.Solution = &trimmed
+			}
+		}
+		if !input.Poll.IsQuiz || input.Poll.Solution == nil {
+			input.Poll.Solution = nil
+			input.Poll.SolutionEntities = nil
+		}
 		return nil
 	}
 
@@ -370,13 +383,15 @@ func validateScheduledMessageInput(input ScheduleMessageInput) error {
 
 func buildPollFromScheduledPayload(messageID uuid.UUID, payload model.ScheduledPollPayload) *model.Poll {
 	poll := &model.Poll{
-		MessageID:     messageID,
-		Question:      strings.TrimSpace(payload.Question),
-		IsAnonymous:   payload.IsAnonymous,
-		IsMultiple:    payload.IsMultiple,
-		IsQuiz:        payload.IsQuiz,
-		CorrectOption: payload.CorrectOption,
-		Options:       make([]model.PollOption, 0, len(payload.Options)),
+		MessageID:        messageID,
+		Question:         strings.TrimSpace(payload.Question),
+		IsAnonymous:      payload.IsAnonymous,
+		IsMultiple:       payload.IsMultiple,
+		IsQuiz:           payload.IsQuiz,
+		CorrectOption:    payload.CorrectOption,
+		Solution:         payload.Solution,
+		SolutionEntities: payload.SolutionEntities,
+		Options:          make([]model.PollOption, 0, len(payload.Options)),
 	}
 
 	for i, option := range payload.Options {

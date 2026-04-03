@@ -54,10 +54,21 @@ func (s *pollStore) Create(ctx context.Context, poll *model.Poll) error {
 	defer tx.Rollback(ctx)
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO polls (message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, close_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO polls (
+		     message_id, question, is_anonymous, is_multiple, is_quiz,
+		     correct_option, solution, solution_entities, close_at
+		 )
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
 		 RETURNING id, is_closed, created_at`,
-		poll.MessageID, poll.Question, poll.IsAnonymous, poll.IsMultiple, poll.IsQuiz, poll.CorrectOption, poll.CloseAt,
+		poll.MessageID,
+		poll.Question,
+		poll.IsAnonymous,
+		poll.IsMultiple,
+		poll.IsQuiz,
+		poll.CorrectOption,
+		poll.Solution,
+		poll.SolutionEntities,
+		poll.CloseAt,
 	).Scan(&poll.ID, &poll.IsClosed, &poll.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert poll: %w", err)
@@ -85,7 +96,8 @@ func (s *pollStore) Create(ctx context.Context, poll *model.Poll) error {
 
 func (s *pollStore) GetByID(ctx context.Context, pollID uuid.UUID) (*model.Poll, error) {
 	return s.getPollByQuery(ctx,
-		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, is_closed, close_at, created_at
+		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option,
+		        solution, solution_entities, is_closed, close_at, created_at
 		 FROM polls WHERE id = $1`,
 		pollID,
 	)
@@ -93,7 +105,8 @@ func (s *pollStore) GetByID(ctx context.Context, pollID uuid.UUID) (*model.Poll,
 
 func (s *pollStore) GetByMessageID(ctx context.Context, messageID uuid.UUID) (*model.Poll, error) {
 	return s.getPollByQuery(ctx,
-		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, is_closed, close_at, created_at
+		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option,
+		        solution, solution_entities, is_closed, close_at, created_at
 		 FROM polls WHERE message_id = $1`,
 		messageID,
 	)
@@ -105,7 +118,8 @@ func (s *pollStore) ListByMessageIDs(ctx context.Context, messageIDs []uuid.UUID
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option, is_closed, close_at, created_at
+		`SELECT id, message_id, question, is_anonymous, is_multiple, is_quiz, correct_option,
+		        solution, solution_entities, is_closed, close_at, created_at
 		 FROM polls
 		 WHERE message_id = ANY($1)`,
 		messageIDs,
@@ -129,6 +143,8 @@ func (s *pollStore) ListByMessageIDs(ctx context.Context, messageIDs []uuid.UUID
 			&poll.IsMultiple,
 			&poll.IsQuiz,
 			&poll.CorrectOption,
+			&poll.Solution,
+			&poll.SolutionEntities,
 			&poll.IsClosed,
 			&poll.CloseAt,
 			&poll.CreatedAt,
@@ -374,6 +390,8 @@ func (s *pollStore) getPollByQuery(ctx context.Context, query string, arg uuid.U
 		&poll.IsMultiple,
 		&poll.IsQuiz,
 		&poll.CorrectOption,
+		&poll.Solution,
+		&poll.SolutionEntities,
 		&poll.IsClosed,
 		&poll.CloseAt,
 		&poll.CreatedAt,

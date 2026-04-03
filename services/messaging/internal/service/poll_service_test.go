@@ -41,7 +41,7 @@ func TestCreatePoll_NotMember(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestPollService(&mockPollStore{}, &mockMessageStore{}, cs, rec)
 
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Where to eat?", []string{"Pizza", "Sushi"}, true, false, false, nil)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Where to eat?", []string{"Pizza", "Sushi"}, true, false, false, nil, nil, nil)
 	pollAssertAppError(t, err, 403)
 }
 
@@ -57,7 +57,7 @@ func TestCreatePoll_TooFewOptions(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestPollService(&mockPollStore{}, &mockMessageStore{}, cs, rec)
 
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Where?", []string{"Only one"}, true, false, false, nil)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Where?", []string{"Only one"}, true, false, false, nil, nil, nil)
 	pollAssertAppError(t, err, 400)
 }
 
@@ -77,7 +77,7 @@ func TestCreatePoll_TooManyOptions(t *testing.T) {
 	for i := range options {
 		options[i] = "Option"
 	}
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Q?", options, true, false, false, nil)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Q?", options, true, false, false, nil, nil, nil)
 	pollAssertAppError(t, err, 400)
 }
 
@@ -93,7 +93,7 @@ func TestCreatePoll_EmptyQuestion(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestPollService(&mockPollStore{}, &mockMessageStore{}, cs, rec)
 
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "", []string{"A", "B"}, true, false, false, nil)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "", []string{"A", "B"}, true, false, false, nil, nil, nil)
 	pollAssertAppError(t, err, 400)
 }
 
@@ -109,7 +109,7 @@ func TestCreatePoll_QuizWithoutCorrectOption(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestPollService(&mockPollStore{}, &mockMessageStore{}, cs, rec)
 
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Quiz?", []string{"A", "B"}, true, false, true, nil)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Quiz?", []string{"A", "B"}, true, false, true, nil, nil, nil)
 	pollAssertAppError(t, err, 400)
 }
 
@@ -126,7 +126,7 @@ func TestCreatePoll_QuizWithInvalidCorrectOption(t *testing.T) {
 	svc := newTestPollService(&mockPollStore{}, &mockMessageStore{}, cs, rec)
 
 	correctOpt := 5 // out of range
-	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Quiz?", []string{"A", "B"}, true, false, true, &correctOpt)
+	_, _, err := svc.CreatePoll(context.Background(), chatID, userID, "Quiz?", []string{"A", "B"}, true, false, true, &correctOpt, nil, nil)
 	pollAssertAppError(t, err, 400)
 }
 
@@ -158,7 +158,7 @@ func TestCreatePoll_Success_PublishesEvent(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestPollService(&mockPollStore{}, ms, cs, rec)
 
-	poll, msg, err := svc.CreatePoll(context.Background(), chatID, userID, "Where to eat?", []string{"Pizza", "Sushi", "Burgers"}, true, false, false, nil)
+	poll, msg, err := svc.CreatePoll(context.Background(), chatID, userID, "Where to eat?", []string{"Pizza", "Sushi", "Burgers"}, true, false, false, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
 	}
@@ -170,6 +170,62 @@ func TestCreatePoll_Success_PublishesEvent(t *testing.T) {
 	}
 	if len(poll.Options) != 3 {
 		t.Fatalf("expected 3 options, got %d", len(poll.Options))
+	}
+}
+
+func TestCreatePoll_QuizWithSolution(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	correctOpt := 1
+	solution := "Because it is the only even answer."
+
+	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+		getMemberIDsFn: func(ctx context.Context, cID uuid.UUID) ([]string, error) {
+			return []string{userID.String()}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{Role: "member", Permissions: -1}, nil
+		},
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group"}, nil
+		},
+	}
+	ms := &mockMessageStore{
+		createFn: func(ctx context.Context, msg *model.Message) error {
+			msg.ID = uuid.New()
+			return nil
+		},
+	}
+	rec := &RecordingPublisher{}
+	svc := newTestPollService(&mockPollStore{}, ms, cs, rec)
+
+	poll, _, err := svc.CreatePoll(
+		context.Background(),
+		chatID,
+		userID,
+		"Which answer is correct?",
+		[]string{"3", "4"},
+		true,
+		false,
+		true,
+		&correctOpt,
+		&solution,
+		[]byte(`[{"type":"MessageEntityItalic","offset":0,"length":7}]`),
+	)
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if poll == nil || poll.Solution == nil {
+		t.Fatal("expected solution to be stored on poll")
+	}
+	if *poll.Solution != solution {
+		t.Fatalf("unexpected solution: %q", *poll.Solution)
+	}
+	if len(poll.SolutionEntities) == 0 {
+		t.Fatal("expected solution entities to be stored on poll")
 	}
 }
 
@@ -281,9 +337,9 @@ func TestVote_Success_PublishesEvent(t *testing.T) {
 		},
 		getByIDFn: func(ctx context.Context, pID uuid.UUID) (*model.Poll, error) {
 			return &model.Poll{
-				ID:        pollID,
-				MessageID: msgID,
-				Options:   []model.PollOption{{ID: optID, PollID: pollID, Text: "Pizza", Voters: 1}},
+				ID:          pollID,
+				MessageID:   msgID,
+				Options:     []model.PollOption{{ID: optID, PollID: pollID, Text: "Pizza", Voters: 1}},
 				TotalVoters: 1,
 			}, nil
 		},

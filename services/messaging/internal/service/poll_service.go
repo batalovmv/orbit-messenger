@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -40,7 +41,16 @@ func NewPollService(
 }
 
 // CreatePoll creates a poll message in a chat.
-func (s *PollService) CreatePoll(ctx context.Context, chatID, senderID uuid.UUID, question string, options []string, isAnonymous, isMultiple, isQuiz bool, correctOption *int) (*model.Poll, *model.Message, error) {
+func (s *PollService) CreatePoll(
+	ctx context.Context,
+	chatID, senderID uuid.UUID,
+	question string,
+	options []string,
+	isAnonymous, isMultiple, isQuiz bool,
+	correctOption *int,
+	solution *string,
+	solutionEntities json.RawMessage,
+) (*model.Poll, *model.Message, error) {
 	question = strings.TrimSpace(question)
 	if question == "" {
 		return nil, nil, apperror.BadRequest("Question is required")
@@ -55,6 +65,22 @@ func (s *PollService) CreatePoll(ctx context.Context, chatID, senderID uuid.UUID
 		if *correctOption < 0 || *correctOption >= len(options) {
 			return nil, nil, apperror.BadRequest("correct_option is out of range")
 		}
+	}
+	if !isQuiz {
+		solution = nil
+		solutionEntities = nil
+	}
+	if solution != nil {
+		trimmed := strings.TrimSpace(*solution)
+		if trimmed == "" {
+			solution = nil
+			solutionEntities = nil
+		} else {
+			solution = &trimmed
+		}
+	}
+	if solution == nil {
+		solutionEntities = nil
 	}
 
 	pollOptions := make([]model.PollOption, 0, len(options))
@@ -111,13 +137,15 @@ func (s *PollService) CreatePoll(ctx context.Context, chatID, senderID uuid.UUID
 	}
 
 	poll := &model.Poll{
-		MessageID:     msg.ID,
-		Question:      question,
-		IsAnonymous:   isAnonymous,
-		IsMultiple:    isMultiple,
-		IsQuiz:        isQuiz,
-		CorrectOption: correctOption,
-		Options:       pollOptions,
+		MessageID:        msg.ID,
+		Question:         question,
+		IsAnonymous:      isAnonymous,
+		IsMultiple:       isMultiple,
+		IsQuiz:           isQuiz,
+		CorrectOption:    correctOption,
+		Solution:         solution,
+		SolutionEntities: solutionEntities,
+		Options:          pollOptions,
 	}
 	if err := s.polls.Create(ctx, poll); err != nil {
 		return nil, nil, fmt.Errorf("create poll: %w", err)
@@ -481,7 +509,7 @@ func applyPollChoiceState(poll *model.Poll, optionIDs []uuid.UUID) {
 		poll.Options[i].IsChosen = isChosen
 		poll.Options[i].IsCorrect = poll.CorrectOption != nil &&
 			poll.Options[i].Position == *poll.CorrectOption &&
-			(poll.IsClosed || isChosen)
+			(poll.IsClosed || (poll.IsQuiz && len(optionIDs) > 0) || isChosen)
 	}
 }
 

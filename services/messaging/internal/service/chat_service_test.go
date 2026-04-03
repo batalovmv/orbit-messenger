@@ -299,6 +299,75 @@ func TestUpdateMemberRole_DemoteResetsPermissions(t *testing.T) {
 	}
 }
 
+func TestUpdateMemberPreferences_Success(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (*model.ChatMember, error) {
+			if gotChatID != chatID || gotUserID != userID {
+				t.Fatalf("unexpected get member args: %s %s", gotChatID, gotUserID)
+			}
+			return &model.ChatMember{ChatID: chatID, UserID: userID, Role: "member"}, nil
+		},
+		updateMemberPrefsFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error) {
+			if gotChatID != chatID || gotUserID != userID {
+				t.Fatalf("unexpected update args: %s %s", gotChatID, gotUserID)
+			}
+			if prefs.IsArchived == nil || !*prefs.IsArchived {
+				t.Fatal("expected is_archived=true")
+			}
+			return &model.ChatMember{
+				ChatID:      chatID,
+				UserID:      userID,
+				Role:        "member",
+				IsArchived:  true,
+				IsPinned:    false,
+				IsMuted:     false,
+				DisplayName: "Orbit",
+			}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	value := true
+	member, err := svc.UpdateMemberPreferences(context.Background(), chatID, userID, model.ChatMemberPreferences{
+		IsArchived: &value,
+	})
+	if err != nil {
+		t.Fatalf("UpdateMemberPreferences: %v", err)
+	}
+	if !member.IsArchived {
+		t.Fatal("expected archived member response")
+	}
+}
+
+func TestUpdateMemberPreferences_EmptyPayloadRejected(t *testing.T) {
+	rec := &RecordingPublisher{}
+	cs := &mockChatStore{}
+
+	svc := newTestChatService(cs, rec)
+	_, err := svc.UpdateMemberPreferences(context.Background(), uuid.New(), uuid.New(), model.ChatMemberPreferences{})
+	assertAppError(t, err, 400)
+}
+
+func TestUpdateMemberPreferences_NonMemberForbidden(t *testing.T) {
+	rec := &RecordingPublisher{}
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
+			return nil, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	value := true
+	_, err := svc.UpdateMemberPreferences(context.Background(), uuid.New(), uuid.New(), model.ChatMemberPreferences{
+		IsMuted: &value,
+	})
+	assertAppError(t, err, 403)
+}
+
 // ---------------------------------------------------------------------------
 // DeleteChat — NATS: sent BEFORE deletion
 // ---------------------------------------------------------------------------

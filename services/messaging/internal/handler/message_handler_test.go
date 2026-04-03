@@ -122,11 +122,63 @@ func TestSendMessage_PollTypeCreatesPoll(t *testing.T) {
 	}
 }
 
+func TestSendMessage_QuizPollStoresSolution(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	msgID := uuid.New()
+	pollID := uuid.New()
+
+	ms := &mockMessageStore{
+		createFn: func(_ context.Context, msg *model.Message) error {
+			msg.ID = msgID
+			msg.CreatedAt = time.Now()
+			return nil
+		},
+	}
+
+	var createdPoll *model.Poll
+	ps := &mockPollStore{
+		createFn: func(_ context.Context, poll *model.Poll) error {
+			createdPoll = poll
+			poll.ID = pollID
+			poll.CreatedAt = time.Now()
+			for i := range poll.Options {
+				poll.Options[i].ID = uuid.New()
+				poll.Options[i].PollID = pollID
+			}
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(ms, defaultMemberChatStore(), ps, nil)
+	body := `{"type":"poll","question":"2+2?","options":["3","4"],"is_quiz":true,"correct_option":1,"solution":"Because 2 plus 2 equals 4.","solution_entities":[{"type":"MessageEntityBold","offset":0,"length":7}]}`
+	req, _ := http.NewRequest(http.MethodPost, "/chats/"+chatID.String()+"/messages", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for quiz poll message, got %d", resp.StatusCode)
+	}
+	if createdPoll == nil || createdPoll.Solution == nil {
+		t.Fatal("expected quiz poll solution to be stored")
+	}
+	if *createdPoll.Solution != "Because 2 plus 2 equals 4." {
+		t.Fatalf("unexpected solution: %q", *createdPoll.Solution)
+	}
+	if len(createdPoll.SolutionEntities) == 0 {
+		t.Fatal("expected solution entities to be stored")
+	}
+}
+
 func TestSendMessage_ScheduledAtCreatesScheduledMessage(t *testing.T) {
 	userID := uuid.New()
 	chatID := uuid.New()
 	scheduledID := uuid.New()
-	scheduledAt := "2026-04-03T09:00:00Z"
+	scheduledAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
 
 	ss := &mockScheduledMessageStore{
 		createFn: func(_ context.Context, msg *model.ScheduledMessage) error {
@@ -156,7 +208,7 @@ func TestSendMessage_ScheduledPollCreatesScheduledPollPayload(t *testing.T) {
 	userID := uuid.New()
 	chatID := uuid.New()
 	scheduledID := uuid.New()
-	scheduledAt := "2026-04-03T09:00:00Z"
+	scheduledAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
 
 	var created *model.ScheduledMessage
 	ss := &mockScheduledMessageStore{
@@ -196,12 +248,56 @@ func TestSendMessage_ScheduledPollCreatesScheduledPollPayload(t *testing.T) {
 	}
 }
 
+func TestSendMessage_ScheduledQuizPollStoresSolution(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	scheduledID := uuid.New()
+	scheduledAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
+
+	var created *model.ScheduledMessage
+	ss := &mockScheduledMessageStore{
+		createFn: func(_ context.Context, msg *model.ScheduledMessage) error {
+			created = msg
+			msg.ID = scheduledID
+			msg.CreatedAt = time.Now()
+			msg.UpdatedAt = msg.CreatedAt
+			return nil
+		},
+	}
+
+	app := newRichMessageApp(&mockMessageStore{}, defaultMemberChatStore(), nil, ss)
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/chats/"+chatID.String()+"/messages?scheduled_at="+scheduledAt,
+		bytes.NewBufferString(`{"type":"poll","question":"2+2?","options":["3","4"],"is_quiz":true,"correct_option":1,"solution":"Math","solution_entities":[{"type":"MessageEntityItalic","offset":0,"length":4}]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 for scheduled quiz poll, got %d", resp.StatusCode)
+	}
+	if created == nil || created.PollPayload == nil || created.PollPayload.Solution == nil {
+		t.Fatal("expected scheduled quiz poll solution to be stored")
+	}
+	if *created.PollPayload.Solution != "Math" {
+		t.Fatalf("unexpected scheduled solution: %q", *created.PollPayload.Solution)
+	}
+	if len(created.PollPayload.SolutionEntities) == 0 {
+		t.Fatal("expected scheduled solution entities to be stored")
+	}
+}
+
 func TestSendMessage_ScheduledMediaSupportsReplyAndAttachments(t *testing.T) {
 	userID := uuid.New()
 	chatID := uuid.New()
 	replyToID := uuid.New()
 	mediaID := uuid.New()
-	scheduledAt := "2026-04-03T09:00:00Z"
+	scheduledAt := time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339)
 
 	var created *model.ScheduledMessage
 	ss := &mockScheduledMessageStore{

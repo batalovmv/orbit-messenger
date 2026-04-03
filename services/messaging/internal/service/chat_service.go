@@ -117,6 +117,17 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*m
 	if chat == nil {
 		return nil, apperror.NotFound("Chat not found")
 	}
+
+	member, memberErr := s.chats.GetMember(ctx, chatID, userID)
+	if memberErr != nil {
+		return nil, fmt.Errorf("get member preferences: %w", memberErr)
+	}
+	if member != nil {
+		chat.IsPinned = member.IsPinned
+		chat.IsMuted = member.IsMuted
+		chat.IsArchived = member.IsArchived
+	}
+
 	return chat, nil
 }
 
@@ -539,6 +550,34 @@ func (s *ChatService) UpdateMemberPermissions(ctx context.Context, chatID, userI
 	)
 
 	return nil
+}
+
+func (s *ChatService) UpdateMemberPreferences(
+	ctx context.Context,
+	chatID, userID uuid.UUID,
+	prefs model.ChatMemberPreferences,
+) (*model.ChatMember, error) {
+	if prefs.IsPinned == nil && prefs.IsMuted == nil && prefs.IsArchived == nil {
+		return nil, apperror.BadRequest("At least one preference must be provided")
+	}
+
+	member, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	updated, err := s.chats.UpdateMemberPreferences(ctx, chatID, userID, prefs)
+	if err != nil {
+		return nil, fmt.Errorf("update member preferences: %w", err)
+	}
+	if updated == nil {
+		return nil, apperror.NotFound("Member not found")
+	}
+
+	return updated, nil
 }
 
 func (s *ChatService) SetSlowMode(ctx context.Context, chatID, userID uuid.UUID, seconds int) error {

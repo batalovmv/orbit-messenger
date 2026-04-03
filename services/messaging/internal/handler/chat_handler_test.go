@@ -192,6 +192,89 @@ func TestGetMemberIDs_RequiresMembership(t *testing.T) {
 	}
 }
 
+func TestUpdateOwnMemberPreferences_Success(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (*model.ChatMember, error) {
+			if gotChatID != chatID || gotUserID != userID {
+				t.Fatalf("unexpected get member args: %s %s", gotChatID, gotUserID)
+			}
+			return &model.ChatMember{ChatID: chatID, UserID: userID, Role: "member"}, nil
+		},
+		updateMemberPrefsFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error) {
+			if gotChatID != chatID || gotUserID != userID {
+				t.Fatalf("unexpected update args: %s %s", gotChatID, gotUserID)
+			}
+			if prefs.IsPinned == nil || !*prefs.IsPinned {
+				t.Fatal("expected is_pinned=true")
+			}
+			return &model.ChatMember{
+				ChatID:            chatID,
+				UserID:            userID,
+				Role:              "member",
+				NotificationLevel: "all",
+				IsPinned:          true,
+			}, nil
+		},
+	}
+
+	app := newChatApp(cs)
+	req, _ := http.NewRequest(http.MethodPatch, "/chats/"+chatID.String()+"/members/me", bytes.NewBufferString(`{"is_pinned":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+
+	body := readBody(t, resp)
+	if body["is_pinned"] != true {
+		t.Fatalf("expected is_pinned=true, got %#v", body["is_pinned"])
+	}
+}
+
+func TestUpdateOwnMemberPreferences_ValidationFail(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+
+	app := newChatApp(&mockChatStore{})
+	req, _ := http.NewRequest(http.MethodPatch, "/chats/"+chatID.String()+"/members/me", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestUpdateOwnMemberPreferences_AuthFail(t *testing.T) {
+	chatID := uuid.New()
+
+	app := newChatApp(&mockChatStore{})
+	req, _ := http.NewRequest(http.MethodPatch, "/chats/"+chatID.String()+"/members/me", bytes.NewBufferString(`{"is_pinned":true}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 401, got %d: %s", resp.StatusCode, raw)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // UpdateDefaultPermissions

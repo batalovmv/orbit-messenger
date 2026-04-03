@@ -26,18 +26,20 @@ type MessageHandler struct {
 }
 
 type sendMessageRequest struct {
-	Content       string          `json:"content"`
-	Question      string          `json:"question"`
-	Entities      json.RawMessage `json:"entities"`
-	ReplyToID     *string         `json:"reply_to_id"`
-	Type          string          `json:"type"`
-	MediaIDs      []string        `json:"media_ids"`
-	IsSpoiler     bool            `json:"is_spoiler"`
-	Options       []string        `json:"options"`
-	IsAnonymous   *bool           `json:"is_anonymous"`
-	IsMultiple    bool            `json:"is_multiple"`
-	IsQuiz        bool            `json:"is_quiz"`
-	CorrectOption *int            `json:"correct_option"`
+	Content          string          `json:"content"`
+	Question         string          `json:"question"`
+	Entities         json.RawMessage `json:"entities"`
+	Solution         string          `json:"solution"`
+	SolutionEntities json.RawMessage `json:"solution_entities"`
+	ReplyToID        *string         `json:"reply_to_id"`
+	Type             string          `json:"type"`
+	MediaIDs         []string        `json:"media_ids"`
+	IsSpoiler        bool            `json:"is_spoiler"`
+	Options          []string        `json:"options"`
+	IsAnonymous      *bool           `json:"is_anonymous"`
+	IsMultiple       bool            `json:"is_multiple"`
+	IsQuiz           bool            `json:"is_quiz"`
+	CorrectOption    *int            `json:"correct_option"`
 }
 
 func NewMessageHandler(
@@ -229,6 +231,9 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 	if len(req.MediaIDs) > 10 {
 		return response.Error(c, apperror.BadRequest("Too many media attachments (max 10)"))
 	}
+	if len(req.SolutionEntities) > 65536 {
+		return response.Error(c, apperror.BadRequest("solution_entities too large (max 64KB)"))
+	}
 
 	scheduledAtRaw := strings.TrimSpace(c.Query("scheduled_at"))
 	if scheduledAtRaw != "" {
@@ -316,6 +321,11 @@ func (h *MessageHandler) sendPoll(
 	if req.IsAnonymous != nil {
 		isAnonymous = *req.IsAnonymous
 	}
+	solution := strings.TrimSpace(req.Solution)
+	var solutionPtr *string
+	if solution != "" {
+		solutionPtr = &solution
+	}
 
 	poll, msg, err := h.pollSvc.CreatePoll(
 		c.Context(),
@@ -327,6 +337,8 @@ func (h *MessageHandler) sendPoll(
 		req.IsMultiple,
 		req.IsQuiz,
 		req.CorrectOption,
+		solutionPtr,
+		req.SolutionEntities,
 	)
 	if err != nil {
 		return response.Error(c, err)
@@ -394,13 +406,20 @@ func (h *MessageHandler) scheduleMessage(
 		if req.IsAnonymous != nil {
 			isAnonymous = *req.IsAnonymous
 		}
+		solution := strings.TrimSpace(req.Solution)
+		var solutionPtr *string
+		if solution != "" {
+			solutionPtr = &solution
+		}
 		pollPayload = &model.ScheduledPollPayload{
-			Question:      question,
-			Options:       req.Options,
-			IsAnonymous:   isAnonymous,
-			IsMultiple:    req.IsMultiple,
-			IsQuiz:        req.IsQuiz,
-			CorrectOption: req.CorrectOption,
+			Question:         question,
+			Options:          req.Options,
+			IsAnonymous:      isAnonymous,
+			IsMultiple:       req.IsMultiple,
+			IsQuiz:           req.IsQuiz,
+			CorrectOption:    req.CorrectOption,
+			Solution:         solutionPtr,
+			SolutionEntities: req.SolutionEntities,
 		}
 	}
 
