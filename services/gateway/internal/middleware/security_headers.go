@@ -15,7 +15,7 @@ func SecurityHeadersMiddleware() fiber.Handler {
 		// img-src 'self' blob: data: — allows inline thumbnails and blob URLs for media.
 		c.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self'; "+
+				"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' blob: data:; "+
 				"media-src 'self' blob:; "+

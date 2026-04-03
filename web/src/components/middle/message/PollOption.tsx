@@ -20,6 +20,7 @@ type OwnProps = {
   answer: ApiPollAnswer;
   voteResults?: ApiPollResult[];
   totalVoters?: number;
+  maxVotersCount?: number;
   correctResults?: string[];
   shouldAnimate?: boolean;
   isMultiple?: boolean;
@@ -33,6 +34,7 @@ const PollOption: FC<OwnProps> = ({
   answer,
   voteResults,
   totalVoters,
+  maxVotersCount = 0,
   correctResults = [],
   shouldAnimate = false,
   isMultiple,
@@ -71,31 +73,30 @@ const PollOption: FC<OwnProps> = ({
   }
 
   const result = voteResults && voteResults.find((r) => r.option === answer.option);
+  const votersCount = result?.votersCount || 0;
   const isChosen = Boolean(result?.isChosen);
   const isCorrect = Boolean(result?.isCorrect) || correctResults.includes(answer.option);
   const isWrong = Boolean(correctResults.length && isChosen && !isCorrect);
   const isSelectedBar = Boolean(!isWrong && (isCorrect || (isChosen && correctResults.length === 0)));
-  const answerPercent = result ? getPercentage(result.votersCount, totalVoters || 0) : 0;
-  const [animatedPercent, setAnimatedPercent] = useState(shouldAnimate ? 0 : answerPercent);
+  const answerPercent = getPercentage(votersCount, totalVoters || 0);
+  // Bar width relative to max voters (Telegram-style: most popular option = 100% width)
+  const barWidth = maxVotersCount > 0 ? getPercentage(votersCount, maxVotersCount) : 0;
+  const [animatedBarWidth, setAnimatedBarWidth] = useState(shouldAnimate ? 0 : barWidth);
 
   useEffect(() => {
     if (!shouldAnimate) {
-      setAnimatedPercent(answerPercent);
+      setAnimatedBarWidth(barWidth);
       return undefined;
     }
 
     const frame = window.requestAnimationFrame(() => {
-      setAnimatedPercent(answerPercent);
+      setAnimatedBarWidth(barWidth);
     });
 
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [shouldAnimate, answerPercent]);
-
-  if (!voteResults || !result) {
-    return undefined;
-  }
+  }, [shouldAnimate, barWidth]);
 
   const showStatusIcon = isWrong || isCorrect || (correctResults.length === 0 && isChosen);
 
@@ -109,15 +110,17 @@ const PollOption: FC<OwnProps> = ({
       )}
       dir={lang.isRtl ? 'rtl' : undefined}
     >
-      <div className="poll-option-result-bg" aria-hidden>
-        <div
-          className={buildClassName(
-            'poll-option-bar',
-            isWrong ? 'wrong' : isSelectedBar ? 'selected' : 'unselected',
-          )}
-          style={`width: ${animatedPercent}%`}
-        />
-      </div>
+      {animatedBarWidth > 0 && (
+        <div className="poll-option-result-bg" aria-hidden>
+          <div
+            className={buildClassName(
+              'poll-option-bar',
+              isWrong ? 'wrong' : isSelectedBar ? 'selected' : 'unselected',
+            )}
+            style={`width: ${animatedBarWidth}%`}
+          />
+        </div>
+      )}
       <div className="poll-option-result-content">
         <div className="poll-option-share">
           {answerPercent}

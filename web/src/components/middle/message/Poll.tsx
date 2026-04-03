@@ -76,6 +76,10 @@ const Poll: FC<OwnProps> = ({
   const { results: voteResults, totalVoters } = results;
   const hasVoted = Boolean(voteResults && voteResults.some((r) => r.isChosen));
   const canVote = !summary.closed && !hasVoted;
+  const maxVotersCount = useMemo(() => {
+    if (!voteResults) return 0;
+    return Math.max(...voteResults.map((r) => r.votersCount), 0);
+  }, [voteResults]);
   const canViewResult = !canVote && summary.isPublic && Number(results.totalVoters) > 0;
   const isMultiple = Boolean(summary.multipleChoice);
   const recentVoterIds = results.recentVoterIds;
@@ -156,15 +160,18 @@ const Poll: FC<OwnProps> = ({
       return;
     }
 
-    setChosenOptions((current) => {
-      if (isMultiple) {
+    if (isMultiple) {
+      setChosenOptions((current) => {
         return current.includes(option)
           ? current.filter((currentOption) => currentOption !== option)
           : [...current, option];
-      }
-
-      return current[0] === option ? current : [option];
-    });
+      });
+    } else {
+      // Single-choice: submit immediately on click (Telegram behavior)
+      setIsSubmitting(true);
+      setWasSubmitted(true);
+      onSendVote([option]);
+    }
   });
 
   const handleVoteClick = useLastCallback(() => {
@@ -211,6 +218,7 @@ const Poll: FC<OwnProps> = ({
         answer={answer}
         voteResults={voteResults}
         totalVoters={totalVoters}
+        maxVotersCount={maxVotersCount}
         correctResults={correctResults}
       />
     );
@@ -309,7 +317,7 @@ const Poll: FC<OwnProps> = ({
           {summaryAnswers.map(renderResultOption)}
         </div>
       )}
-      {canVote && (
+      {canVote && isMultiple && (
         <Button
           className={buildClassName('poll-action-button', chosenOptions.length > 0 && 'active')}
           isText

@@ -88,11 +88,15 @@
   }
 
   .poll-option-bar {
-    min-width: 0.5rem;
-    height: 1.75rem;
+    height: 100%;
     border-radius: 0.75rem;
-    background: var(--poll-primary-color);
+    opacity: 0.3;
     transition: width 0.3s ease;
+
+    &.selected {
+      background: var(--poll-primary-color);
+      opacity: 0.4;
+    }
 
     &.unselected {
       background: var(--color-interactive-element-hover);
@@ -100,6 +104,7 @@
 
     &.wrong {
       background: var(--color-error);
+      opacity: 0.4;
     }
   }
 
