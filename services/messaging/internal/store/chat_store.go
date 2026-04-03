@@ -69,7 +69,8 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		       c.is_signatures, c.created_at, c.updated_at,
 		       m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		       m.sequence_number, m.created_at, m.edited_at,
+		       m.grouped_id, m.is_one_time, m.sequence_number, m.created_at, m.edited_at,
+		       m.viewed_at, m.viewed_by,
 		       (SELECT COUNT(*) FROM chat_members cm2 WHERE cm2.chat_id = c.id) as member_count,
 		       (SELECT COUNT(*) FROM messages msg
 		        WHERE msg.chat_id = c.id AND msg.is_deleted = false
@@ -113,10 +114,11 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		var item model.ChatListItem
 		var msg model.Message
 		var msgID, msgChatID, msgSenderID, msgReplyToID, msgForwardedFrom *uuid.UUID
-		var msgType, msgContent *string
+		var msgType, msgContent, msgGroupedID *string
 		var msgSeq *int64
-		var msgCreatedAt, msgEditedAt *time.Time
-		var msgIsEdited, msgIsDeleted, msgIsPinned, msgIsForwarded *bool
+		var msgCreatedAt, msgEditedAt, msgViewedAt *time.Time
+		var msgViewedBy *uuid.UUID
+		var msgIsEdited, msgIsDeleted, msgIsPinned, msgIsForwarded, msgIsOneTime *bool
 		var ouID *uuid.UUID
 		var ouDisplayName *string
 		var ouAvatarURL *string
@@ -130,7 +132,8 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&item.Chat.IsSignatures, &item.Chat.CreatedAt, &item.Chat.UpdatedAt,
 			&msgID, &msgChatID, &msgSenderID, &msgType, &msgContent, &msgReplyToID,
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
-			&msgSeq, &msgCreatedAt, &msgEditedAt,
+			&msgGroupedID, &msgIsOneTime, &msgSeq, &msgCreatedAt, &msgEditedAt,
+			&msgViewedAt, &msgViewedBy,
 			&item.MemberCount, &item.UnreadCount,
 			&item.Chat.IsPinned, &item.Chat.IsMuted, &item.Chat.IsArchived,
 			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt,
@@ -161,6 +164,12 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 				msg.IsForwarded = *msgIsForwarded
 			}
 			msg.ForwardedFrom = msgForwardedFrom
+			msg.GroupedID = msgGroupedID
+			if msgIsOneTime != nil {
+				msg.IsOneTime = *msgIsOneTime
+			}
+			msg.ViewedAt = msgViewedAt
+			msg.ViewedBy = msgViewedBy
 			if msgSeq != nil {
 				msg.SequenceNumber = *msgSeq
 			}

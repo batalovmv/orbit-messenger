@@ -831,6 +831,7 @@ export {
   pinMessage, searchMessagesInChat, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
   fetchMessage, sendPollVote, closePoll, loadPollOptionResults, fetchScheduledHistory,
   sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage,
+  viewOneTimeMessage,
 } from './messages';
 
 export {

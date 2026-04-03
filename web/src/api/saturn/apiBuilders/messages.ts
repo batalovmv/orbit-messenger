@@ -481,7 +481,14 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
 
   if (msg.media_attachments?.length) {
     buildMediaContent(content, msg.media_attachments);
-  } else if (richContent?.kind === 'sticker') {
+  }
+
+  // One-time media: set ttlSeconds so TG Web A renders blur/one-time overlay
+  if (msg.is_one_time && !msg.viewed_at) {
+    content.ttlSeconds = 2147483647;
+  }
+
+  if (!msg.media_attachments?.length && richContent?.kind === 'sticker') {
     content.sticker = buildStickerFromSerializedMessage(richContent.sticker);
   } else if (richContent?.kind === 'gif') {
     content.video = buildGifFromSerializedMessage(richContent.gif);

@@ -93,7 +93,14 @@ func (s *stickerStore) ListFeatured(ctx context.Context, limit int) ([]model.Sti
 	}
 	defer rows.Close()
 
-	return scanStickerPacks(rows)
+	packs, err := scanStickerPacks(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydratePackStickers(ctx, packs); err != nil {
+		return nil, err
+	}
+	return packs, nil
 }
 
 func (s *stickerStore) Search(ctx context.Context, query string, limit int) ([]model.StickerPack, error) {
@@ -117,7 +124,14 @@ func (s *stickerStore) Search(ctx context.Context, query string, limit int) ([]m
 	}
 	defer rows.Close()
 
-	return scanStickerPacks(rows)
+	packs, err := scanStickerPacks(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydratePackStickers(ctx, packs); err != nil {
+		return nil, err
+	}
+	return packs, nil
 }
 
 func (s *stickerStore) ListInstalled(ctx context.Context, userID uuid.UUID) ([]model.StickerPack, error) {
@@ -135,7 +149,14 @@ func (s *stickerStore) ListInstalled(ctx context.Context, userID uuid.UUID) ([]m
 	}
 	defer rows.Close()
 
-	return scanStickerPacks(rows)
+	packs, err := scanStickerPacks(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hydratePackStickers(ctx, packs); err != nil {
+		return nil, err
+	}
+	return packs, nil
 }
 
 func (s *stickerStore) Install(ctx context.Context, userID, packID uuid.UUID) error {
@@ -285,7 +306,7 @@ func (s *stickerStore) CreatePack(ctx context.Context, pack *model.StickerPack, 
 			author_id = EXCLUDED.author_id,
 			thumbnail_url = EXCLUDED.thumbnail_url,
 			is_official = EXCLUDED.is_official,
-			is_featured = true,
+			is_featured = EXCLUDED.is_featured,
 			is_animated = EXCLUDED.is_animated,
 			sticker_count = EXCLUDED.sticker_count,
 			updated_at = NOW()
@@ -610,4 +631,46 @@ func scanStickerPacks(rows pgx.Rows) ([]model.StickerPack, error) {
 		return nil, fmt.Errorf("iterate sticker packs: %w", err)
 	}
 	return packs, nil
+}
+
+func (s *stickerStore) hydratePackStickers(ctx context.Context, packs []model.StickerPack) error {
+	if len(packs) == 0 {
+		return nil
+	}
+
+	packIDs := make([]uuid.UUID, len(packs))
+	for i, p := range packs {
+		packIDs[i] = p.ID
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, pack_id, emoji, file_url, file_type, width, height, position
+		FROM stickers
+		WHERE pack_id = ANY($1)
+		ORDER BY pack_id, position ASC`,
+		packIDs,
+	)
+	if err != nil {
+		return fmt.Errorf("hydrate pack stickers: %w", err)
+	}
+	defer rows.Close()
+
+	stickersByPack := make(map[uuid.UUID][]model.Sticker)
+	for rows.Next() {
+		var sticker model.Sticker
+		if err := rows.Scan(
+			&sticker.ID, &sticker.PackID, &sticker.Emoji,
+			&sticker.FileURL, &sticker.FileType,
+			&sticker.Width, &sticker.Height, &sticker.Position,
+		); err != nil {
+			return fmt.Errorf("scan sticker: %w", err)
+		}
+		stickersByPack[sticker.PackID] = append(stickersByPack[sticker.PackID], sticker)
+	}
+
+	for i := range packs {
+		packs[i].Stickers = stickersByPack[packs[i].ID]
+	}
+
+	return nil
 }

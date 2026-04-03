@@ -76,6 +76,9 @@ export interface SaturnMessage {
   reactions?: SaturnReactionSummary[];
   poll?: SaturnPoll;
   grouped_id?: string;
+  is_one_time?: boolean;
+  viewed_at?: string;
+  viewed_by?: string;
 }
 
 export interface SaturnMediaAttachment {

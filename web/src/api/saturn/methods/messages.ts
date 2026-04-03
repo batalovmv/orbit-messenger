@@ -1461,6 +1461,31 @@ export async function deleteScheduledMessages({
   return true;
 }
 
+export async function viewOneTimeMessage({
+  chat,
+  messageId,
+}: {
+  chat: { id: string };
+  messageId: number;
+}) {
+  const uuid = resolveMessageUuid(chat.id, messageId)
+    || getGlobalMessage(chat.id, messageId)?.saturnId;
+  if (!uuid) return undefined;
+
+  const msg = await client.request<SaturnMessage>('POST', `/messages/${uuid}/view`);
+  if (!msg) return undefined;
+
+  const apiMessage = buildApiMessage(msg);
+  sendApiUpdate({
+    '@type': 'updateMessage',
+    chatId: chat.id,
+    id: apiMessage.id,
+    message: apiMessage,
+  });
+
+  return true;
+}
+
 export async function rescheduleMessage({
   chat,
   message,
