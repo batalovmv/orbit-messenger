@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
+	"github.com/mst-corp/orbit/services/messaging/internal/store"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -513,6 +515,105 @@ func TestSendMediaMessage_DirectChatMember_AllowedWithDirectDefaults(t *testing.
 	)
 	if err != nil {
 		t.Fatalf("direct chat member should be able to send media with direct defaults: %v", err)
+	}
+}
+
+func TestViewOneTimeMessage_NotFound(t *testing.T) {
+	rec := &RecordingPublisher{}
+	svc := newTestMessageService(&mockMessageStore{
+		markOneTimeViewedFn: func(_ context.Context, _, _ uuid.UUID) (*model.Message, error) {
+			return nil, pgx.ErrNoRows
+		},
+	}, &mockChatStore{}, rec, nil)
+
+	_, err := svc.ViewOneTimeMessage(context.Background(), uuid.New(), uuid.New())
+	msgAssertAppError(t, err, 404)
+}
+
+func TestViewOneTimeMessage_Forbidden(t *testing.T) {
+	rec := &RecordingPublisher{}
+	svc := newTestMessageService(&mockMessageStore{
+		markOneTimeViewedFn: func(_ context.Context, _, _ uuid.UUID) (*model.Message, error) {
+			return nil, store.ErrMessageForbidden
+		},
+	}, &mockChatStore{}, rec, nil)
+
+	_, err := svc.ViewOneTimeMessage(context.Background(), uuid.New(), uuid.New())
+	msgAssertAppError(t, err, 403)
+}
+
+func TestViewOneTimeMessage_NotOneTime(t *testing.T) {
+	rec := &RecordingPublisher{}
+	svc := newTestMessageService(&mockMessageStore{
+		markOneTimeViewedFn: func(_ context.Context, _, _ uuid.UUID) (*model.Message, error) {
+			return nil, store.ErrMessageNotOneTime
+		},
+	}, &mockChatStore{}, rec, nil)
+
+	_, err := svc.ViewOneTimeMessage(context.Background(), uuid.New(), uuid.New())
+	msgAssertAppError(t, err, 400)
+}
+
+func TestViewOneTimeMessage_SuccessPublishesUpdate(t *testing.T) {
+	chatID := uuid.New()
+	messageID := uuid.New()
+	viewerID := uuid.New()
+	viewedAt := time.Now()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getMemberIDsFn: func(_ context.Context, id uuid.UUID) ([]string, error) {
+			if id != chatID {
+				t.Fatalf("unexpected chat id: %s", id)
+			}
+			return []string{viewerID.String()}, nil
+		},
+	}
+
+	ms := &mockMessageStore{
+		markOneTimeViewedFn: func(_ context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+			if msgID != messageID {
+				t.Fatalf("unexpected message id: %s", msgID)
+			}
+			if userID != viewerID {
+				t.Fatalf("unexpected viewer id: %s", userID)
+			}
+			return &model.Message{
+				ID:         messageID,
+				ChatID:     chatID,
+				SenderID:   &viewerID,
+				Type:       "photo",
+				IsOneTime:  true,
+				ViewedAt:   &viewedAt,
+				ViewedBy:   &viewerID,
+				CreatedAt:  viewedAt,
+				SenderName: "Viewer",
+			}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	msg, err := svc.ViewOneTimeMessage(context.Background(), messageID, viewerID)
+	if err != nil {
+		t.Fatalf("ViewOneTimeMessage: %v", err)
+	}
+	if msg == nil || msg.ViewedAt == nil {
+		t.Fatalf("expected viewed message with viewed_at, got %+v", msg)
+	}
+
+	events := rec.FindByEvent("message_updated")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 message_updated event, got %d", len(events))
+	}
+	if events[0].Subject != "orbit.chat."+chatID.String()+".message.updated" {
+		t.Fatalf("unexpected subject: %s", events[0].Subject)
+	}
+	updated, ok := events[0].Data.(*model.Message)
+	if !ok {
+		t.Fatalf("event data should be *model.Message, got %T", events[0].Data)
+	}
+	if updated.ViewedAt == nil || updated.ViewedBy == nil || *updated.ViewedBy != viewerID {
+		t.Fatalf("expected viewed metadata in event, got %+v", updated)
 	}
 }
 
