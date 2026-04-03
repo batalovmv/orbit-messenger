@@ -216,15 +216,24 @@ async function searchMessagesGlobal<T extends GlobalState>(global: T, params: {
   const previousSearchFlood = selectTabState(global, tabId).globalSearch.searchFlood;
 
   if (peer) {
-    const inChatResultRequest = callApi('searchMessagesInChat', {
-      peer,
-      query,
-      type,
-      limit: GLOBAL_SEARCH_SLICE,
-      offsetId,
-      minDate,
-      maxDate,
-    });
+    const inChatResultRequest = type === 'text'
+      ? callApi('searchMessagesInChatWithFilters', {
+        chatId: peer.id,
+        query,
+        limit: GLOBAL_SEARCH_SLICE,
+        offset: offsetId,
+        minDate,
+        maxDate,
+      })
+      : callApi('searchMessagesInChat', {
+        peer,
+        query,
+        type,
+        limit: GLOBAL_SEARCH_SLICE,
+        offsetId,
+        minDate,
+        maxDate,
+      });
     const isChat = isApiPeerChat(peer);
     const topicsRequest = isChat && peer.isForum ? callApi('fetchTopics', {
       chat: peer,

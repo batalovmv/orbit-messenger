@@ -81,6 +81,8 @@ export function updateMiddleSearch<T extends GlobalState>(
     currentSearch.type !== updated.type
     || currentSearch.savedTag !== updated.savedTag
     || currentSearch.fromPeerId !== updated.fromPeerId
+    || currentSearch.dateFrom !== updated.dateFrom
+    || currentSearch.dateTo !== updated.dateTo
   )) {
     updated.results = undefined;
   }

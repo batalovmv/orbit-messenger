@@ -179,6 +179,7 @@ const SearchInput: FC<OwnProps> = ({
       <input
         ref={inputRef}
         id={inputId}
+        name={inputId || 'search'}
         type="text"
         dir="auto"
         placeholder={placeholder || oldLang('Search')}

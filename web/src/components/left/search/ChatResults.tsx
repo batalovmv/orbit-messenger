@@ -337,7 +337,7 @@ const ChatResults: FC<OwnProps & StateProps> = ({
 
   const shouldRenderTopPeers = !searchQuery && !searchDate && !isChannelList;
 
-  const { observe } = useIntersectionObserver({
+  useIntersectionObserver({
     rootRef: containerRef,
     throttleMs: INTERSECTION_THROTTLE,
     isDisabled: !shouldRenderTopPeers,

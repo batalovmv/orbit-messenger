@@ -64,7 +64,7 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
   currentSearch = selectCurrentMiddleSearch(global, tabId)!;
 
   const {
-    results, savedTag, type, isHashtag, fromPeerId,
+    results, savedTag, type, isHashtag, fromPeerId, dateFrom, dateTo,
   } = currentSearch;
   const shouldReuseParams = results?.query === query;
   const fromPeer = fromPeerId ? selectPeer(global, fromPeerId) : undefined;
@@ -74,7 +74,8 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
   const offsetPeerId = shouldReuseParams ? results?.nextOffsetPeerId : undefined;
   const offsetPeer = shouldReuseParams && offsetPeerId ? selectChat(global, offsetPeerId) : undefined;
 
-  const shouldHaveQuery = isHashtag || (!savedTag && !fromPeerId);
+  const hasFilterOnlySearch = Boolean(fromPeerId || dateFrom || dateTo);
+  const shouldHaveQuery = isHashtag || (!savedTag && !hasFilterOnlySearch);
   if (shouldHaveQuery && !query) {
     global = updateMiddleSearch(global, realChatId, threadId, {
       fetchingQuery: undefined,
@@ -90,17 +91,28 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
 
   let result;
   if (type === 'chat') {
-    result = await callApi('searchMessagesInChat', {
-      peer,
-      type: 'text',
-      query: isHashtag ? `#${query}` : query,
-      threadId,
-      limit: MESSAGE_SEARCH_SLICE,
-      offsetId,
-      isSavedDialog,
-      savedTag,
-      fromPeer,
-    });
+    result = savedTag
+      ? await callApi('searchMessagesInChat', {
+        peer,
+        type: 'text',
+        query: isHashtag ? `#${query}` : query,
+        threadId,
+        limit: MESSAGE_SEARCH_SLICE,
+        offsetId,
+        isSavedDialog,
+        savedTag,
+        fromPeer,
+      })
+      : await callApi('searchMessagesInChatWithFilters', {
+        chatId: peer.id,
+        query: isHashtag ? `#${query}` : query,
+        fromUserId: fromPeerId,
+        dateFrom,
+        dateTo,
+        type: 'text',
+        limit: MESSAGE_SEARCH_SLICE,
+        offset: offsetId,
+      });
   }
 
   if (type === 'myChats') {
@@ -138,7 +150,12 @@ addActionHandler('performMiddleSearch', async (global, actions, payload): Promis
 
   currentSearch = selectCurrentMiddleSearch(global, tabId);
   const hasTagChanged = currentSearch?.savedTag && !isSameReaction(savedTag, currentSearch.savedTag);
-  const hasSearchChanged = currentSearch?.fetchingQuery !== query;
+  const hasSearchChanged = currentSearch?.fetchingQuery !== query
+    || currentSearch?.fromPeerId !== fromPeerId
+    || currentSearch?.dateFrom !== dateFrom
+    || currentSearch?.dateTo !== dateTo
+    || currentSearch?.type !== type
+    || Boolean(currentSearch?.isHashtag) !== Boolean(isHashtag);
   if (!currentSearch || hasSearchChanged || hasTagChanged) {
     return;
   }
@@ -204,6 +221,10 @@ addActionHandler('searchSharedMediaMessages', (global, actions, payload): Action
   const offsetId = currentResults?.nextOffsetId;
 
   if (!type) {
+    return;
+  }
+
+  if (currentResults && offsetId === undefined) {
     return;
   }
 
@@ -322,7 +343,7 @@ async function searchSharedMedia<T extends GlobalState>(
   );
   setGlobal(global);
 
-  if (!isBudgetPreload) {
+  if (!isBudgetPreload && nextOffsetId !== undefined) {
     void searchSharedMedia(global, peer, threadId, type, nextOffsetId, true, isSavedDialog, tabId);
   }
 }

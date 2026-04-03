@@ -2,6 +2,7 @@ import type { ActionReturnType } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+import { buildChatThreadKey } from '../../helpers/middleSearch';
 import { addActionHandler } from '../../index';
 import {
   closeMiddleSearch,
@@ -9,7 +10,7 @@ import {
   updateMiddleSearch,
   updateSharedMediaSearchType,
 } from '../../reducers';
-import { selectCurrentMessageList } from '../../selectors';
+import { selectCurrentMessageList, selectTabState } from '../../selectors';
 
 addActionHandler('openMiddleSearch', (global, actions, payload): ActionReturnType => {
   const { fromPeerId, tabId = getCurrentTabId() } = payload || {};
@@ -72,8 +73,14 @@ addActionHandler('setSharedMediaSearchType', (global, actions, payload): ActionR
     return undefined;
   }
 
+  const currentSearch = selectTabState(global, tabId).sharedMediaSearch.byChatThreadKey[
+    buildChatThreadKey(chatId, threadId)
+  ];
+  const isSameType = currentSearch?.currentType === mediaType;
+  const hasCachedResults = Boolean(mediaType && currentSearch?.resultsByType?.[mediaType]);
+
   // Trigger initial search after state is updated
-  if (mediaType) {
+  if (mediaType && !isSameType && !hasCachedResults) {
     queueMicrotask(() => {
       actions.searchSharedMediaMessages({ tabId });
     });

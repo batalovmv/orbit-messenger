@@ -29,12 +29,11 @@ import {
   selectMonoforumChannel,
   selectPeer,
   selectSender,
-  selectTabState,
 } from '../../../global/selectors';
 import { IS_IOS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
-import { getDayStartAt } from '../../../util/dates/dateFormat';
+import { formatDateToString } from '../../../util/dates/dateFormat';
 import focusEditableElement from '../../../util/focusEditableElement';
 import focusNoScroll from '../../../util/focusNoScroll';
 import { getSearchResultKey, parseSearchResultKey, type SearchResultKey } from '../../../util/keys/searchResultKey';
@@ -54,6 +53,8 @@ import useOldLang from '../../../hooks/useOldLang';
 import usePeerSearch, { prepareChatMemberSearch } from '../../../hooks/usePeerSearch';
 
 import Avatar from '../../common/Avatar';
+import CalendarModalAsync from '../../common/CalendarModal.async';
+import Icon from '../../common/icons/Icon';
 import PeerChip from '../../common/PeerChip';
 import Button from '../../ui/Button';
 import InfiniteScroll from '../../ui/InfiniteScroll';
@@ -78,7 +79,6 @@ type StateProps = {
   totalCount?: number;
   lastSearchQuery?: string;
   foundIds?: SearchResultKey[];
-  isHistoryCalendarOpen?: boolean;
   isCurrentUserPremium?: boolean;
   isSavedMessages?: boolean;
   fetchingQuery?: string;
@@ -86,6 +86,8 @@ type StateProps = {
   searchType?: MiddleSearchType;
   currentUserId?: string;
   fromPeerId?: string;
+  dateFrom?: string;
+  dateTo?: string;
   isGroupChat?: boolean;
 };
 
@@ -102,6 +104,22 @@ const INLINE_MEMBER_COUNT = 5;
 
 const runDebouncedForSearch = debounce((cb) => cb(), 200, false);
 
+function toSearchDateFrom(date: Date) {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return normalizedDate.toISOString();
+}
+
+function toSearchDateTo(date: Date) {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(23, 59, 59, 999);
+  return normalizedDate.toISOString();
+}
+
+function getSearchDateTimestamp(value?: string) {
+  return value ? new Date(value).getTime() : undefined;
+}
+
 const MiddleSearch: FC<OwnProps & StateProps> = ({
   isActive,
   chat,
@@ -113,7 +131,6 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   totalCount,
   lastSearchQuery,
   foundIds,
-  isHistoryCalendarOpen,
   isCurrentUserPremium,
   isSavedMessages,
   fetchingQuery,
@@ -121,6 +138,8 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   searchType = 'chat',
   currentUserId,
   fromPeerId,
+  dateFrom,
+  dateTo,
   isGroupChat,
 }) => {
   const {
@@ -129,7 +148,6 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     performMiddleSearch,
     focusMessage,
     closeMiddleSearch,
-    openHistoryCalendar,
     openPremiumModal,
     loadSavedReactionTags,
   } = getActions();
@@ -157,6 +175,8 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isFromFilterMode, setIsFromFilterMode] = useState(Boolean(fromPeerId));
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [dateFilterBoundary, setDateFilterBoundary] = useState<'from' | 'to' | undefined>();
+  const shouldPromptDateToRef = useRef(false);
 
   useEffect(() => {
     if (fromPeerId) {
@@ -171,6 +191,10 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   );
 
   const hasMemberDropdown = isFromFilterMode && !fromPeerId;
+  const hasDateFilters = Boolean(dateFrom || dateTo);
+  const selectedDatePickerAt = dateFilterBoundary === 'to'
+    ? getSearchDateTimestamp(dateTo) || getSearchDateTimestamp(dateFrom)
+    : getSearchDateTimestamp(dateFrom);
 
   const { result: memberSearchResults, isLoading: isMemberSearchLoading } = usePeerSearch({
     query: hasMemberDropdown ? (memberSearchQuery || ' ') : query,
@@ -186,11 +210,11 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   });
   useClickOutside([ref], handleClickOutside);
 
-  const hasResultsContainer = Boolean(((query || fromPeerId) && foundIds) || isHashtagQuery);
+  const hasResultsContainer = Boolean(((query || fromPeerId || hasDateFilters) && foundIds) || isHashtagQuery);
   const isOnlyHash = isHashtagQuery && !query;
   const isNonFocusedDropdownForced = searchType === 'myChats' || searchType === 'channels';
   const hasMemberResults = !isHashtagQuery && Boolean(memberSearchResults?.length);
-  const hasQueryData = Boolean((query && !isOnlyHash) || savedTag || fromPeerId);
+  const hasQueryData = Boolean((query && !isOnlyHash) || savedTag || fromPeerId || hasDateFilters);
   const hasNavigationButtons = searchType === 'chat' && Boolean(foundIds?.length);
 
   const handleClose = useLastCallback(() => {
@@ -263,6 +287,8 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
       setQuery('');
       setIsFromFilterMode(false);
       setMemberSearchQuery('');
+      setDateFilterBoundary(undefined);
+      shouldPromptDateToRef.current = false;
       hiddenTimerRef.current = window.setTimeout(() => setIsFullyHidden(true), HIDE_TIMEOUT);
     } else {
       setIsFullyHidden(false);
@@ -290,18 +316,8 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     }
   }, [isActive, lastSearchQuery, query]);
 
-  useEffectWithPrevDeps(([prevIsCalendarOpen]) => {
-    if (!isActive || prevIsCalendarOpen === isHistoryCalendarOpen) return;
-    if (isHistoryCalendarOpen) {
-      blurInput();
-      markBlurred();
-    } else {
-      focusInput();
-    }
-  }, [isHistoryCalendarOpen, isActive]);
-
   const handleReset = useLastCallback(() => {
-    if (!query?.length && !savedTag && !fromPeerId && !isFromFilterMode) {
+    if (!query?.length && !savedTag && !fromPeerId && !isFromFilterMode && !hasDateFilters) {
       handleClose();
       return;
     }
@@ -310,6 +326,9 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     setIsLoading(false);
     setIsFromFilterMode(false);
     setMemberSearchQuery('');
+    setDateFilterBoundary(undefined);
+    shouldCancelSearchRef.current = false;
+    shouldPromptDateToRef.current = false;
     resetMiddleSearch();
     focusInput();
   });
@@ -366,7 +385,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     // Normal query update (including when fromPeerId is set - query is separate)
     setQuery(newQuery);
 
-    if (!newQuery && !fromPeerId) {
+    if (!newQuery && !fromPeerId && !dateFrom && !dateTo) {
       setIsLoading(false);
       resetMiddleSearch();
       shouldCancelSearchRef.current = true;
@@ -374,10 +393,10 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   });
 
   useEffect(() => {
-    if (isActive && (query || fromPeerId)) {
+    if (isActive && (query || fromPeerId || dateFrom || dateTo)) {
       handleSearch();
     }
-  }, [isActive, query, fromPeerId]);
+  }, [isActive, query, fromPeerId, dateFrom, dateTo]);
 
   useEffect(() => {
     setIsLoading(Boolean(fetchingQuery));
@@ -443,7 +462,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     && (hasMemberDropdown ? viewportMemberIds : memberSearchResults.slice(0, INLINE_MEMBER_COUNT))) || undefined;
 
   const viewportResults = useMemo(() => {
-    if ((!query && !savedTag && !fromPeerId) || !viewportIds?.length) {
+    if ((!query && !savedTag && !fromPeerId && !hasDateFilters) || !viewportIds?.length) {
       return MEMO_EMPTY_ARRAY;
     }
     const global = getGlobal();
@@ -469,10 +488,14 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
         senderPeer,
       };
     }).filter(Boolean);
-  }, [query, savedTag, fromPeerId, viewportIds, isSavedMessages]);
+  }, [query, savedTag, fromPeerId, hasDateFilters, viewportIds, isSavedMessages]);
 
   const areResultsEmpty = Boolean(
-    (query || fromPeerId) && !isLoading && !viewportResults.length && !isOnlyHash && !hasMemberResults,
+    (query || fromPeerId || hasDateFilters)
+    && !isLoading
+    && !viewportResults.length
+    && !isOnlyHash
+    && !hasMemberResults,
   );
   const hasResultsPlaceholder = areResultsEmpty || isOnlyHash;
   const hasResultsDropdown = isActive && (isViewAsList || !isMobile) && (isFocused || isNonFocusedDropdownForced)
@@ -538,6 +561,88 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     handleSearch();
   });
 
+  const dateFilterLabel = useMemo(() => {
+    if (!hasDateFilters) {
+      return undefined;
+    }
+
+    const formatSearchDate = (value: string) => formatDateToString(new Date(value), lang.code);
+
+    if (dateFrom && dateTo) {
+      const fromDateLabel = formatSearchDate(dateFrom);
+      const toDateLabel = formatSearchDate(dateTo);
+
+      if (fromDateLabel === toDateLabel) {
+        return fromDateLabel;
+      }
+
+      return lang('SearchFilterDateRangeValue', {
+        from: fromDateLabel,
+        to: toDateLabel,
+      });
+    }
+
+    if (dateFrom) {
+      return lang('SearchFilterDateFromValue', {
+        date: formatSearchDate(dateFrom),
+      });
+    }
+
+    return lang('SearchFilterDateToValue', {
+      date: formatSearchDate(dateTo!),
+    });
+  }, [dateFrom, dateTo, hasDateFilters, lang]);
+
+  const openDateFilterPicker = useLastCallback((boundary: 'from' | 'to', shouldPromptDateTo = false) => {
+    shouldPromptDateToRef.current = boundary === 'from' && shouldPromptDateTo;
+    setDateFilterBoundary(boundary);
+    blurInput();
+    markBlurred();
+  });
+
+  const closeDateFilterPicker = useLastCallback(() => {
+    shouldPromptDateToRef.current = false;
+    setDateFilterBoundary(undefined);
+    focusInput();
+  });
+
+  const handleOpenDateFilter = useLastCallback(() => {
+    openDateFilterPicker('from', !dateTo);
+  });
+
+  const handleClearDateFilter = useLastCallback(() => {
+    updateSearchParams({ dateFrom: undefined, dateTo: undefined });
+    closeDateFilterPicker();
+  });
+
+  const handleSelectDateFilter = useLastCallback((selectedDate: Date) => {
+    if (dateFilterBoundary === 'from') {
+      const nextDateFrom = toSearchDateFrom(selectedDate);
+      const shouldResetDateTo = Boolean(
+        dateTo && getSearchDateTimestamp(dateTo)! < getSearchDateTimestamp(nextDateFrom)!,
+      );
+
+      updateSearchParams({
+        dateFrom: nextDateFrom,
+        dateTo: shouldResetDateTo ? undefined : dateTo,
+      });
+
+      if (shouldPromptDateToRef.current || shouldResetDateTo) {
+        shouldPromptDateToRef.current = false;
+        setDateFilterBoundary('to');
+        return;
+      }
+
+      closeDateFilterPicker();
+      return;
+    }
+
+    updateSearchParams({
+      dateTo: toSearchDateTo(selectedDate),
+    });
+    closeDateFilterPicker();
+  });
+
   const activateSearchTag = useLastCallback((tag: ApiReaction) => {
     if (areSavedTagsDisabled) {
       openPremiumModal({
@@ -573,6 +678,11 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
 
     if (savedTag) {
       removeSearchSavedTag();
+      return;
+    }
+
+    if (hasDateFilters) {
+      handleClearDateFilter();
     }
   });
 
@@ -817,6 +927,31 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
                 {fromPeerId && <PeerChip peerId={fromPeerId} forceShowSelf canClose onClick={handleDeleteTag} />}
               </div>
             )}
+            {dateFilterLabel && (
+              <div
+                className={styles.filterChip}
+                role="button"
+                tabIndex={0}
+                onClick={handleOpenDateFilter}
+              >
+                <Icon name="calendar" className={styles.filterChipIcon} />
+                <span className={styles.filterChipLabel}>
+                  {lang('SearchFilterDate')}
+                  {' '}
+                  {dateFilterLabel}
+                </span>
+                <button
+                  type="button"
+                  className={styles.filterChipClose}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleClearDateFilter();
+                  }}
+                >
+                  <Icon name="close" className={styles.filterChipCloseIcon} />
+                </button>
+              </div>
+            )}
           </div>
           {!isMobile && renderDropdown()}
         </SearchInput>
@@ -828,16 +963,17 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
                 size="smaller"
                 color="translucent"
                 onClick={handleFromFilterClick}
-                ariaLabel={oldLang('FilterByUser')}
+                ariaLabel={oldLang('SearchFilterFrom')}
                 iconName="user"
               />
             )}
             <Button
+              className={buildClassName(hasDateFilters && styles.activeFilterButton)}
               round
               size="smaller"
               color="translucent"
-              onClick={() => openHistoryCalendar({ selectedAt: getDayStartAt(Date.now()) })}
-              ariaLabel={oldLang('JumpToDate')}
+              onClick={handleOpenDateFilter}
+              ariaLabel={lang('AriaSearchByDate')}
               iconName="calendar"
             />
           </div>
@@ -852,16 +988,17 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
               size="smaller"
               color="translucent"
               onClick={handleFromFilterClick}
-              ariaLabel={oldLang('FilterByUser')}
+              ariaLabel={oldLang('SearchFilterFrom')}
               iconName="user"
             />
           )}
           <Button
+            className={buildClassName(hasDateFilters && styles.activeFilterButton)}
             round
             size="smaller"
             color="translucent"
-            onClick={() => openHistoryCalendar({ selectedAt: getDayStartAt(Date.now()) })}
-            ariaLabel={oldLang('JumpToDate')}
+            onClick={handleOpenDateFilter}
+            ariaLabel={lang('AriaSearchByDate')}
             iconName="calendar"
           />
           <div className={styles.counter}>
@@ -911,6 +1048,15 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
           )}
         </div>
       )}
+      <CalendarModalAsync
+        isOpen={Boolean(dateFilterBoundary)}
+        isPastMode
+        minAt={dateFilterBoundary === 'to' ? getSearchDateTimestamp(dateFrom) : undefined}
+        selectedAt={selectedDatePickerAt}
+        submitButtonLabel={dateFilterBoundary === 'to' ? lang('SearchFilterDateTo') : lang('SearchFilterDateFrom')}
+        onClose={closeDateFilterPicker}
+        onSubmit={handleSelectDateFilter}
+      />
     </div>
   );
 };
@@ -929,7 +1075,7 @@ export default memo(withGlobal<OwnProps>(
     }
 
     const {
-      requestedQuery, savedTag, results, fetchingQuery, isHashtag, type, fromPeerId,
+      requestedQuery, savedTag, results, fetchingQuery, isHashtag, type, fromPeerId, dateFrom, dateTo,
     } = selectCurrentMiddleSearch(global) || {};
     const { totalCount, foundIds, query: lastSearchQuery } = results || {};
 
@@ -948,7 +1094,6 @@ export default memo(withGlobal<OwnProps>(
       totalCount,
       threadId,
       foundIds,
-      isHistoryCalendarOpen: Boolean(selectTabState(global).historyCalendarSelectedAt),
       savedTags,
       savedTag,
       isCurrentUserPremium: selectIsCurrentUserPremium(global),
@@ -959,6 +1104,8 @@ export default memo(withGlobal<OwnProps>(
       searchType: type,
       lastSearchQuery,
       fromPeerId,
+      dateFrom,
+      dateTo,
       isGroupChat: isChatGroup(chat),
     };
   },
