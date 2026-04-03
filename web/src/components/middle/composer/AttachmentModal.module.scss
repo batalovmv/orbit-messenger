@@ -103,6 +103,16 @@
   }
 }
 
+.headerActions {
+  display: flex;
+  gap: 0.375rem;
+  margin-inline-start: auto;
+}
+
+.headerActionButton {
+  flex-shrink: 0;
+}
+
 .attachments-bottom-padding {
   padding-bottom: 0.5rem;
 }

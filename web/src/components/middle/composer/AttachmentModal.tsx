@@ -75,12 +75,15 @@ export type OwnProps = {
   forceDarkTheme?: boolean;
   canScheduleUntilOnline?: boolean;
   canSchedule?: boolean;
+  canSendOneTimeMedia?: boolean;
+  isOneTimeMediaEnabled?: boolean;
   paidMessagesStars?: number;
   onCaptionUpdate: (html: string) => void;
   onSend: (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => void;
   onFileAppend: (files: File[], isSpoiler?: boolean) => void;
   onAttachmentsUpdate: (attachments: ApiAttachment[]) => void;
   onClear: NoneToVoidFunction;
+  onToggleOneTimeMedia?: NoneToVoidFunction;
   onSendSilent: (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => void;
   onSendScheduled: (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => void;
   onCustomEmojiSelect: (emoji: ApiSticker) => void;
@@ -136,6 +139,8 @@ const AttachmentModal = ({
   forceDarkTheme,
   canScheduleUntilOnline,
   canSchedule,
+  canSendOneTimeMedia,
+  isOneTimeMediaEnabled,
   paidMessagesStars,
   shouldOpenMessageMediaEditor,
   onAttachmentsUpdate,
@@ -143,6 +148,7 @@ const AttachmentModal = ({
   onSend,
   onFileAppend,
   onClear,
+  onToggleOneTimeMedia,
   onSendSilent,
   onSendScheduled,
   onCustomEmojiSelect,
@@ -404,6 +410,10 @@ const AttachmentModal = ({
   const handleToggleShouldCompress = useLastCallback(() => {
     const newValue = !shouldSendCompressed;
     updateAttachmentSettings({ shouldCompress: newValue });
+
+    if (isSendingCompressed && isOneTimeMediaEnabled) {
+      onToggleOneTimeMedia?.();
+    }
   });
 
   const handleToggleQuality = useLastCallback(() => {
@@ -443,6 +453,7 @@ const AttachmentModal = ({
     const newAttachment = await buildAttachment(file.name, file, {
       shouldSendAsFile: attachments[editingAttachmentIndex].shouldSendAsFile,
       shouldSendAsSpoiler: attachments[editingAttachmentIndex].shouldSendAsSpoiler,
+      ttlSeconds: attachments[editingAttachmentIndex].ttlSeconds,
       shouldSendInHighQuality: attachments[editingAttachmentIndex].shouldSendInHighQuality,
     });
 
@@ -523,6 +534,21 @@ const AttachmentModal = ({
     return renderingAttachments.some((a) => !SUPPORTED_AUDIO_CONTENT_TYPES.has(a.mimeType));
   }, [renderingAttachments]);
 
+  const canToggleOneTimeMedia = useMemo(() => {
+    if (!canSendOneTimeMedia || !renderingAttachments || isEditing || !isSendingCompressed) {
+      return false;
+    }
+
+    if (renderingAttachments.length !== 1) {
+      return false;
+    }
+
+    return renderingAttachments.every((attachment) => (
+      SUPPORTED_PHOTO_CONTENT_TYPES.has(attachment.mimeType)
+      || SUPPORTED_VIDEO_CONTENT_TYPES.has(attachment.mimeType)
+    ));
+  }, [canSendOneTimeMedia, isEditing, isSendingCompressed, renderingAttachments]);
+
   useEffect(() => {
     if (shouldSendInHighQuality === renderingShouldSendInHighQuality) return;
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -595,83 +621,97 @@ const AttachmentModal = ({
           iconName="close"
         />
         <div className="modal-title">{title}</div>
-        {notEditingFile && !isInAlbum
-          && (
-            <DropdownMenu
-              className="with-menu-transitions"
-              trigger={MoreMenuButton}
-              positionX="right"
-            >
-              {Boolean(!editingMessage) && (
-                <MenuItem icon="add" onClick={handleDocumentSelect}>{lang('Add')}</MenuItem>
-              )}
-              {hasMedia && (
-                <>
-                  {
-                    canInvertMedia && (!isInvertedMedia ? (
-
-                      <MenuItem icon="move-caption-up" onClick={() => setIsInvertedMedia(true)}>
-                        {lang('ContextMoveTextUp')}
-                      </MenuItem>
-                    ) : (
-
-                      <MenuItem icon="move-caption-down" onClick={() => setIsInvertedMedia(undefined)}>
-                        {lang('ContextMoveTextDown')}
-                      </MenuItem>
-                    ))
-                  }
-                  {
-                    !shouldForceAsFile && !shouldForceCompression && (isSendingCompressed ? (
-
-                      <MenuItem icon="document" onClick={handleToggleShouldCompress}>
-                        {lang(isMultiple ? 'AttachmentMenuSendAllAsFiles' : 'AttachmentMenuSendAsFiles')}
-                      </MenuItem>
-                    ) : (
-
-                      <MenuItem icon="photo" onClick={handleToggleShouldCompress}>
-                        {lang(isMultiple ? 'AttachmentMenuSendAllAsMedia' : 'AttachmentMenuSendAsMedia')}
-                      </MenuItem>
-                    ))
-                  }
-                  {isSendingCompressed && !editingMessage && hasAnyPhoto && (
-                    <MenuItem
-                      icon={renderingShouldSendInHighQuality ? 'sd-photo' : 'hd-photo'}
-                      onClick={handleToggleQuality}
-                    >
-                      {lang(renderingShouldSendInHighQuality ? 'SendInStandardQuality' : 'SendInHighQuality')}
-                    </MenuItem>
-                  )}
-                  {isSendingCompressed && hasAnySpoilerable && Boolean(!editingMessage) && (
-                    hasSpoiler ? (
-                      <MenuItem icon="spoiler-disable" onClick={handleDisableSpoilers}>
-                        {lang('AttachmentMenuDisableSpoiler')}
-                      </MenuItem>
-                    ) : (
-                      <MenuItem icon="spoiler" onClick={handleEnableSpoilers}>
-                        {lang('AttachmentMenuEnableSpoiler')}
-                      </MenuItem>
-                    )
-                  )}
-                </>
-              )}
-              {isMultiple && (
-                shouldSendGrouped ? (
-                  <MenuItem
-                    icon="grouped-disable"
-
-                    onClick={() => setShouldSendGrouped(false)}
-                  >
-                    {lang('AttachmentMenuUngroupAllMedia')}
-                  </MenuItem>
-                ) : (
-
-                  <MenuItem icon="grouped" onClick={() => setShouldSendGrouped(true)}>
-                    {lang('AttachmentMenuGroupAllMedia')}
-                  </MenuItem>
-                )
-              )}
-            </DropdownMenu>
+        <div className={styles.headerActions}>
+          {canToggleOneTimeMedia && (
+            <Button
+              round
+              ripple={!isMobile}
+              size="tiny"
+              color="translucent"
+              className={buildClassName(styles.headerActionButton, isOneTimeMediaEnabled && 'active')}
+              onClick={onToggleOneTimeMedia}
+              ariaLabel={lang('OneTimeMedia')}
+              iconName="timer"
+            />
           )}
+          {notEditingFile && !isInAlbum
+            && (
+              <DropdownMenu
+                className="with-menu-transitions"
+                trigger={MoreMenuButton}
+                positionX="right"
+              >
+                {Boolean(!editingMessage) && (
+                  <MenuItem icon="add" onClick={handleDocumentSelect}>{lang('Add')}</MenuItem>
+                )}
+                {hasMedia && (
+                  <>
+                    {
+                      canInvertMedia && (!isInvertedMedia ? (
+
+                        <MenuItem icon="move-caption-up" onClick={() => setIsInvertedMedia(true)}>
+                          {lang('ContextMoveTextUp')}
+                        </MenuItem>
+                      ) : (
+
+                        <MenuItem icon="move-caption-down" onClick={() => setIsInvertedMedia(undefined)}>
+                          {lang('ContextMoveTextDown')}
+                        </MenuItem>
+                      ))
+                    }
+                    {
+                      !shouldForceAsFile && !shouldForceCompression && (isSendingCompressed ? (
+
+                        <MenuItem icon="document" onClick={handleToggleShouldCompress}>
+                          {lang(isMultiple ? 'AttachmentMenuSendAllAsFiles' : 'AttachmentMenuSendAsFiles')}
+                        </MenuItem>
+                      ) : (
+
+                        <MenuItem icon="photo" onClick={handleToggleShouldCompress}>
+                          {lang(isMultiple ? 'AttachmentMenuSendAllAsMedia' : 'AttachmentMenuSendAsMedia')}
+                        </MenuItem>
+                      ))
+                    }
+                    {isSendingCompressed && !editingMessage && hasAnyPhoto && (
+                      <MenuItem
+                        icon={renderingShouldSendInHighQuality ? 'sd-photo' : 'hd-photo'}
+                        onClick={handleToggleQuality}
+                      >
+                        {lang(renderingShouldSendInHighQuality ? 'SendInStandardQuality' : 'SendInHighQuality')}
+                      </MenuItem>
+                    )}
+                    {isSendingCompressed && hasAnySpoilerable && Boolean(!editingMessage) && (
+                      hasSpoiler ? (
+                        <MenuItem icon="spoiler-disable" onClick={handleDisableSpoilers}>
+                          {lang('AttachmentMenuDisableSpoiler')}
+                        </MenuItem>
+                      ) : (
+                        <MenuItem icon="spoiler" onClick={handleEnableSpoilers}>
+                          {lang('AttachmentMenuEnableSpoiler')}
+                        </MenuItem>
+                      )
+                    )}
+                  </>
+                )}
+                {isMultiple && (
+                  shouldSendGrouped ? (
+                    <MenuItem
+                      icon="grouped-disable"
+
+                      onClick={() => setShouldSendGrouped(false)}
+                    >
+                      {lang('AttachmentMenuUngroupAllMedia')}
+                    </MenuItem>
+                  ) : (
+
+                    <MenuItem icon="grouped" onClick={() => setShouldSendGrouped(true)}>
+                      {lang('AttachmentMenuGroupAllMedia')}
+                    </MenuItem>
+                  )
+                )}
+              </DropdownMenu>
+            )}
+        </div>
       </div>
     );
   }

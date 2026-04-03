@@ -3,6 +3,7 @@ import { getActions } from '../../../../global';
 
 import type { ApiAttachment, ApiMessage } from '../../../../api/types';
 
+import { ONE_TIME_MEDIA_TTL_SECONDS } from '../../../../config';
 import { canReplaceMessageMedia, getAttachmentMediaType } from '../../../../global/helpers';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import buildAttachment from '../helpers/buildAttachment';
@@ -23,6 +24,7 @@ export default function useAttachmentModal({
   insertNextText,
   editedMessage,
   shouldSendInHighQuality,
+  shouldSendOneTimeMedia,
 }: {
   attachments: ApiAttachment[];
   fileSizeLimit: number;
@@ -36,6 +38,7 @@ export default function useAttachmentModal({
   insertNextText: VoidFunction;
   editedMessage: ApiMessage | undefined;
   shouldSendInHighQuality?: boolean;
+  shouldSendOneTimeMedia?: boolean;
 }) {
   const lang = useLang();
   const { openLimitReachedModal, showAllowedMessageTypesNotification, showNotification } = getActions();
@@ -101,7 +104,11 @@ export default function useAttachmentModal({
     } else {
       const newAttachments = await Promise.all(files.map((file) => (
         buildAttachment(file.name, file,
-          { shouldSendAsSpoiler: isSpoiler || undefined, shouldSendInHighQuality })
+          {
+            shouldSendAsSpoiler: isSpoiler || undefined,
+            shouldSendInHighQuality,
+            ttlSeconds: shouldSendOneTimeMedia ? ONE_TIME_MEDIA_TTL_SECONDS : undefined,
+          })
       )));
       handleSetAttachments([...attachments, ...newAttachments]);
     }
@@ -123,14 +130,22 @@ export default function useAttachmentModal({
       }
     } else {
       const newAttachments = await Promise.all(files.map((file) =>
-        buildAttachment(file.name, file, { shouldSendInHighQuality })));
+        buildAttachment(file.name, file, {
+          shouldSendInHighQuality,
+          ttlSeconds: shouldSendOneTimeMedia ? ONE_TIME_MEDIA_TTL_SECONDS : undefined,
+        })));
       handleSetAttachments(newAttachments);
     }
   });
 
   const handleUpdateAttachmentsQuality = useLastCallback(async () => {
     const newAttachments = await Promise.all(attachments.map((attachment) =>
-      buildAttachment(attachment.filename, attachment.blob, { shouldSendInHighQuality })));
+      buildAttachment(attachment.filename, attachment.blob, {
+        shouldSendAsFile: attachment.shouldSendAsFile,
+        shouldSendAsSpoiler: attachment.shouldSendAsSpoiler,
+        ttlSeconds: attachment.ttlSeconds,
+        shouldSendInHighQuality,
+      })));
     handleSetAttachments(newAttachments);
   });
 

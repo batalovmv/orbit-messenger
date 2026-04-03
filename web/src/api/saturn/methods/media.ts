@@ -1,6 +1,9 @@
+import type { SaturnMediaAttachment, SaturnPaginatedResponse } from '../types';
+
 import { getAccessToken, getBaseUrl } from '../client';
 import { request } from '../client';
-import type { SaturnMediaAttachment, SaturnPaginatedResponse } from '../types';
+
+const SIMPLE_UPLOAD_LIMIT = 50 * 1024 * 1024;
 
 interface MediaUploadResponse {
   id: string;
@@ -29,6 +32,21 @@ interface ChunkedPartResponse {
   total_chunks: number;
 }
 
+type UploadMediaOptions = {
+  fileName?: string;
+  mimeType?: string;
+  uploadId?: string;
+};
+
+type CancelableUpload<T> = {
+  abort: NoneToVoidFunction;
+  response: Promise<T>;
+  uploadId: string;
+};
+
+const activeUploadControllers = new Map<string, AbortController>();
+const activeChunkedUploadIds = new Map<string, string>();
+
 // Upload a file via multipart/form-data with progress tracking.
 // Uses XMLHttpRequest because fetch() doesn't support upload progress.
 export function uploadMedia(
@@ -36,6 +54,36 @@ export function uploadMedia(
   type?: string,
   onProgress?: (loaded: number, total: number) => void,
   isOneTime = false,
+  options: UploadMediaOptions = {},
+): CancelableUpload<MediaUploadResponse> {
+  const uploadId = options.uploadId || buildUploadId();
+  const controller = new AbortController();
+
+  activeUploadControllers.set(uploadId, controller);
+
+  const abort = () => cancelMediaUpload(uploadId);
+
+  const response = (file.size > SIMPLE_UPLOAD_LIMIT
+    ? uploadChunkedMedia(file, type, onProgress, isOneTime, controller.signal, uploadId, options)
+    : uploadSimpleMedia(file, type, onProgress, isOneTime, controller.signal)
+  ).finally(() => {
+    activeUploadControllers.delete(uploadId);
+    activeChunkedUploadIds.delete(uploadId);
+  });
+
+  return {
+    abort,
+    response,
+    uploadId,
+  };
+}
+
+function uploadSimpleMedia(
+  file: File | Blob,
+  type: string | undefined,
+  onProgress: ((loaded: number, total: number) => void) | undefined,
+  isOneTime: boolean,
+  signal: AbortSignal,
 ): Promise<MediaUploadResponse> {
   return new Promise((resolve, reject) => {
     const formData = new FormData();
@@ -58,6 +106,10 @@ export function uploadMedia(
       };
     }
 
+    signal.addEventListener('abort', () => {
+      xhr.abort();
+    }, { once: true });
+
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(JSON.parse(xhr.responseText));
@@ -65,6 +117,7 @@ export function uploadMedia(
         reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
       }
     };
+    xhr.onabort = () => reject(createAbortError());
     xhr.onerror = () => reject(new Error('Upload network error'));
     xhr.send(formData);
   });
@@ -76,13 +129,14 @@ export function initChunkedUpload(
   mimeType: string,
   totalSize: number,
   mediaType?: string,
+  signal?: AbortSignal,
 ): Promise<ChunkedInitResponse> {
   return request<ChunkedInitResponse>('POST', '/media/upload/chunked/init', {
     filename,
     mime_type: mimeType,
     total_size: totalSize,
     media_type: mediaType || '',
-  });
+  }, { signal });
 }
 
 // Upload a single chunk.
@@ -90,16 +144,18 @@ export async function uploadChunk(
   uploadId: string,
   partNumber: number,
   chunk: Blob,
+  signal?: AbortSignal,
 ): Promise<ChunkedPartResponse> {
   const token = getAccessToken();
   const resp = await fetch(`${getBaseUrl()}/media/upload/chunked/${uploadId}`, {
     method: 'POST',
     headers: {
-      'Authorization': token ? `Bearer ${token}` : '',
+      Authorization: token ? `Bearer ${token}` : '',
       'X-Part-Number': String(partNumber),
     },
     credentials: 'include',
     body: chunk,
+    signal,
   });
 
   if (!resp.ok) {
@@ -112,10 +168,31 @@ export async function uploadChunk(
 export function completeChunkedUpload(
   uploadId: string,
   isOneTime = false,
+  signal?: AbortSignal,
 ): Promise<MediaUploadResponse> {
   return request<MediaUploadResponse>('POST', `/media/upload/chunked/${uploadId}/complete`, {
     is_one_time: isOneTime,
-  });
+  }, { signal });
+}
+
+export function abortChunkedUpload(uploadId: string): Promise<void> {
+  return request<void>('DELETE', `/media/upload/chunked/${uploadId}`);
+}
+
+export function cancelMediaUpload(uploadId: string) {
+  const controller = activeUploadControllers.get(uploadId);
+  if (!controller || controller.signal.aborted) {
+    return;
+  }
+
+  controller.abort();
+
+  const chunkedUploadId = activeChunkedUploadIds.get(uploadId);
+  if (chunkedUploadId) {
+    void abortChunkedUpload(chunkedUploadId).catch(() => {
+      // Ignore best-effort cleanup failures on cancel.
+    });
+  }
 }
 
 // Get media metadata.
@@ -149,4 +226,72 @@ export function updateChatPhoto(chatId: string, avatarUrl: string): Promise<void
 // Delete chat photo.
 export function deleteChatPhoto(chatId: string): Promise<void> {
   return request<void>('DELETE', `/chats/${chatId}/photo`);
+}
+
+async function uploadChunkedMedia(
+  file: File | Blob,
+  type: string | undefined,
+  onProgress: ((loaded: number, total: number) => void) | undefined,
+  isOneTime: boolean,
+  signal: AbortSignal,
+  uploadId: string,
+  options: UploadMediaOptions,
+) {
+  const fileName = options.fileName || getFileName(file);
+  const mimeType = options.mimeType || file.type || 'application/octet-stream';
+  const initResult = await initChunkedUpload(fileName, mimeType, file.size, type, signal);
+
+  activeChunkedUploadIds.set(uploadId, initResult.upload_id);
+
+  let loaded = 0;
+
+  try {
+    for (let partNumber = 0; partNumber < initResult.total_chunks; partNumber++) {
+      const start = partNumber * initResult.chunk_size;
+      const end = Math.min(start + initResult.chunk_size, file.size);
+      const chunk = file.slice(start, end);
+
+      await uploadChunk(initResult.upload_id, partNumber + 1, chunk, signal);
+
+      loaded += chunk.size;
+      onProgress?.(loaded, file.size);
+    }
+
+    return await completeChunkedUpload(initResult.upload_id, isOneTime, signal);
+  } catch (error) {
+    if (isAbortError(error)) {
+      await abortChunkedUpload(initResult.upload_id).catch(() => {
+        // Ignore best-effort cleanup failures on cancel.
+      });
+    }
+
+    throw error;
+  }
+}
+
+function buildUploadId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `upload-${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+}
+
+function createAbortError() {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('Upload aborted', 'AbortError');
+  }
+
+  const error = new Error('Upload aborted');
+  error.name = 'AbortError';
+
+  return error;
+}
+
+function getFileName(file: File | Blob) {
+  return file instanceof File ? file.name : 'upload.bin';
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError';
 }

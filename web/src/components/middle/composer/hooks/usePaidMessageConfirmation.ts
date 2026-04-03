@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from '../../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../../global';
 
-import { PAID_MESSAGES_PURPOSE } from '../../../../config';
-
 import useLastCallback from '../../../../hooks/useLastCallback';
 
 export default function usePaidMessageConfirmation(

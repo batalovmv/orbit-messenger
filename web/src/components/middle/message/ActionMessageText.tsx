@@ -769,7 +769,7 @@ const ActionMessageText = ({
         if (isVoice) return lang('ActionExpiredVoice');
         if (isRoundVideo) return lang('ActionExpiredVideo');
 
-        return lang(UNSUPPORTED_LANG_KEY);
+        return lang('OneTimeMediaViewed');
       }
 
       case 'historyClear':

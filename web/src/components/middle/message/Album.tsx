@@ -123,7 +123,9 @@ const Album: FC<OwnProps & StateProps> = ({
 
       return (
         <PhotoWithSelect
-          id={`album-media-${getMessageHtmlId(message.id, (album.isPaidMedia || album.isSaturnAlbum) ? index : undefined)}`}
+          id={`album-media-${
+            getMessageHtmlId(message.id, (album.isPaidMedia || album.isSaturnAlbum) ? index : undefined)
+          }`}
           photo={photo}
           isOwn={isOwn}
           observeIntersectionForLoading={observeIntersection}

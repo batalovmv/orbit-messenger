@@ -1,15 +1,4 @@
 import type {
-  ApiAttachment,
-  ApiMessage,
-  ApiMessageEntity,
-  ApiNewPoll,
-  ApiPeer,
-  ApiPoll,
-  ApiSendMessageAction,
-  ApiSticker,
-  ApiVideo,
-} from '../../types';
-import type {
   SaturnMessage,
   SaturnPaginatedResponse,
   SaturnPoll,
@@ -17,13 +6,26 @@ import type {
   SaturnScheduledMessage,
   SaturnSharedMediaItem,
 } from '../types';
-import { MESSAGE_DELETED } from '../../types';
+import {
+  type ApiAttachment,
+  type ApiChat,
+  type ApiMessage,
+  type ApiMessageEntity,
+  type ApiNewPoll,
+  type ApiPeer,
+  type ApiPoll,
+  type ApiSendMessageAction,
+  type ApiSticker,
+  type ApiVideo,
+  MESSAGE_DELETED,
+} from '../../types';
 
+import { buildMessageKey } from '../../../util/keys/messageKey';
 import {
   buildApiMessage,
   buildApiPoll,
-  buildApiScheduledPoll,
   buildApiScheduledMessage,
+  buildApiScheduledPoll,
   buildSaturnEntities,
   getMessageUuid,
   getScheduledMessageUuid,
@@ -54,7 +56,10 @@ type PollSendResponse = {
   message: SaturnMessage;
   poll: SaturnPoll;
 };
-type SendProgressCallback = (progress: number, key: string) => void;
+type SendProgressCallback = ((progress: number, key: string) => void) & {
+  abort?: NoneToVoidFunction;
+  isCanceled?: boolean;
+};
 
 function extractApiPolls(messages: SaturnMessage[]) {
   const pollsById: Record<string, ApiPoll> = {};
@@ -171,6 +176,10 @@ function buildAttachmentContent(content: ApiMessage['content'], attachment: ApiA
   const localId = `local-${Date.now()}`;
   const { quick } = attachment;
 
+  if (attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0 && mediaType !== 'file') {
+    content.ttlSeconds = 1;
+  }
+
   switch (mediaType) {
     case 'photo':
       content.photo = {
@@ -252,6 +261,7 @@ function buildSendBody({
   attachment,
   entities,
   gif,
+  groupedId,
   isSpoiler,
   poll,
   replyInfo,
@@ -262,6 +272,7 @@ function buildSendBody({
   attachment?: ApiAttachment;
   entities?: ApiMessageEntity[];
   gif?: ApiVideo;
+  groupedId?: string;
   isSpoiler?: boolean;
   poll?: ApiNewPoll;
   replyInfo?: { replyToMsgId?: number; type?: string };
@@ -310,12 +321,21 @@ function buildSendBody({
     body.is_spoiler = true;
   }
 
+  if (attachment && attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0
+    && detectMediaType(attachment) !== 'file' && !sticker && !gif) {
+    body.is_one_time = true;
+  }
+
   const replyToId = replyInfo?.type === 'message' ? replyInfo.replyToMsgId : undefined;
   if (replyToId) {
     const replyUuid = resolveMessageUuid(chatId, replyToId);
     if (replyUuid) {
       body.reply_to_id = replyUuid;
     }
+  }
+
+  if (groupedId) {
+    body.grouped_id = groupedId;
   }
 
   return body;
@@ -332,20 +352,40 @@ async function uploadAttachmentIfNeeded(
   }
 
   const mediaType = detectMediaType(attachment);
+  const uploadId = chatId && localId !== undefined ? buildMessageKey(chatId, localId) : undefined;
   const onProgress = progressCallback && chatId && localId
     ? (loaded: number, total: number) => {
-      progressCallback(total > 0 ? loaded / total : 0, `${chatId}_${localId}`);
+      progressCallback(total > 0 ? loaded / total : 0, uploadId!);
     }
     : undefined;
 
-  const result = await uploadMedia(
+  const upload = uploadMedia(
     attachment.blob,
     mediaType,
     onProgress,
     attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0,
+    {
+      fileName: attachment.filename,
+      mimeType: attachment.mimeType,
+      uploadId,
+    },
   );
 
-  return [result.id];
+  if (progressCallback) {
+    progressCallback.abort = upload.abort;
+    if (uploadId) {
+      progressCallback(0, uploadId);
+    }
+  }
+
+  try {
+    const result = await upload.response;
+    return [result.id];
+  } finally {
+    if (progressCallback?.abort === upload.abort) {
+      progressCallback.abort = undefined;
+    }
+  }
 }
 
 async function sendScheduledMessage({
@@ -416,6 +456,10 @@ async function sendScheduledMessage({
     try {
       uploadedMediaIds = await uploadAttachmentIfNeeded(attachment, progressCallback, chatId, localId);
     } catch (error) {
+      if (isAbortError(error)) {
+        return undefined;
+      }
+
       sendApiUpdate({
         '@type': 'updateScheduledMessageSendFailed',
         chatId,
@@ -593,6 +637,7 @@ export async function sendMessage({
   sticker,
   gif,
   poll,
+  groupedId,
   scheduledAt,
   scheduleRepeatPeriod,
 }: {
@@ -607,6 +652,7 @@ export async function sendMessage({
   sticker?: ApiSticker;
   gif?: ApiVideo;
   poll?: ApiNewPoll;
+  groupedId?: string;
   scheduledAt?: number;
   scheduleRepeatPeriod?: number;
 }, progressCallback?: SendProgressCallback) {
@@ -650,6 +696,7 @@ export async function sendMessage({
       entities,
     }),
     sendingState: 'messageSendingStatePending',
+    groupedId,
   };
 
   if (localPoll) {
@@ -668,11 +715,19 @@ export async function sendMessage({
     setTimeout(resolve, 0);
   });
 
+  if (!getGlobalMessage(chatId, localId)) {
+    return undefined;
+  }
+
   let uploadedMediaIds = mediaIds || [];
   if (attachment) {
     try {
       uploadedMediaIds = await uploadAttachmentIfNeeded(attachment, progressCallback, chatId, localId);
     } catch (error) {
+      if (isAbortError(error)) {
+        return undefined;
+      }
+
       sendApiUpdate({
         '@type': 'updateMessageSendFailed',
         chatId,
@@ -688,6 +743,7 @@ export async function sendMessage({
       attachment,
       entities,
       gif,
+      groupedId,
       isSpoiler,
       poll,
       replyInfo,
@@ -747,38 +803,91 @@ export async function sendMessage({
   }
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 export async function editMessage({
-  chatId, messageId, text, entities,
+  chat,
+  message,
+  text,
+  entities,
+  attachment,
+  noWebPage,
 }: {
-  chatId: string;
-  messageId: number;
+  chat: ApiChat;
+  message: ApiMessage;
   text: string;
   entities?: ApiMessageEntity[];
+  attachment?: ApiAttachment;
+  noWebPage?: boolean;
 }) {
-  const uuid = resolveMessageUuid(chatId, messageId);
+  void attachment;
+  void noWebPage;
+
+  const chatId = chat.id;
+  const messageId = message.id;
+  const uuid = message.saturnId || resolveMessageUuid(chatId, messageId);
   if (!uuid) return undefined;
-
-  const body: Record<string, unknown> = { content: text };
-  if (entities?.length) {
-    body.entities = buildSaturnEntities(entities);
-  }
-
-  const message = await client.request<SaturnMessage>('PATCH', `/messages/${uuid}`, body);
-  const apiMessage = buildApiMessage(message);
-  if (currentUserId) {
-    apiMessage.isOutgoing = message.sender_id === currentUserId;
-  }
 
   sendApiUpdate({
     '@type': 'updateMessage',
     chatId,
     id: messageId,
     isFull: true,
-    message: apiMessage,
-    poll: buildApiPoll(message.poll),
+    message: {
+      ...message,
+      content: {
+        ...message.content,
+        text: {
+          text,
+          entities: entities || [],
+        },
+      },
+    },
   });
 
-  return apiMessage;
+  const body: Record<string, unknown> = { content: text };
+  if (entities?.length) {
+    body.entities = buildSaturnEntities(entities);
+  }
+
+  try {
+    const updatedMessage = await client.request<SaturnMessage>('PATCH', `/messages/${uuid}`, body);
+    const apiMessage = buildApiMessage(updatedMessage);
+    if (currentUserId) {
+      apiMessage.isOutgoing = updatedMessage.sender_id === currentUserId;
+    }
+
+    sendApiUpdate({
+      '@type': 'updateMessage',
+      chatId,
+      id: messageId,
+      isFull: true,
+      message: apiMessage,
+      poll: buildApiPoll(updatedMessage.poll),
+    });
+
+    return apiMessage;
+  } catch (error) {
+    sendApiUpdate({
+      '@type': 'error',
+      error: {
+        message: error instanceof Error ? error.message : 'Failed to edit message',
+        hasErrorKey: true,
+      },
+    });
+
+    sendApiUpdate({
+      '@type': 'updateMessage',
+      chatId,
+      id: messageId,
+      isFull: true,
+      message,
+    });
+
+    return undefined;
+  }
 }
 
 export async function deleteMessages({
@@ -862,8 +971,9 @@ export async function fetchPinnedMessages({
 }) {
   const chatId = chat?.id || chatIdDirect!;
   const result = await client.request<{ messages: SaturnMessage[] }>('GET', `/chats/${chatId}/pinned`);
+  const pinnedMessages = result.messages || [];
 
-  const messages = result.messages.map((message) => {
+  const messages = pinnedMessages.map((message) => {
     const apiMessage = buildApiMessage(message);
     if (currentUserId) {
       apiMessage.isOutgoing = message.sender_id === currentUserId;
@@ -881,7 +991,7 @@ export async function fetchPinnedMessages({
   return {
     messages,
     pinnedIds,
-    polls: extractApiPolls(result.messages),
+    polls: extractApiPolls(pinnedMessages),
   };
 }
 
@@ -963,6 +1073,28 @@ export async function markMessageListRead({
     },
     noTopChatsRequest: true,
   });
+
+  return true;
+}
+
+export async function markMessagesRead({
+  chat,
+  messageIds,
+}: {
+  chat: { id: string };
+  messageIds: number[];
+}) {
+  if (!messageIds.length) {
+    return true;
+  }
+
+  const maxId = Math.max(...messageIds);
+  const uuid = resolveMessageUuid(chat.id, maxId);
+  if (!uuid) {
+    return undefined;
+  }
+
+  await client.request('PATCH', `/chats/${chat.id}/read`, { last_read_message_id: uuid });
 
   return true;
 }
@@ -1179,14 +1311,15 @@ export async function loadPollOptionResults({
 }
 
 export async function fetchScheduledHistory({ chat }: { chat: { id: string } }) {
-  const scheduled = await client.request<SaturnScheduledMessage[]>(
+  const scheduled = await client.request<SaturnScheduledMessage[] | null>(
     'GET',
     `/chats/${chat.id}/messages/scheduled`,
   );
+  const scheduledMessages = scheduled || [];
 
   return {
-    messages: scheduled.map((message) => buildApiScheduledMessage(message)),
-    polls: extractScheduledApiPolls(scheduled),
+    messages: scheduledMessages.map((message) => buildApiScheduledMessage(message)),
+    polls: extractScheduledApiPolls(scheduledMessages),
   };
 }
 
