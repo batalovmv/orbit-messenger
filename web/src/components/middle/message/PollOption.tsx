@@ -96,7 +96,7 @@ const PollOption: FC<OwnProps> = ({
 };
 
 function getPercentage(value: number, total: number) {
-  return total > 0 ? ((value / total) * 100).toFixed() : 0;
+  return total > 0 ? ((value / total) * 100).toFixed() : '0';
 }
 
 export default PollOption;

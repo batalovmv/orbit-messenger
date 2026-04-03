@@ -141,18 +141,20 @@ export async function getChatNotifySettings({ chatId }: {
 }
 
 export async function updateChatNotifySettings({
-  chatId, mutedUntil, sound, showPreview,
+  chatId, mutedUntil, sound, showPreview, silentPosting,
 }: {
   chatId: string;
   mutedUntil?: string;
   sound?: string;
   showPreview?: boolean;
+  silentPosting?: boolean;
 }): Promise<SaturnNotificationSettings | undefined> {
   try {
     return await request<SaturnNotificationSettings>('PUT', `/chats/${chatId}/notifications`, {
       muted_until: mutedUntil,
       sound: sound || 'default',
       show_preview: showPreview !== false,
+      silent_posting: silentPosting,
     });
   } catch (err) {
     logSettingsApiError('updateChatNotifySettings', err);

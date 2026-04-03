@@ -171,7 +171,7 @@ func TestGetDocuments_MissingUserID(t *testing.T) {
 	}
 }
 
-func TestGetDocuments_InvalidStickerID(t *testing.T) {
+func TestGetDocuments_InvalidStickerID_Skipped(t *testing.T) {
 	app := newStickerApp(&mockStickerStore{})
 	req, err := makeJSONRequest(http.MethodPost, "/stickers/documents", map[string]any{
 		"ids": []string{"bad-id"},
@@ -185,8 +185,9 @@ func TestGetDocuments_InvalidStickerID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	// Invalid IDs are skipped (not rejected), returning 200 with empty result
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 }
 

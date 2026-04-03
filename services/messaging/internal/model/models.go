@@ -276,14 +276,24 @@ type StickerPack struct {
 
 // Sticker represents a single sticker in a pack.
 type Sticker struct {
-	ID       uuid.UUID `json:"id"`
-	PackID   uuid.UUID `json:"pack_id"`
-	Emoji    *string   `json:"emoji,omitempty"`
-	FileURL  string    `json:"file_url"`
-	FileType string    `json:"file_type"` // webp, tgs, webm, svg
-	Width    *int      `json:"width,omitempty"`
-	Height   *int      `json:"height,omitempty"`
-	Position int       `json:"position"`
+	ID           uuid.UUID `json:"id"`
+	PackID       uuid.UUID `json:"pack_id"`
+	Emoji        *string   `json:"emoji,omitempty"`
+	FileURL      string    `json:"file_url"`
+	FileType     string    `json:"file_type"` // webp, tgs, webm, svg
+	Width        *int      `json:"width,omitempty"`
+	Height       *int      `json:"height,omitempty"`
+	Position     int       `json:"position"`
+	ThumbnailURL *string   `json:"thumbnail_url,omitempty"`
+	PreviewURL   *string   `json:"preview_url,omitempty"`
+}
+
+// FillPreviewURLs populates ThumbnailURL and PreviewURL from FileURL for webp stickers.
+func (s *Sticker) FillPreviewURLs() {
+	if s.FileType == "webp" && s.ThumbnailURL == nil {
+		s.ThumbnailURL = &s.FileURL
+		s.PreviewURL = &s.FileURL
+	}
 }
 
 // SavedGIF represents a user's saved GIF from Tenor.

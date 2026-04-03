@@ -95,7 +95,7 @@ const ReactionAnimatedEmoji = ({
 
     const matchingAvailableReaction = availableReactions?.find((available) => isSameReaction(available.reaction, {
       type: 'emoji',
-      emoticon: customEmoji.emoji,
+      emoticon: customEmoji.emoji || '',
     }));
     const assignedId = matchingAvailableReaction && !matchingAvailableReaction.isLocalCache
       ? matchingAvailableReaction.aroundAnimation?.id

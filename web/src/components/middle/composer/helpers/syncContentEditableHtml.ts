@@ -33,13 +33,14 @@ export default function syncContentEditableHtml({ element, html, inputId }: Args
     return;
   }
 
-  focusEditableElement(element, true, true);
-
   if (caretPosition === undefined) {
+    focusEditableElement(element, true, true);
     return;
   }
 
-  if (setCaretPosition(element, caretPosition) !== -1) {
+  focusEditableElement(element, true);
+
+  if (setCaretPosition(element, caretPosition) === -1) {
     focusEditableElement(element, true, true);
   }
 }

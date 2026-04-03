@@ -126,7 +126,7 @@ func (h *StickerHandler) GetDocuments(c *fiber.Ctx) error {
 	for _, rawID := range body.IDs {
 		stickerID, err := uuid.Parse(strings.TrimSpace(rawID))
 		if err != nil {
-			return response.Error(c, apperror.BadRequest("Invalid sticker ID"))
+			continue // skip invalid IDs — partial success for batch lookups
 		}
 		if _, ok := seen[stickerID]; ok {
 			continue
@@ -138,6 +138,10 @@ func (h *StickerHandler) GetDocuments(c *fiber.Ctx) error {
 	stickers, err := h.svc.GetByIDs(c.Context(), stickerIDs)
 	if err != nil {
 		return response.Error(c, err)
+	}
+
+	for i := range stickers {
+		stickers[i].FillPreviewURLs()
 	}
 
 	return response.JSON(c, 200, stickers)

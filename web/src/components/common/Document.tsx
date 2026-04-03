@@ -142,8 +142,6 @@ const Document = ({
             Authorization: `Bearer ${token}`,
           },
           withCredentials: true,
-          disableAutoFetch: false,
-          disableStream: false,
         });
       })
       .catch(() => {

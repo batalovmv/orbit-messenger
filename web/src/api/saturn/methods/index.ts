@@ -884,6 +884,7 @@ export async function updateChatNotifySettings({
     chatId: chat.id,
     mutedUntil: settings.mutedUntil != null ? new Date(settings.mutedUntil * 1000).toISOString() : undefined,
     showPreview: settings.shouldShowPreviews,
+    silentPosting: settings.isSilentPosting,
     sound: undefined,
   });
 }

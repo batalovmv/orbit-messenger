@@ -361,8 +361,14 @@ addActionHandler('loadReactors', async (global, actions, payload): Promise<void>
   }
 
   global = getGlobal();
+  const freshMessage = selectChatMessage(global, chatId, messageId);
+  const existingReactions = offset ? freshMessage?.reactors?.reactions : undefined;
+  const mergedReactions = existingReactions
+    ? [...existingReactions, ...result.reactions]
+    : result.reactions;
+
   global = updateChatMessage(global, chatId, messageId, {
-    reactors: result,
+    reactors: { ...result, reactions: mergedReactions },
   });
   setGlobal(global);
 });

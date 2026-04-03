@@ -256,8 +256,8 @@ const Poll: FC<OwnProps> = ({
                 r={TIMER_RADIUS}
                 className="poll-countdown-progress"
                 transform="rotate(-90, 8, 8)"
-                stroke-dasharray={TIMER_CIRCUMFERENCE}
-                stroke-dashoffset="0"
+                strokeDasharray={TIMER_CIRCUMFERENCE}
+                strokeDashoffset="0"
               />
             </svg>
           </div>

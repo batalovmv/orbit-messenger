@@ -64,6 +64,10 @@ func (s *StickerService) GetByIDs(ctx context.Context, stickerIDs []uuid.UUID) (
 		return nil, fmt.Errorf("get stickers by ids: %w", err)
 	}
 
+	for i := range stickers {
+		stickers[i].FillPreviewURLs()
+	}
+
 	return stickers, nil
 }
 
@@ -178,6 +182,11 @@ func (s *StickerService) ListRecent(ctx context.Context, userID uuid.UUID, limit
 	if err != nil {
 		return nil, fmt.Errorf("list recent stickers: %w", err)
 	}
+
+	for i := range stickers {
+		stickers[i].FillPreviewURLs()
+	}
+
 	return stickers, nil
 }
 
