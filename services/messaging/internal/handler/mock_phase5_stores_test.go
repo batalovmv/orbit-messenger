@@ -239,6 +239,9 @@ type mockStickerStore struct {
 	removeRecentFn       func(ctx context.Context, userID, stickerID uuid.UUID) error
 	clearRecentFn        func(ctx context.Context, userID uuid.UUID) error
 	createPackFn         func(ctx context.Context, pack *model.StickerPack, stickers []model.Sticker) error
+	addStickerFn         func(ctx context.Context, packID uuid.UUID, sticker *model.Sticker) error
+	updatePackFn         func(ctx context.Context, pack *model.StickerPack) error
+	deletePackFn         func(ctx context.Context, packID uuid.UUID) error
 }
 
 func (m *mockStickerStore) GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error) {
@@ -330,6 +333,29 @@ func (m *mockStickerStore) CreatePack(ctx context.Context, pack *model.StickerPa
 		return m.createPackFn(ctx, pack, stickers)
 	}
 	pack.ID = uuid.New()
+	return nil
+}
+
+func (m *mockStickerStore) AddSticker(ctx context.Context, packID uuid.UUID, sticker *model.Sticker) error {
+	if m.addStickerFn != nil {
+		return m.addStickerFn(ctx, packID, sticker)
+	}
+	sticker.ID = uuid.New()
+	sticker.PackID = packID
+	return nil
+}
+
+func (m *mockStickerStore) UpdatePack(ctx context.Context, pack *model.StickerPack) error {
+	if m.updatePackFn != nil {
+		return m.updatePackFn(ctx, pack)
+	}
+	return nil
+}
+
+func (m *mockStickerStore) DeletePack(ctx context.Context, packID uuid.UUID) error {
+	if m.deletePackFn != nil {
+		return m.deletePackFn(ctx, packID)
+	}
 	return nil
 }
 

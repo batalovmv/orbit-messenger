@@ -47,10 +47,10 @@ type Chat struct {
 
 type ChatListItem struct {
 	Chat
-	LastMessage  *Message `json:"last_message,omitempty"`
-	MemberCount  int      `json:"member_count"`
-	UnreadCount  int      `json:"unread_count"`
-	OtherUser    *User    `json:"other_user,omitempty"`
+	LastMessage *Message `json:"last_message,omitempty"`
+	MemberCount int      `json:"member_count"`
+	UnreadCount int      `json:"unread_count"`
+	OtherUser   *User    `json:"other_user,omitempty"`
 }
 
 type ChatMember struct {
@@ -69,22 +69,22 @@ type ChatMember struct {
 }
 
 type Message struct {
-	ID             uuid.UUID  `json:"id"`
-	ChatID         uuid.UUID  `json:"chat_id"`
-	SenderID       *uuid.UUID `json:"sender_id,omitempty"`
-	Type           string     `json:"type"`
-	Content        *string     `json:"content,omitempty"`
+	ID             uuid.UUID       `json:"id"`
+	ChatID         uuid.UUID       `json:"chat_id"`
+	SenderID       *uuid.UUID      `json:"sender_id,omitempty"`
+	Type           string          `json:"type"`
+	Content        *string         `json:"content,omitempty"`
 	Entities       json.RawMessage `json:"entities,omitempty"`
-	ReplyToID      *uuid.UUID  `json:"reply_to_id,omitempty"`
-	ReplyToSeqNum  *int64      `json:"reply_to_sequence_number,omitempty"`
-	IsEdited       bool       `json:"is_edited"`
-	IsDeleted      bool       `json:"is_deleted"`
-	IsPinned       bool       `json:"is_pinned"`
-	IsForwarded    bool       `json:"is_forwarded"`
-	ForwardedFrom  *uuid.UUID `json:"forwarded_from,omitempty"`
-	SequenceNumber int64      `json:"sequence_number"`
-	CreatedAt      time.Time  `json:"created_at"`
-	EditedAt       *time.Time `json:"edited_at,omitempty"`
+	ReplyToID      *uuid.UUID      `json:"reply_to_id,omitempty"`
+	ReplyToSeqNum  *int64          `json:"reply_to_sequence_number,omitempty"`
+	IsEdited       bool            `json:"is_edited"`
+	IsDeleted      bool            `json:"is_deleted"`
+	IsPinned       bool            `json:"is_pinned"`
+	IsForwarded    bool            `json:"is_forwarded"`
+	ForwardedFrom  *uuid.UUID      `json:"forwarded_from,omitempty"`
+	SequenceNumber int64           `json:"sequence_number"`
+	CreatedAt      time.Time       `json:"created_at"`
+	EditedAt       *time.Time      `json:"edited_at,omitempty"`
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`
@@ -117,13 +117,13 @@ type MediaAttachment struct {
 // SharedMediaItem wraps a MediaAttachment with the parent message context,
 // so the frontend can build full ApiMessage objects for the shared media gallery.
 type SharedMediaItem struct {
-	MessageID       string          `json:"message_id"`
-	SequenceNumber  int64           `json:"sequence_number"`
-	ChatID          string          `json:"chat_id"`
-	SenderID        string          `json:"sender_id"`
-	Content         string          `json:"content,omitempty"`
-	CreatedAt       time.Time       `json:"created_at"`
-	Attachment      MediaAttachment `json:"attachment"`
+	MessageID      string          `json:"message_id"`
+	SequenceNumber int64           `json:"sequence_number"`
+	ChatID         string          `json:"chat_id"`
+	SenderID       string          `json:"sender_id"`
+	Content        string          `json:"content,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	Attachment     MediaAttachment `json:"attachment"`
 }
 
 type InviteLink struct {
@@ -195,10 +195,10 @@ type PushSubscription struct {
 
 // SearchResult represents a unified search result item.
 type SearchResult struct {
-	Type    string      `json:"type"` // message, user, chat
-	Data    interface{} `json:"data"`
-	ChatID  *string     `json:"chat_id,omitempty"`
-	Score   float64     `json:"score,omitempty"`
+	Type   string      `json:"type"` // message, user, chat
+	Data   interface{} `json:"data"`
+	ChatID *string     `json:"chat_id,omitempty"`
+	Score  float64     `json:"score,omitempty"`
 }
 
 // ValidPrivacyValues are the allowed values for privacy settings fields.
@@ -242,18 +242,20 @@ type ChatAvailableReactions struct {
 
 // StickerPack represents a collection of stickers.
 type StickerPack struct {
-	ID           uuid.UUID `json:"id"`
-	Title        string    `json:"title"`
-	ShortName    string    `json:"short_name"`
+	ID           uuid.UUID  `json:"id"`
+	Title        string     `json:"title"`
+	ShortName    string     `json:"short_name"`
+	Description  *string    `json:"description,omitempty"`
 	AuthorID     *uuid.UUID `json:"author_id,omitempty"`
-	ThumbnailURL *string   `json:"thumbnail_url,omitempty"`
-	IsOfficial   bool      `json:"is_official"`
-	IsAnimated   bool      `json:"is_animated"`
-	StickerCount int       `json:"sticker_count"`
-	Stickers     []Sticker `json:"stickers,omitempty"`
-	IsInstalled  bool      `json:"is_installed,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ThumbnailURL *string    `json:"thumbnail_url,omitempty"`
+	IsOfficial   bool       `json:"is_official"`
+	IsFeatured   bool       `json:"is_featured"`
+	IsAnimated   bool       `json:"is_animated"`
+	StickerCount int        `json:"sticker_count"`
+	Stickers     []Sticker  `json:"stickers,omitempty"`
+	IsInstalled  bool       `json:"is_installed,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // Sticker represents a single sticker in a pack.
@@ -262,7 +264,7 @@ type Sticker struct {
 	PackID   uuid.UUID `json:"pack_id"`
 	Emoji    *string   `json:"emoji,omitempty"`
 	FileURL  string    `json:"file_url"`
-	FileType string    `json:"file_type"` // webp, tgs, webm
+	FileType string    `json:"file_type"` // webp, tgs, webm, svg
 	Width    *int      `json:"width,omitempty"`
 	Height   *int      `json:"height,omitempty"`
 	Position int       `json:"position"`
@@ -282,12 +284,12 @@ type SavedGIF struct {
 
 // TenorGIF represents a GIF result from the Tenor API.
 type TenorGIF struct {
-	TenorID    string  `json:"tenor_id"`
-	URL        string  `json:"url"`
-	PreviewURL string  `json:"preview_url"`
-	Width      int     `json:"width"`
-	Height     int     `json:"height"`
-	Title      string  `json:"title,omitempty"`
+	TenorID    string `json:"tenor_id"`
+	URL        string `json:"url"`
+	PreviewURL string `json:"preview_url"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	Title      string `json:"title,omitempty"`
 }
 
 // Poll represents a poll attached to a message.

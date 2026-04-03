@@ -1,0 +1,81 @@
+{
+  "packs": [
+    {
+      "id": "5f52fd0a-8c59-4f3b-a9b3-6c26e3e95c51",
+      "title": "Orbit Basics",
+      "short_name": "orbit_basics",
+      "description": "Core Orbit stickers for daily team chatter, approvals, and launch moments.",
+      "thumbnail": "orbit-basics/smile.svg",
+      "stickers": [
+        { "id": "eaa67fd2-4bd3-4aa0-95f0-2cd7c0fc7d91", "emoji": "😀", "file": "orbit-basics/smile.svg", "width": 512, "height": 512 },
+        { "id": "ff0e4c91-8fb2-4d86-ae0c-bf7dcefc44b4", "emoji": "🔥", "file": "orbit-basics/fire.svg", "width": 512, "height": 512 },
+        { "id": "0328e589-797f-453e-a8d1-d212f11edf7a", "emoji": "🚀", "file": "orbit-basics/rocket.svg", "width": 512, "height": 512 },
+        { "id": "2ab6957f-d2c0-4739-a58c-5b6a5e79042d", "emoji": "✅", "file": "orbit-basics/check.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000005", "emoji": "👋", "file": "orbit-basics/wave.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000006", "emoji": "💡", "file": "orbit-basics/idea.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000007", "emoji": "☕", "file": "orbit-basics/coffee.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000008", "emoji": "🎉", "file": "orbit-basics/party.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000009", "emoji": "🎯", "file": "orbit-basics/target.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000010", "emoji": "🛡️", "file": "orbit-basics/shield.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000011", "emoji": "✨", "file": "orbit-basics/sparkles.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000012", "emoji": "👏", "file": "orbit-basics/clap.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000013", "emoji": "📅", "file": "orbit-basics/calendar.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000014", "emoji": "📞", "file": "orbit-basics/phone.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000015", "emoji": "✉️", "file": "orbit-basics/mail.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000016", "emoji": "👌", "file": "orbit-basics/ok.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000017", "emoji": "⚠️", "file": "orbit-basics/warning.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000018", "emoji": "⭐", "file": "orbit-basics/star.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000019", "emoji": "🛠️", "file": "orbit-basics/tools.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000020", "emoji": "🔒", "file": "orbit-basics/lock.svg", "width": 512, "height": 512 }
+      ]
+    },
+    {
+      "id": "10000000-0000-4000-8000-0000000000a1",
+      "title": "Office Life",
+      "short_name": "office_life",
+      "description": "Meetings, deadlines, desks, and the small rituals of office work.",
+      "thumbnail": "office-life/laptop.svg",
+      "stickers": [
+        { "id": "20000000-0000-4000-8000-000000000101", "emoji": "💻", "file": "office-life/laptop.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000102", "emoji": "🤝", "file": "office-life/meeting.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000103", "emoji": "⏰", "file": "office-life/deadline.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000104", "emoji": "🖨️", "file": "office-life/printer.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000105", "emoji": "📋", "file": "office-life/clipboard.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000106", "emoji": "📈", "file": "office-life/chart.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000107", "emoji": "📁", "file": "office-life/folder.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000108", "emoji": "💼", "file": "office-life/briefcase.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000109", "emoji": "☕", "file": "office-life/coffee-break.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000110", "emoji": "🎧", "file": "office-life/headset.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000111", "emoji": "📶", "file": "office-life/wifi.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000112", "emoji": "📝", "file": "office-life/notebook.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000113", "emoji": "🔑", "file": "office-life/keycard.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000114", "emoji": "🖱️", "file": "office-life/mouse.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000115", "emoji": "🪑", "file": "office-life/chair.svg", "width": 512, "height": 512 }
+      ]
+    },
+    {
+      "id": "10000000-0000-4000-8000-0000000000b1",
+      "title": "Reactions",
+      "short_name": "reactions",
+      "description": "Fast response stickers for approvals, surprises, empathy, and classic team reactions.",
+      "thumbnail": "reactions/thumbs-up.svg",
+      "stickers": [
+        { "id": "20000000-0000-4000-8000-000000000201", "emoji": "👍", "file": "reactions/thumbs-up.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000202", "emoji": "👎", "file": "reactions/thumbs-down.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000203", "emoji": "❤️", "file": "reactions/heart.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000204", "emoji": "😂", "file": "reactions/laugh.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000205", "emoji": "😮", "file": "reactions/wow.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000206", "emoji": "🤯", "file": "reactions/mindblown.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000207", "emoji": "🤔", "file": "reactions/thinking.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000208", "emoji": "👀", "file": "reactions/eyes.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000209", "emoji": "🙏", "file": "reactions/pray.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000210", "emoji": "🫡", "file": "reactions/salute.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000211", "emoji": "💔", "file": "reactions/broken-heart.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000212", "emoji": "😴", "file": "reactions/sleepy.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000213", "emoji": "💯", "file": "reactions/hundred.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000214", "emoji": "🙌", "file": "reactions/raised-hands.svg", "width": 512, "height": 512 },
+        { "id": "20000000-0000-4000-8000-000000000215", "emoji": "🤦", "file": "reactions/facepalm.svg", "width": 512, "height": 512 }
+      ]
+    }
+  ]
+}

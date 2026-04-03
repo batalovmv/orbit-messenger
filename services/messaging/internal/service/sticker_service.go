@@ -2,15 +2,23 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"path"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
+
+var stickerPackShortNamePattern = regexp.MustCompile(`^[a-z0-9_]{3,64}$`)
 
 // StickerService handles business logic for sticker packs.
 type StickerService struct {
@@ -20,6 +28,10 @@ type StickerService struct {
 
 // NewStickerService creates a new StickerService.
 func NewStickerService(stickers store.StickerStore, logger *slog.Logger) *StickerService {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &StickerService{stickers: stickers, logger: logger}
 }
 
@@ -157,4 +169,234 @@ func (s *StickerService) ClearRecent(ctx context.Context, userID uuid.UUID) erro
 		return fmt.Errorf("clear recent stickers: %w", err)
 	}
 	return nil
+}
+
+func (s *StickerService) CreateAdminPack(ctx context.Context, pack *model.StickerPack) (*model.StickerPack, error) {
+	pack.Title = strings.TrimSpace(pack.Title)
+	pack.ShortName = normalizeStickerPackShortName(pack.ShortName)
+
+	if err := validatePackInput(pack); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.stickers.GetPackByShortName(ctx, pack.ShortName)
+	if err != nil {
+		return nil, fmt.Errorf("get sticker pack by short name: %w", err)
+	}
+	if existing != nil {
+		return nil, apperror.Conflict("Sticker pack short_name already exists")
+	}
+
+	pack.IsOfficial = true
+	pack.IsFeatured = true
+	if err := s.stickers.CreatePack(ctx, pack, nil); err != nil {
+		return nil, s.mapWriteError("create sticker pack", err)
+	}
+
+	s.logger.Info("sticker pack created", "pack_id", pack.ID, "short_name", pack.ShortName)
+	return pack, nil
+}
+
+func (s *StickerService) AddStickerToPack(ctx context.Context, packID uuid.UUID, sticker *model.Sticker, isAnimated bool) (*model.Sticker, error) {
+	pack, err := s.stickers.GetPack(ctx, packID)
+	if err != nil {
+		return nil, fmt.Errorf("get sticker pack: %w", err)
+	}
+	if pack == nil {
+		return nil, apperror.NotFound("Sticker pack not found")
+	}
+
+	sticker.PackID = packID
+	sticker.FileType = inferStickerFileType(sticker.FileURL, isAnimated)
+	if err := validateStickerInput(sticker); err != nil {
+		return nil, err
+	}
+
+	if err := s.stickers.AddSticker(ctx, packID, sticker); err != nil {
+		return nil, s.mapWriteError("add sticker to pack", err)
+	}
+
+	s.logger.Info("sticker added to pack", "pack_id", packID, "sticker_id", sticker.ID, "position", sticker.Position)
+	return sticker, nil
+}
+
+func (s *StickerService) UpdateAdminPack(ctx context.Context, pack *model.StickerPack) (*model.StickerPack, error) {
+	existing, err := s.stickers.GetPack(ctx, pack.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get sticker pack: %w", err)
+	}
+	if existing == nil {
+		return nil, apperror.NotFound("Sticker pack not found")
+	}
+
+	pack.Title = strings.TrimSpace(pack.Title)
+	pack.ShortName = normalizeStickerPackShortName(pack.ShortName)
+	pack.AuthorID = existing.AuthorID
+	pack.IsOfficial = existing.IsOfficial
+	pack.IsAnimated = existing.IsAnimated
+	pack.IsFeatured = true
+	pack.StickerCount = existing.StickerCount
+
+	if err := validatePackInput(pack); err != nil {
+		return nil, err
+	}
+
+	if existing.ShortName != pack.ShortName {
+		conflict, err := s.stickers.GetPackByShortName(ctx, pack.ShortName)
+		if err != nil {
+			return nil, fmt.Errorf("get sticker pack by short name: %w", err)
+		}
+		if conflict != nil && conflict.ID != pack.ID {
+			return nil, apperror.Conflict("Sticker pack short_name already exists")
+		}
+	}
+
+	if err := s.stickers.UpdatePack(ctx, pack); err != nil {
+		return nil, s.mapWriteError("update sticker pack", err)
+	}
+
+	updated, err := s.stickers.GetPack(ctx, pack.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reload sticker pack: %w", err)
+	}
+	if updated == nil {
+		return nil, apperror.NotFound("Sticker pack not found")
+	}
+
+	s.logger.Info("sticker pack updated", "pack_id", updated.ID, "short_name", updated.ShortName)
+	return updated, nil
+}
+
+func (s *StickerService) DeleteAdminPack(ctx context.Context, packID uuid.UUID) error {
+	pack, err := s.stickers.GetPack(ctx, packID)
+	if err != nil {
+		return fmt.Errorf("get sticker pack: %w", err)
+	}
+	if pack == nil {
+		return apperror.NotFound("Sticker pack not found")
+	}
+
+	if err := s.stickers.DeletePack(ctx, packID); err != nil {
+		return s.mapWriteError("delete sticker pack", err)
+	}
+
+	s.logger.Info("sticker pack deleted", "pack_id", packID, "short_name", pack.ShortName)
+	return nil
+}
+
+func (s *StickerService) mapWriteError(operation string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return apperror.Conflict("Sticker pack already exists")
+	}
+
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
+func validatePackInput(pack *model.StickerPack) error {
+	if err := validator.RequireString(pack.Title, "name", 1, 100); err != nil {
+		return err
+	}
+	if err := validator.RequireString(pack.ShortName, "short_name", 3, 64); err != nil {
+		return err
+	}
+	if !stickerPackShortNamePattern.MatchString(pack.ShortName) {
+		return apperror.BadRequest("short_name must contain only lowercase letters, numbers, and underscores")
+	}
+	if pack.Description != nil && len(strings.TrimSpace(*pack.Description)) > 500 {
+		return apperror.BadRequest("description is too long")
+	}
+	if pack.ThumbnailURL != nil && !isAllowedStickerURL(*pack.ThumbnailURL) {
+		return apperror.BadRequest("thumbnail_url must be a valid http(s) or data URL")
+	}
+
+	return nil
+}
+
+func validateStickerInput(sticker *model.Sticker) error {
+	if sticker.Emoji == nil || strings.TrimSpace(*sticker.Emoji) == "" {
+		return apperror.BadRequest("emoji is required")
+	}
+	if err := validator.RequireString(strings.TrimSpace(*sticker.Emoji), "emoji", 1, 16); err != nil {
+		return err
+	}
+	if err := validator.RequireString(strings.TrimSpace(sticker.FileURL), "file_url", 1, 2048); err != nil {
+		return err
+	}
+	if !isAllowedStickerURL(sticker.FileURL) {
+		return apperror.BadRequest("file_url must be a valid http(s) or data URL")
+	}
+	switch sticker.FileType {
+	case "webp", "tgs", "webm", "svg":
+	default:
+		return apperror.BadRequest("unsupported sticker file type")
+	}
+	if sticker.Width == nil || sticker.Height == nil || *sticker.Width <= 0 || *sticker.Height <= 0 {
+		return apperror.BadRequest("width and height must be positive")
+	}
+
+	return nil
+}
+
+func normalizeStickerPackShortName(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "-", "_")
+	return strings.ToLower(value)
+}
+
+func inferStickerFileType(fileURL string, isAnimated bool) string {
+	lowerURL := strings.ToLower(strings.TrimSpace(fileURL))
+
+	if strings.HasPrefix(lowerURL, "data:") {
+		switch {
+		case strings.HasPrefix(lowerURL, "data:image/svg+xml"):
+			return "svg"
+		case strings.HasPrefix(lowerURL, "data:video/webm"):
+			return "webm"
+		case strings.HasPrefix(lowerURL, "data:application/x-tgsticker"):
+			return "tgs"
+		case strings.HasPrefix(lowerURL, "data:image/webp"):
+			return "webp"
+		}
+	}
+
+	if parsed, err := url.Parse(lowerURL); err == nil {
+		switch ext := path.Ext(parsed.Path); ext {
+		case ".svg":
+			return "svg"
+		case ".webm":
+			return "webm"
+		case ".tgs":
+			return "tgs"
+		case ".webp":
+			return "webp"
+		}
+	}
+
+	if isAnimated {
+		return "tgs"
+	}
+
+	return "webp"
+}
+
+func isAllowedStickerURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return false
+	}
+
+	if strings.HasPrefix(strings.ToLower(raw), "data:") {
+		return strings.HasPrefix(strings.ToLower(raw), "data:image/svg+xml") ||
+			strings.HasPrefix(strings.ToLower(raw), "data:image/webp") ||
+			strings.HasPrefix(strings.ToLower(raw), "data:video/webm") ||
+			strings.HasPrefix(strings.ToLower(raw), "data:application/x-tgsticker")
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }

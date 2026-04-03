@@ -3,11 +3,13 @@ package handler
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
@@ -34,6 +36,11 @@ func (h *StickerHandler) Register(app fiber.Router) {
 	app.Get("/stickers/sets/:id", h.GetPack)
 	app.Post("/stickers/sets/:id/install", h.Install)
 	app.Delete("/stickers/sets/:id/install", h.Uninstall)
+
+	app.Post("/admin/sticker-packs", h.CreatePack)
+	app.Post("/admin/sticker-packs/:id/stickers", h.AddSticker)
+	app.Put("/admin/sticker-packs/:id", h.UpdatePack)
+	app.Delete("/admin/sticker-packs/:id", h.DeletePack)
 }
 
 func (h *StickerHandler) ListFeatured(c *fiber.Ctx) error {
@@ -187,4 +194,143 @@ func (h *StickerHandler) Uninstall(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, 200, fiber.Map{"ok": true})
+}
+
+func (h *StickerHandler) CreatePack(c *fiber.Ctx) error {
+	if err := requireAdminRole(c); err != nil {
+		return response.Error(c, err)
+	}
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	var req struct {
+		Name         string  `json:"name"`
+		ShortName    string  `json:"short_name"`
+		Description  *string `json:"description"`
+		ThumbnailURL *string `json:"thumbnail_url"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	pack, err := h.svc.CreateAdminPack(c.Context(), &model.StickerPack{
+		Title:        strings.TrimSpace(req.Name),
+		ShortName:    req.ShortName,
+		Description:  normalizeOptionalString(req.Description),
+		AuthorID:     &userID,
+		ThumbnailURL: normalizeOptionalString(req.ThumbnailURL),
+	})
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, pack)
+}
+
+func (h *StickerHandler) AddSticker(c *fiber.Ctx) error {
+	if err := requireAdminRole(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	packID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid pack ID"))
+	}
+
+	var req struct {
+		Emoji      string `json:"emoji"`
+		FileURL    string `json:"file_url"`
+		Width      int    `json:"width"`
+		Height     int    `json:"height"`
+		IsAnimated bool   `json:"is_animated"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	sticker, err := h.svc.AddStickerToPack(c.Context(), packID, &model.Sticker{
+		Emoji:   normalizeOptionalString(&req.Emoji),
+		FileURL: strings.TrimSpace(req.FileURL),
+		Width:   intPtr(req.Width),
+		Height:  intPtr(req.Height),
+	}, req.IsAnimated)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusCreated, sticker)
+}
+
+func (h *StickerHandler) UpdatePack(c *fiber.Ctx) error {
+	if err := requireAdminRole(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	packID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid pack ID"))
+	}
+
+	var req struct {
+		Name         string  `json:"name"`
+		ShortName    string  `json:"short_name"`
+		Description  *string `json:"description"`
+		ThumbnailURL *string `json:"thumbnail_url"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	pack, err := h.svc.UpdateAdminPack(c.Context(), &model.StickerPack{
+		ID:           packID,
+		Title:        strings.TrimSpace(req.Name),
+		ShortName:    req.ShortName,
+		Description:  normalizeOptionalString(req.Description),
+		ThumbnailURL: normalizeOptionalString(req.ThumbnailURL),
+	})
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, pack)
+}
+
+func (h *StickerHandler) DeletePack(c *fiber.Ctx) error {
+	if err := requireAdminRole(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	packID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid pack ID"))
+	}
+
+	if err := h.svc.DeleteAdminPack(c.Context(), packID); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+}
+
+func normalizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func intPtr(value int) *int {
+	if value <= 0 {
+		return nil
+	}
+
+	return &value
 }

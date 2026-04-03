@@ -16,9 +16,9 @@ type StickerStore interface {
 	GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error)
 	// GetPackByShortName returns a sticker pack by its short name.
 	GetPackByShortName(ctx context.Context, shortName string) (*model.StickerPack, error)
-	// ListFeatured returns recommended/official sticker packs.
+	// ListFeatured returns recommended sticker packs.
 	ListFeatured(ctx context.Context, limit int) ([]model.StickerPack, error)
-	// Search searches sticker packs by title or short_name.
+	// Search searches sticker packs by title, short_name, or description.
 	Search(ctx context.Context, query string, limit int) ([]model.StickerPack, error)
 	// ListInstalled returns the user's installed sticker packs ordered by position.
 	ListInstalled(ctx context.Context, userID uuid.UUID) ([]model.StickerPack, error)
@@ -36,8 +36,14 @@ type StickerStore interface {
 	RemoveRecent(ctx context.Context, userID, stickerID uuid.UUID) error
 	// ClearRecent removes all stickers from the user's recent list.
 	ClearRecent(ctx context.Context, userID uuid.UUID) error
-	// CreatePack creates a new sticker pack (for TG import).
+	// CreatePack creates or updates a sticker pack and synchronizes its stickers.
 	CreatePack(ctx context.Context, pack *model.StickerPack, stickers []model.Sticker) error
+	// AddSticker appends a sticker to the end of a pack.
+	AddSticker(ctx context.Context, packID uuid.UUID, sticker *model.Sticker) error
+	// UpdatePack updates pack metadata.
+	UpdatePack(ctx context.Context, pack *model.StickerPack) error
+	// DeletePack removes a pack and its stickers.
+	DeletePack(ctx context.Context, packID uuid.UUID) error
 }
 
 type stickerStore struct {
@@ -50,8 +56,8 @@ func NewStickerStore(pool *pgxpool.Pool) StickerStore {
 
 func (s *stickerStore) GetPack(ctx context.Context, packID uuid.UUID) (*model.StickerPack, error) {
 	return s.getPack(ctx, `
-		SELECT id, title, short_name, author_id, thumbnail_url, is_official,
-		       is_animated, sticker_count, created_at, updated_at
+		SELECT id, title, short_name, description, author_id, thumbnail_url, is_official,
+		       is_featured, is_animated, sticker_count, created_at, updated_at
 		FROM sticker_packs
 		WHERE id = $1`,
 		packID,
@@ -60,8 +66,8 @@ func (s *stickerStore) GetPack(ctx context.Context, packID uuid.UUID) (*model.St
 
 func (s *stickerStore) GetPackByShortName(ctx context.Context, shortName string) (*model.StickerPack, error) {
 	return s.getPack(ctx, `
-		SELECT id, title, short_name, author_id, thumbnail_url, is_official,
-		       is_animated, sticker_count, created_at, updated_at
+		SELECT id, title, short_name, description, author_id, thumbnail_url, is_official,
+		       is_featured, is_animated, sticker_count, created_at, updated_at
 		FROM sticker_packs
 		WHERE short_name = $1`,
 		shortName,
@@ -74,11 +80,11 @@ func (s *stickerStore) ListFeatured(ctx context.Context, limit int) ([]model.Sti
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, title, short_name, author_id, thumbnail_url, is_official,
-		       is_animated, sticker_count, created_at, updated_at
+		SELECT id, title, short_name, description, author_id, thumbnail_url, is_official,
+		       is_featured, is_animated, sticker_count, created_at, updated_at
 		FROM sticker_packs
-		WHERE is_official = true
-		ORDER BY created_at DESC
+		WHERE is_featured = true
+		ORDER BY is_official DESC, updated_at DESC, created_at DESC
 		LIMIT $1`,
 		limit,
 	)
@@ -96,12 +102,13 @@ func (s *stickerStore) Search(ctx context.Context, query string, limit int) ([]m
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, title, short_name, author_id, thumbnail_url, is_official,
-		       is_animated, sticker_count, created_at, updated_at
+		SELECT id, title, short_name, description, author_id, thumbnail_url, is_official,
+		       is_featured, is_animated, sticker_count, created_at, updated_at
 		FROM sticker_packs
 		WHERE title ILIKE '%' || $1 || '%'
 		   OR short_name ILIKE '%' || $1 || '%'
-		ORDER BY is_official DESC, title ASC, created_at DESC
+		   OR COALESCE(description, '') ILIKE '%' || $1 || '%'
+		ORDER BY is_featured DESC, is_official DESC, title ASC, created_at DESC
 		LIMIT $2`,
 		query, limit,
 	)
@@ -115,8 +122,8 @@ func (s *stickerStore) Search(ctx context.Context, query string, limit int) ([]m
 
 func (s *stickerStore) ListInstalled(ctx context.Context, userID uuid.UUID) ([]model.StickerPack, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT sp.id, sp.title, sp.short_name, sp.author_id, sp.thumbnail_url,
-		       sp.is_official, sp.is_animated, sp.sticker_count, sp.created_at, sp.updated_at
+		SELECT sp.id, sp.title, sp.short_name, sp.description, sp.author_id, sp.thumbnail_url,
+		       sp.is_official, sp.is_featured, sp.is_animated, sp.sticker_count, sp.created_at, sp.updated_at
 		FROM user_installed_stickers uis
 		JOIN sticker_packs sp ON sp.id = uis.pack_id
 		WHERE uis.user_id = $1
@@ -254,57 +261,170 @@ func (s *stickerStore) CreatePack(ctx context.Context, pack *model.StickerPack, 
 	}
 	defer tx.Rollback(ctx)
 
+	pack.IsFeatured = true
+	for i := range stickers {
+		if stickers[i].ID == uuid.Nil {
+			stickers[i].ID = uuid.New()
+		}
+		stickers[i].PackID = pack.ID
+		stickers[i].Position = i
+	}
+
 	err = tx.QueryRow(ctx, `
 		INSERT INTO sticker_packs (
-			title, short_name, author_id, thumbnail_url, is_official, is_animated, sticker_count
+			id, title, short_name, description, author_id, thumbnail_url,
+			is_official, is_featured, is_animated, sticker_count
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, sticker_count, created_at, updated_at`,
+		VALUES (
+			COALESCE(NULLIF($1, '00000000-0000-0000-0000-000000000000'::uuid), gen_random_uuid()),
+			$2, $3, $4, $5, $6, $7, true, $8, $9
+		)
+		ON CONFLICT (short_name) DO UPDATE SET
+			title = EXCLUDED.title,
+			description = EXCLUDED.description,
+			author_id = EXCLUDED.author_id,
+			thumbnail_url = EXCLUDED.thumbnail_url,
+			is_official = EXCLUDED.is_official,
+			is_featured = true,
+			is_animated = EXCLUDED.is_animated,
+			sticker_count = EXCLUDED.sticker_count,
+			updated_at = NOW()
+		RETURNING id, title, short_name, description, author_id, thumbnail_url,
+		          is_official, is_featured, is_animated, sticker_count, created_at, updated_at`,
+		pack.ID,
 		pack.Title,
 		pack.ShortName,
+		pack.Description,
 		pack.AuthorID,
 		pack.ThumbnailURL,
 		pack.IsOfficial,
 		pack.IsAnimated,
 		len(stickers),
-	).Scan(&pack.ID, &pack.StickerCount, &pack.CreatedAt, &pack.UpdatedAt)
+	).Scan(
+		&pack.ID,
+		&pack.Title,
+		&pack.ShortName,
+		&pack.Description,
+		&pack.AuthorID,
+		&pack.ThumbnailURL,
+		&pack.IsOfficial,
+		&pack.IsFeatured,
+		&pack.IsAnimated,
+		&pack.StickerCount,
+		&pack.CreatedAt,
+		&pack.UpdatedAt,
+	)
 	if err != nil {
-		return fmt.Errorf("insert sticker pack: %w", err)
+		return fmt.Errorf("upsert sticker pack: %w", err)
 	}
 
-	if len(stickers) > 0 {
-		batch := &pgx.Batch{}
-		for i := range stickers {
-			batch.Queue(`
-				INSERT INTO stickers (pack_id, emoji, file_url, file_type, width, height, position)
-				VALUES ($1, $2, $3, $4, $5, $6, $7)
-				RETURNING id`,
-				pack.ID,
-				stickers[i].Emoji,
-				stickers[i].FileURL,
-				stickers[i].FileType,
-				stickers[i].Width,
-				stickers[i].Height,
-				stickers[i].Position,
-			)
-		}
-
-		results := tx.SendBatch(ctx, batch)
-		for i := range stickers {
-			stickers[i].PackID = pack.ID
-			if err := results.QueryRow().Scan(&stickers[i].ID); err != nil {
-				_ = results.Close()
-				return fmt.Errorf("insert sticker %d: %w", i, err)
-			}
-		}
-		if err := results.Close(); err != nil {
-			return fmt.Errorf("close sticker batch: %w", err)
-		}
+	for i := range stickers {
+		stickers[i].PackID = pack.ID
+	}
+	if err := s.syncPackStickers(ctx, tx, pack.ID, stickers); err != nil {
+		return err
+	}
+	if err := s.refreshPackStats(ctx, tx, pack); err != nil {
+		return err
 	}
 
 	pack.Stickers = append([]model.Sticker(nil), stickers...)
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit sticker pack tx: %w", err)
+	}
+	return nil
+}
+
+func (s *stickerStore) AddSticker(ctx context.Context, packID uuid.UUID, sticker *model.Sticker) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin add sticker tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if sticker.ID == uuid.Nil {
+		sticker.ID = uuid.New()
+	}
+	sticker.PackID = packID
+
+	err = tx.QueryRow(ctx, `
+		WITH next_position AS (
+			SELECT COALESCE(MAX(position) + 1, 0) AS value
+			FROM stickers
+			WHERE pack_id = $1
+		)
+		INSERT INTO stickers (id, pack_id, emoji, file_url, file_type, width, height, position)
+		SELECT $2, $1, $3, $4, $5, $6, $7, value
+		FROM next_position
+		RETURNING position`,
+		packID,
+		sticker.ID,
+		sticker.Emoji,
+		sticker.FileURL,
+		sticker.FileType,
+		sticker.Width,
+		sticker.Height,
+	).Scan(&sticker.Position)
+	if err != nil {
+		return fmt.Errorf("insert sticker: %w", err)
+	}
+
+	pack := &model.StickerPack{ID: packID}
+	if err := s.refreshPackStats(ctx, tx, pack); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit add sticker tx: %w", err)
+	}
+	return nil
+}
+
+func (s *stickerStore) UpdatePack(ctx context.Context, pack *model.StickerPack) error {
+	pack.IsFeatured = true
+	err := s.pool.QueryRow(ctx, `
+		UPDATE sticker_packs
+		SET title = $2,
+		    short_name = $3,
+		    description = $4,
+		    thumbnail_url = $5,
+		    is_featured = true,
+		    updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, title, short_name, description, author_id, thumbnail_url,
+		          is_official, is_featured, is_animated, sticker_count, created_at, updated_at`,
+		pack.ID,
+		pack.Title,
+		pack.ShortName,
+		pack.Description,
+		pack.ThumbnailURL,
+	).Scan(
+		&pack.ID,
+		&pack.Title,
+		&pack.ShortName,
+		&pack.Description,
+		&pack.AuthorID,
+		&pack.ThumbnailURL,
+		&pack.IsOfficial,
+		&pack.IsFeatured,
+		&pack.IsAnimated,
+		&pack.StickerCount,
+		&pack.CreatedAt,
+		&pack.UpdatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("update sticker pack: %w", err)
+	}
+	return nil
+}
+
+func (s *stickerStore) DeletePack(ctx context.Context, packID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM sticker_packs WHERE id = $1`, packID)
+	if err != nil {
+		return fmt.Errorf("delete sticker pack: %w", err)
 	}
 	return nil
 }
@@ -315,9 +435,11 @@ func (s *stickerStore) getPack(ctx context.Context, query string, arg interface{
 		&pack.ID,
 		&pack.Title,
 		&pack.ShortName,
+		&pack.Description,
 		&pack.AuthorID,
 		&pack.ThumbnailURL,
 		&pack.IsOfficial,
+		&pack.IsFeatured,
 		&pack.IsAnimated,
 		&pack.StickerCount,
 		&pack.CreatedAt,
@@ -377,6 +499,90 @@ func (s *stickerStore) listPackStickers(ctx context.Context, packID uuid.UUID) (
 	return stickers, nil
 }
 
+func (s *stickerStore) syncPackStickers(ctx context.Context, tx pgx.Tx, packID uuid.UUID, stickers []model.Sticker) error {
+	stickerIDs := make([]uuid.UUID, 0, len(stickers))
+	for i := range stickers {
+		stickerIDs = append(stickerIDs, stickers[i].ID)
+	}
+
+	if len(stickerIDs) == 0 {
+		if _, err := tx.Exec(ctx, `DELETE FROM stickers WHERE pack_id = $1`, packID); err != nil {
+			return fmt.Errorf("clear stickers for pack: %w", err)
+		}
+		return nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM stickers
+		WHERE pack_id = $1
+		  AND NOT (id = ANY($2))`,
+		packID, stickerIDs,
+	); err != nil {
+		return fmt.Errorf("delete stale stickers: %w", err)
+	}
+
+	batch := &pgx.Batch{}
+	for i := range stickers {
+		batch.Queue(`
+			INSERT INTO stickers (id, pack_id, emoji, file_url, file_type, width, height, position)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (id) DO UPDATE SET
+				pack_id = EXCLUDED.pack_id,
+				emoji = EXCLUDED.emoji,
+				file_url = EXCLUDED.file_url,
+				file_type = EXCLUDED.file_type,
+				width = EXCLUDED.width,
+				height = EXCLUDED.height,
+				position = EXCLUDED.position`,
+			stickers[i].ID,
+			packID,
+			stickers[i].Emoji,
+			stickers[i].FileURL,
+			stickers[i].FileType,
+			stickers[i].Width,
+			stickers[i].Height,
+			stickers[i].Position,
+		)
+	}
+
+	results := tx.SendBatch(ctx, batch)
+	for i := range stickers {
+		if _, err := results.Exec(); err != nil {
+			_ = results.Close()
+			return fmt.Errorf("upsert sticker %d: %w", i, err)
+		}
+	}
+	if err := results.Close(); err != nil {
+		return fmt.Errorf("close sticker batch: %w", err)
+	}
+
+	return nil
+}
+
+func (s *stickerStore) refreshPackStats(ctx context.Context, tx pgx.Tx, pack *model.StickerPack) error {
+	err := tx.QueryRow(ctx, `
+		UPDATE sticker_packs
+		SET sticker_count = stats.sticker_count,
+		    is_animated = stats.is_animated,
+		    is_featured = true,
+		    updated_at = NOW()
+		FROM (
+			SELECT $1::uuid AS pack_id,
+			       COUNT(*)::int AS sticker_count,
+			       COALESCE(BOOL_OR(file_type IN ('tgs', 'webm')), false) AS is_animated
+			FROM stickers
+			WHERE pack_id = $1
+		) AS stats
+		WHERE sticker_packs.id = stats.pack_id
+		RETURNING sticker_packs.sticker_count, sticker_packs.is_animated, sticker_packs.is_featured, sticker_packs.updated_at`,
+		pack.ID,
+	).Scan(&pack.StickerCount, &pack.IsAnimated, &pack.IsFeatured, &pack.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("refresh sticker pack stats: %w", err)
+	}
+	return nil
+}
+
 func scanStickerPacks(rows pgx.Rows) ([]model.StickerPack, error) {
 	packs := make([]model.StickerPack, 0)
 	for rows.Next() {
@@ -385,9 +591,11 @@ func scanStickerPacks(rows pgx.Rows) ([]model.StickerPack, error) {
 			&pack.ID,
 			&pack.Title,
 			&pack.ShortName,
+			&pack.Description,
 			&pack.AuthorID,
 			&pack.ThumbnailURL,
 			&pack.IsOfficial,
+			&pack.IsFeatured,
 			&pack.IsAnimated,
 			&pack.StickerCount,
 			&pack.CreatedAt,
