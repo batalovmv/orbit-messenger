@@ -1,22 +1,9 @@
 .Poll {
-  --poll-primary-color: var(--accent-color);
-  --poll-secondary-color: var(--secondary-color);
-  --poll-input-border-color: var(--secondary-color);
-  --poll-button-color: var(--accent-color);
-
-  width: 100%;
   min-width: 15rem;
-  max-width: 19rem;
   text-align: initial;
 
-  .Message.own & {
-    --poll-secondary-color: var(--color-message-meta-own);
-    --poll-input-border-color: rgb(255, 255, 255, 0.72);
-    --poll-button-color: var(--color-accent-own);
-  }
-
   .poll-question {
-    margin: 0;
+    margin: 0.125rem 0;
     font-weight: var(--font-weight-medium);
     line-height: 1.25rem;
     overflow-wrap: anywhere;
@@ -25,45 +12,114 @@
   .poll-type,
   .poll-voters-count {
     font-size: 0.875rem;
-    color: var(--poll-secondary-color);
+    color: var(--secondary-color);
   }
 
   .poll-type {
     display: flex;
-    gap: 0.375rem;
     align-items: center;
-
-    min-height: 1.25rem;
-    margin: 0.25rem 0 0.625rem;
-  }
-
-  .poll-voters-count {
-    margin: 0.125rem 0 0.875rem;
-    line-height: 1.125rem;
-    text-align: center;
-  }
-
-  .poll-answers,
-  .poll-results {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    min-height: 1.375rem;
     margin-bottom: 0.5rem;
   }
 
+  .poll-voters-count {
+    margin: 0 0 1.125rem;
+    text-align: center;
+  }
+
+  .Checkbox,
+  .Radio {
+    min-height: 2.5rem;
+    padding-bottom: 1.25rem;
+    padding-left: 2.25rem;
+
+    &.disabled {
+      cursor: var(--custom-cursor, not-allowed);
+      opacity: 1 !important;
+    }
+
+    &:hover {
+      background: none;
+    }
+
+    .Checkbox-main,
+    .Radio-main {
+
+      &::before {
+        --color-borders-input: var(--secondary-color);
+
+        top: 0.6875rem;
+        left: 0.125rem;
+        background-color: var(--background-color);
+      }
+
+      &::after {
+        top: 0.6875rem;
+        left: 0.4375rem;
+        background-color: var(--accent-color);
+      }
+      .label {
+        line-height: 1.3125rem;
+      }
+    }
+
+    /* stylelint-disable-next-line selector-max-type */
+    input:checked ~ .Radio-main,
+    /* stylelint-disable-next-line selector-max-type */
+    input:checked ~ .Checkbox-main {
+      &::before {
+        border-color: var(--accent-color);
+      }
+    }
+
+    .Spinner {
+      top: 0.6875rem;
+      left: 0.125rem;
+    }
+  }
+
+  .Checkbox {
+    &.loading {
+      .Spinner {
+        top: 0;
+      }
+    }
+    .Checkbox-main {
+      &::after {
+        left: 0.125rem;
+        background-color: var(--accent-color);
+
+        .theme-dark .Message.own & {
+          color: var(--color-primary);
+        }
+      }
+    }
+  }
+
+  .Spinner .Spinner__inner {
+    // gray spinner
+    background-image: var(--spinner-gray-data);
+
+    .theme-dark & {
+      background-image: var(--spinner-white-data);
+    }
+
+    .Message.own & {
+      // green spinner
+      background-image: var(--spinner-green-data);
+      .theme-dark & {
+        background-image: var(--spinner-white-data);
+      }
+    }
+  }
+
   .poll-recent-voters {
-    margin-inline-start: 0.5rem;
+    margin-left: 0.875rem;
   }
 
   .poll-countdown {
-    display: inline-flex;
-    gap: 0.25rem;
-    align-items: center;
-
-    margin-inline-start: auto;
-
+    margin-left: auto;
     font-size: 0.75rem;
-
     transition: color 0.2s;
 
     &.hurry-up {
@@ -82,7 +138,7 @@
 
   .poll-countdown-progress {
     fill: transparent;
-    stroke: var(--poll-button-color);
+    stroke: var(--color-primary);
     stroke-linecap: round;
     stroke-width: 2;
 
@@ -90,51 +146,28 @@
   }
 
   .poll-quiz-help {
-    margin: -0.375rem 0 -0.375rem auto;
+    margin: -0.625rem 0 -0.625rem auto;
     .Message:not(.own) & {
-      color: var(--poll-button-color);
+      color: var(--color-primary);
     }
   }
 
   .Button {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0;
+    font-size: 1rem;
+    text-transform: none;
 
     .Message.own & {
       --color-primary-shade-rgb: var(--color-accent-own);
 
-      color: var(--poll-button-color);
+      color: var(--accent-color);
     }
   }
 
-  .poll-action-button,
   > .Button {
-    width: 100%;
-    min-width: 0;
-    height: auto;
-    margin: 0;
-    padding-inline: 0;
-  }
-
-  .poll-action-button {
-    display: block;
-    margin-bottom: 0.125rem;
-
-    &.Button.text {
-      justify-content: center;
-      padding: 0.5rem 0;
-      color: var(--poll-button-color);
-      font-weight: var(--font-weight-medium);
-    }
-  }
-
-  .poll-action-button.disabled {
-    opacity: 0.55 !important;
+    margin-bottom: 0.1875rem;
   }
 
   @media (max-width: 600px) {
-    min-width: 0;
-    max-width: 100%;
+    min-width: 50vw;
   }
 }

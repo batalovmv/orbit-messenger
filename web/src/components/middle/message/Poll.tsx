@@ -16,9 +16,7 @@ import type {
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { OldLangFn } from '../../../hooks/useOldLang';
 
-import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { selectPeer } from '../../../global/selectors';
-import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dates/dateFormat';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { getServerTime } from '../../../util/serverTime';
@@ -29,6 +27,8 @@ import useOldLang from '../../../hooks/useOldLang';
 
 import AvatarList from '../../common/AvatarList';
 import Button from '../../ui/Button';
+import CheckboxGroup from '../../ui/CheckboxGroup';
+import RadioGroup from '../../ui/RadioGroup';
 import PollOption from './PollOption';
 
 import './Poll.scss';
@@ -74,18 +74,32 @@ const Poll: FC<OwnProps> = ({
   const countdownRef = useRef<HTMLDivElement>();
   const timerCircleRef = useRef<SVGCircleElement>();
   const { results: voteResults, totalVoters } = results;
-  const hasVoted = Boolean(voteResults && voteResults.some((r) => r.isChosen));
+  const hasVoted = Boolean(voteResults && voteResults.some((result) => result.isChosen));
   const canVote = !summary.closed && !hasVoted;
-  const maxVotersCount = useMemo(() => {
-    if (!voteResults) return 0;
-    return Math.max(...voteResults.map((r) => r.votersCount), 0);
-  }, [voteResults]);
   const canViewResult = !canVote && summary.isPublic && Number(results.totalVoters) > 0;
-  const isMultiple = Boolean(summary.multipleChoice);
+  const isMultiple = canVote && Boolean(summary.multipleChoice);
   const recentVoterIds = results.recentVoterIds;
+  const maxVotersCount = voteResults ? Math.max(...voteResults.map((result) => result.votersCount)) : totalVoters;
   const correctResults = useMemo(() => {
-    return voteResults?.filter((r) => r.isCorrect).map((r) => r.option) || [];
+    return voteResults?.filter((result) => result.isCorrect).map((result) => result.option) || [];
   }, [voteResults]);
+  const answers = useMemo(() => summaryAnswers.map((answer) => ({
+    label: renderTextWithEntities({
+      text: answer.text.text,
+      entities: answer.text.entities,
+      observeIntersectionForLoading,
+      observeIntersectionForPlaying,
+    }),
+    value: answer.option,
+    hidden: Boolean(summary.quiz && summary.closePeriod && closePeriod <= 0),
+  })), [
+    closePeriod,
+    observeIntersectionForLoading,
+    observeIntersectionForPlaying,
+    summary.closePeriod,
+    summary.quiz,
+    summaryAnswers,
+  ]);
 
   useEffect(() => {
     const chosen = poll.results.results?.find((result) => result.isChosen);
@@ -93,15 +107,10 @@ const Poll: FC<OwnProps> = ({
       if (chosen.isCorrect) {
         requestConfetti({});
       }
+
       setIsSubmitting(false);
     }
   }, [isSubmitting, poll.results.results, requestConfetti]);
-
-  useEffect(() => {
-    if (!canVote && chosenOptions.length) {
-      setChosenOptions([]);
-    }
-  }, [canVote, chosenOptions.length]);
 
   useLayoutEffect(() => {
     if (closePeriod > 0) {
@@ -109,14 +118,12 @@ const Poll: FC<OwnProps> = ({
     }
     if (!timerCircleRef.current) return;
 
-    const strokeDashOffset = ((summary.closePeriod! - closePeriod) / summary.closePeriod!) * TIMER_CIRCUMFERENCE;
-    requestMutation(() => {
-      if (closePeriod <= 5) {
-        countdownRef.current?.classList.add('hurry-up');
-      }
+    if (closePeriod <= 5) {
+      countdownRef.current!.classList.add('hurry-up');
+    }
 
-      timerCircleRef.current?.setAttribute('stroke-dashoffset', `-${strokeDashOffset}`);
-    });
+    const strokeDashOffset = ((summary.closePeriod! - closePeriod) / summary.closePeriod!) * TIMER_CIRCUMFERENCE;
+    timerCircleRef.current.setAttribute('stroke-dashoffset', `-${strokeDashOffset}`);
   }, [closePeriod, summary.closePeriod]);
 
   useEffect(() => {
@@ -155,30 +162,18 @@ const Poll: FC<OwnProps> = ({
     }, []) : [];
   }, [recentVoterIds]);
 
-  const handleOptionClick = useLastCallback((option: string) => {
-    if (!canVote || message.isScheduled || isSubmitting) {
-      return;
-    }
+  const handleRadioChange = useLastCallback((option: string) => {
+    setChosenOptions([option]);
+    setIsSubmitting(true);
+    setWasSubmitted(true);
+    onSendVote([option]);
+  });
 
-    if (isMultiple) {
-      setChosenOptions((current) => {
-        return current.includes(option)
-          ? current.filter((currentOption) => currentOption !== option)
-          : [...current, option];
-      });
-    } else {
-      // Single-choice: submit immediately on click (Telegram behavior)
-      setIsSubmitting(true);
-      setWasSubmitted(true);
-      onSendVote([option]);
-    }
+  const handleCheckboxChange = useLastCallback((options: string[]) => {
+    setChosenOptions(options);
   });
 
   const handleVoteClick = useLastCallback(() => {
-    if (!chosenOptions.length || message.isScheduled || isSubmitting) {
-      return;
-    }
-
     setIsSubmitting(true);
     setWasSubmitted(true);
     onSendVote(chosenOptions);
@@ -201,12 +196,12 @@ const Poll: FC<OwnProps> = ({
   // Show the solution to quiz if the answer was incorrect
   useEffect(() => {
     if (wasSubmitted && hasVoted && summary.quiz && results.results && poll.results.solution) {
-      const correctResult = results.results.find((r) => r.isChosen && r.isCorrect);
+      const correctResult = results.results.find((result) => result.isChosen && result.isCorrect);
       if (!correctResult) {
         showSolution();
       }
     }
-  }, [hasVoted, wasSubmitted, results.results, summary.quiz, poll.results.solution]);
+  }, [hasVoted, poll.results.solution, results.results, showSolution, summary.quiz, wasSubmitted]);
 
   const lang = useOldLang();
 
@@ -220,20 +215,6 @@ const Poll: FC<OwnProps> = ({
         totalVoters={totalVoters}
         maxVotersCount={maxVotersCount}
         correctResults={correctResults}
-      />
-    );
-  }
-
-  function renderVoteOption(answer: ApiPollAnswer) {
-    return (
-      <PollOption
-        key={answer.option}
-        mode="vote"
-        answer={answer}
-        isMultiple={isMultiple}
-        isSelected={chosenOptions.includes(answer.option)}
-        disabled={message.isScheduled || isSubmitting}
-        onClick={handleOptionClick}
       />
     );
   }
@@ -252,16 +233,7 @@ const Poll: FC<OwnProps> = ({
   }
 
   return (
-    <div
-      className={buildClassName(
-        'Poll',
-        canVote ? 'can-vote' : 'has-results',
-        summary.closed && 'is-closed',
-        summary.quiz && 'is-quiz',
-        isMultiple && 'is-multiple',
-      )}
-      dir={lang.isRtl ? 'auto' : 'ltr'}
-    >
+    <div className="Poll" dir={lang.isRtl ? 'auto' : 'ltr'}>
       <div className="poll-question">
         {renderTextWithEntities({
           text: summaryQuestion.text,
@@ -307,9 +279,26 @@ const Poll: FC<OwnProps> = ({
           className="poll-answers"
           onClick={stopPropagation}
         >
-          {summaryAnswers
-            .filter((answer) => !(summary.quiz && summary.closePeriod && closePeriod <= 0))
-            .map(renderVoteOption)}
+          {isMultiple
+            ? (
+              <CheckboxGroup
+                options={answers}
+                selected={chosenOptions}
+                onChange={handleCheckboxChange}
+                disabled={message.isScheduled || isSubmitting}
+                loadingOptions={isSubmitting ? chosenOptions : undefined}
+                isRound
+              />
+            )
+            : (
+              <RadioGroup
+                name={`poll-${messageId}`}
+                options={answers}
+                onChange={handleRadioChange}
+                disabled={message.isScheduled || isSubmitting}
+                loadingOption={isSubmitting ? chosenOptions[0] : undefined}
+              />
+            )}
         </div>
       )}
       {!canVote && (
@@ -317,9 +306,11 @@ const Poll: FC<OwnProps> = ({
           {summaryAnswers.map(renderResultOption)}
         </div>
       )}
-      {canVote && isMultiple && (
+      {!canViewResult && !isMultiple && (
+        <div className="poll-voters-count">{getReadableVotersCount(lang, summary.quiz, results.totalVoters)}</div>
+      )}
+      {isMultiple && (
         <Button
-          className={buildClassName('poll-action-button', chosenOptions.length > 0 && 'active')}
           isText
           disabled={chosenOptions.length === 0 || message.isScheduled || isSubmitting}
           size="tiny"
@@ -328,12 +319,8 @@ const Poll: FC<OwnProps> = ({
           {lang('PollSubmitVotes')}
         </Button>
       )}
-      {!canViewResult && !canVote && (
-        <div className="poll-voters-count">{getReadableVotersCount(lang, summary.quiz, results.totalVoters)}</div>
-      )}
       {canViewResult && (
         <Button
-          className="poll-action-button active"
           isText
           size="tiny"
           onClick={handleViewResultsClick}
@@ -346,13 +333,13 @@ const Poll: FC<OwnProps> = ({
 };
 
 function getPollTypeString(summary: ApiPoll['summary']) {
-  if (summary.closed) {
-    return 'FinalResults';
-  }
-
   // When we just created the poll, some properties don't exist.
   if (typeof summary.isPublic === 'undefined') {
     return NBSP;
+  }
+
+  if (summary.closed) {
+    return 'FinalResults';
   }
 
   if (summary.quiz) {
