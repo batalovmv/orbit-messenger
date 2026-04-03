@@ -181,6 +181,7 @@ describe('buildApiMessage', () => {
         type: 'sticker',
         mime_type: 'video/webm',
         url: '/media/sticker-video-1',
+        thumbnail_url: '/media/sticker-video-1/thumbnail',
         size_bytes: 4096,
         width: 512,
         height: 512,
@@ -198,6 +199,7 @@ describe('buildApiMessage', () => {
     }));
     expect(getRegisteredAsset('sticker-video-1', 'sticker')).toEqual(expect.objectContaining({
       mimeType: 'video/webm',
+      previewUrl: expect.stringContaining('/media/sticker-video-1/thumbnail'),
     }));
   });
 

@@ -100,7 +100,13 @@ const StickerView = ({
   );
   const isVideo = sticker.isVideo;
   const isStatic = !isLottie && !isVideo;
-  const previewMediaHash = getStickerMediaHash(sticker, 'preview');
+  const previewMediaHash = useMemo(() => {
+    if (isUnsupportedVideo && fullMediaHash) {
+      return fullMediaHash;
+    }
+
+    return getStickerMediaHash(sticker, 'preview');
+  }, [fullMediaHash, isUnsupportedVideo, sticker]);
 
   const dpr = useDevicePixelRatio();
 
@@ -121,7 +127,7 @@ const StickerView = ({
   const cachedPreview = mediaLoader.getFromMemory(previewMediaHash);
   const isReadyToMountFullMedia = useMountAfterHeavyAnimation(hasIntersectedForPlayingRef.current);
   const shouldForcePreview = !skipPreview && (isUnsupportedVideo || (isStatic ? isSmall : noPlay));
-  const shouldLoadPreview = !skipPreview && !customColor && !cachedPreview
+  const shouldLoadPreview = Boolean(previewMediaHash) && !skipPreview && !customColor && !cachedPreview
     && (!isReadyToMountFullMedia || shouldForcePreview);
   const previewMediaData = useMedia(previewMediaHash, !shouldLoadPreview);
   const withPreview = !skipPreview && (shouldLoadPreview || cachedPreview);

@@ -284,7 +284,8 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         id: first.media_id,
         pack_id: '',
         emoji: undefined,
-        file_url: fullMediaUrl(first.url) || fullMediaUrl(`/media/${first.media_id}`) || '',
+        file_url: getMediaAttachmentUrl(first, 'full') || fullMediaUrl(first.url) || '',
+        preview_url: getMediaAttachmentUrl(first, 'thumbnail') || getMediaAttachmentUrl(first, 'medium'),
         file_type: inferStickerAttachmentFileType(first),
         width: first.width || undefined,
         height: first.height || undefined,
@@ -297,6 +298,7 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         is_video: serializedSticker.file_type === 'webm',
         set_id: serializedSticker.pack_id,
         url: serializedSticker.file_url,
+        preview_url: serializedSticker.preview_url,
         width: serializedSticker.width,
         height: serializedSticker.height,
       });

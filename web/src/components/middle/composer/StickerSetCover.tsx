@@ -6,7 +6,6 @@ import type { ApiStickerSet } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
 import { STICKER_SIZE_PICKER_HEADER } from '../../../config';
-import { getStickerMediaHash } from '../../../global/helpers';
 import { selectIsAlwaysHighPriorityEmoji } from '../../../global/selectors';
 import { IS_WEBM_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
@@ -22,6 +21,7 @@ import useCustomEmoji from '../../common/hooks/useCustomEmoji';
 
 import AnimatedSticker from '../../common/AnimatedSticker';
 import CustomEmoji from '../../common/CustomEmoji';
+import StickerView from '../../common/StickerView';
 import OptimizedVideo from '../../ui/OptimizedVideo';
 
 import styles from './StickerSetCover.module.scss';
@@ -60,13 +60,13 @@ const StickerSetCover: FC<OwnProps> = ({
 
   const shouldFallbackToSticker = !hasThumbnail
     || (hasVideoThumb && !IS_WEBM_SUPPORTED && !hasAnimatedThumb && !hasStaticThumb);
-  const firstStickerHash = shouldFallbackToSticker && stickerSet.stickers?.[0]
-    && getStickerMediaHash(stickerSet.stickers[0], 'preview');
-  const firstStickerMediaData = useMedia(firstStickerHash, !isIntersecting);
+  const fallbackSticker = shouldFallbackToSticker
+    ? (stickerSet.covers?.[0] || stickerSet.stickers?.[0])
+    : undefined;
 
-  const mediaHash = ((hasThumbnail && !firstStickerHash) || hasAnimatedThumb) && `stickerSet${stickerSet.id}`;
+  const mediaHash = hasThumbnail && !fallbackSticker && `stickerSet${stickerSet.id}`;
   const mediaData = useMedia(mediaHash, !isIntersecting);
-  const isReady = thumbCustomEmojiId || mediaData || firstStickerMediaData;
+  const isReady = thumbCustomEmojiId || mediaData || fallbackSticker;
   const transitionClassNames = useMediaTransitionDeprecated(isReady);
 
   const coords = useCoordsInSharedCanvas(containerRef, sharedCanvasRef);
@@ -93,6 +93,22 @@ const StickerSetCover: FC<OwnProps> = ({
             observeIntersectionForPlaying={observeIntersection}
             noPlay={noPlay}
           />
+        ) : fallbackSticker ? (
+          <StickerView
+            containerRef={containerRef}
+            sticker={fallbackSticker}
+            size={size}
+            isSmall
+            shouldLoop
+            noPlay={noPlay}
+            observeIntersectionForLoading={observeIntersection}
+            observeIntersectionForPlaying={observeIntersection}
+            thumbClassName={styles.image}
+            fullMediaClassName={styles.image}
+            forceAlways={forcePlayback}
+            withSharedAnimation={Boolean(sharedCanvasRef)}
+            sharedCanvasRef={sharedCanvasRef}
+          />
         ) : hasAnimatedThumb ? (
           <AnimatedSticker
             className={transitionClassNames}
@@ -116,7 +132,7 @@ const StickerSetCover: FC<OwnProps> = ({
           />
         ) : (
           <img
-            src={mediaData || firstStickerMediaData}
+            src={mediaData}
             style={colorFilter}
             className={buildClassName(styles.image, transitionClassNames)}
             alt=""

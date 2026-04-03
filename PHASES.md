@@ -698,11 +698,12 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 8.1 (Reaction emoji parity): picker / reaction bubbles / selector используют Apple-style emoji-data-ios assets для static reaction render, Unicode fallback остаётся только для неподдержанных glyphs
 - [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI приведён к TG Web A 1-в-1 (radio/checkbox до голосования, оригинальные spacing/result lines/button), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
+- [x] Шаг 7.2 (Sticker render parity): preview/full sticker asset chain больше не путает `tgs/webm` с image-preview, sticker message attachments сохраняют `thumbnail_url`, picker covers и fallback-рендер используют `StickerView` для animated/video/static наборов
 
 ### Проработка (Шаг 0)
 
 - [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 5, `docs/TZ-ORBIT-MESSENGER.md` §11.5
-- [ ] Изучить TG Web A sticker rendering — TGS (Lottie), WebP, WebM. Какие библиотеки (rlottie)?
+- [x] Изучить TG Web A sticker rendering — TGS (Lottie), WebP, WebM. Какие библиотеки (rlottie)?
 - [ ] Изучить Tenor API — rate limits, API key, response format, caching strategy
 - [ ] Спроектировать sticker import из Telegram — как работает TG Bot API fetchStickerSet? Легальность?
 - [x] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee

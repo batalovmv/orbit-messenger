@@ -270,7 +270,7 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
   if (!chat) return undefined;
 
   function renderCover(stickerSet: StickerSetOrReactionsSetOrRecent, index: number) {
-    const firstSticker = stickerSet.stickers?.[0];
+    const firstSticker = (stickerSet as ApiStickerSet).covers?.[0] || stickerSet.stickers?.[0];
     const buttonClassName = buildClassName(styles.stickerCover, index === activeSetIndex && styles.activated);
     const withSharedCanvas = index < STICKER_PICKER_MAX_SHARED_COVERS;
 

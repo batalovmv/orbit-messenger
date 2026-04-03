@@ -26,6 +26,9 @@
 }
 
 .thumb, .media {
+  display: block;
+  object-fit: contain;
+
   // @optimization
   &:not(:global(.shown)) {
     display: block !important;
