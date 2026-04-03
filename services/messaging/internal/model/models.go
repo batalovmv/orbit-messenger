@@ -94,6 +94,7 @@ type Message struct {
 	IsPinned       bool            `json:"is_pinned"`
 	IsForwarded    bool            `json:"is_forwarded"`
 	ForwardedFrom  *uuid.UUID      `json:"forwarded_from,omitempty"`
+	GroupedID      *string         `json:"grouped_id,omitempty"`
 	SequenceNumber int64           `json:"sequence_number"`
 	CreatedAt      time.Time       `json:"created_at"`
 	EditedAt       *time.Time      `json:"edited_at,omitempty"`

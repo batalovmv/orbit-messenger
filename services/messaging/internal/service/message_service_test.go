@@ -509,6 +509,7 @@ func TestSendMediaMessage_DirectChatMember_AllowedWithDirectDefaults(t *testing.
 		"photo",
 		[]uuid.UUID{uuid.New()},
 		false,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("direct chat member should be able to send media with direct defaults: %v", err)

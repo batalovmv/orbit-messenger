@@ -82,7 +82,7 @@ func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Messag
 	err := s.pool.QueryRow(ctx,
 		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.sequence_number, m.created_at, m.edited_at,
+		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
 		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		 FROM messages m
@@ -90,7 +90,7 @@ func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Messag
 		 WHERE m.id = $1`, id,
 	).Scan(&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
 		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
-		&msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
+		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
 		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -105,7 +105,7 @@ func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.M
 	rows, err := s.pool.Query(ctx,
 		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.sequence_number, m.created_at, m.edited_at,
+		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
 		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		 FROM messages m
@@ -122,7 +122,7 @@ func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.M
 		var m model.Message
 		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
+			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
 			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, err
 		}
@@ -150,7 +150,7 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 	query := `
 		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		       m.sequence_number, m.created_at, m.edited_at,
+		       m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
 		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		FROM messages m
@@ -171,7 +171,7 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 		var m model.Message
 		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
+			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
 			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, "", false, err
 		}
@@ -202,7 +202,7 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 	query := `
 		SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		       m.sequence_number, m.created_at, m.edited_at,
+		       m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 		       COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
 		       (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		FROM messages m
@@ -222,7 +222,7 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 		var m model.Message
 		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
+			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
 			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, "", false, err
 		}
@@ -304,7 +304,7 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 	rows, err := s.pool.Query(ctx,
 		`SELECT m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
 		        m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
-		        m.sequence_number, m.created_at, m.edited_at,
+		        m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 		        COALESCE(u.display_name, '') as sender_name, u.avatar_url as sender_avatar_url,
 		        (SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) as reply_to_seq
 		 FROM messages m
@@ -323,7 +323,7 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 		var m model.Message
 		if err := rows.Scan(&m.ID, &m.ChatID, &m.SenderID, &m.Type, &m.Content, &m.Entities, &m.ReplyToID,
 			&m.IsEdited, &m.IsDeleted, &m.IsPinned, &m.IsForwarded, &m.ForwardedFrom,
-			&m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
+			&m.GroupedID, &m.SequenceNumber, &m.CreatedAt, &m.EditedAt,
 			&m.SenderName, &m.SenderAvatarURL, &m.ReplyToSeqNum); err != nil {
 			return nil, err
 		}

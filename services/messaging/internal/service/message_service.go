@@ -462,7 +462,7 @@ func (s *MessageService) ListPinned(ctx context.Context, chatID, userID uuid.UUI
 // SendMediaMessage creates a message with media attachments.
 func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID uuid.UUID,
 	content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string,
-	mediaIDs []uuid.UUID, isSpoiler bool) (*model.Message, error) {
+	mediaIDs []uuid.UUID, isSpoiler bool, groupedID *string) (*model.Message, error) {
 
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
@@ -517,6 +517,7 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		Content:   strPtrOrNil(content),
 		Entities:  entities,
 		ReplyToID: replyToID,
+		GroupedID: groupedID,
 	}
 
 	if err := s.messages.CreateWithMedia(ctx, msg, mediaIDs, isSpoiler); err != nil {

@@ -34,6 +34,7 @@ type sendMessageRequest struct {
 	ReplyToID        *string         `json:"reply_to_id"`
 	Type             string          `json:"type"`
 	MediaIDs         []string        `json:"media_ids"`
+	GroupedID        *string         `json:"grouped_id"`
 	IsSpoiler        bool            `json:"is_spoiler"`
 	Options          []string        `json:"options"`
 	IsAnonymous      *bool           `json:"is_anonymous"`
@@ -277,7 +278,7 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 
 		msg, err := h.svc.SendMediaMessage(c.Context(), chatID, uid,
 			req.Content, req.Entities, replyTo, req.Type,
-			mediaUUIDs, req.IsSpoiler)
+			mediaUUIDs, req.IsSpoiler, req.GroupedID)
 		if err != nil {
 			return response.Error(c, err)
 		}
