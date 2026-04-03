@@ -867,9 +867,34 @@ export {
 export {
   getUserSettings, updateUserSettings,
   fetchBlockedUsersList,
-  getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings,
   subscribePush, unsubscribePush,
 } from './settingsApi';
+
+// Adapt Saturn settingsApi (expects { chatId }) to TG Web A format (expects { chat, settings })
+export async function updateChatNotifySettings({
+  chat, settings,
+}: {
+  chat: { id: string };
+  settings: { mutedUntil?: number; shouldShowPreviews?: boolean; isSilentPosting?: boolean };
+}) {
+  const { updateChatNotifySettings: update } = await import('./settingsApi');
+  return update({
+    chatId: chat.id,
+    mutedUntil: settings.mutedUntil != null ? new Date(settings.mutedUntil * 1000).toISOString() : undefined,
+    showPreview: settings.shouldShowPreviews,
+    sound: undefined,
+  });
+}
+
+export async function getChatNotifySettings({ chat }: { chat: { id: string } }) {
+  const { getChatNotifySettings: get } = await import('./settingsApi');
+  return get({ chatId: chat.id });
+}
+
+export async function deleteChatNotifySettings({ chat }: { chat: { id: string } }) {
+  const { deleteChatNotifySettings: del } = await import('./settingsApi');
+  return del({ chatId: chat.id });
+}
 
 // blockUser/unblockUser adapted for TG Web A action format: { user: ApiUser }
 export async function blockUser({ user }: { user: { id: string }; isOnlyStories?: boolean }) {
