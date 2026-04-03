@@ -9,6 +9,7 @@ import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { CustomPeer } from '../../types';
 import { ApiMediaFormat } from '../../api/types';
 
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import { IS_TEST } from '../../config';
 import {
   getChatAvatarHash,
@@ -179,7 +180,9 @@ const Avatar = ({
 
     videoLoopCountRef.current += 1;
     if (videoLoopCountRef.current >= LOOP_COUNT) {
-      video.style.display = 'none';
+      requestMutation(() => {
+        video.style.display = 'none';
+      });
     }
   });
 

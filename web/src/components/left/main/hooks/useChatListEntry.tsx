@@ -9,7 +9,7 @@ import type {
 import type { ObserveFn } from '../../../../hooks/useIntersectionObserver';
 
 import { CHAT_HEIGHT_PX } from '../../../../config';
-import { requestMutation } from '../../../../lib/fasterdom/fasterdom';
+import { requestForcedReflow, requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import {
   getMessageIsSpoiler,
   getMessageRoundVideo,
@@ -189,37 +189,36 @@ export default function useChatListEntry({
       onReorderAnimationEnd?.();
     };
 
-    // TODO Refactor animation: create `useListAnimation` that owns `orderDiff` and `animationType`
     if (animationType === ChatAnimationTypes.Opacity) {
-      element.style.opacity = '0';
-
-      requestMutation(() => {
-        element.classList.add('animate-opacity');
-        element.style.opacity = '1';
-
-        waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+      requestForcedReflow(() => {
+        element.style.opacity = '0';
+        return () => {
+          element.classList.add('animate-opacity');
+          element.style.opacity = '1';
+          waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+        };
       });
     }
 
     if (animationType === ChatAnimationTypes.Move) {
-      element.style.transform = `translate3d(0, ${-orderDiff * CHAT_HEIGHT_PX - shiftDiff}px, 0)`;
-
-      requestMutation(() => {
-        element.classList.add('animate-transform');
-        element.style.transform = '';
-
-        waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+      requestForcedReflow(() => {
+        element.style.transform = `translate3d(0, ${-orderDiff * CHAT_HEIGHT_PX - shiftDiff}px, 0)`;
+        return () => {
+          element.classList.add('animate-transform');
+          element.style.transform = '';
+          waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+        };
       });
     }
 
     if (animationType === ChatAnimationTypes.Shift) {
-      element.style.transform = `translate3d(0, ${-shiftDiff}px, 0)`;
-
-      requestMutation(() => {
-        element.classList.add('animate-transform');
-        element.style.transform = '';
-
-        waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+      requestForcedReflow(() => {
+        element.style.transform = `translate3d(0, ${-shiftDiff}px, 0)`;
+        return () => {
+          element.classList.add('animate-transform');
+          element.style.transform = '';
+          waitStartingTransitionsEnd(element).then(notifyAnimationEnd);
+        };
       });
     }
 
