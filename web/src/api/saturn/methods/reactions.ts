@@ -39,7 +39,7 @@ function getCurrentUserId() {
 }
 
 async function loadReactionSummaries(uuid: string) {
-  return client.request<SaturnReactionSummary[]>('GET', `/messages/${uuid}/reactions`);
+  return await client.request<SaturnReactionSummary[]>('GET', `/messages/${uuid}/reactions`) || [];
 }
 
 export function fetchAvailableReactions() {
@@ -179,7 +179,7 @@ export async function sendReaction({
       .map((reaction) => reaction.emoticon),
   );
 
-  const summaries = await loadReactionSummaries(uuid);
+  const summaries = await loadReactionSummaries(uuid) || [];
   const currentUserId = getCurrentUserId();
   const currentEmojiSet = new Set(
     summaries
