@@ -14,6 +14,8 @@ import {
   isDocumentVideo,
 } from '../../global/helpers';
 import { isIpRevealingMedia } from '../../util/media/ipRevealingMedia';
+import { PDF_INLINE_PREVIEW_MAX_SIZE, type PdfRenderSource } from '../../util/pdf';
+import { ensureAuth, getBaseUrl } from '../../api/saturn/client';
 import { getDocumentExtension, getDocumentHasPreview } from './helpers/documentInfo';
 import { preloadDocumentMedia } from './helpers/preloadDocumentMedia';
 
@@ -108,12 +110,54 @@ const Document = ({
   const isPdf = mimeType === 'application/pdf' || extension.toLowerCase() === 'pdf';
 
   const documentHash = getDocumentMediaHash(document, 'download');
-  const shouldLoadPdfPreview = isPdf && wasIntersected && !isLocalDocument;
   const { loadProgress: downloadProgress, mediaData } = useMediaWithLoadProgress(
-    documentHash, !(shouldDownload || shouldLoadPdfPreview), getMediaFormat(document, 'download'), undefined, true,
+    documentHash, !shouldDownload, getMediaFormat(document, 'download'), undefined, true,
   );
   const resolvedMediaData = mediaData || document.blobUrl;
+  const [remotePdfPreviewSource, setRemotePdfPreviewSource] = useState<PdfRenderSource | undefined>(undefined);
   const isLoaded = Boolean(resolvedMediaData);
+  const shouldRenderPdfInline = isPdf && wasIntersected && size <= PDF_INLINE_PREVIEW_MAX_SIZE;
+
+  useEffect(() => {
+    if (!shouldRenderPdfInline || isLocalDocument || !document.id) {
+      setRemotePdfPreviewSource(undefined);
+      return;
+    }
+
+    let isCancelled = false;
+    const mediaUrl = `${getBaseUrl()}/media/${document.id}`;
+
+    void ensureAuth()
+      .then((token) => {
+        if (isCancelled || !token) {
+          if (!isCancelled) {
+            setRemotePdfPreviewSource(undefined);
+          }
+          return;
+        }
+
+        setRemotePdfPreviewSource({
+          url: mediaUrl,
+          httpHeaders: {
+            Authorization: `Bearer ${token}`,
+          },
+          withCredentials: true,
+          disableAutoFetch: false,
+          disableStream: false,
+        });
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setRemotePdfPreviewSource(undefined);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [document.id, isLocalDocument, shouldRenderPdfInline]);
+
+  const pdfPreviewSource = resolvedMediaData || remotePdfPreviewSource;
 
   const {
     isUploading, isTransferring, transferProgress,
@@ -230,7 +274,7 @@ const Document = ({
           extension={extension}
           size={size}
           pageCount={document.pageCount}
-          pdfUrl={resolvedMediaData}
+          pdfSource={pdfPreviewSource}
           timestamp={datetime}
           thumbnailDataUri={thumbDataUri}
           previewData={localBlobUrl || previewData}

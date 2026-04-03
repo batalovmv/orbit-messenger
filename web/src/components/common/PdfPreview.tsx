@@ -11,6 +11,7 @@ import {
   PDF_PREVIEW_ASPECT_RATIO,
   PDF_PREVIEW_SMALL_WIDTH_REM,
   PDF_PREVIEW_WIDTH_REM,
+  type PdfRenderSource,
   renderPdfPreviewToCanvas,
 } from '../../util/pdf';
 import renderText from './helpers/renderText';
@@ -32,7 +33,7 @@ type OwnProps = {
   extension?: string;
   size: number;
   pageCount?: number;
-  pdfUrl?: string;
+  pdfSource?: PdfRenderSource;
   timestamp?: number;
   sender?: string;
   thumbnailDataUri?: string;
@@ -56,7 +57,7 @@ const PdfPreview = ({
   extension = 'pdf',
   size,
   pageCount,
-  pdfUrl,
+  pdfSource,
   timestamp,
   sender,
   thumbnailDataUri,
@@ -90,7 +91,7 @@ const PdfPreview = ({
   useEffect(() => {
     const canvas = canvasRef.current;
 
-    if (!pdfUrl || !canvas) {
+    if (!pdfSource || !canvas) {
       setIsPdfRendered(false);
       return;
     }
@@ -98,7 +99,7 @@ const PdfPreview = ({
     let isCancelled = false;
     setIsPdfRendered(false);
 
-    void renderPdfPreviewToCanvas(pdfUrl, canvas, getCanvasDimensions(smaller)).then((result) => {
+    void renderPdfPreviewToCanvas(pdfSource, canvas, getCanvasDimensions(smaller)).then((result) => {
       if (isCancelled) {
         return;
       }
@@ -115,7 +116,7 @@ const PdfPreview = ({
     return () => {
       isCancelled = true;
     };
-  }, [pageCount, pdfUrl, smaller]);
+  }, [pageCount, pdfSource, smaller]);
 
   const previewSource = previewData || thumbnailDataUri;
   const extensionLabel = extension ? extension.slice(0, 4).toUpperCase() : 'PDF';
@@ -146,7 +147,7 @@ const PdfPreview = ({
 
       <div className={styles.previewColumn}>
         <div className={styles.preview} onClick={isUploading ? undefined : onClick}>
-          {pdfUrl && (
+          {pdfSource && (
             <canvas
               ref={canvasRef}
               className={buildClassName(

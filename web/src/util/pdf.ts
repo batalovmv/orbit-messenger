@@ -5,6 +5,14 @@ type PdfRenderDimensions = {
   height: number;
 };
 
+export type PdfRenderSource = string | {
+  url: string;
+  httpHeaders?: Record<string, string>;
+  withCredentials?: boolean;
+  disableAutoFetch?: boolean;
+  disableStream?: boolean;
+};
+
 type PdfPreviewResult = {
   pageCount: number;
 };
@@ -18,9 +26,10 @@ export const PDF_PREVIEW_WIDTH_REM = 8.25;
 export const PDF_PREVIEW_SMALL_WIDTH_REM = 6.5;
 export const PDF_PREVIEW_IMAGE_WIDTH = 360;
 export const PDF_PREVIEW_IMAGE_HEIGHT = Math.round(PDF_PREVIEW_IMAGE_WIDTH / PDF_PREVIEW_ASPECT_RATIO);
+export const PDF_INLINE_PREVIEW_MAX_SIZE = 50 * 1024 * 1024;
 
 export async function renderPdfPreviewToCanvas(
-  url: string,
+  source: PdfRenderSource,
   canvas: HTMLCanvasElement,
   dimensions: PdfRenderDimensions,
 ): Promise<PdfPreviewResult | undefined> {
@@ -29,10 +38,13 @@ export async function renderPdfPreviewToCanvas(
     return undefined;
   }
 
+  const sourceConfig = typeof source === 'string' ? { url: source } : source;
   const loadingTask = getDocument({
-    url,
-    disableAutoFetch: true,
-    disableStream: true,
+    url: sourceConfig.url,
+    httpHeaders: sourceConfig.httpHeaders,
+    withCredentials: sourceConfig.withCredentials,
+    disableAutoFetch: sourceConfig.disableAutoFetch ?? true,
+    disableStream: sourceConfig.disableStream ?? true,
     isEvalSupported: false,
   });
   let shouldDestroyTask = true;
