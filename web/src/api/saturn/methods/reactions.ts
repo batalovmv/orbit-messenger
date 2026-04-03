@@ -9,10 +9,21 @@ import type {
   SaturnReactionSummary,
 } from '../types';
 
-import { buildApiPeerReactions, buildApiReactions, buildAvailableReactions } from '../apiBuilders/reactions';
+import {
+  buildApiEmojiReaction,
+  buildApiPeerReactions,
+  buildApiReactions,
+  buildAvailableReactions,
+  DEFAULT_AVAILABLE_REACTION_EMOJIS,
+} from '../apiBuilders/reactions';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { resolveMessageUuid } from './messages';
+
+const DEFAULT_TOP_REACTION_EMOJIS = DEFAULT_AVAILABLE_REACTION_EMOJIS.slice(0, 7);
+const DEFAULT_TOP_REACTIONS_HASH = 'orbit-top-reactions-v1';
+const DEFAULT_RECENT_REACTIONS_HASH = 'orbit-recent-reactions-v1';
+const DEFAULT_DEFAULT_TAG_REACTIONS_HASH = 'orbit-default-tag-reactions-v1';
 
 function getCurrentUserId() {
   return (window as any).getGlobal?.()?.currentUserId as string | undefined;
@@ -24,6 +35,39 @@ async function loadReactionSummaries(uuid: string) {
 
 export function fetchAvailableReactions() {
   return Promise.resolve(buildAvailableReactions());
+}
+
+export function fetchTopReactions({ hash }: { hash?: string } = {}) {
+  if (hash === DEFAULT_TOP_REACTIONS_HASH) {
+    return Promise.resolve(undefined);
+  }
+
+  return Promise.resolve({
+    hash: DEFAULT_TOP_REACTIONS_HASH,
+    reactions: DEFAULT_TOP_REACTION_EMOJIS.map(buildApiEmojiReaction),
+  });
+}
+
+export function fetchRecentReactions({ hash }: { hash?: string } = {}) {
+  if (hash === DEFAULT_RECENT_REACTIONS_HASH) {
+    return Promise.resolve(undefined);
+  }
+
+  return Promise.resolve({
+    hash: DEFAULT_RECENT_REACTIONS_HASH,
+    reactions: DEFAULT_TOP_REACTION_EMOJIS.map(buildApiEmojiReaction),
+  });
+}
+
+export function fetchDefaultTagReactions({ hash }: { hash?: string } = {}) {
+  if (hash === DEFAULT_DEFAULT_TAG_REACTIONS_HASH) {
+    return Promise.resolve(undefined);
+  }
+
+  return Promise.resolve({
+    hash: DEFAULT_DEFAULT_TAG_REACTIONS_HASH,
+    reactions: DEFAULT_TOP_REACTION_EMOJIS.map(buildApiEmojiReaction),
+  });
 }
 
 export async function fetchMessageReactions({

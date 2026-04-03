@@ -585,7 +585,7 @@ export default memo(withGlobal<OwnProps>(
     const userStatus = selectUserStatus(global, peerId);
     const chat = selectChat(global, peerId);
     const profilePhotos = selectPeerPhotos(global, peerId);
-    const { mediaIndex, chatId: avatarOwnerId } = selectTabState(global).mediaViewer;
+    const { mediaIndex, chatId: avatarOwnerId } = selectTabState(global).mediaViewer || {};
     const isForum = chat?.isForum;
     const { threadId: currentTopicId } = selectCurrentMessageList(global) || {};
     const topic = isForum && currentTopicId ? selectTopic(global, peerId, currentTopicId) : undefined;

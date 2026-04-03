@@ -145,4 +145,3 @@ addActionHandler('closePaymentMessageConfirmDialogOpen', (global, actions, paylo
     isPaymentMessageConfirmDialogOpen: false,
   }, tabId);
 });
-

@@ -9,6 +9,7 @@ import type { ThemeKey, TimeFormat } from '../../../types';
 import type { IRadioOption } from '../../ui/RadioGroup';
 import { SettingsScreens } from '../../../types';
 
+import { suppressStrict } from '../../../lib/fasterdom/stricterdom.ts';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import {
   IS_ANDROID, IS_IOS, IS_MAC_OS,
@@ -85,12 +86,14 @@ const SettingsGeneral: FC<OwnProps & StateProps> = ({
   ] : undefined;
 
   const handleMessageTextSizeChange = useCallback((newSize: number) => {
-    document.documentElement.style.setProperty(
-      '--composer-text-size', `${Math.max(newSize, IS_IOS ? 16 : 15)}px`,
-    );
-    document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(newSize * 1.3125)}px`);
-    document.documentElement.style.setProperty('--message-text-size', `${newSize}px`);
-    document.documentElement.setAttribute('data-message-text-size', newSize.toString());
+    suppressStrict(() => {
+      document.documentElement.style.setProperty(
+        '--composer-text-size', `${Math.max(newSize, IS_IOS ? 16 : 15)}px`,
+      );
+      document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(newSize * 1.3125)}px`);
+      document.documentElement.style.setProperty('--message-text-size', `${newSize}px`);
+      document.documentElement.setAttribute('data-message-text-size', newSize.toString());
+    });
 
     setSharedSettingOption({ messageTextSize: newSize });
   }, []);

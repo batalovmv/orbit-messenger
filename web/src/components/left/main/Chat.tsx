@@ -13,6 +13,7 @@ import type {
   ApiTypingStatus,
   ApiUser,
   ApiUserStatus,
+  StatefulMediaContent,
 } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
@@ -20,7 +21,7 @@ import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { ALL_FOLDER_ID, UNMUTE_TIMESTAMP } from '../../../config';
 import {
-  groupStatefulContent,
+  getMessageStatefulContent,
   isUserOnline,
 } from '../../../global/helpers';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
@@ -119,6 +120,7 @@ type StateProps = {
   withInterfaceAnimations?: boolean;
   lastMessageId?: number;
   lastMessage?: ApiMessage;
+  lastMessageStatefulContent?: StatefulMediaContent;
   currentUserId: string;
   isSynced?: boolean;
   isAccountFrozen?: boolean;
@@ -156,6 +158,7 @@ const Chat: FC<OwnProps & StateProps> = ({
   typingStatus,
   lastMessageId,
   lastMessage,
+  lastMessageStatefulContent,
   isSavedDialog,
   currentUserId,
   isPreview,
@@ -228,7 +231,7 @@ const Chat: FC<OwnProps & StateProps> = ({
     lastMessage,
     typingStatus,
     draft,
-    statefulMediaContent: groupStatefulContent({}),
+    statefulMediaContent: lastMessageStatefulContent,
     lastMessageTopic,
     lastMessageSender,
     observeIntersection,
@@ -555,6 +558,7 @@ export default memo(withGlobal<OwnProps>(
 
     const userStatus = selectUserStatus(global, chatId);
     const lastMessageTopic = lastMessage && selectTopicFromMessage(global, lastMessage);
+    const lastMessageStatefulContent = lastMessage ? getMessageStatefulContent(global, lastMessage) : undefined;
 
     const typingStatus = selectThreadLocalStateParam(global, chatId, MAIN_THREAD_ID, 'typingStatus');
 
@@ -583,6 +587,7 @@ export default memo(withGlobal<OwnProps>(
       typingStatus,
       withInterfaceAnimations: selectCanAnimateInterface(global),
       lastMessage,
+      lastMessageStatefulContent,
       lastMessageId,
       currentUserId: global.currentUserId!,
       listedTopicIds: topicsInfo?.listedTopicIds,

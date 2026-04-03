@@ -338,7 +338,19 @@ export function selectChatLastMessage<T extends GlobalState>(
   if (!id) return undefined;
 
   const realChatId = listType === 'saved' ? global.currentUserId! : chatId;
-  return global.messages.byChatId[realChatId]?.byId[id];
+  const stored = global.messages.byChatId[realChatId]?.byId[id];
+  if (stored?.chatId === realChatId) {
+    return stored;
+  }
+
+  if (listType === 'all') {
+    const chatLastMessage = selectChat(global, chatId)?.lastMessage;
+    if (chatLastMessage?.id === id && chatLastMessage.chatId === chatId) {
+      return chatLastMessage;
+    }
+  }
+
+  return stored;
 }
 
 export function selectIsMonoforumAdmin<T extends GlobalState>(

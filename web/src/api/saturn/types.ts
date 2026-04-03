@@ -72,6 +72,7 @@ export interface SaturnMessage {
   media_attachments?: SaturnMediaAttachment[];
   reactions?: SaturnReactionSummary[];
   poll?: SaturnPoll;
+  grouped_id?: string;
 }
 
 export interface SaturnMediaAttachment {
@@ -237,11 +238,64 @@ export interface SaturnPushSubscription {
   created_at: string;
 }
 
-export interface SaturnSearchResponse {
-  results: Record<string, unknown>[];
+export interface SaturnSearchResponse<Result = Record<string, unknown>> {
+  results: Result[];
   total: number;
   query: string;
   scope: 'messages' | 'users' | 'chats';
+}
+
+export interface SaturnSearchMatchRegion {
+  start: number;
+  length: number;
+}
+
+export type SaturnSearchMatchPosition = Record<string, SaturnSearchMatchRegion[]>;
+
+export interface SaturnMessageSearchHit {
+  id: string;
+  chat_id: string;
+  sender_id?: string;
+  content?: string;
+  type?: string;
+  has_media?: boolean;
+  created_at_ts: number;
+  sequence_number: number;
+  _matchesPosition?: SaturnSearchMatchPosition;
+}
+
+export interface SaturnUserSearchHit {
+  id: string;
+  email?: string;
+  phone?: string;
+  display_name?: string;
+  avatar_url?: string;
+  bio?: string;
+  status?: 'online' | 'offline' | 'recently';
+  custom_status?: string;
+  custom_status_emoji?: string;
+  role?: 'admin' | 'member';
+  totp_enabled?: boolean;
+  invited_by?: string;
+  last_seen_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SaturnChatSearchHit {
+  id: string;
+  type?: 'direct' | 'group' | 'channel';
+  name?: string;
+  description?: string;
+  avatar_url?: string;
+  created_by?: string;
+  is_encrypted?: boolean;
+  max_members?: number;
+  created_at?: string;
+  updated_at?: string;
+  default_permissions?: number;
+  slow_mode_seconds?: number;
+  is_signatures?: boolean;
 }
 
 export interface SaturnReactionSummary {
@@ -271,7 +325,7 @@ export interface SaturnSticker {
   pack_id: string;
   emoji?: string;
   file_url: string;
-  file_type: 'webp' | 'tgs' | 'webm';
+  file_type: 'webp' | 'tgs' | 'webm' | 'svg';
   width?: number;
   height?: number;
   position: number;
@@ -281,9 +335,11 @@ export interface SaturnStickerPack {
   id: string;
   title: string;
   short_name: string;
+  description?: string;
   author_id?: string;
   thumbnail_url?: string;
   is_official: boolean;
+  is_featured?: boolean;
   is_animated: boolean;
   sticker_count: number;
   stickers?: SaturnSticker[];

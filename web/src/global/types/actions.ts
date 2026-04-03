@@ -37,7 +37,6 @@ import type {
   ApiPremiumSection,
   ApiPreparedInlineMessage,
   ApiPrivacyKey,
-  ApiPrivacySettings,
   ApiProfileTab,
   ApiReaction,
   ApiReactionWithPaid,
@@ -50,8 +49,6 @@ import type {
   ApiStarGiftRegular,
   ApiStarGiftUnique,
   ApiStarGiftUpgradePrice,
-  ApiStarsSubscription,
-  ApiStarsTransaction,
   ApiSticker,
   ApiStickerSet,
   ApiStickerSetInfo,
@@ -108,6 +105,7 @@ import type {
 } from '../../types';
 import type { WebApp, WebAppModalStateType, WebAppOutboundEvent } from '../../types/webapp';
 import type { DownloadableMedia } from '../helpers';
+import type { InAppNotificationBanner } from './notificationBanners';
 import type { SharedState } from './sharedState';
 import type { TabState } from './tabState';
 
@@ -2138,11 +2136,13 @@ export interface ActionPayloads {
   } & WithTabId;
   closeUrlAuthModal: WithTabId | undefined;
   showNotification: Omit<ApiNotification, 'localId'> & { localId?: string } & WithTabId;
+  showNotificationBanner: Omit<InAppNotificationBanner, 'localId'> & { localId?: string } & WithTabId;
   showAllowedMessageTypesNotification: {
     chatId: string;
     messageListType?: MessageListType;
   } & WithTabId;
   dismissNotification: { localId: string } & WithTabId;
+  dismissNotificationBanner: { localId: string } & WithTabId;
 
   updatePageTitle: WithTabId | undefined;
   closeInviteViaLinkModal: WithTabId | undefined;

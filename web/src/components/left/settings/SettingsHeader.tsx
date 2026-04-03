@@ -22,6 +22,18 @@ type OwnProps = {
   onReset: () => void;
 };
 
+const SETTINGS_HEADER_FALLBACKS = {
+  calls: 'Calls',
+  customEmoji: 'Emoji',
+  doNotTranslate: 'Do Not Translate',
+  experimental: 'Experimental',
+  filterEdit: 'Edit Folder',
+  folderShare: 'Share Folder',
+  privacyMessages: 'Messages',
+  privacyVoiceMessages: 'Voice Messages',
+  signOutConfirmation: 'Are you sure you want to log out?',
+} as const;
+
 const SettingsHeader: FC<OwnProps> = ({
   currentScreen,
   editedFolderId,
@@ -77,16 +89,22 @@ const SettingsHeader: FC<OwnProps> = ({
   const oldLang = useOldLang();
   const lang = useLang();
 
+  const getOldText = useCallback((key: string, fallback: string) => {
+    const translation = oldLang(key);
+
+    return translation === key ? fallback : translation;
+  }, [oldLang]);
+
   function renderHeaderContent() {
     switch (currentScreen) {
       case SettingsScreens.EditProfile:
-        return <h3>{oldLang('lng_settings_information')}</h3>;
+        return <h3>{oldLang('SettingsInformation')}</h3>;
       case SettingsScreens.General:
         return <h3>{oldLang('General')}</h3>;
       case SettingsScreens.QuickReaction:
         return <h3>{oldLang('DoubleTapSetting')}</h3>;
       case SettingsScreens.CustomEmoji:
-        return <h3>{oldLang('Emoji')}</h3>;
+        return <h3>{getOldText('Emoji', SETTINGS_HEADER_FALLBACKS.customEmoji)}</h3>;
       case SettingsScreens.Notifications:
         return <h3>{oldLang('Notifications')}</h3>;
       case SettingsScreens.DataStorage:
@@ -96,11 +114,11 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.Language:
         return <h3>{oldLang('Language')}</h3>;
       case SettingsScreens.DoNotTranslate:
-        return <h3>{oldLang('DoNotTranslate')}</h3>;
+        return <h3>{getOldText('DoNotTranslate', SETTINGS_HEADER_FALLBACKS.doNotTranslate)}</h3>;
       case SettingsScreens.Stickers:
-        return <h3>{oldLang('StickersName')}</h3>;
+        return <h3>{oldLang('MenuStickers')}</h3>;
       case SettingsScreens.Experimental:
-        return <h3>{oldLang('lng_settings_experimental')}</h3>;
+        return <h3>{getOldText('lng_settings_experimental', SETTINGS_HEADER_FALLBACKS.experimental)}</h3>;
 
       case SettingsScreens.GeneralChatBackground:
         return <h3>{oldLang('ChatBackground')}</h3>;
@@ -122,13 +140,13 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.PrivacyForwarding:
         return <h3>{oldLang('PrivacyForwards')}</h3>;
       case SettingsScreens.PrivacyVoiceMessages:
-        return <h3>{oldLang('PrivacyVoiceMessages')}</h3>;
+        return <h3>{getOldText('PrivacyVoiceMessages', SETTINGS_HEADER_FALLBACKS.privacyVoiceMessages)}</h3>;
       case SettingsScreens.PrivacyMessages:
-        return <h3>{oldLang('PrivacyMessages')}</h3>;
+        return <h3>{getOldText('PrivacyMessages', SETTINGS_HEADER_FALLBACKS.privacyMessages)}</h3>;
       case SettingsScreens.PrivacyGroupChats:
         return <h3>{oldLang('AutodownloadGroupChats')}</h3>;
       case SettingsScreens.PrivacyPhoneCall:
-        return <h3>{oldLang('Calls')}</h3>;
+        return <h3>{getOldText('Calls', SETTINGS_HEADER_FALLBACKS.calls)}</h3>;
 
       case SettingsScreens.PrivacyLastSeenAllowedContacts:
       case SettingsScreens.PrivacyProfilePhotoAllowedContacts:
@@ -220,13 +238,13 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.FoldersCreateFolder:
         return <h3>{oldLang('FilterNew')}</h3>;
       case SettingsScreens.FoldersShare:
-        return <h3>{oldLang('FolderLinkScreen.Title')}</h3>;
+        return <h3>{getOldText('FolderLinkScreen.Title', SETTINGS_HEADER_FALLBACKS.folderShare)}</h3>;
       case SettingsScreens.FoldersEditFolder:
       case SettingsScreens.FoldersEditFolderFromChatList:
       case SettingsScreens.FoldersEditFolderInvites:
         return (
           <div className="settings-main-header">
-            <h3>{oldLang('FilterEdit')}</h3>
+            <h3>{getOldText('FilterEdit', SETTINGS_HEADER_FALLBACKS.filterEdit)}</h3>
             {Boolean(editedFolderId) && (
               <DropdownMenu
                 className="settings-more-menu"
@@ -271,7 +289,7 @@ const SettingsHeader: FC<OwnProps> = ({
               size="smaller"
               color="translucent"
               onClick={() => openSettingsScreen({ screen: SettingsScreens.EditProfile })}
-              ariaLabel={oldLang('lng_settings_information')}
+              ariaLabel={oldLang('SettingsInformation')}
               iconName="edit"
             />
             <DropdownMenu
@@ -300,7 +318,7 @@ const SettingsHeader: FC<OwnProps> = ({
       <ConfirmDialog
         isOpen={isSignOutDialogOpen}
         onClose={closeSignOutConfirmation}
-        text={oldLang('lng_sure_logout')}
+        text={getOldText('lng_sure_logout', SETTINGS_HEADER_FALLBACKS.signOutConfirmation)}
         confirmLabel={oldLang('AccountSettings.Logout')}
         confirmHandler={handleSignOutMessage}
         confirmIsDestructive

@@ -526,7 +526,7 @@ r2://orbit-media/
 - [x] updateChatPhoto, deleteChatPhoto
 - [x] buildApiMessage → media_attachments маппинг (photo/video/voice/document/gif)
 - [x] WS events: media_ready, media_upload_progress (handler stubs)
-- [~] cancelMediaUpload — XHR abort (deferred, trivial)
+- [x] cancelMediaUpload — real XHR/fetch abort + chunked server abort
 - [~] sendVoice, sendVideoNote, sendDocument, sendPhoto, sendVideo — convenience wrappers (deferred to UI wiring)
 
 ### Фичи
@@ -534,19 +534,19 @@ r2://orbit-media/
 - [ ] Drag & Drop в чат (TG Web A UI exists, needs Saturn API wiring)
 - [ ] Clipboard paste (Ctrl+V для скриншотов) (TG Web A UI exists, needs wiring)
 - [ ] Preview перед отправкой + caption (TG Web A UI exists, needs wiring)
-- [ ] One-time media (self-destruct) — DB flags ready, UI deferred
+- [x] One-time media (self-destruct) — toggle в AttachmentModal, Saturn wiring и viewed placeholder готовы
 - [ ] Media spoiler (blur до клика) — DB flags ready, UI deferred
-- [ ] Albums (несколько фото в одном сообщении) — message_media.position ready
+- [x] Albums (несколько фото в одном сообщении) — grouped_id прокинут через Saturn API
 - [ ] Media gallery tab в чате — fetchSharedMedia endpoint ready, UI deferred
 - [~] GIF: Tenor API прокси — defer to Phase 5 (Rich Messaging)
-- [~] PDF preview — defer
+- [x] PDF preview — inline iframe viewer in chat
 
 ### Известные отложения и решения
 
 - **Thumbnails в JPEG** (не WebP) — Go не имеет стабильного WebP encoder. JPEG для thumb/medium
 - **ClamAV** → Phase 7 (Security). Invite-only, 150 юзеров
 - **GIF Tenor API** → Phase 5 (Rich Messaging). GIF→MP4 конвертация работает
-- **PDF preview** → отложено, не критично
+- **PDF preview** → Done — inline iframe viewer, fallback to new tab
 - **Frontend UI wiring** — TG Web A компоненты (AttachMenu, MediaViewer, VoiceRecorder) существуют, нужна интеграция с Saturn API. Backend полностью готов
 - **Chunked upload state** — Redis с TTL 24h (не DB), автоочистка
 
@@ -592,7 +592,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] DELETE /chats/:id/notifications — сбросить (unmute)
 
 **Delivery logic:** online → WS in-app → нет → Web Push (VAPID) / FCM / APNs → muted → skip (кроме @mention) → DND → skip
-- [~] Push dispatcher в gateway — структура готова, VAPID delivery при наличии ключей
+- [x] Push dispatcher в gateway — VAPID delivery, offline dispatch, mute check, stale subscription cleanup
 
 ### Backend: Settings (12 endpoints)
 
@@ -645,15 +645,17 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 ### Дополнительные фичи
 
-- [ ] In-app notification banners (сообщение в другом чате → баннер сверху)
-- [ ] In-chat search (лупа → фильтры: from user, date, type) — backend ready, frontend wiring deferred
+- [x] In-app notification banners (сообщение в другом чате → баннер сверху)
+- [x] In-chat search (лупа → фильтры: from user, date, type) — frontend Saturn wiring for from user + date completed
 
 ### Frontend: Saturn API методы (~25)
 
 **Search:**
 - [x] searchMessagesGlobal, searchUsersGlobal, searchChatsGlobal
+- [x] Frontend: Meilisearch hits hydration (`message/user/chat` → `ApiMessage`/`ApiUser`/`ApiChat`) + global/middle search rendering
 - [~] searchChatMessages — уже есть из Phase 1 (searchMessagesInChat)
-- [~] fetchSearchHistory, searchHashtag, getMessageByDate — deferred, бэкенд готов
+- [x] searchHashtag — реализован через action layer (isHashtag flag → performMiddleSearch)
+- [~] fetchSearchHistory, getMessageByDate — deferred, бэкенд готов
 
 **Notifications:**
 - [x] subscribePush (registerDevice), unsubscribePush
@@ -683,6 +685,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 1 (Reactions backend): `ReactionStore` + `ReactionService` реализованы, `reaction_added` / `reaction_removed` публикуются в NATS, таргетные reaction tests PASS
 - [x] Шаг 3 (Stickers backend): `StickerStore` + `StickerService` реализованы, таргетные sticker handler/service tests PASS, runtime wiring в `services/messaging/cmd/main.go` подключён
 - [x] Шаг 4 (GIF backend): `GIFStore` + `GIFService` + `internal/tenor/client.go` реализованы, таргетные GIF handler/service tests PASS, runtime wiring в `services/messaging/cmd/main.go` подключён
+- [x] Шаг 5 (Sticker import + seed): admin CRUD для sticker packs, idempotent seed CLI `scripts/seed-stickers`, deploy migration с 3 SVG pack'ами и R2-backed import
 - [x] Шаг 6 (Runtime wiring в messaging): DI в `services/messaging/cmd/main.go` подключён для reactions/stickers/GIF/polls/scheduled, Phase 5 HTTP routes зарегистрированы, `POST /chats/:id/messages` поддерживает `type=poll` и `?scheduled_at=`
 - [x] Шаг 7 (Frontend wiring + poll hydration + smoke): Saturn API методы и TG Web A wiring закрыты для reactions/stickers/GIF/polls/scheduled, обычная history hydration для polls/reactions доведена, WS `reaction_added` / `reaction_removed` / `poll_vote` / `poll_closed` применяются без reload, live Playwright smoke PASS
 
@@ -694,7 +697,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [ ] Спроектировать sticker import из Telegram — как работает TG Bot API fetchStickerSet? Легальность?
 - [x] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee
 - [x] Продумать: isPremium removal — grep все проверки в TG Web A, составить список файлов для изменения
-- [ ] Продумать: reactions animation — что отправляет сервер? Какой формат ожидает фронтенд?
+- [x] Продумать: reactions animation — CSS keyframes (pop-in, bounce, count-bump) + staggered appear в пикере, без серверных изменений
 - [x] Продумать: polls real-time — WS broadcast при каждом голосе или батчинг? → per-vote WS (`poll_vote`) + отдельный `poll_closed`
 - [x] Оценить: custom emoji — нужен свой рендер или TG Web A уже умеет? → TG Web A rendering reused, Saturn wiring + no-premium gating applied
 - [x] Составить порядок реализации и предложить пользователю

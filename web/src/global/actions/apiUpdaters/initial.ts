@@ -21,8 +21,8 @@ import { clearWebTokenAuth } from '../../../util/routing';
 import { setServerTimeOffset } from '../../../util/serverTime';
 import { updateSessionUserId } from '../../../util/sessions';
 import { forceWebsync } from '../../../util/websync';
-import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import { callApi } from '../../../api/saturn';
+import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';

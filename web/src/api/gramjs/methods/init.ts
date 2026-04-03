@@ -29,4 +29,5 @@ export function callApi<T extends keyof Methods>(fnName: T, ...args: MethodArgs<
 
 export function cancelApiProgress(progressCallback: ApiOnProgress) {
   progressCallback.isCanceled = true;
+  progressCallback.abort?.();
 }

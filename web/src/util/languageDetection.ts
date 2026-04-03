@@ -30,8 +30,13 @@ async function initLanguageDetection() {
       initializationDeferred.resolve();
       return;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      if (DEBUG) console.error('Failed to initialize language detector: ', error);
+      const message = error instanceof Error ? error.message : String(error);
+      const isModelUnavailable = message.includes('Model not available');
+
+      if (DEBUG && !isModelUnavailable) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to initialize language detector: ', error);
+      }
     }
   }
 

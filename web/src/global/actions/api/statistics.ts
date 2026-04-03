@@ -1,6 +1,7 @@
 import type {
   StatisticsMessageInteractionCounter,
 } from '../../../api/types';
+
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { callApi } from '../../../api/saturn';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';

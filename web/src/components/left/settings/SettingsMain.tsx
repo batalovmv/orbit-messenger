@@ -4,11 +4,9 @@ import { getActions, withGlobal } from '../../../global';
 
 import { SettingsScreens } from '../../../types';
 
-import { FAQ_URL, PRIVACY_URL } from '../../../config';
 import {
   selectIsPremiumPurchaseBlocked,
 } from '../../../global/selectors';
-
 import { request } from '../../../api/saturn/client';
 
 import useFlag from '../../../hooks/useFlag';
@@ -43,14 +41,12 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
 }) => {
   const {
     loadMoreProfilePhotos,
-    openPremiumModal,
     openSupportChat,
-    openUrl,
     openSettingsScreen,
     showNotification,
   } = getActions();
 
-  const [isSupportDialogOpen, openSupportDialog, closeSupportDialog] = useFlag(false);
+  const [isSupportDialogOpen, , closeSupportDialog] = useFlag(false);
 
   const lang = useLang();
 

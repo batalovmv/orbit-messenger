@@ -290,6 +290,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
               isSavedDialog={isSavedDialog}
               emojiStatusSize={EMOJI_STATUS_SIZE}
               noRtl
+              onClick={handleOpenChat}
               onEmojiStatusClick={handleUserStatusClick}
             />
           ) : (
@@ -306,6 +307,7 @@ const MiddleHeader: FC<OwnProps & StateProps> = ({
               withUpdatingStatus
               isSavedDialog={isSavedDialog}
               emojiStatusSize={EMOJI_STATUS_SIZE}
+              onClick={handleOpenChat}
               onEmojiStatusClick={handleChannelStatusClick}
               noRtl
             />

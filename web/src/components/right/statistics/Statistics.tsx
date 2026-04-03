@@ -16,7 +16,6 @@ import {
   selectChat,
   selectChatFullInfo,
   selectChatMessages,
-
   selectStatistics,
 } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
@@ -29,8 +28,8 @@ import useOldLang from '../../../hooks/useOldLang';
 import Loading from '../../ui/Loading';
 import StatisticsOverview from './StatisticsOverview';
 import StatisticsRecentMessage from './StatisticsRecentMessage';
-// import StatisticsRecentStory from './StatisticsRecentStory'; // stories removed
 
+// import StatisticsRecentStory from './StatisticsRecentStory'; // stories removed
 import styles from './Statistics.module.scss';
 
 type ILovelyChart = { create: (el: HTMLElement, params: AnyLiteral) => void };

@@ -61,8 +61,8 @@ type OwnProps = {
   noStatusOrTyping?: boolean;
   isSavedDialog?: boolean;
   withMonoforumStatus?: boolean;
-  onClick?: VoidFunction;
-  onEmojiStatusClick?: VoidFunction;
+  onClick?: (event: React.MouseEvent | React.TouchEvent) => void;
+  onEmojiStatusClick?: NoneToVoidFunction;
 };
 
 type StateProps = {

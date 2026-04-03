@@ -63,13 +63,15 @@ addCallback((global: GlobalState) => {
   }
 
   if (sharedSettings.messageTextSize !== oldSharedSettings.messageTextSize) {
-    document.documentElement.style.setProperty(
-      '--composer-text-size', `${Math.max(sharedSettings.messageTextSize, IS_IOS ? 16 : 15)}px`,
-    );
-    document.documentElement.style.setProperty('--message-meta-height',
-      `${Math.floor(sharedSettings.messageTextSize * 1.3125)}px`);
-    document.documentElement.style.setProperty('--message-text-size', `${sharedSettings.messageTextSize}px`);
-    document.documentElement.setAttribute('data-message-text-size', sharedSettings.messageTextSize.toString());
+    requestMutation(() => {
+      document.documentElement.style.setProperty(
+        '--composer-text-size', `${Math.max(sharedSettings.messageTextSize, IS_IOS ? 16 : 15)}px`,
+      );
+      document.documentElement.style.setProperty('--message-meta-height',
+        `${Math.floor(sharedSettings.messageTextSize * 1.3125)}px`);
+      document.documentElement.style.setProperty('--message-text-size', `${sharedSettings.messageTextSize}px`);
+      document.documentElement.setAttribute('data-message-text-size', sharedSettings.messageTextSize.toString());
+    });
   }
 
   if (sharedSettings.canDisplayChatInTitle !== oldSharedSettings.canDisplayChatInTitle) {

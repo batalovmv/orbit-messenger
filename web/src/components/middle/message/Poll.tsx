@@ -16,7 +16,9 @@ import type {
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { OldLangFn } from '../../../hooks/useOldLang';
 
+import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { selectPeer } from '../../../global/selectors';
+import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dates/dateFormat';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { getServerTime } from '../../../util/serverTime';
@@ -61,6 +63,8 @@ const Poll: FC<OwnProps> = ({
 
   const { id: messageId, chatId } = message;
   const { summary, results } = poll;
+  const summaryQuestion = summary.question || { text: '', entities: [] };
+  const summaryAnswers = useMemo(() => summary.answers || [], [summary.answers]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [chosenOptions, setChosenOptions] = useState<string[]>([]);
   const [wasSubmitted, setWasSubmitted] = useState<boolean>(false);
@@ -77,11 +81,13 @@ const Poll: FC<OwnProps> = ({
   const canViewResult = !canVote && summary.isPublic && Number(results.totalVoters) > 0;
   const isMultiple = canVote && summary.multipleChoice;
   const recentVoterIds = results.recentVoterIds;
-  const maxVotersCount = voteResults ? Math.max(...voteResults.map((r) => r.votersCount)) : totalVoters;
+  const maxVotersCount = voteResults?.length
+    ? Math.max(...voteResults.map((r) => r.votersCount))
+    : (totalVoters || 0);
   const correctResults = useMemo(() => {
     return voteResults?.filter((r) => r.isCorrect).map((r) => r.option) || [];
   }, [voteResults]);
-  const answers = useMemo(() => summary.answers.map((a) => ({
+  const answers = useMemo(() => summaryAnswers.map((a) => ({
     label: renderTextWithEntities({
       text: a.text.text,
       entities: a.text.entities,
@@ -92,7 +98,7 @@ const Poll: FC<OwnProps> = ({
     hidden: Boolean(summary.quiz && summary.closePeriod && closePeriod <= 0),
   })), [
     closePeriod, observeIntersectionForLoading, observeIntersectionForPlaying,
-    summary.answers, summary.closePeriod, summary.quiz,
+    summary.closePeriod, summary.quiz, summaryAnswers,
   ]);
 
   useEffect(() => {
@@ -111,12 +117,14 @@ const Poll: FC<OwnProps> = ({
     }
     if (!timerCircleRef.current) return;
 
-    if (closePeriod <= 5) {
-      countdownRef.current!.classList.add('hurry-up');
-    }
-
     const strokeDashOffset = ((summary.closePeriod! - closePeriod) / summary.closePeriod!) * TIMER_CIRCUMFERENCE;
-    timerCircleRef.current.setAttribute('stroke-dashoffset', `-${strokeDashOffset}`);
+    requestMutation(() => {
+      if (closePeriod <= 5) {
+        countdownRef.current?.classList.add('hurry-up');
+      }
+
+      timerCircleRef.current?.setAttribute('stroke-dashoffset', `-${strokeDashOffset}`);
+    });
   }, [closePeriod, summary.closePeriod]);
 
   useEffect(() => {
@@ -226,11 +234,20 @@ const Poll: FC<OwnProps> = ({
   }
 
   return (
-    <div className="Poll" dir={lang.isRtl ? 'auto' : 'ltr'}>
+    <div
+      className={buildClassName(
+        'Poll',
+        canVote ? 'can-vote' : 'has-results',
+        summary.closed && 'is-closed',
+        summary.quiz && 'is-quiz',
+        isMultiple && 'is-multiple',
+      )}
+      dir={lang.isRtl ? 'auto' : 'ltr'}
+    >
       <div className="poll-question">
         {renderTextWithEntities({
-          text: summary.question.text,
-          entities: summary.question.entities,
+          text: summaryQuestion.text,
+          entities: summaryQuestion.entities,
           observeIntersectionForLoading,
           observeIntersectionForPlaying,
         })}
@@ -296,7 +313,7 @@ const Poll: FC<OwnProps> = ({
       )}
       {!canVote && (
         <div className="poll-results">
-          {summary.answers.map(renderResultOption)}
+          {summaryAnswers.map(renderResultOption)}
         </div>
       )}
       {!canViewResult && !isMultiple && (
@@ -304,6 +321,7 @@ const Poll: FC<OwnProps> = ({
       )}
       {isMultiple && (
         <Button
+          className="poll-action-button"
           isText
           disabled={chosenOptions.length === 0}
           size="tiny"
@@ -314,6 +332,7 @@ const Poll: FC<OwnProps> = ({
       )}
       {canViewResult && (
         <Button
+          className="poll-action-button"
           isText
           size="tiny"
           onClick={handleViewResultsClick}
@@ -326,13 +345,13 @@ const Poll: FC<OwnProps> = ({
 };
 
 function getPollTypeString(summary: ApiPoll['summary']) {
+  if (summary.closed) {
+    return 'FinalResults';
+  }
+
   // When we just created the poll, some properties don't exist.
   if (typeof summary.isPublic === 'undefined') {
     return NBSP;
-  }
-
-  if (summary.closed) {
-    return 'FinalResults';
   }
 
   if (summary.quiz) {
@@ -342,7 +361,7 @@ function getPollTypeString(summary: ApiPoll['summary']) {
   return summary.isPublic ? 'PublicPoll' : 'AnonymousPoll';
 }
 
-function getReadableVotersCount(lang: OldLangFn, isQuiz: true | undefined, count?: number) {
+function getReadableVotersCount(lang: OldLangFn, isQuiz: boolean | undefined, count?: number) {
   if (!count) {
     return lang(isQuiz ? 'Chat.Quiz.TotalVotesEmpty' : 'Chat.Poll.TotalVotesResultEmpty');
   }

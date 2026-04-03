@@ -111,7 +111,6 @@ const LeftMainHeader = ({
   const lang = useLang();
   const { isMobile } = useAppLayout();
 
-  const areContactsVisible = content === LeftColumnContent.Contacts;
   const hasMenu = content === LeftColumnContent.ChatList;
 
   const isSearchButton = isForumPanelOpen && isFoldersSidebarShown && !IS_WITH_WINDOW_BUTTONS;

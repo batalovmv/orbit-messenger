@@ -25,7 +25,6 @@ import PeerColorWrapper from '../../common/PeerColorWrapper';
 import SafeLink from '../../common/SafeLink';
 import StickerView from '../../common/StickerView';
 import Button from '../../ui/Button';
-
 import Photo from './Photo';
 import Video from './Video';
 
@@ -33,8 +32,6 @@ import './WebPage.scss';
 
 const MAX_TEXT_LENGTH = 170; // symbols
 const WEBPAGE_STORY_TYPE = 'telegram_story';
-const WEBPAGE_GIFT_TYPE = 'telegram_nft';
-const WEBPAGE_AUCTION_TYPE = 'telegram_auction';
 const STICKER_SIZE = 80;
 const EMOJI_SIZE = 38;
 

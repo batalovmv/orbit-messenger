@@ -4,14 +4,11 @@ import * as saturnClient from '../client';
 import { init as initUpdateEmitter, sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { initWsHandler, setWsCurrentUserId } from '../updates/wsHandler';
 import { checkAuth } from './auth';
-import { setCurrentUserId as setChatUserId, fetchChats } from './chats';
+import { fetchChats, setCurrentUserId as setChatUserId } from './chats';
 import { setCurrentUserId as setMsgUserId } from './messages';
-
-let currentOnUpdate: OnApiUpdate | undefined;
+import { setCurrentUserId as setSearchUserId } from './search';
 
 export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
-  currentOnUpdate = onUpdate;
-
   // Both production (nginx) and development (webpack proxy) route /api/* to gateway
   const apiUrl = `${window.location.origin}/api/v1`;
 
@@ -45,12 +42,16 @@ export function setCurrentUser(userId: string) {
   console.log('[Saturn] setCurrentUser:', userId);
   setChatUserId(userId);
   setMsgUserId(userId);
+  setSearchUserId(userId);
   setWsCurrentUserId(userId);
 }
 
-export function destroy() {
+export function destroy(noLogOut = false, _noClearLocalDb = false) {
   saturnClient.disconnectWs();
-  saturnClient.clearAuth();
+
+  if (!noLogOut) {
+    saturnClient.clearAuth();
+  }
 }
 
 export function disconnect() {

@@ -13,11 +13,8 @@ import useHistoryBack from '../../hooks/useHistoryBack';
 
 import Transition from '../ui/Transition';
 import AuthCode from './AuthCode.async';
-import AuthPassword from './AuthPassword.async';
 import AuthEmailLogin from './AuthEmailLogin';
-import AuthPhoneNumber from './AuthPhoneNumber';
-import AuthQrCode from './AuthQrCode';
-import AuthRegister from './AuthRegister.async';
+import AuthPassword from './AuthPassword.async';
 import AuthSaturnRegister from './AuthSaturnRegister';
 
 import './Auth.scss';

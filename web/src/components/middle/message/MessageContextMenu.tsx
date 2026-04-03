@@ -441,7 +441,7 @@ const MessageContextMenu: FC<OwnProps> = ({
         {canClosePoll && <MenuItem icon="stop" onClick={onClosePoll}>{oldLang('lng_polls_stop')}</MenuItem>}
         {canDownload && (
           <MenuItem icon="download" onClick={onDownload}>
-            {isDownloading ? oldLang('lng_context_cancel_download') : oldLang('lng_media_download')}
+            {isDownloading ? oldLang('ContextCancelDownload') : oldLang('MediaDownload')}
           </MenuItem>
         )}
         {canForward && <MenuItem icon="forward" onClick={onForward}>{oldLang('Forward')}</MenuItem>}

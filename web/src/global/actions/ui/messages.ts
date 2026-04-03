@@ -559,9 +559,10 @@ addActionHandler('openForwardMenu', (global, actions, payload): ActionReturnType
 
 addActionHandler('changeRecipient', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
+  const forwardMessages = selectTabState(global, tabId).forwardMessages || {};
   return updateTabState(global, {
     forwardMessages: {
-      ...selectTabState(global, tabId).forwardMessages,
+      ...forwardMessages,
       toChatId: undefined,
       noAuthors: false,
       noCaptions: false,
@@ -573,21 +574,23 @@ addActionHandler('changeRecipient', (global, actions, payload): ActionReturnType
 addActionHandler('setForwardNoAuthors', (global, actions, payload): ActionReturnType => {
   const { noAuthors, tabId = getCurrentTabId() } = payload;
   const tabState = selectTabState(global, tabId);
+  const forwardMessages = tabState.forwardMessages || {};
   return updateTabState(global, {
     forwardMessages: {
-      ...tabState.forwardMessages,
+      ...forwardMessages,
       noAuthors,
       // `noCaptions` cannot be true when `noAuthors` is false
-      noCaptions: noAuthors && tabState.forwardMessages.noCaptions,
+      noCaptions: noAuthors && forwardMessages.noCaptions,
     },
   }, tabId);
 });
 
 addActionHandler('setForwardNoCaptions', (global, actions, payload): ActionReturnType => {
   const { noCaptions, tabId = getCurrentTabId() } = payload;
+  const forwardMessages = selectTabState(global, tabId).forwardMessages || {};
   return updateTabState(global, {
     forwardMessages: {
-      ...selectTabState(global, tabId).forwardMessages,
+      ...forwardMessages,
       noCaptions,
       noAuthors: noCaptions, // On other clients `noAuthors` updates together with `noCaptions`
     },

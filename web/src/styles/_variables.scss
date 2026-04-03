@@ -345,6 +345,10 @@
       --messages-container-width: 50vw;
     }
 
+    @media (min-width: 601px) and (max-width: 900px) {
+      --right-column-width: 16.5rem;
+    }
+
     @media (max-width: 600px) {
       --right-column-width: 100vw;
       --symbol-menu-width: 100vw;

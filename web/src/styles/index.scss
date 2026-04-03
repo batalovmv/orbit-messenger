@@ -274,13 +274,13 @@ body:not(.is-ios) {
   transition: opacity 0.15s ease;
 
   &.not-open {
-    opacity: 0;
     pointer-events: none;
+    opacity: 0;
   }
 
   &.not-shown {
-    display: none;
     pointer-events: none;
+    display: none;
   }
 
   &.slow {

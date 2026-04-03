@@ -62,8 +62,8 @@ type BaseOwnProps = {
   className?: string;
   iconElement?: React.ReactNode;
   rightElement?: React.ReactNode;
-  onClick?: VoidFunction;
-  onEmojiStatusClick?: VoidFunction;
+  onClick?: (event: React.MouseEvent | React.TouchEvent) => void;
+  onEmojiStatusClick?: NoneToVoidFunction;
 };
 
 type OwnProps = BaseOwnProps & ({

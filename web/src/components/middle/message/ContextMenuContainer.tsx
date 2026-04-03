@@ -61,7 +61,6 @@ import {
   selectIsReactionPickerOpen,
   selectMessageCustomEmojiSets,
   selectMessageTranslations,
-
   selectPollFromMessage,
   selectRequestedChatTranslationLanguage,
   selectRequestedMessageTranslationLanguage,
@@ -879,7 +878,6 @@ export default memo(withGlobal<OwnProps>(
 
     const poll = selectPollFromMessage(global, message);
     const webPage = selectWebPageFromMessage(global, message);
-    const storyData = message.content.storyData;
     const story = undefined;
 
     const canGift = selectCanGift(global, message.chatId);

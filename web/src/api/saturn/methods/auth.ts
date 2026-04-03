@@ -19,7 +19,7 @@ export async function registerWithInvite({
   password: string;
   displayName: string;
 }) {
-  const user = await client.request<SaturnUser>(
+  await client.request<SaturnUser>(
     'POST', '/auth/register',
     { invite_code: inviteCode, email, password, display_name: displayName },
     { noAuth: true },
@@ -68,7 +68,10 @@ export async function loginWithEmail({
 
     client.setAccessToken(result.access_token, result.expires_in);
     pending2FAEncrypted = undefined;
-    if (pending2FATimeout) { clearTimeout(pending2FATimeout); pending2FATimeout = undefined; }
+    if (pending2FATimeout) {
+      clearTimeout(pending2FATimeout);
+      pending2FATimeout = undefined;
+    }
 
     const apiUser = buildApiUser(result.user);
     apiUser.isSelf = true;
@@ -102,7 +105,9 @@ export async function loginWithEmail({
           pending2FAEncrypted = encrypted;
         });
         if (pending2FATimeout) clearTimeout(pending2FATimeout);
-        pending2FATimeout = setTimeout(() => { pending2FAEncrypted = undefined; }, 5 * 60 * 1000);
+        pending2FATimeout = setTimeout(() => {
+          pending2FAEncrypted = undefined;
+        }, 5 * 60 * 1000);
         sendApiUpdate({
           '@type': 'updateAuthorizationState',
           authorizationState: 'authorizationStateWaitPassword',
@@ -163,7 +168,7 @@ export async function checkAuth() {
 
   // Verify existing token
   try {
-    const user = await client.request<SaturnUser>('GET', '/auth/me');
+    const user = await client.request<SaturnUser>('GET', '/auth/me', undefined, { skipAuthReady: true });
     const apiUser = buildApiUser(user);
     apiUser.isSelf = true;
 
@@ -190,7 +195,7 @@ export async function checkAuth() {
       client.setAccessToken(result.access_token, result.expires_in);
 
       // Fetch current user after token refresh
-      const user = await client.request<SaturnUser>('GET', '/auth/me');
+      const user = await client.request<SaturnUser>('GET', '/auth/me', undefined, { skipAuthReady: true });
       const apiUser = buildApiUser(user);
       apiUser.isSelf = true;
 

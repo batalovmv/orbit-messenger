@@ -79,6 +79,13 @@ export function renderMessageSummary(
   highlight?: string,
   truncateLength = TRUNCATED_SUMMARY_LENGTH,
 ): TextPart[] {
+  if (message.searchSnippet?.text) {
+    const snippetText = trimText(message.searchSnippet.text, truncateLength);
+    return renderText(snippetText, ['emoji', 'highlight'], {
+      highlight: message.searchSnippet.highlight || highlight,
+    });
+  }
+
   const { entities } = message.content?.text || {};
 
   const global = getGlobal();

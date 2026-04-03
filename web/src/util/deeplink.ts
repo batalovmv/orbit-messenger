@@ -145,7 +145,7 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
     case 'resolve': {
       const {
         domain, phone, post, comment, voicechat, livestream, start, startattach, attach, thread, topic,
-        appname, startapp, mode, story, text,
+        appname, startapp, mode, text,
       } = params;
 
       const threadId = Number(thread) || Number(topic) || undefined;

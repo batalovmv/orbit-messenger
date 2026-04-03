@@ -4,6 +4,7 @@ import { getActions, withGlobal } from '../../global';
 import type { GlobalState } from '../../global/types';
 
 import { pick } from '../../util/iteratees';
+
 import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
@@ -73,7 +74,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
         <form action="" onSubmit={handleSubmit}>
           <InputText
             id="register-invite-code"
-            label={lang('InviteCode' as any) as string || 'Invite Code'}
+            label={lang('InviteCode' as any) || 'Invite Code'}
             value={inviteCode}
             error={auth.errorKey ? lang.withRegular(auth.errorKey) : undefined}
             autoComplete="off"
@@ -89,7 +90,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
           />
           <InputText
             id="register-password"
-            label={lang('LoginPassword' as any) as string || 'Password'}
+            label={lang('LoginPassword' as any) || 'Password'}
             type="password"
             value={password}
             autoComplete="new-password"

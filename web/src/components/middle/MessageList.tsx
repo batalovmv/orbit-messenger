@@ -37,7 +37,6 @@ import {
   selectIsChatProtected,
   selectIsChatWithSelf,
   selectIsCurrentUserFrozen,
-  selectIsCurrentUserPremium,
   selectIsInSelectMode,
   selectIsViewportNewest,
   selectMonoforumChannel,
@@ -170,8 +169,6 @@ enum Content {
 const MESSAGE_REACTIONS_POLLING_INTERVAL = 20 * 1000;
 const MESSAGE_COMMENTS_POLLING_INTERVAL = 20 * 1000;
 const MESSAGE_FACT_CHECK_UPDATE_INTERVAL = 5 * 1000;
-const MESSAGE_STORY_POLLING_INTERVAL = 5 * 60 * 1000;
-
 const BOTTOM_THRESHOLD = 50;
 const BOTTOM_SNAP_THRESHOLD = 7;
 
@@ -293,7 +290,6 @@ const MessageList = ({
   useSyncEffect(() => {
     memoFirstUnreadIdRef.current = firstUnreadId;
   }, [firstUnreadId]);
-
 
   // Updated only once when messages are loaded (as we want the unread divider to keep its position)
   useSyncEffect(() => {
@@ -922,7 +918,6 @@ export default memo(withGlobal<OwnProps>(
     const chatFullInfo = !isUserId(chatId) ? selectChatFullInfo(global, chatId) : undefined;
     const isEmptyThread = !selectThreadInfo(global, chatId, threadId)?.messagesCount;
 
-    const isCurrentUserPremium = selectIsCurrentUserPremium(global);
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
 
     const hasCustomGreeting = Boolean(userFullInfo?.businessIntro);

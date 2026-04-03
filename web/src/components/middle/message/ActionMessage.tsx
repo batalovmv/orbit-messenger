@@ -12,7 +12,6 @@ import type {
 } from '../../../types';
 import type { Signal } from '../../../util/signals';
 import {
-  type ApiKeyboardButton,
   type ApiMessage,
   type ApiPeer,
   MAIN_THREAD_ID,
@@ -21,7 +20,6 @@ import { MediaViewerOrigin } from '../../../types';
 
 import { MESSAGE_APPEARANCE_DELAY } from '../../../config';
 import { getMessageHtmlId } from '../../../global/helpers';
-import { getPeerTitle } from '../../../global/helpers/peers';
 import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
   selectActionMessageBg,
@@ -39,7 +37,6 @@ import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_ANDROID, IS_FLUID_BACKGROUND_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { isLocalMessageId } from '../../../util/keys/messageKey';
-import { getServerTime } from '../../../util/serverTime';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
 import { preventMessageInputBlur } from '../helpers/preventMessageInputBlur';
 
@@ -48,13 +45,11 @@ import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
 import useEnsureMessage from '../../../hooks/useEnsureMessage';
 import useFlag from '../../../hooks/useFlag';
 import { type ObserveFn, useOnIntersect } from '../../../hooks/useIntersectionObserver';
-import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useShowTransition from '../../../hooks/useShowTransition';
 import useFluidBackgroundFilter from './hooks/useFluidBackgroundFilter';
 import useFocusMessageListElement from './hooks/useFocusMessageListElement';
 
-import ConfirmDialog from '../../ui/ConfirmDialog';
 import ActionMessageText from './ActionMessageText';
 import ChannelPhoto from './actions/ChannelPhoto';
 import SuggestedPhoto from './actions/SuggestedPhoto';
@@ -62,7 +57,6 @@ import SuggestedPostApproval from './actions/SuggestedPostApproval';
 import SuggestedPostBalanceTooLow from './actions/SuggestedPostBalanceTooLow';
 import SuggestedPostRejected from './actions/SuggestedPostRejected';
 import ContextMenuContainer from './ContextMenuContainer';
-import InlineButtons from './InlineButtons';
 import Reactions from './reactions/Reactions';
 import SimilarChannels from './SimilarChannels';
 
@@ -143,12 +137,10 @@ const ActionMessage = ({
     getReceipt,
     checkGiftCode,
     openPremiumModal,
-    openGiftInfoModalFromMessage,
     toggleChannelRecommendations,
     animateUnreadReaction,
     markMentionsRead,
     focusMessage,
-    showNotification,
   } = getActions();
 
   const ref = useRef<HTMLDivElement>();
@@ -170,18 +162,7 @@ const ActionMessage = ({
 
   const shouldSkipRender = isInsideTopic && action.type === 'topicCreate';
 
-  const lang = useLang();
   const { isTouchScreen } = useAppLayout();
-
-  const [isRejectOfferDialogOpen,,closeRejectOfferDialog] = useFlag(false);
-
-  const handleInlineButtonClick = useLastCallback((_button: ApiKeyboardButton) => {
-    // Gift offer handling removed
-  });
-
-  const handleRejectOfferClose = useLastCallback(() => {
-    closeRejectOfferDialog();
-  });
 
   useOnIntersect(ref, !shouldSkipRender ? observeIntersectionForBottom : undefined);
 
@@ -394,7 +375,7 @@ const ActionMessage = ({
         return undefined;
     }
   }, [
-    action, message, observeIntersectionForLoading, sender, observeIntersectionForPlaying,
+    action, message, observeIntersectionForLoading,
   ]);
 
   if ((isInsideTopic && action.type === 'topicCreate') || action.type === 'phoneCall') {
@@ -429,7 +410,7 @@ const ActionMessage = ({
             <div className={buildClassName(
               styles.inlineWrapper,
               isClickableText && styles.hoverable,
-              )}
+            )}
             >
               <span className={styles.fluidBackground} style={fluidBackgroundStyle}>
                 <ActionMessageText message={message} isInsideTopic={isInsideTopic} />

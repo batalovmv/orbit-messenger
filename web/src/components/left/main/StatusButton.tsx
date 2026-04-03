@@ -36,8 +36,6 @@ const StatusButton = ({ emojiStatus, collectibleStatuses, isAccountFrozen }: Sta
   const [isStatusPickerOpen, openStatusPicker, closeStatusPicker] = useFlag(false);
   const { isMobile } = useAppLayout();
 
-  const collectibleEmojiStatus = emojiStatus?.type === 'collectible' ? emojiStatus : undefined;
-
   const delay = emojiStatus?.until ? (emojiStatus.until - getServerTime()) * 1000 : undefined;
   useTimeout(loadCurrentUser, delay);
 

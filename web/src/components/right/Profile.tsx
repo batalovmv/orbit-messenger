@@ -47,7 +47,6 @@ import {
   selectIsCurrentUserPremium,
   selectIsRightColumnShown,
   selectMonoforumChannel,
-
   selectPerformanceSettingsValue,
   selectSimilarBotsIds,
   selectSimilarChannelIds,
@@ -62,17 +61,14 @@ import { selectMessageDownloadableMedia } from '../../global/selectors/media';
 import { selectSharedSettings } from '../../global/selectors/sharedState';
 // import { selectActiveStoriesCollectionId } from '../../global/selectors/stories'; // stories removed
 import {
-  VTT_PROFILE_GIFTS,
   VTT_RIGHT_PROFILE_COLLAPSE,
   VTT_RIGHT_PROFILE_EXPAND,
 } from '../../util/animations/viewTransitionTypes.ts';
-import { areDeepEqual } from '../../util/areDeepEqual';
 import { IS_TOUCH_ENV } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import { captureEvents, SwipeDirection } from '../../util/captureEvents';
 import { isUserId } from '../../util/entities/ids';
 import { resolveTransitionName } from '../../util/resolveTransitionName.ts';
-import { LOCAL_TGS_URLS } from '../common/helpers/animatedAssets';
 import renderText from '../common/helpers/renderText';
 import { getSenderName } from '../left/search/helpers/getSenderName';
 
@@ -87,14 +83,12 @@ import { useIntersectionObserver } from '../../hooks/useIntersectionObserver';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
-import useSyncEffect from '../../hooks/useSyncEffect';
 import useSyncEffectWithPrevDeps from '../../hooks/useSyncEffectWithPrevDeps.ts';
 import useAsyncRendering from './hooks/useAsyncRendering';
 import useProfileState from './hooks/useProfileState';
 import useProfileViewportIds from './hooks/useProfileViewportIds';
 import useTransitionFixes from './hooks/useTransitionFixes';
 
-import AnimatedIconWithPreview from '../common/AnimatedIconWithPreview';
 import Audio from '../common/Audio';
 import Document from '../common/Document';
 import GroupChatInfo from '../common/GroupChatInfo';
@@ -110,14 +104,13 @@ import ChatList from '../left/main/ChatList';
 import Button from '../ui/Button';
 import FloatingActionButton from '../ui/FloatingActionButton';
 import InfiniteScroll from '../ui/InfiniteScroll';
-import Link from '../ui/Link';
 import ListItem, { type MenuItemContextAction } from '../ui/ListItem';
 import Spinner from '../ui/Spinner';
 import TabList, { type TabWithProperties } from '../ui/TabList';
 import Transition from '../ui/Transition';
 import DeleteMemberModal from './DeleteMemberModal';
-// import StoryAlbumList from './stories/StoryAlbumList'; // stories removed
 
+// import StoryAlbumList from './stories/StoryAlbumList'; // stories removed
 import './Profile.scss';
 
 type OwnProps = {
@@ -698,16 +691,16 @@ const Profile = ({
           text = oldLang('NoGroupsInCommon');
           break;
         case 'documents':
-          text = oldLang('lng_media_file_empty');
+          text = oldLang('MediaFileEmpty');
           break;
         case 'links':
-          text = oldLang('lng_media_link_empty');
+          text = oldLang('MediaLinkEmpty');
           break;
         case 'audio':
-          text = oldLang('lng_media_song_empty');
+          text = oldLang('MediaSongEmpty');
           break;
         case 'voice':
-          text = oldLang('lng_media_audio_empty');
+          text = oldLang('MediaAudioEmpty');
           break;
         case 'stories':
           text = oldLang('StoryList.SavedEmptyState.Title');
@@ -716,10 +709,10 @@ const Profile = ({
           text = oldLang('StoryList.ArchivedEmptyState.Title');
           break;
         case 'gif':
-          text = oldLang('lng_media_gif_empty');
+          text = oldLang('NoGIFsFound');
           break;
         default:
-          text = oldLang('SharedMedia.EmptyTitle');
+          text = oldLang('SharedMediaEmptyTitle');
       }
 
       return (
@@ -795,7 +788,9 @@ const Profile = ({
               onPlay={handlePlayAudio}
               onDateClick={handleMessageFocus}
               canDownload={!isChatProtected && !messagesById[id].isProtected}
-              isDownloading={getIsDownloading(activeDownloads, messagesById[id].content?.audio!)}
+              isDownloading={messagesById[id].content?.audio
+                ? getIsDownloading(activeDownloads, messagesById[id].content.audio)
+                : false}
             />
           ))
         ) : resultType === 'voice' ? (
@@ -1139,7 +1134,7 @@ export default memo(withGlobal<OwnProps>(
     const activeCollectionId = selectActiveGiftsCollectionId(global, chatId);
 
     const storyAlbums = undefined;
-    const selectedStoryAlbumId: 'all' = 'all';
+    const selectedStoryAlbumId = 'all' as const;
 
     const monoforumChannel = selectMonoforumChannel(global, chatId);
     const isRestricted = chat && selectIsChatRestricted(global, chat.id);

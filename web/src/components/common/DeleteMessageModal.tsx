@@ -33,7 +33,6 @@ import buildClassName from '../../util/buildClassName';
 import { isUserId } from '../../util/entities/ids';
 import { buildCollectionByCallback, unique } from '../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
-import renderText from './helpers/renderText';
 
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
@@ -43,7 +42,6 @@ import useManagePermissions from '../right/hooks/useManagePermissions';
 
 import PermissionCheckboxList from '../main/PermissionCheckboxList';
 import Button from '../ui/Button';
-import Checkbox from '../ui/Checkbox';
 import CheckboxGroup from '../ui/CheckboxGroup';
 import ListItem from '../ui/ListItem';
 import Modal from '../ui/Modal';

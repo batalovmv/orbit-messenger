@@ -87,6 +87,7 @@ import type { SearchResultKey } from '../../util/keys/searchResultKey';
 import type { RegularLangFnParameters } from '../../util/localization';
 import type { ProfileCollectionKey } from '../selectors/payments';
 import type { CallbackAction } from './actions';
+import type { InAppNotificationBanner } from './notificationBanners';
 
 export type TabState = {
   id: number;
@@ -407,6 +408,7 @@ export type TabState = {
   };
 
   notifications: ApiNotification[];
+  notificationBanners: InAppNotificationBanner[];
   dialogs: (ApiError | ApiContact)[];
 
   safeLinkModalUrl?: string;

@@ -129,11 +129,15 @@ const SymbolMenu: FC<OwnProps & StateProps> = ({
       return undefined;
     }
 
-    document.body.classList.add('enable-symbol-menu-transforms');
-    document.body.classList.add('is-symbol-menu-open');
+    requestMutation(() => {
+      document.body.classList.add('enable-symbol-menu-transforms');
+      document.body.classList.add('is-symbol-menu-open');
+    });
 
     return () => {
-      document.body.classList.remove('is-symbol-menu-open');
+      requestMutation(() => {
+        document.body.classList.remove('is-symbol-menu-open');
+      });
 
       setTimeout(() => {
         requestMutation(() => {

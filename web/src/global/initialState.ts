@@ -417,7 +417,6 @@ export const INITIAL_TAB_STATE: TabState = {
     },
   },
 
-
   mediaViewer: {
     volume: DEFAULT_VOLUME,
     playbackRate: DEFAULT_PLAYBACK_RATE,
@@ -442,6 +441,7 @@ export const INITIAL_TAB_STATE: TabState = {
   payment: {},
 
   notifications: [],
+  notificationBanners: [],
 
   dialogs: [],
 

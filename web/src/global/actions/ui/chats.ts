@@ -1,7 +1,7 @@
 import type { ProfileTabType } from '../../../types';
-import { LeftColumnContent } from '../../../types';
 import type { ActionReturnType, GlobalState } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
+import { LeftColumnContent } from '../../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { createMessageHashUrl } from '../../../util/routing';
@@ -40,7 +40,6 @@ addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionRe
   }
   actions.hideEffectInComposer({ tabId });
 
-
   actions.closeGiftInfoModal({ tabId });
   actions.closeGiftAuctionModal({ tabId });
 
@@ -65,7 +64,7 @@ addActionHandler('processOpenChatOrThread', (global, actions, payload): ActionRe
     global = updateTabState(global, {
       isStatisticsShown: false,
       contentToBeScheduled: undefined,
-      ...(chatId !== selectTabState(global, tabId).forwardMessages.toChatId && {
+      ...(chatId !== selectTabState(global, tabId).forwardMessages?.toChatId && {
         forwardMessages: {},
         isShareMessageModalShown: false,
       }),

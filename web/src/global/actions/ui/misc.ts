@@ -208,7 +208,6 @@ addActionHandler('toggleMessageStatistics', (global, actions, payload): ActionRe
   }, tabId);
 });
 
-
 addActionHandler('toggleLeftColumn', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
   return updateTabState(global, {

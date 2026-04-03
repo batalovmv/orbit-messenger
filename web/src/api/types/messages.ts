@@ -199,10 +199,10 @@ export interface ApiPoll {
   mediaType: 'poll';
   id: string;
   summary: {
-    closed?: true;
-    isPublic?: true;
-    multipleChoice?: true;
-    quiz?: true;
+    closed?: boolean;
+    isPublic?: boolean;
+    multipleChoice?: boolean;
+    quiz?: boolean;
     question: ApiFormattedText;
     answers: ApiPollAnswer[];
     closePeriod?: number;
@@ -700,8 +700,14 @@ export interface ApiMessage {
   paidMessageStars?: number;
   restrictionReasons?: ApiRestrictionReason[];
   summaryLanguageCode?: string;
+  searchSnippet?: ApiMessageSearchSnippet;
 
   isTypingDraft?: boolean; // Local field
+}
+
+export interface ApiMessageSearchSnippet {
+  text: string;
+  highlight?: string;
 }
 
 export interface ApiReactions {

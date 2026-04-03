@@ -5,6 +5,7 @@ import type {
   SaturnChatListItem,
   SaturnChatMember,
   SaturnPaginatedResponse,
+  SaturnUser,
 } from '../types';
 
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
@@ -89,11 +90,20 @@ export async function fetchChats({
     }
 
     if (item.last_message) {
-      const apiMessage = buildApiMessage(item.last_message);
-      const poll = buildApiPoll(item.last_message.poll);
+      // Some Saturn responses return a stale `last_message.chat_id` from another chat/thread.
+      // In chat list context the parent item id is the source of truth for the preview message.
+      const normalizedLastMessage = item.last_message.chat_id === item.id
+        ? item.last_message
+        : {
+          ...item.last_message,
+          chat_id: item.id,
+        };
+      const apiMessage = buildApiMessage(normalizedLastMessage);
+      const poll = buildApiPoll(normalizedLastMessage.poll);
       if (currentUserId) {
         apiMessage.isOutgoing = item.last_message.sender_id === currentUserId;
       }
+      apiChat.lastMessage = apiMessage;
       lastMessageByChatId[item.id] = apiMessage.id;
       messages.push(apiMessage);
       if (poll) {
@@ -160,6 +170,40 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   const apiChat = buildApiChat(chat);
   const fullInfo = buildApiChatFullInfo(chat, membersResult.data, availableReactions);
 
+  if (chat.type === 'direct') {
+    const peerMember = membersResult.data.find((member) => member.user_id !== currentUserId) || membersResult.data[0];
+    if (peerMember?.user_id) {
+      apiChat.peerUserId = peerMember.user_id;
+
+      try {
+        const saturnUser = await client.request<SaturnUser>('GET', `/users/${peerMember.user_id}`);
+        const apiUser = buildApiUser(saturnUser);
+        const apiUserStatus = buildApiUserStatus(saturnUser);
+
+        sendApiUpdate({
+          '@type': 'updateUser',
+          id: saturnUser.id,
+          user: apiUser,
+        });
+
+        sendApiUpdate({
+          '@type': 'updateUserStatus',
+          userId: saturnUser.id,
+          status: apiUserStatus,
+        });
+
+        if (!apiChat.title || apiChat.title === 'Saved Messages') {
+          const fallbackTitle = [apiUser.firstName, apiUser.lastName].filter(Boolean).join(' ').trim();
+          if (fallbackTitle) {
+            apiChat.title = fallbackTitle;
+          }
+        }
+      } catch (err) {
+        // Keep the chat reachable even if user hydration fails.
+      }
+    }
+  }
+
   // Set current user's admin rights and creator flag on chat object
   if (currentUserId && membersResult.data) {
     const me = membersResult.data.find((m) => m.user_id === currentUserId);
@@ -204,6 +248,15 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   };
 }
 
+export function fetchChannelRecommendations({ chat }: { chat?: ApiChat }) {
+  void chat;
+
+  return Promise.resolve({
+    similarChannels: [] as ApiChat[],
+    count: 0,
+  });
+}
+
 export async function createDirectChat({ userId }: { userId: string }) {
   const chat = await client.request<SaturnChat>(
     'POST', '/chats/direct', { user_id: userId },
@@ -219,6 +272,35 @@ export async function createDirectChat({ userId }: { userId: string }) {
   });
 
   return { chat: apiChat };
+}
+
+export async function createDirectChatWithFallbackUser({
+  user,
+}: {
+  user: Pick<ApiUser, 'id' | 'firstName' | 'lastName'>;
+}) {
+  const result = await createDirectChat({ userId: user.id });
+  const { chat } = result;
+
+  if (chat.type === 'chatTypePrivate') {
+    chat.peerUserId ||= user.id;
+
+    if (!chat.title || chat.title === 'Saved Messages') {
+      const fallbackTitle = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+      if (fallbackTitle) {
+        chat.title = fallbackTitle;
+      }
+    }
+  }
+
+  sendApiUpdate({
+    '@type': 'updateChat',
+    id: chat.id,
+    chat,
+    noTopChatsRequest: true,
+  });
+
+  return result;
 }
 
 export async function createGroupChat({

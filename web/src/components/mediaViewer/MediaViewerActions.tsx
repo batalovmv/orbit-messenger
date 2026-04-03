@@ -385,7 +385,7 @@ export default memo(withGlobal<OwnProps>(
     item, canUpdateMedia,
   }): Complete<StateProps> => {
     const tabState = selectTabState(global);
-    const { origin } = tabState.mediaViewer;
+    const { origin } = tabState.mediaViewer || {};
 
     const message = item?.type === 'message' ? item.message : undefined;
     const avatarOwner = item?.type === 'avatar' ? item.avatarOwner : undefined;

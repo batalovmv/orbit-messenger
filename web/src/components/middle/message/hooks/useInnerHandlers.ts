@@ -6,7 +6,9 @@ import type { IAlbum, ThreadId } from '../../../../types';
 import { MAIN_THREAD_ID } from '../../../../api/types';
 import { MediaViewerOrigin } from '../../../../types';
 
-import { getMainUsername, getMessagePhoto, getWebPagePhoto, getWebPageVideo } from '../../../../global/helpers';
+import {
+  getMainUsername, getMessagePhoto, getWebPagePhoto, getWebPageVideo, hasMessageTtl,
+} from '../../../../global/helpers';
 import { getMessageReplyInfo } from '../../../../global/helpers/replies';
 import { tryParseDeepLink } from '../../../../util/deepLinkParser';
 
@@ -133,8 +135,19 @@ export default function useInnerHandlers({
     });
   });
 
+  const handleReadMedia = useLastCallback((): void => {
+    markMessagesRead({ chatId, messageIds: [messageId] });
+  });
+
+  const shouldMarkOneTimeMediaAsRead = hasMessageTtl(message)
+    && (!message.isOutgoing || isSavedMessages)
+    && !isScheduled;
+
   const openMediaViewerWithPhotoOrVideo = useLastCallback((withDynamicLoading: boolean): void => {
     if (paidMedia && !paidMedia.isBought) return;
+    if (shouldMarkOneTimeMediaAsRead) {
+      handleReadMedia();
+    }
     if (withDynamicLoading) {
       searchChatMediaMessages({ chatId, threadId, currentMediaMessageId: messageId });
     }
@@ -188,10 +201,6 @@ export default function useInnerHandlers({
       origin: isScheduled ? MediaViewerOrigin.ScheduledAlbum : MediaViewerOrigin.Album,
       withDynamicLoading: !paidMedia,
     });
-  });
-
-  const handleReadMedia = useLastCallback((): void => {
-    markMessagesRead({ chatId, messageIds: [messageId] });
   });
 
   const handleCancelUpload = useLastCallback(() => {

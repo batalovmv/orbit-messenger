@@ -132,6 +132,10 @@ addActionHandler('loadTopUsers', async (global): Promise<void> => {
 });
 
 addActionHandler('loadContactList', async (global): Promise<void> => {
+  if (!global.currentUserId || global.auth.state !== 'authorizationStateReady') {
+    return;
+  }
+
   const contactList = await callApi('fetchContactList');
   if (!contactList) {
     return;

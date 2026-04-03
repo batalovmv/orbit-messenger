@@ -43,8 +43,6 @@ const AuthEmailLogin = ({
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
   const canSubmit = email.length > 3 && password.length >= 8 && !isLoading;
-  const isConnected = connectionState === 'connectionStateReady';
-
   useEffect(() => {
     if (!isPreloadInitiated) {
       isPreloadInitiated = true;

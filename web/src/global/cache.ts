@@ -130,7 +130,7 @@ export async function loadCache(initialState: GlobalState): Promise<GlobalState 
       setTimeout(() => {
         if (DEBUG) {
           // eslint-disable-next-line no-console
-          console.warn('Cache read timed out, starting fresh');
+          console.info('Cache read timed out, starting fresh');
         }
         resolve(undefined);
       }, IDB_READ_TIMEOUT);

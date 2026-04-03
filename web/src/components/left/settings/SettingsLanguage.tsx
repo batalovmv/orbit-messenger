@@ -33,6 +33,14 @@ type StateProps = {
 } & Pick<AccountSettings, 'canTranslate' | 'canTranslateChats' | 'doNotTranslate'>
 & Pick<SharedSettings, 'language' | 'languages'>;
 
+const LANGUAGE_SCREEN_FALLBACKS = {
+  doNotTranslate: 'Do Not Translate',
+  interfaceLanguage: 'Interface Language',
+  showTranslateButton: 'Show Translate Button',
+  showTranslateChatButton: 'Translate Entire Chats',
+  translateAbout: 'Show translation controls for messages and chats when they are available.',
+} as const;
+
 const SettingsLanguage: FC<OwnProps & StateProps> = ({
   isActive,
   isCurrentUserPremium,
@@ -57,6 +65,11 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
 
   const lang = useOldLang();
+  const getLanguageText = useLastCallback((key: string, fallback: string) => {
+    const translation = lang(key);
+
+    return translation === key ? fallback : translation;
+  });
 
   useEffect(() => {
     if (!languages?.length) {
@@ -116,7 +129,11 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       return originalNames.of(doNotTranslate[0])!;
     }
 
-    return lang('Languages', doNotTranslate.length);
+    const languagesLabel = lang('Languages', doNotTranslate.length);
+
+    return languagesLabel === 'Languages'
+      ? `${doNotTranslate.length} languages`
+      : languagesLabel;
   }, [doNotTranslate, lang, language]);
 
   const handleDoNotSelectOpen = useLastCallback(() => {
@@ -133,12 +150,15 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       {IS_TRANSLATION_SUPPORTED && (
         <div className="settings-item">
           <Checkbox
-            label={lang('ShowTranslateButton')}
+            label={getLanguageText('ShowTranslateButton', LANGUAGE_SCREEN_FALLBACKS.showTranslateButton)}
             checked={canTranslate}
             onCheck={handleShouldTranslateChange}
           />
           <Checkbox
-            label={lang('ShowTranslateChatButton')}
+            label={getLanguageText(
+              'ShowTranslateChatButton',
+              LANGUAGE_SCREEN_FALLBACKS.showTranslateChatButton,
+            )}
             checked={canTranslateChatsEnabled}
             disabled={!isCurrentUserPremium}
             rightIcon={!isCurrentUserPremium ? 'lock' : undefined}
@@ -150,18 +170,18 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
               narrow
               onClick={handleDoNotSelectOpen}
             >
-              {lang('DoNotTranslate')}
+              {getLanguageText('DoNotTranslate', LANGUAGE_SCREEN_FALLBACKS.doNotTranslate)}
               <span className="settings-item__current-value">{doNotTranslateText}</span>
             </ListItem>
           )}
           <p className="settings-item-description mb-0 mt-1">
-            {lang('lng_translate_settings_about')}
+            {getLanguageText('lng_translate_settings_about', LANGUAGE_SCREEN_FALLBACKS.translateAbout)}
           </p>
         </div>
       )}
       <div className="settings-item settings-item-picker">
         <h4 className="settings-item-header">
-          {lang('Localization.InterfaceLanguage')}
+          {getLanguageText('Localization.InterfaceLanguage', LANGUAGE_SCREEN_FALLBACKS.interfaceLanguage)}
         </h4>
         {options ? (
           <ItemPicker

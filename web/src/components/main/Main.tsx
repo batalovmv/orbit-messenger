@@ -97,6 +97,7 @@ export interface OwnProps {
 }
 
 type StateProps = {
+  isAuthReady?: boolean;
   isMasterTab?: boolean;
   currentUserId?: string;
   isLeftColumnOpen: boolean;
@@ -182,6 +183,7 @@ const Main = ({
   isReactionPickerOpen,
   isCurrentUserPremium,
   deleteFolderDialog,
+  isAuthReady,
   isMasterTab,
   noRightColumnAnimation,
   isSynced,
@@ -279,7 +281,7 @@ const Main = ({
 
   // Initial API calls
   useEffect(() => {
-    if (isMasterTab && isSynced) {
+    if (isMasterTab && isSynced && isAuthReady && currentUserId) {
       updateIsOnline({ isOnline: true });
       loadConfig();
       loadAppConfig();
@@ -290,11 +292,11 @@ const Main = ({
       loadAuthorizations();
       loadPasswordInfo();
     }
-  }, [isMasterTab, isSynced]);
+  }, [currentUserId, isAuthReady, isMasterTab, isSynced]);
 
   // Initial API calls
   useEffect(() => {
-    if (isMasterTab && isSynced && isAppConfigLoaded && !isAccountFrozen) {
+    if (isMasterTab && isSynced && isAuthReady && currentUserId && isAppConfigLoaded && !isAccountFrozen) {
       loadAllChats({ listType: 'saved' });
       loadPromoData();
       loadContentSettings();
@@ -322,15 +324,16 @@ const Main = ({
       loadQuickReplies();
       loadTimezones();
     }
-  }, [isMasterTab, isSynced, isAppConfigLoaded, isAccountFrozen]);
+  }, [currentUserId, isAuthReady, isMasterTab, isSynced, isAppConfigLoaded, isAccountFrozen]);
 
   // Initial Premium API calls
   useEffect(() => {
-    if (isMasterTab && isCurrentUserPremium && isAppConfigLoaded && !isAccountFrozen) {
+    if (isMasterTab && isAuthReady && currentUserId
+      && isCurrentUserPremium && isAppConfigLoaded && !isAccountFrozen) {
       loadDefaultStatusIcons();
       loadRecentEmojiStatuses();
     }
-  }, [isCurrentUserPremium, isMasterTab, isAppConfigLoaded, isAccountFrozen]);
+  }, [currentUserId, isAuthReady, isCurrentUserPremium, isMasterTab, isAppConfigLoaded, isAccountFrozen]);
 
   // Language-based API calls
   useEffect(() => {
@@ -632,6 +635,7 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       currentUserId,
+      isAuthReady: global.auth.state === 'authorizationStateReady',
       isLeftColumnOpen: isLeftColumnShown,
       isMiddleColumnOpen: Boolean(chatId),
       isRightColumnOpen: selectIsRightColumnShown(global, isMobile),

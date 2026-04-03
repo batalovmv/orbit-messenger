@@ -41,7 +41,7 @@ addActionHandler('closeMediaViewer', (global, actions, payload): ActionReturnTyp
   const { tabId = getCurrentTabId() } = payload || {};
   const {
     volume, isMuted, playbackRate, isHidden,
-  } = selectTabState(global, tabId).mediaViewer;
+  } = selectTabState(global, tabId).mediaViewer || {};
 
   return updateTabState(global, {
     mediaViewer: {
@@ -163,7 +163,7 @@ addActionHandler('setMediaViewerVolume', (global, actions, payload): ActionRetur
 
   return updateTabState(global, {
     mediaViewer: {
-      ...selectTabState(global, tabId).mediaViewer,
+      ...(selectTabState(global, tabId).mediaViewer || {}),
       volume,
       isMuted: false,
     },
@@ -186,7 +186,7 @@ addActionHandler('setMediaViewerPlaybackRate', (global, actions, payload): Actio
 
   return updateTabState(global, {
     mediaViewer: {
-      ...selectTabState(global, tabId).mediaViewer,
+      ...(selectTabState(global, tabId).mediaViewer || {}),
       playbackRate,
     },
   }, tabId);
@@ -200,7 +200,7 @@ addActionHandler('setMediaViewerMuted', (global, actions, payload): ActionReturn
 
   return updateTabState(global, {
     mediaViewer: {
-      ...selectTabState(global, tabId).mediaViewer,
+      ...(selectTabState(global, tabId).mediaViewer || {}),
       isMuted,
     },
   }, tabId);
@@ -211,7 +211,7 @@ addActionHandler('setMediaViewerHidden', (global, actions, payload): ActionRetur
 
   return updateTabState(global, {
     mediaViewer: {
-      ...selectTabState(global, tabId).mediaViewer,
+      ...(selectTabState(global, tabId).mediaViewer || {}),
       isHidden,
     },
   }, tabId);

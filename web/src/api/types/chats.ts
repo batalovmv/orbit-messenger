@@ -1,6 +1,12 @@
 import type { ApiBotCommand } from './bots';
 import type {
-  ApiChatReactions, ApiFormattedText, ApiInputMessageReplyInfo, ApiInputSuggestedPostInfo, ApiPhoto, ApiStickerSet,
+  ApiChatReactions,
+  ApiFormattedText,
+  ApiInputMessageReplyInfo,
+  ApiInputSuggestedPostInfo,
+  ApiMessage,
+  ApiPhoto,
+  ApiStickerSet,
 } from './messages';
 import type { ApiChatInviteImporter, ApiRestrictionReason } from './misc';
 import type {
@@ -28,6 +34,7 @@ export interface ApiChat {
   folderId?: number;
   type: ApiChatType;
   title: string;
+  lastMessage?: ApiMessage;
   peerUserId?: string; // Saturn: for DM chats, the other user's ID (differs from chatId)
   isVerified?: true;
   areSignaturesShown?: boolean;

@@ -55,7 +55,7 @@
     }
   }
 
-  &:not(.standalone):last-of-type {
+  &:not(.standalone) {
     border-bottom: 0.5rem solid transparent; // `margin` does not help, and `padding` affects forum indicator height
   }
 

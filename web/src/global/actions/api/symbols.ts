@@ -867,7 +867,7 @@ addActionHandler('loadRecentEmojiStatuses', async (global): Promise<void> => {
   }
 
   global = getGlobal();
-  global = updateRecentStatusCustomEmojis(global, result.hash, result.emojiStatuses!);
+  global = updateRecentStatusCustomEmojis(global, result.hash, result.emojiStatuses);
   setGlobal(global);
 });
 

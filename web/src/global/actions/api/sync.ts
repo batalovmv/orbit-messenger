@@ -1,7 +1,7 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
-import type { ThreadId, ThreadLocalState } from '../../../types';
 import type { ApiMessage, ApiPoll } from '../../../api/types';
+import type { ThreadId, ThreadLocalState } from '../../../types';
 import type { RequiredGlobalActions } from '../../index';
 import type { ActionReturnType, GlobalState } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
@@ -111,14 +111,19 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
 
         // Store last messages so chat list shows previews
         if (result.messages?.length) {
-          const byId = buildCollectionByKey(result.messages, 'id');
-          for (const chatId of result.chatIds) {
-            const lastMsgId = result.lastMessageByChatId[chatId];
-            if (lastMsgId && byId[lastMsgId]) {
-              global = addChatMessagesById(global, chatId, { [lastMsgId]: byId[lastMsgId] });
+          result.messages.forEach((message: ApiMessage) => {
+            const chatLastMessageId = result.lastMessageByChatId[message.chatId];
+            if (!chatLastMessageId || chatLastMessageId !== message.id) {
+              return;
             }
-          }
+
+            global = addChatMessagesById(global, message.chatId, { [message.id]: message });
+          });
         }
+
+        result.polls?.forEach((poll: ApiPoll) => {
+          global = updatePoll(global, poll.id, poll);
+        });
       }
 
       global = {
@@ -145,7 +150,7 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
   })();
 });
 
-async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions: RequiredGlobalActions) {
+async function _loadAndReplaceMessages<T extends GlobalState>(global: T, actions: RequiredGlobalActions) {
   let areMessagesLoaded = false;
 
   global = getGlobal();

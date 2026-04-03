@@ -20,8 +20,13 @@ function consumeCachedIds() {
   }
 }
 
-export function registerChatId(id: string) { knownChatIds.add(id); }
-export function unregisterChatId(id: string) { knownChatIds.delete(id); }
+export function registerChatId(id: string) {
+  knownChatIds.add(id);
+}
+
+export function unregisterChatId(id: string) {
+  knownChatIds.delete(id);
+}
 
 export function isUserId(entityId: string) {
   if (isUuid(entityId)) {

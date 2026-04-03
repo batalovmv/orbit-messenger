@@ -29,6 +29,14 @@ import ListItem from '../../ui/ListItem';
 
 const DEFAULT_REACTION_SIZE = 1.5 * REM;
 
+const STICKERS_SCREEN_FALLBACKS = {
+  emojiPacks: 'Emoji',
+  dynamicPackOrder: 'Dynamic pack order',
+  dynamicPackOrderInfo: 'Frequently used sticker packs will move to the top of the list.',
+  myStickerSets: 'My sticker sets',
+  stickersBotInfo: 'Get more stickers and emoji packs from @stickers.',
+} as const;
+
 type OwnProps = {
   isActive?: boolean;
   onReset: () => void;
@@ -64,6 +72,33 @@ const SettingsStickers: FC<OwnProps & StateProps> = ({
     openSettingsScreen,
   } = getActions();
   const lang = useOldLang();
+
+  const getStickerScreenText = useCallback((key: string, fallback: string) => {
+    const translation = lang(key);
+
+    return translation === key ? fallback : translation;
+  }, [lang]);
+
+  const dynamicPackOrderLabel = getStickerScreenText(
+    'InstalledStickers.DynamicPackOrder',
+    STICKERS_SCREEN_FALLBACKS.dynamicPackOrder,
+  );
+  const emojiPacksLabel = getStickerScreenText(
+    'StickersList.EmojiItem',
+    STICKERS_SCREEN_FALLBACKS.emojiPacks,
+  );
+  const dynamicPackOrderInfo = getStickerScreenText(
+    'InstalledStickers.DynamicPackOrderInfo',
+    STICKERS_SCREEN_FALLBACKS.dynamicPackOrderInfo,
+  );
+  const myStickerSetsLabel = getStickerScreenText(
+    'ChooseStickerMyStickerSets',
+    STICKERS_SCREEN_FALLBACKS.myStickerSets,
+  );
+  const stickersBotInfo = getStickerScreenText(
+    'StickersBotInfo',
+    STICKERS_SCREEN_FALLBACKS.stickersBotInfo,
+  );
 
   const stickerSettingsRef = useRef<HTMLDivElement>();
   const { observe: observeIntersectionForCovers } = useIntersectionObserver({ rootRef: stickerSettingsRef });
@@ -105,7 +140,7 @@ const SettingsStickers: FC<OwnProps & StateProps> = ({
           onClick={() => openSettingsScreen({ screen: SettingsScreens.CustomEmoji })}
           icon="smile"
         >
-          {lang('StickersList.EmojiItem')}
+          {emojiPacksLabel}
           {customEmojiSetIds && <span className="settings-item__current-value">{customEmojiSetIds.length}</span>}
         </ListItem>
         {defaultReaction && (
@@ -127,21 +162,21 @@ const SettingsStickers: FC<OwnProps & StateProps> = ({
       </div>
       <div className="settings-item">
         <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('InstalledStickers.DynamicPackOrder')}
+          {dynamicPackOrderLabel}
         </h4>
         <Checkbox
-          label={lang('InstalledStickers.DynamicPackOrder')}
+          label={dynamicPackOrderLabel}
           checked={shouldUpdateStickerSetOrder}
           onCheck={handleSuggestStickerSetOrderChange}
         />
         <p className="settings-item-description mt-3" dir="auto">
-          {lang('InstalledStickers.DynamicPackOrderInfo')}
+          {dynamicPackOrderInfo}
         </p>
       </div>
       {stickerSets && (
         <div className="settings-item">
           <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
-            {lang('ChooseStickerMyStickerSets')}
+            {myStickerSetsLabel}
           </h4>
           <div ref={stickerSettingsRef}>
             {stickerSets.map((stickerSet: ApiStickerSet) => (
@@ -155,7 +190,7 @@ const SettingsStickers: FC<OwnProps & StateProps> = ({
             ))}
           </div>
           <p className="settings-item-description mt-3" dir="auto">
-            {renderText(lang('StickersBotInfo'), ['links'])}
+            {renderText(stickersBotInfo, ['links'])}
           </p>
         </div>
       )}

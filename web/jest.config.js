@@ -8,6 +8,7 @@ export default {
   },
   testPathIgnorePatterns: [
     '<rootDir>/tests/playwright/',
+    '<rootDir>/tests/playwright-live/',
     '<rootDir>/node_modules/',
     '<rootDir>/legacy_notes_and_workbook/',
     '<rootDir>/client/src/stylesheets/',

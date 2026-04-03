@@ -8,12 +8,11 @@ import {
   deleteContact,
   replaceUserStatuses,
   updateChat,
-
   updateUser,
   updateUserFullInfo,
 } from '../../reducers';
 import {
-  selectIsChatWithSelf, selectIsCurrentUserPremium, selectUser, selectUserFullInfo,
+  selectIsChatWithSelf, selectIsCurrentUserPremium, selectUserFullInfo,
 } from '../../selectors';
 
 const updateStatusesOnFullyIdle = throttleWithFullyIdle(flushStatusUpdates);
@@ -55,13 +54,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         }
       });
 
-      const localUser = selectUser(global, update.id);
-
       global = updateUser(global, update.id, update.user);
       if (update.fullInfo) {
         global = updateUserFullInfo(global, update.id, update.fullInfo);
       }
-
 
       return global;
     }

@@ -212,7 +212,7 @@ export function buildInputPoll(pollParams: ApiNewPoll, randomId: bigint) {
 
   const poll = new GramJs.Poll({
     id: randomId,
-    publicVoters: summary.isPublic,
+    publicVoters: summary.isPublic ? true : undefined,
     question: buildInputTextWithEntities(summary.question),
     answers: summary.answers.map(({ text, option }) => {
       return new GramJs.PollAnswer({
@@ -220,8 +220,8 @@ export function buildInputPoll(pollParams: ApiNewPoll, randomId: bigint) {
         option: deserializeBytes(option),
       });
     }),
-    quiz: summary.quiz,
-    multipleChoice: summary.multipleChoice,
+    quiz: summary.quiz ? true : undefined,
+    multipleChoice: summary.multipleChoice ? true : undefined,
   });
 
   if (!quiz) {
@@ -246,7 +246,7 @@ export function buildInputPollFromExisting(poll: ApiPoll, shouldClose = false) {
   return new GramJs.InputMediaPoll({
     poll: new GramJs.Poll({
       id: BigInt(poll.id),
-      publicVoters: poll.summary.isPublic,
+      publicVoters: poll.summary.isPublic ? true : undefined,
       question: buildInputTextWithEntities(poll.summary.question),
       answers: poll.summary.answers.map(({ text, option }) => {
         return new GramJs.PollAnswer({
@@ -254,11 +254,11 @@ export function buildInputPollFromExisting(poll: ApiPoll, shouldClose = false) {
           option: deserializeBytes(option),
         });
       }),
-      quiz: poll.summary.quiz,
-      multipleChoice: poll.summary.multipleChoice,
+      quiz: poll.summary.quiz ? true : undefined,
+      multipleChoice: poll.summary.multipleChoice ? true : undefined,
       closeDate: poll.summary.closeDate,
       closePeriod: poll.summary.closePeriod,
-      closed: shouldClose ? true : poll.summary.closed,
+      closed: shouldClose || poll.summary.closed ? true : undefined,
     }),
     correctAnswers: poll.results.results?.filter((o) => o.isCorrect).map((o) => deserializeBytes(o.option)),
     solution: poll.results.solution,

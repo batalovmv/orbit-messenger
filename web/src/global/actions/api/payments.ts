@@ -10,15 +10,13 @@ import type {
 } from '../../types';
 import { PaymentStep } from '../../../types';
 
-import { DEBUG_PAYMENT_SMART_GLOCAL, STARS_CURRENCY_CODE, TON_CURRENCY_CODE } from '../../../config';
+import { DEBUG_PAYMENT_SMART_GLOCAL } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import * as langProvider from '../../../util/oldLangProvider';
 import { getStripeError } from '../../../util/payments/stripe';
 import { buildQueryString } from '../../../util/requestQuery';
-import { getServerTime } from '../../../util/serverTime';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/saturn';
-import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   getRequestInputInvoice,
   getRequestInputSavedStarGift,
@@ -34,7 +32,6 @@ import {
   setRequestInfoId,
   setSmartGlocalCardInfo,
   setStripeCardInfo,
-  updateChatFullInfo,
   updatePayment,
   updateShippingOptions,
   updateStarsPayment,
@@ -42,19 +39,15 @@ import {
 import { updateTabState } from '../../reducers/tabs';
 import {
   selectChat,
-  selectChatFullInfo,
   selectIsCurrentUserFrozen,
   selectPaymentInputInvoice,
   selectPaymentRequestId,
   selectProviderPublicToken,
   selectProviderPublishableKey,
   selectSmartGlocalCredentials,
-  selectStarsPayment,
   selectStripeCredentials,
   selectTabState,
 } from '../../selectors';
-
-const LOCAL_BOOST_COOLDOWN = 86400; // 24 hours
 
 addActionHandler('validateRequestedInfo', (global, actions, payload): ActionReturnType => {
   const { requestInfo, saveInfo, tabId = getCurrentTabId() } = payload;
@@ -296,7 +289,7 @@ addActionHandler('sendStarPaymentForm', async (global, actions, payload): Promis
     return;
   }
 
-  const formId = directInfo?.formId!;
+  const formId = directInfo?.formId;
 
   global = updateStarsPayment(global, { status: 'pending' }, tabId);
   setGlobal(global);
@@ -594,7 +587,6 @@ async function validateRequestedInfo<T extends GlobalState>(
   setGlobal(global);
 }
 
-
 addActionHandler('checkGiftCode', async (global, actions, payload): Promise<void> => {
   const { slug, message, tabId = getCurrentTabId() } = payload;
 
@@ -637,7 +629,7 @@ addActionHandler('applyGiftCode', async (global, actions, payload): Promise<void
 
 addActionHandler('launchPrepaidGiveaway', async (global, actions, payload): Promise<void> => {
   const {
-    chatId, giveawayId, paymentPurpose, tabId = getCurrentTabId(),
+    chatId, giveawayId, paymentPurpose,
   } = payload;
 
   const chat = selectChat(global, chatId);
@@ -645,7 +637,7 @@ addActionHandler('launchPrepaidGiveaway', async (global, actions, payload): Prom
 
   const additionalChannels = paymentPurpose?.additionalChannelIds?.map((id) => selectChat(global, id)).filter(Boolean);
 
-  const result = await callApi('launchPrepaidGiveaway', {
+  await callApi('launchPrepaidGiveaway', {
     chat,
     giveawayId,
     paymentPurpose: {
@@ -660,12 +652,11 @@ addActionHandler('launchPrepaidGiveaway', async (global, actions, payload): Prom
       amount: paymentPurpose.amount,
     },
   });
-
 });
 
 addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload): Promise<void> => {
   const {
-    chatId, giveawayId, paymentPurpose, tabId = getCurrentTabId(),
+    chatId, giveawayId, paymentPurpose,
   } = payload;
 
   const chat = selectChat(global, chatId);
@@ -673,7 +664,7 @@ addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload):
 
   const additionalChannels = paymentPurpose?.additionalChannelIds?.map((id) => selectChat(global, id)).filter(Boolean);
 
-  const result = await callApi('launchPrepaidGiveaway', {
+  await callApi('launchPrepaidGiveaway', {
     chat,
     giveawayId,
     paymentPurpose: {
@@ -690,7 +681,6 @@ addActionHandler('launchPrepaidStarsGiveaway', async (global, actions, payload):
       users: paymentPurpose.users,
     },
   });
-
 });
 
 addActionHandler('upgradeGift', async (global, actions, payload): Promise<void> => {

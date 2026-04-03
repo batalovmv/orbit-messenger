@@ -161,13 +161,13 @@ const FullNameTitle = ({
               shouldCleanup
             >
               <CustomEmoji
-                  className={buildClassName('no-selection', !withStatusTextColor && styles.statusPrimaryColor)}
-                  documentId={emojiStatus.documentId}
-                  size={emojiStatusSize}
-                  loopLimit={!noLoopLimit ? EMOJI_STATUS_LOOP_LIMIT : undefined}
-                  observeIntersectionForLoading={observeIntersection}
-                  onClick={onEmojiStatusClick}
-                />
+                className={buildClassName('no-selection', !withStatusTextColor && styles.statusPrimaryColor)}
+                documentId={emojiStatus.documentId}
+                size={emojiStatusSize}
+                loopLimit={!noLoopLimit ? EMOJI_STATUS_LOOP_LIMIT : undefined}
+                observeIntersectionForLoading={observeIntersection}
+                onClick={onEmojiStatusClick}
+              />
             </Transition>
           )}
           {canShowEmojiStatus && !emojiStatus && isPremium && <StarIcon />}

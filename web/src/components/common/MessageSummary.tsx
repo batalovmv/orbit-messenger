@@ -69,6 +69,18 @@ function MessageSummary({
 
   const statefulContent = groupStatefulContent({ poll, story, webPage });
 
+  if (message.searchSnippet?.text) {
+    const snippetText = trimText(message.searchSnippet.text, truncateLength);
+
+    return (
+      <span>
+        {renderText(snippetText, ['emoji', 'highlight'], {
+          highlight: message.searchSnippet.highlight || highlight,
+        })}
+      </span>
+    );
+  }
+
   if (!extractedText && !hasPoll && !isAction) {
     const summaryText = forcedText?.text
       || getMessageSummaryText(lang, message, statefulContent, noEmoji, truncateLength);
@@ -122,7 +134,6 @@ export default memo(withGlobal<OwnProps>(
   (global, { message }): Complete<StateProps> => {
     const poll = selectPollFromMessage(global, message);
     const webPage = selectWebPageFromMessage(global, message);
-    const storyData = message.content?.storyData;
     const story = undefined;
 
     return {

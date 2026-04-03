@@ -13,7 +13,7 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
 export function callApi<T extends keyof Methods>(fnName: T, ...args: MethodArgs<T>): MethodResponse<T>;
 export function callApi(fnName: string, ...args: any[]): any;
 export function callApi(fnName: string, ...args: any[]): any {
-  const method = (methods as Record<string, Function>)[fnName];
+  const method = (methods as Record<string, (...args: any[]) => unknown>)[fnName];
   if (!method) {
     if (DEBUG) {
       // eslint-disable-next-line no-console
@@ -26,4 +26,5 @@ export function callApi(fnName: string, ...args: any[]): any {
 
 export function cancelApiProgress(progressCallback: ApiOnProgress) {
   progressCallback.isCanceled = true;
+  progressCallback.abort?.();
 }

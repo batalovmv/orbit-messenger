@@ -1,6 +1,7 @@
 import type {
+  ApiDocument,
   ApiFormattedText,
-  ApiMessage, ApiPoll, ApiPollResult, ApiQuickReply,
+  ApiMessage, ApiPhoto, ApiPoll, ApiPollResult, ApiQuickReply, ApiSticker, ApiVideo,
   ApiWebPage,
   ApiWebPageFull,
 } from '../../api/types';
@@ -23,7 +24,7 @@ import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
   areSortedArraysEqual, excludeSortedArray, omit, omitUndefined, pick, pickTruthy, unique,
 } from '../../util/iteratees';
-import { isLocalMessageId, type MessageKey } from '../../util/keys/messageKey';
+import { buildMessageKey, isLocalMessageId, type MessageKey } from '../../util/keys/messageKey';
 import { unload } from '../../util/mediaLoader';
 import {
   getAllMessageMediaHashes,
@@ -76,10 +77,104 @@ function mergeMessageContent(
     return existingContent;
   }
 
-  return omitUndefined({
-    ...existingContent,
+  const mergedContent = omitUndefined({
     ...incomingContent,
+    photo: mergePhotoContent(existingContent.photo, incomingContent.photo),
+    video: mergeVideoContent(existingContent.video, incomingContent.video),
+    document: mergeDocumentContent(existingContent.document, incomingContent.document),
+    sticker: mergeStickerContent(existingContent.sticker, incomingContent.sticker),
+    albumMedia: mergeAlbumMediaContent(existingContent.albumMedia, incomingContent.albumMedia),
   });
+
+  return areDeepEqual(incomingContent, mergedContent) ? incomingContent : mergedContent;
+}
+
+function mergePhotoContent(existingPhoto?: ApiPhoto, incomingPhoto?: ApiPhoto) {
+  if (!existingPhoto || !incomingPhoto || existingPhoto.id !== incomingPhoto.id) {
+    return incomingPhoto;
+  }
+
+  return omitUndefined({
+    ...incomingPhoto,
+    blobUrl: incomingPhoto.blobUrl ?? existingPhoto.blobUrl,
+    thumbnail: incomingPhoto.thumbnail ?? existingPhoto.thumbnail,
+  });
+}
+
+function mergeVideoContent(existingVideo?: ApiVideo, incomingVideo?: ApiVideo) {
+  if (!existingVideo || !incomingVideo || existingVideo.id !== incomingVideo.id) {
+    return incomingVideo;
+  }
+
+  return omitUndefined({
+    ...incomingVideo,
+    blobUrl: incomingVideo.blobUrl ?? existingVideo.blobUrl,
+    previewBlobUrl: incomingVideo.previewBlobUrl ?? existingVideo.previewBlobUrl,
+    thumbnail: incomingVideo.thumbnail ?? existingVideo.thumbnail,
+  });
+}
+
+function mergeDocumentContent(existingDocument?: ApiDocument, incomingDocument?: ApiDocument) {
+  if (!existingDocument || !incomingDocument || existingDocument.id !== incomingDocument.id) {
+    return incomingDocument;
+  }
+
+  return omitUndefined({
+    ...incomingDocument,
+    previewBlobUrl: incomingDocument.previewBlobUrl ?? existingDocument.previewBlobUrl,
+    thumbnail: incomingDocument.thumbnail ?? existingDocument.thumbnail,
+  });
+}
+
+function mergeStickerContent(existingSticker?: ApiSticker, incomingSticker?: ApiSticker) {
+  if (!existingSticker || !incomingSticker || existingSticker.id !== incomingSticker.id) {
+    return incomingSticker;
+  }
+
+  return omitUndefined({
+    ...incomingSticker,
+    thumbnail: incomingSticker.thumbnail ?? existingSticker.thumbnail,
+    isPreloadedGlobally: incomingSticker.isPreloadedGlobally ?? existingSticker.isPreloadedGlobally,
+  });
+}
+
+function mergeAlbumMediaContent(
+  existingAlbum?: ApiMessage['content']['albumMedia'],
+  incomingAlbum?: ApiMessage['content']['albumMedia'],
+) {
+  if (!existingAlbum || !incomingAlbum || existingAlbum.length !== incomingAlbum.length) {
+    return incomingAlbum;
+  }
+
+  const mergedAlbum = incomingAlbum.map((item, index) => {
+    const existingItem = existingAlbum[index];
+    if (!existingItem || existingItem.mediaType !== item.mediaType || existingItem.id !== item.id) {
+      return item;
+    }
+
+    if (item.mediaType === 'photo' && existingItem.mediaType === 'photo') {
+      return mergePhotoContent(existingItem, item) || item;
+    }
+
+    if (item.mediaType === 'video' && existingItem.mediaType === 'video') {
+      return mergeVideoContent(existingItem, item) || item;
+    }
+
+    return item;
+  });
+
+  return areDeepEqual(incomingAlbum, mergedAlbum) ? incomingAlbum : mergedAlbum;
+}
+
+function mergeMessageReactions(
+  existingReactions: ApiMessage['reactions'] | undefined,
+  incomingReactions: ApiMessage['reactions'] | undefined,
+): ApiMessage['reactions'] | undefined {
+  if (!incomingReactions) {
+    return existingReactions;
+  }
+
+  return incomingReactions;
 }
 
 function mergeApiMessages(existingMessage: ApiMessage | undefined, incomingMessage: ApiMessage) {
@@ -91,6 +186,7 @@ function mergeApiMessages(existingMessage: ApiMessage | undefined, incomingMessa
     ...existingMessage,
     ...incomingMessage,
     content: mergeMessageContent(existingMessage.content, incomingMessage.content),
+    reactions: mergeMessageReactions(existingMessage.reactions, incomingMessage.reactions),
   });
 
   return areDeepEqual(existingMessage, mergedMessage) ? existingMessage : mergedMessage;
@@ -269,6 +365,13 @@ export function updateChatMessage<T extends GlobalState>(
           isRoundVideo: true,
         },
       };
+    } else {
+      messageUpdate.content = {
+        action: {
+          mediaType: 'action',
+          type: 'expired',
+        },
+      };
     }
   }
 
@@ -285,6 +388,7 @@ export function updateChatMessage<T extends GlobalState>(
     ...message,
     ...messageUpdate,
     text,
+    reactions: mergeMessageReactions(message?.reactions, messageUpdate.reactions),
   });
 
   if (!updatedMessage.id) {
@@ -665,6 +769,22 @@ export function updateScheduledMessages<T extends GlobalState>(
   };
 }
 
+export function replaceScheduledMessages<T extends GlobalState>(
+  global: T, chatId: string, newById: Record<number, ApiMessage>,
+): T {
+  return {
+    ...global,
+    scheduledMessages: {
+      byChatId: {
+        ...global.scheduledMessages.byChatId,
+        [chatId]: {
+          byId: newById,
+        },
+      },
+    },
+  };
+}
+
 export function updateQuickReplyMessages<T extends GlobalState>(
   global: T, update: Record<number, ApiMessage>,
 ): T {
@@ -822,6 +942,29 @@ export function updateUploadByMessageKey<T extends GlobalState>(
   };
 }
 
+export function clearUploadByMessage<T extends GlobalState>(
+  global: T,
+  message: Pick<ApiMessage, 'chatId' | 'id' | 'previousLocalId'>,
+  localId?: number,
+) {
+  const messageKeys = Array.from(new Set([
+    !isLocalMessageId(message.id) ? buildMessageKey(message.chatId, message.id) : undefined,
+    message.previousLocalId ? buildMessageKey(message.chatId, message.previousLocalId) : undefined,
+    localId !== undefined ? buildMessageKey(message.chatId, localId) : undefined,
+  ].filter((messageKey): messageKey is MessageKey => Boolean(messageKey))));
+
+  if (!messageKeys.length) {
+    return global;
+  }
+
+  return {
+    ...global,
+    fileUploads: {
+      byMessageKey: omit(global.fileUploads.byMessageKey, messageKeys),
+    },
+  };
+}
+
 export function updateQuickReplies<T extends GlobalState>(
   global: T,
   quickRepliesUpdate: Record<number, ApiQuickReply>,
@@ -888,18 +1031,34 @@ export function replaceWebPage<T extends GlobalState>(
 export function updatePoll<T extends GlobalState>(
   global: T,
   pollId: string,
-  pollUpdate: Partial<ApiPoll>,
+  pollUpdate: Partial<Omit<ApiPoll, 'summary' | 'results'>> & {
+    summary?: Partial<ApiPoll['summary']>;
+    results?: Partial<ApiPoll['results']>;
+  },
 ) {
   const poll = selectPoll(global, pollId);
+  const hasCompleteSummary = Boolean(pollUpdate.summary?.question)
+    && Array.isArray(pollUpdate.summary?.answers);
+
+  if (!poll && !hasCompleteSummary) {
+    return global;
+  }
 
   const oldResults = poll?.results;
-  let newResults = oldResults || pollUpdate.results;
+  let mergedResults: ApiPoll['results'] = poll
+    ? { ...poll.results, ...pollUpdate.results }
+    : (pollUpdate.results || {});
+
   if (poll && pollUpdate.results?.results) {
     if (!poll.results || !pollUpdate.results.isMin) {
-      newResults = pollUpdate.results;
+      mergedResults = {
+        ...mergedResults,
+        ...pollUpdate.results,
+      };
     } else if (oldResults.results) {
       // Update voters counts, but keep local `isChosen` values
-      newResults = {
+      mergedResults = {
+        ...mergedResults,
         ...pollUpdate.results,
         results: pollUpdate.results.results.map((result) => ({
           ...result,
@@ -910,10 +1069,24 @@ export function updatePoll<T extends GlobalState>(
     }
   }
 
+  const mergedSummary: ApiPoll['summary'] = poll
+    ? {
+      ...poll.summary,
+      ...pollUpdate.summary,
+      question: pollUpdate.summary?.question || poll.summary.question,
+      answers: pollUpdate.summary?.answers || poll.summary.answers,
+    }
+    : {
+      ...pollUpdate.summary!,
+      question: pollUpdate.summary!.question!,
+      answers: pollUpdate.summary!.answers!,
+    };
+
   const updatedPoll = {
-    ...poll,
-    ...pollUpdate,
-    results: newResults,
+    mediaType: 'poll',
+    id: poll?.id || pollUpdate.id!,
+    summary: mergedSummary,
+    results: mergedResults,
   } satisfies ApiPoll;
   if (!updatedPoll.id) {
     return global;

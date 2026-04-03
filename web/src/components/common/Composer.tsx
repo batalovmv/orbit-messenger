@@ -13,7 +13,6 @@ import type {
   ApiBotMenuButton,
   ApiChat,
   ApiChatFullInfo,
-  ApiDisallowedGifts,
   ApiDraft,
   ApiFormattedText,
   ApiMessage,
@@ -56,6 +55,7 @@ import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterd
 import {
   canEditMedia,
   getAllowedAttachmentOptions,
+  getAttachmentMediaType,
   getMediaFilename,
   getMediaHash,
   getMessageDocumentPhoto,
@@ -94,7 +94,6 @@ import {
   selectNotifyException,
   selectPeer,
   selectPeerPaidMessagesStars,
-
   selectPerformanceSettingsValue,
   selectRequestedDraft,
   selectRequestedDraftFiles,
@@ -555,6 +554,7 @@ const Composer = ({
   }, [chatId, sendAsPeerIds]);
 
   const [attachments, setAttachments] = useState<ApiAttachment[]>([]);
+  const [isOneTimeMediaEnabled, enableOneTimeMedia, disableOneTimeMedia] = useFlag();
   const hasAttachments = Boolean(attachments.length);
   const [nextText, setNextText] = useState<ApiFormattedText | undefined>(undefined);
 
@@ -563,6 +563,36 @@ const Composer = ({
       updateShouldSaveAttachmentsCompression({ shouldSave: false });
     }
   }, [attachments]);
+
+  useEffect(() => {
+    if (!attachments.length) {
+      disableOneTimeMedia();
+      return;
+    }
+
+    const hasOneTimeAttachments = attachments.some((attachment) => attachment.ttlSeconds !== undefined);
+    const canKeepOneTimeAttachments = attachments.length === 1
+      && attachments.every((attachment) => {
+        const mediaType = getAttachmentMediaType(attachment);
+        return !attachment.shouldSendAsFile && (mediaType === 'photo' || mediaType === 'video');
+      });
+
+    if (hasOneTimeAttachments && !canKeepOneTimeAttachments) {
+      setAttachments((currentAttachments) => currentAttachments.map((attachment) => ({
+        ...attachment,
+        ttlSeconds: undefined,
+      })));
+      disableOneTimeMedia();
+      return;
+    }
+
+    if (attachments.every((attachment) => attachment.ttlSeconds !== undefined)) {
+      enableOneTimeMedia();
+      return;
+    }
+
+    disableOneTimeMedia();
+  }, [attachments, disableOneTimeMedia, enableOneTimeMedia]);
 
   const {
     canSendStickers, canSendGifs, canAttachMedia, canAttachPolls, canAttachEmbedLinks, canAttachToDoLists,
@@ -692,6 +722,22 @@ const Composer = ({
     insertNextText,
     editedMessage: editingMessage,
     shouldSendInHighQuality: attachmentSettings.shouldSendInHighQuality,
+    shouldSendOneTimeMedia: isOneTimeMediaEnabled,
+  });
+
+  const handleToggleOneTimeMedia = useLastCallback(() => {
+    const shouldEnableOneTimeMedia = !isOneTimeMediaEnabled;
+
+    if (shouldEnableOneTimeMedia) {
+      enableOneTimeMedia();
+    } else {
+      disableOneTimeMedia();
+    }
+
+    setAttachments((currentAttachments) => currentAttachments.map((attachment) => ({
+      ...attachment,
+      ttlSeconds: shouldEnableOneTimeMedia ? ONE_TIME_MEDIA_TTL_SECONDS : undefined,
+    })));
   });
 
   const mediaEditRequestRef = useRef(Date.now());
@@ -2015,8 +2061,10 @@ const Composer = ({
         isForCurrentMessageList={isForCurrentMessageList}
         isForMessage={isInMessageList}
         shouldSchedule={canSchedule && isInScheduledList}
-        canSchedule={canSchedule}
+        canSchedule={canSchedule && !isOneTimeMediaEnabled}
         forceDarkTheme={isInStoryViewer}
+        canSendOneTimeMedia={canSendOneTimeMedia}
+        isOneTimeMediaEnabled={isOneTimeMediaEnabled}
         onCaptionUpdate={onCaptionUpdate}
         onSendSilent={handleSendSilentAttachments}
         onSend={handleSendAttachmentsFromModal}
@@ -2024,12 +2072,13 @@ const Composer = ({
         onFileAppend={handleAppendFiles}
         onClear={handleClearAttachments}
         onAttachmentsUpdate={handleSetAttachments}
+        onToggleOneTimeMedia={handleToggleOneTimeMedia}
         onCustomEmojiSelect={handleCustomEmojiSelectAttachmentModal}
         onRemoveSymbol={removeSymbolAttachmentModal}
         onEmojiSelect={insertTextAndUpdateCursorAttachmentModal}
         editingMessage={editingMessage}
         onSendWhenOnline={handleSendWhenOnline}
-        canScheduleUntilOnline={canScheduleUntilOnline && !isViewOnceEnabled}
+        canScheduleUntilOnline={canScheduleUntilOnline && !isOneTimeMediaEnabled}
         paidMessagesStars={paidMessagesStars}
       />
       <PollModal
@@ -2542,10 +2591,11 @@ export default memo(withGlobal<OwnProps>(
       shouldSuggestStickers, shouldSuggestCustomEmoji, shouldUpdateStickerSetOrder, shouldPaidMessageAutoApprove,
     } = global.settings.byKey;
     const { language, shouldCollectDebugLogs } = selectSharedSettings(global);
+    const tabState = selectTabState(global);
+    const { messageIds: forwardMessageIds } = tabState.forwardMessages || {};
     const {
-      forwardMessages: { messageIds: forwardMessageIds },
       shouldOpenMessageMediaEditor,
-    } = selectTabState(global);
+    } = tabState;
     const baseEmojiKeywords = global.emojiKeywords[BASE_EMOJI_KEYWORD_LANG];
     const emojiKeywords = language !== BASE_EMOJI_KEYWORD_LANG ? global.emojiKeywords[language] : undefined;
     const botKeyboardMessageId = messageWithActualBotKeyboard ? messageWithActualBotKeyboard.id : undefined;
@@ -2558,7 +2608,6 @@ export default memo(withGlobal<OwnProps>(
     const requestedDraft = selectRequestedDraft(global, chatId);
     const requestedDraftFiles = selectRequestedDraftFiles(global, chatId);
 
-    const tabState = selectTabState(global);
     const isStoryViewerOpen = false;
 
     const currentMessageList = selectCurrentMessageList(global);
@@ -2601,9 +2650,10 @@ export default memo(withGlobal<OwnProps>(
     const effectId = areEffectsSupported && draft?.effectId;
     const effect = effectId ? global.availableEffectById[effectId] : undefined;
     const effectReactions = global.reactions.effectReactions;
+    const forwardMessages = tabState.forwardMessages || {};
 
     const maxMessageLength = global.config?.maxMessageLength || DEFAULT_MAX_MESSAGE_LENGTH;
-    const isForwarding = chatId === tabState.forwardMessages.toChatId;
+    const isForwarding = chatId === forwardMessages.toChatId;
     const isReplying = Boolean(draft?.replyInfo);
     const hasSuggestedPost = Boolean(draft?.suggestedPostInfo);
     const isAccountFrozen = selectIsCurrentUserFrozen(global);

@@ -31,6 +31,11 @@ type StateProps = Pick<AccountSettings, (
   canPlayAnimatedEmojis: boolean;
 };
 
+const CUSTOM_EMOJI_FALLBACKS = {
+  suggestAnimatedEmoji: 'Suggest animated emoji',
+  emojiBotInfo: 'Get more emoji packs from @stickers.',
+} as const;
+
 const SettingsCustomEmoji: FC<OwnProps & StateProps> = ({
   isActive,
   customEmojiSetIds,
@@ -41,6 +46,12 @@ const SettingsCustomEmoji: FC<OwnProps & StateProps> = ({
 }) => {
   const { openStickerSet, setSettingOption } = getActions();
   const lang = useOldLang();
+
+  const getCustomEmojiText = useCallback((key: string, fallback: string) => {
+    const translation = lang(key);
+
+    return translation === key ? fallback : translation;
+  }, [lang]);
 
   const stickerSettingsRef = useRef<HTMLDivElement>();
   const { observe: observeIntersectionForCovers } = useIntersectionObserver({ rootRef: stickerSettingsRef });
@@ -63,13 +74,21 @@ const SettingsCustomEmoji: FC<OwnProps & StateProps> = ({
   const customEmojiSets = useMemo(() => (
     customEmojiSetIds && Object.values(pick(stickerSetsById, customEmojiSetIds))
   ), [customEmojiSetIds, stickerSetsById]);
+  const suggestAnimatedEmojiLabel = getCustomEmojiText(
+    'SuggestAnimatedEmoji',
+    CUSTOM_EMOJI_FALLBACKS.suggestAnimatedEmoji,
+  );
+  const emojiBotInfo = getCustomEmojiText(
+    'EmojiBotInfo',
+    CUSTOM_EMOJI_FALLBACKS.emojiBotInfo,
+  );
 
   return (
     <div className="settings-content custom-scroll">
       {customEmojiSets && (
         <div className="settings-item">
           <Checkbox
-            label={lang('SuggestAnimatedEmoji')}
+            label={suggestAnimatedEmojiLabel}
             checked={shouldSuggestCustomEmoji}
             onCheck={handleSuggestCustomEmojiChange}
           />
@@ -85,7 +104,7 @@ const SettingsCustomEmoji: FC<OwnProps & StateProps> = ({
             ))}
           </div>
           <p className="settings-item-description mt-3" dir="auto">
-            {renderText(lang('EmojiBotInfo'), ['links'])}
+            {renderText(emojiBotInfo, ['links'])}
           </p>
         </div>
       )}

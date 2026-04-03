@@ -1,7 +1,6 @@
 import 'webpack-dev-server';
 import 'dotenv/config';
 
-import WebpackObfuscator from 'webpack-obfuscator';
 import WatchFilePlugin from '@mytonwallet/webpack-watch-file-plugin';
 import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
 import { statSync } from 'fs';
@@ -41,7 +40,8 @@ const {
 
 const CSP = `
   default-src 'self';
-  connect-src 'self' https://*.saturn.ac wss://*.saturn.ac blob: ${APP_ENV === 'development' ? 'http://localhost:* ws://localhost:* ipc:' : ''};
+  connect-src 'self' https://*.saturn.ac wss://*.saturn.ac blob:
+    ${APP_ENV === 'development' ? 'http://localhost:* ws://localhost:* ipc:' : ''};
   script-src 'self' 'wasm-unsafe-eval';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;

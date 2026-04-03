@@ -1,5 +1,5 @@
 import type {
-  ApiAvailableEffect, ApiMessage, ApiReaction, ApiReactionEmoji,
+  ApiAvailableEffect, ApiMessage, ApiReactionEmoji,
   ApiSavedReactionTag, ApiSticker, ApiTopicWithState,
 } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
@@ -96,7 +96,11 @@ addActionHandler('loadAvailableEffects', async (global): Promise<void> => {
     return;
   }
 
-  const { effects, emojis, stickers } = result as { effects: ApiAvailableEffect[]; emojis: ApiSticker[]; stickers: ApiSticker[] };
+  const { effects, emojis, stickers } = result as {
+    effects: ApiAvailableEffect[];
+    emojis: ApiSticker[];
+    stickers: ApiSticker[];
+  };
   const reactions: ApiReactionEmoji[] = [];
 
   const effectById = buildCollectionByKey(effects, 'id');
@@ -221,7 +225,7 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
     ? userReactions.filter((userReaction) => !isSameReaction(userReaction, reaction)) : [...userReactions, reaction];
 
   const limit = selectMaxUserReactions(global);
-  const trimmedRegularReactions = newUserReactions.filter((r) => r.type !== 'paid').slice(-limit) as ApiReaction[];
+  const trimmedRegularReactions = newUserReactions.filter((r) => r.type !== 'paid').slice(-limit);
   const localReactions = trimmedRegularReactions;
   const messageKey = getMessageKey(message);
 
@@ -593,7 +597,10 @@ addActionHandler('loadSavedReactionTags', async (global): Promise<void> => {
 
   global = getGlobal();
 
-  const tagsByKey = buildCollectionByCallback(result.tags as ApiSavedReactionTag[], (tag) => ([getReactionKey(tag.reaction), tag]));
+  const tagsByKey = buildCollectionByCallback(
+    result.tags as ApiSavedReactionTag[],
+    (tag) => ([getReactionKey(tag.reaction), tag]),
+  );
 
   global = {
     ...global,

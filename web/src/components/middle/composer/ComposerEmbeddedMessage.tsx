@@ -476,20 +476,28 @@ export default memo(withGlobal<OwnProps>(
   (global, {
     shouldForceShowEditing, chatId, threadId, messageListType,
   }): Complete<StateProps> => {
+    const tabState = selectTabState(global);
+    const forwardMessages = tabState.forwardMessages || {};
     const {
-      forwardMessages: {
-        fromChatId, toChatId, messageIds: forwardMessageIds, noAuthors, noCaptions,
-      },
+      fromChatId,
+      toChatId,
+      messageIds: forwardMessageIds,
+      noAuthors,
+      noCaptions,
+    } = forwardMessages;
+    const {
       isShareMessageModalShown: isModalShown,
       shouldPreventComposerAnimation,
-    } = selectTabState(global);
+    } = tabState;
 
     const editingId = messageListType === 'scheduled'
       ? selectEditingScheduledId(global, chatId)
       : selectEditingId(global, chatId, threadId);
     const shouldAnimate = selectCanAnimateInterface(global) && !shouldPreventComposerAnimation;
     const isForwarding = toChatId === chatId;
-    const forwardedMessages = forwardMessageIds?.map((id) => selectChatMessage(global, fromChatId!, id)!);
+    const forwardedMessages = fromChatId && forwardMessageIds
+      ? forwardMessageIds.map((id) => selectChatMessage(global, fromChatId, id)).filter(Boolean)
+      : undefined;
 
     const draft = selectDraft(global, chatId, threadId);
     const replyInfo = draft?.replyInfo;
@@ -500,7 +508,7 @@ export default memo(withGlobal<OwnProps>(
     let message: ApiMessage | undefined;
     if (editingId) {
       message = selectEditingMessage(global, chatId, threadId, messageListType);
-    } else if (isForwarding && forwardMessageIds!.length === 1) {
+    } else if (isForwarding && forwardMessageIds?.length === 1) {
       message = forwardedMessages?.[0];
     } else if (replyInfo && !shouldForceShowEditing) {
       message = selectChatMessage(global, replyInfo.replyToPeerId || chatId, replyInfo.replyToMsgId);
@@ -541,7 +549,7 @@ export default memo(withGlobal<OwnProps>(
       forward?.content?.text && Object.keys(forward.content).length > 1
     ));
 
-    const isContextMenuDisabled = isForwarding && forwardMessageIds!.length === 1
+    const isContextMenuDisabled = isForwarding && forwardMessageIds?.length === 1
       && Boolean(message?.content?.storyData);
 
     const isReplyToDiscussion = replyInfo?.replyToMsgId === threadId && !replyInfo.replyToPeerId;
@@ -555,7 +563,7 @@ export default memo(withGlobal<OwnProps>(
       message,
       sender,
       shouldAnimate,
-      forwardedMessagesCount: isForwarding ? forwardMessageIds!.length : undefined,
+      forwardedMessagesCount: isForwarding ? forwardMessageIds?.length : undefined,
       noAuthors,
       noCaptions,
       forwardsHaveCaptions,

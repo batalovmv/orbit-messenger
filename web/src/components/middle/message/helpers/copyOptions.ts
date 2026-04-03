@@ -54,7 +54,7 @@ export function getMessageCopyOptions(
 
   if (canImageBeCopied) {
     options.push({
-      label: 'lng_context_copy_image',
+      label: 'ContextCopyImage',
       icon: 'copy-media',
       handler: () => {
         Promise.resolve(mediaHash ? mediaLoader.fetch(mediaHash, ApiMediaFormat.BlobUrl) : photo.blobUrl)
@@ -112,7 +112,7 @@ export function getMessageCopyOptions(
 
   if (onCopyLink) {
     options.push({
-      label: 'lng_context_copy_message_link',
+      label: 'ContextCopyMessageLink',
       icon: 'link',
       handler: onCopyLink,
     });

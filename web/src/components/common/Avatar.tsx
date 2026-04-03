@@ -1,7 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { TeactNode } from '../../lib/teact/teact';
 import { memo, useMemo, useRef } from '../../lib/teact/teact';
-import { getActions } from '../../global';
 
 import type {
   ApiPeer, ApiPhoto, ApiWebDocument,

@@ -6,7 +6,6 @@ import type { ApiUser, ApiUserStatus } from '../../../api/types';
 
 import { sortUserIds } from '../../../global/helpers';
 import { filterPeersByQuery } from '../../../global/helpers/peers';
-
 import { callApi } from '../../../api/saturn';
 
 import useAppLayout from '../../../hooks/useAppLayout';

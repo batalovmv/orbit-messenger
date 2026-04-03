@@ -428,7 +428,6 @@ addActionHandler('sendInlineBotApiResult', async (global, actions, payload): Pro
     scheduleDate: scheduledAt,
     allowPaidStars,
   });
-
 });
 
 addActionHandler('sendInlineBotResult', async (global, actions, payload): Promise<void> => {

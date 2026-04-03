@@ -232,6 +232,7 @@ export interface LangPair {
   'Info': undefined;
   'SetUrlPlaceholder': undefined;
   'Notifications': undefined;
+  'AriaDismissNotificationBanner': undefined;
   'SavedMessagesInfo': undefined;
   'BlockedListNotFound': undefined;
   'TextCopied': undefined;
@@ -1111,6 +1112,7 @@ export interface LangPair {
   'VoipIncoming': undefined;
   'TimeJustNow': undefined;
   'MuteForForever': undefined;
+  'Common.Done': undefined;
   'NoViews': undefined;
   'LiveLocationUpdatedJustNow': undefined;
   'RightNow': undefined;
@@ -1461,6 +1463,9 @@ export interface LangPair {
   'GroupChatsSearchContext': undefined;
   'ChannelsSearchContext': undefined;
   'SearchFilterFrom': undefined;
+  'SearchFilterDate': undefined;
+  'SearchFilterDateFrom': undefined;
+  'SearchFilterDateTo': undefined;
   'FolderLinkSubtitleNew': undefined;
   'FolderLinkSubtitleAlready': undefined;
   'FolderLinkAddFolder': undefined;
@@ -1993,6 +1998,8 @@ export interface LangPair {
   'AttachmentMenuUngroupAllMedia': undefined;
   'AttachmentMenuEnableSpoiler': undefined;
   'AttachmentMenuDisableSpoiler': undefined;
+  'OneTimeMedia': undefined;
+  'OneTimeMediaViewed': undefined;
   'AttachmentDragAddItems': undefined;
   'AttachmentCaptionPlaceholder': undefined;
   'MessageSummaryTitle': undefined;
@@ -2047,6 +2054,8 @@ export interface LangPair {
   'ReplyToAnotherChat': undefined;
   'DoNotReply': undefined;
   'ChannelInfo': undefined;
+  'OpenInNewTab': undefined;
+  'PdfCannotPreview': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -2134,6 +2143,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ConversationScheduleMessageSendOn': {
     'date': V;
     'time': V;
+  };
+  'NotificationBannerChat': {
+    'chat': V;
   };
   'ChatListDeleteAndLeaveGroupConfirmation': {
     'chat': V;
@@ -2630,6 +2642,16 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'SearchContextCaption': {
     'type': V;
+  };
+  'SearchFilterDateFromValue': {
+    'date': V;
+  };
+  'SearchFilterDateToValue': {
+    'date': V;
+  };
+  'SearchFilterDateRangeValue': {
+    'from': V;
+    'to': V;
   };
   'FolderLinkTitleDescription': {
     'folder': V;
@@ -3722,6 +3744,12 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'MuteForHours': {
+    'count': V;
+  };
+  'MuteFor.Hours': {
+    'count': V;
+  };
+  'MuteFor.Days': {
     'count': V;
   };
   'LiveLocationUpdatedMinutesAgo': {

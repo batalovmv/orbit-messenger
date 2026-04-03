@@ -76,6 +76,10 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     (apiChat as any).unreadCount = chat.unread_count;
   }
 
+  if (chat.type === 'direct' && 'other_user' in chat && chat.other_user) {
+    apiChat.peerUserId = chat.other_user.id;
+  }
+
   return apiChat;
 }
 

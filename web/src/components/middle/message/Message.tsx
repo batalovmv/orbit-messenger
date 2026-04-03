@@ -101,7 +101,6 @@ import {
   selectMessageSummary,
   selectOutgoingStatus,
   selectPeer,
-
   selectPerformanceSettingsValue,
   selectPollFromMessage,
   selectReplyMessage,
@@ -203,7 +202,6 @@ import Poll from './Poll';
 import Reactions from './reactions/Reactions';
 import RoundVideo from './RoundVideo';
 import Sticker from './Sticker';
-
 import TodoList from './TodoList';
 import Video from './Video';
 import WebPage from './WebPage';
@@ -846,9 +844,7 @@ const Message = ({
     && !isInDocumentGroupNotLast && !isStoryMention && !hasTtl && !isAccountFrozen;
 
   const hasOutsideReactions = !withVoiceTranscription && hasReactions
-    && (isCustomShape || (
-      (photo || video || storyData || (location?.mediaType === 'geo')) && (!hasText || isInvertedMedia))
-    );
+    && (isCustomShape || isAlbum || photo || video || storyData || (location?.mediaType === 'geo'));
 
   const { className: peerColorClass, style: peerColorStyle } = usePeerColor({
     peer: messageColorPeer,
@@ -1140,7 +1136,6 @@ const Message = ({
         threadId={threadId}
         metaChildren={meta}
         observeIntersection={observeIntersectionForPlaying}
-        noRecentReactors={isChannel}
         tags={tags}
         isCurrentUserPremium={isPremium}
         isAccountFrozen={isAccountFrozen}
@@ -1926,7 +1921,6 @@ const Message = ({
             isCurrentUserPremium={isPremium}
             maxWidth={reactionsMaxWidth}
             observeIntersection={observeIntersectionForPlaying}
-            noRecentReactors={isChannel}
             tags={tags}
             isAccountFrozen={isAccountFrozen}
           />
@@ -2015,7 +2009,7 @@ export default memo(withGlobal<OwnProps>(
     const isThreadTop = message.id === threadId;
 
     const { replyToMsgId, replyToPeerId, replyFrom } = getMessageReplyInfo(message) || {};
-    const { peerId: storyReplyPeerId, storyId: storyReplyId } = getStoryReplyInfo(message) || {};
+    const { peerId: storyReplyPeerId, storyId: _storyReplyId } = getStoryReplyInfo(message) || {};
 
     const shouldHideReply = replyToMsgId && replyToMsgId === threadId;
     const replyMessage = selectReplyMessage(global, message);

@@ -52,7 +52,6 @@ import { renderTextWithEntities } from '../helpers/renderTextWithEntities';
 import { useViewTransition } from '../../../hooks/animations/useViewTransition';
 import { useVtn } from '../../../hooks/animations/useVtn';
 import useCollapsibleLines from '../../../hooks/element/useCollapsibleLines';
-import useEffectWithPrevDeps from '../../../hooks/useEffectWithPrevDeps';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
@@ -391,7 +390,11 @@ const ChatExtra = ({
         <div className={styles.personalChannel} style={createVtnStyle('personalChannel')}>
           <h3 className={styles.personalChannelTitle}>{oldLang('ProfileChannel')}</h3>
           <span className={styles.personalChannelSubscribers}>
-            {lang('Subscribers', { count: personalChannel.membersCount ?? 0 }, { pluralValue: personalChannel.membersCount ?? 0 })}
+            {lang(
+              'Subscribers',
+              { count: personalChannel.membersCount ?? 0 },
+              { pluralValue: personalChannel.membersCount ?? 0 },
+            )}
           </span>
           <Chat
             chatId={personalChannel.id}

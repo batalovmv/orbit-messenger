@@ -6,17 +6,14 @@ import type { ApiInitialArgs, ApiOnProgress, OnApiUpdate } from '../../types';
 import type { MethodArgs, MethodResponse, Methods } from '../methods/types';
 
 import Deferred from '../../../util/Deferred';
-import { initApi as initMethods, callApi as callMethod, cancelApiProgress as cancelProgress } from '../methods/init';
+import { callApi as callMethod, cancelApiProgress as cancelProgress, initApi as initMethods } from '../methods/init';
 
-let updateCallback: OnApiUpdate | undefined;
 let isInited = false;
 let initPromise: Promise<void> | undefined;
 let apiRequestsQueue: { fnName: any; args: any; deferred: Deferred<any> }[] = [];
 
 export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
   if (isInited) return Promise.resolve();
-
-  updateCallback = onUpdate;
 
   initPromise = initMethods(onUpdate, initialArgs).then(() => {
     isInited = true;
@@ -73,9 +70,9 @@ export function cancelApiProgress(progressCallback: ApiOnProgress) {
   cancelProgress(progressCallback);
 }
 
-export function cancelApiProgressMaster(progressCallback: ApiOnProgress | any) {
+export function cancelApiProgressMaster(progressCallback: unknown) {
   if (typeof progressCallback === 'function') {
-    cancelProgress(progressCallback);
+    cancelProgress(progressCallback as ApiOnProgress);
   }
 }
 

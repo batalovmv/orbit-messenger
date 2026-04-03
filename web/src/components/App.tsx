@@ -6,7 +6,7 @@ import type { ThemeKey } from '../types';
 import type { UiLoaderPage } from './common/UiLoader';
 
 import { DARK_THEME_BG_COLOR, INACTIVE_MARKER, LIGHT_THEME_BG_COLOR, PAGE_TITLE, PAGE_TITLE_TAURI } from '../config';
-import { forceMutation } from '../lib/fasterdom/stricterdom.ts';
+import { forceMutation, suppressStrict } from '../lib/fasterdom/stricterdom.ts';
 import { selectActionMessageBg, selectTabState, selectTheme } from '../global/selectors';
 import { IS_TAURI } from '../util/browser/globalEnvironment';
 import { IS_INSTALL_PROMPT_SUPPORTED, PLATFORM_ENV } from '../util/browser/windowEnvironment';
@@ -26,6 +26,7 @@ import { getIsInBackground } from '../hooks/window/useBackgroundMode';
 
 // import Test from './test/TestCleanupOrder';
 import Auth from './auth/Auth';
+import NotificationBanners from './common/NotificationBanners';
 import Notifications from './common/Notifications';
 import UiLoader from './common/UiLoader';
 import AppInactive from './main/AppInactive';
@@ -218,19 +219,25 @@ const App = ({
   useTauriDrag();
 
   useLayoutEffect(() => {
-    document.body.classList.add(styles.bg);
+    suppressStrict(() => {
+      document.body.classList.add(styles.bg);
+    });
   }, []);
 
   useLayoutEffect(() => {
-    document.body.style.setProperty(
-      '--theme-background-color',
-      theme === 'dark' ? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
-    );
+    suppressStrict(() => {
+      document.body.style.setProperty(
+        '--theme-background-color',
+        theme === 'dark' ? DARK_THEME_BG_COLOR : LIGHT_THEME_BG_COLOR,
+      );
+    });
   }, [theme]);
 
   useLayoutEffect(() => {
     if (actionMessageBg) {
-      document.body.style.setProperty('--action-message-bg', actionMessageBg);
+      suppressStrict(() => {
+        document.body.style.setProperty('--action-message-bg', actionMessageBg);
+      });
     }
   }, [actionMessageBg]);
 
@@ -257,6 +264,7 @@ const App = ({
         {renderContent}
       </Transition>
       {activeKey === AppScreens.auth && isTestServer && <div className="test-server-badge">Test server</div>}
+      <NotificationBanners />
       <Notifications />
     </UiLoader>
   );

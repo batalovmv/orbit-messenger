@@ -15,12 +15,14 @@ import type {
 import { buildStaticAssetDocument } from './symbols';
 
 export const DEFAULT_AVAILABLE_REACTION_EMOJIS = [
-  '👍',
   '❤️',
+  '👍',
+  '👎',
   '🔥',
-  '🎉',
+  '🥰',
   '👏',
   '😁',
+  '🎉',
   '🤔',
   '😢',
   '😡',

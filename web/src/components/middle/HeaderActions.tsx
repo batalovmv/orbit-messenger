@@ -11,7 +11,6 @@ import { ManagementScreens } from '../../types';
 import { COCOON_EMOJI_ID } from '../../config';
 import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
 import {
-  getHasAdminRight,
   getIsSavedDialog,
   isAnonymousForwardsChat,
   isChatBasicGroup, isChatChannel, isChatSuperGroup,

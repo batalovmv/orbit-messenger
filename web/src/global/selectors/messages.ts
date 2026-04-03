@@ -183,7 +183,7 @@ export function selectPinnedIds<T extends GlobalState>(global: T, chatId: string
 
 export function selectScheduledIds<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {
   const scheduledIds = selectThreadLocalStateParam(global, chatId, threadId, 'scheduledIds');
-  if (scheduledIds) {
+  if (scheduledIds !== undefined) {
     return scheduledIds;
   }
 
@@ -200,7 +200,7 @@ export function selectScheduledIds<T extends GlobalState>(global: T, chatId: str
     })
     .sort((a, b) => b - a);
 
-  return derivedIds.length ? derivedIds : undefined;
+  return derivedIds;
 }
 
 export function selectFirstMessageId<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {
@@ -519,11 +519,6 @@ export function selectCanForwardMessage<T extends GlobalState>(global: T, messag
   const isServiceNotification = isServiceNotificationMessage(message);
   const isAction = isActionMessage(message);
   const hasTtl = hasMessageTtl(message);
-  const { content } = message;
-
-  const webPage = selectFullWebPageFromMessage(global, message);
-
-  const story = undefined;
   const isChatProtected = selectIsChatProtected(global, message.chatId);
   const isStoryForwardForbidden = false;
   const canForward = (
@@ -1320,12 +1315,14 @@ export function selectForwardsContainVoiceMessages<T extends GlobalState>(
   global: T,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages;
-  if (!messageIds) return false;
-  const chatMessages = selectChatMessages(global, fromChatId!);
+  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages || {};
+  if (!messageIds || !fromChatId) return false;
+  const chatMessages = selectChatMessages(global, fromChatId);
+  if (!chatMessages) return false;
+
   return messageIds.some((messageId) => {
     const message = chatMessages[messageId];
-    return Boolean(message.content.voice) || Boolean(message.content.video?.isRound);
+    return Boolean(message?.content.voice) || Boolean(message?.content.video?.isRound);
   });
 }
 
@@ -1380,17 +1377,21 @@ export function selectForwardsCanBeSentToChat<T extends GlobalState>(
   toChatId: string,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages;
+  const { messageIds, fromChatId } = selectTabState(global, tabId).forwardMessages || {};
   const chat = selectChat(global, toChatId);
-  if (!messageIds || !chat) return false;
+  if (!messageIds || !fromChatId || !chat) return false;
 
   const chatFullInfo = selectChatFullInfo(global, toChatId);
-  const chatMessages = selectChatMessages(global, fromChatId!);
+  const chatMessages = selectChatMessages(global, fromChatId);
+  if (!chatMessages) return false;
 
   const isSavedMessages = toChatId ? selectIsChatWithSelf(global, toChatId) : undefined;
   const isChatWithBot = toChatId ? selectIsChatWithBot(global, toChatId) : undefined;
   const options = getAllowedAttachmentOptions(chat, chatFullInfo, isChatWithBot, isSavedMessages);
-  return !messageIds!.some((messageId) => сheckMessageSendingDenied(chatMessages[messageId], options));
+  return !messageIds.some((messageId) => {
+    const message = chatMessages[messageId];
+    return message ? сheckMessageSendingDenied(message, options) : true;
+  });
 }
 function сheckMessageSendingDenied(message: ApiMessage, options: IAllowedAttachmentOptions) {
   const isVoice = message.content?.voice;

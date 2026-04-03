@@ -44,7 +44,7 @@ const ReportModal = ({
 
   const handleOptionClick = useLastCallback((e, option: string) => {
     const {
-      messageIds, subject, peerId, chatId,
+      messageIds, subject, chatId,
     } = modal!;
     if (!messageIds) return;
     switch (subject) {
@@ -142,7 +142,7 @@ const ReportModal = ({
 
   const sendMessageReportHandler = useLastCallback(() => {
     const {
-      messageIds, subject, peerId, chatId,
+      messageIds, subject, chatId,
     } = modal!;
     switch (subject) {
       case 'message':

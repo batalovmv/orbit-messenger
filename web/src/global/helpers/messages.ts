@@ -74,8 +74,13 @@ export function hasMessageText(message: MediaContainer) {
     webPage, contact, invoice, location, game, storyData, giveaway, giveawayResults, paidMedia,
   } = message.content;
 
+  // Poll bubbles render their own question/body, but chat list summaries still may use `content.text` as fallback.
+  if (pollId) {
+    return false;
+  }
+
   return Boolean(text) || !(
-    sticker || photo || video || audio || voice || document || contact || pollId || todo || webPage
+    sticker || photo || video || audio || voice || document || contact || todo || webPage
     || invoice || location || game || storyData || giveaway || giveawayResults || dice
     || paidMedia || action?.type === 'phoneCall'
   );

@@ -20,7 +20,6 @@ import {
   selectNotifyDefaults,
   selectNotifyException,
   selectOutgoingStatus,
-
   selectSender,
   selectTopicsInfo,
 } from '../../../../global/selectors';
@@ -278,7 +277,6 @@ export default memo(withGlobal<OwnProps>(
 
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global) || {};
 
-    const storyData = lastMessage?.content?.storyData;
     const lastMessageStory = undefined;
 
     const isChatMuted = chat && getIsChatMuted(

@@ -34,7 +34,6 @@ type StateProps = {
   isForumPanelOpen?: boolean;
 };
 
-const ITEM_MARGIN = 0.25 * REM;
 const BOTTOM_MARGIN = 0.5 * REM;
 const FALLBACK_PANE_STATE = { height: 0 };
 

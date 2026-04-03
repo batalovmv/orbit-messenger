@@ -21,6 +21,7 @@ import {
   buildGifFromSerializedMessage,
   buildStickerFromSerializedMessage,
   parseRichMessageContent,
+  registerAsset,
 } from './symbols';
 
 const MAX_UUID_MAP_SIZE = 50000;
@@ -63,6 +64,41 @@ function fullMediaUrl(relativePath?: string) {
   return `${getBaseUrl()}${relativePath}`;
 }
 
+function registerMediaAttachmentAsset(att: SaturnMediaAttachment) {
+  const fullUrl = fullMediaUrl(att.url) || fullMediaUrl(`/media/${att.media_id}`);
+  const previewUrl = fullMediaUrl(att.thumbnail_url)
+    || fullMediaUrl(att.medium_url)
+    || (att.type === 'photo' ? fullUrl : undefined);
+
+  registerAsset(att.media_id, {
+    fileName: att.original_filename || `${att.media_id}${guessFileExtension(att.mime_type)}`,
+    fullUrl,
+    previewUrl,
+    mimeType: att.mime_type,
+  }, ['document']);
+}
+
+function guessFileExtension(mimeType?: string) {
+  if (!mimeType) {
+    return '';
+  }
+
+  const knownExtensions: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+  };
+
+  if (knownExtensions[mimeType]) {
+    return knownExtensions[mimeType];
+  }
+
+  const subtype = mimeType.split('/')[1];
+  return subtype ? `.${subtype}` : '';
+}
+
 function getOrCreateScheduledMessageId(chatId: string, uuid: string) {
   const key = getScheduledMapKey(chatId, uuid);
   const existing = scheduledUuidToIdMap.get(key);
@@ -84,6 +120,8 @@ function getOrCreateScheduledMessageId(chatId: string, uuid: string) {
 }
 
 function buildSaturnPhoto(att: SaturnMediaAttachment): ApiPhoto {
+  registerMediaAttachmentAsset(att);
+
   return {
     mediaType: 'photo',
     id: att.media_id,
@@ -98,6 +136,8 @@ function buildSaturnPhoto(att: SaturnMediaAttachment): ApiPhoto {
 }
 
 function buildSaturnVideo(att: SaturnMediaAttachment): ApiVideo {
+  registerMediaAttachmentAsset(att);
+
   return {
     mediaType: 'video',
     id: att.media_id,
@@ -289,10 +329,10 @@ export function buildApiPoll(poll?: SaturnPoll): ApiPoll | undefined {
     mediaType: 'poll',
     id: poll.id,
     summary: {
-      closed: poll.is_closed || undefined,
-      isPublic: !poll.is_anonymous || undefined,
-      multipleChoice: poll.is_multiple || undefined,
-      quiz: poll.is_quiz || undefined,
+      closed: poll.is_closed,
+      isPublic: !poll.is_anonymous,
+      multipleChoice: poll.is_multiple,
+      quiz: poll.is_quiz,
       question: {
         text: poll.question,
         entities: [],
@@ -322,16 +362,15 @@ export function buildApiScheduledPoll(msg: SaturnScheduledMessage): ApiPoll | un
   if (!msg.poll) return undefined;
 
   const pollId = `scheduled-poll-${msg.id}`;
-  const createdAt = Math.floor(new Date(msg.created_at).getTime() / 1000);
 
   return {
     mediaType: 'poll',
     id: pollId,
     summary: {
-      closed: undefined,
-      isPublic: !msg.poll.is_anonymous || undefined,
-      multipleChoice: msg.poll.is_multiple || undefined,
-      quiz: msg.poll.is_quiz || undefined,
+      closed: false,
+      isPublic: !msg.poll.is_anonymous,
+      multipleChoice: msg.poll.is_multiple,
+      quiz: msg.poll.is_quiz,
       question: {
         text: msg.poll.question,
         entities: [],
@@ -382,6 +421,12 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   const poll = buildApiPoll(msg.poll);
   if (poll) {
     content.pollId = poll.id;
+    if (!content.text) {
+      content.text = {
+        text: poll.summary.question.text,
+        entities: [...(poll.summary.question.entities || [])],
+      };
+    }
   }
 
   return {
@@ -401,6 +446,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     forwardInfo: msg.is_forwarded ? buildForwardInfo(msg) : undefined,
     reactions: buildApiReactions(msg.reactions, currentUserId),
     areReactionsPossible: msg.is_deleted ? undefined : true,
+    groupedId: msg.grouped_id,
   };
 }
 
@@ -427,7 +473,12 @@ export function buildApiScheduledMessage(msg: SaturnScheduledMessage): ApiMessag
   const poll = buildApiScheduledPoll(msg);
   if (poll) {
     content.pollId = poll.id;
-    content.text = undefined;
+    if (!content.text) {
+      content.text = {
+        text: poll.summary.question.text,
+        entities: [...(poll.summary.question.entities || [])],
+      };
+    }
   }
 
   return {

@@ -17,13 +17,11 @@ export function selectIsMediaViewerOpen<T extends GlobalState>(
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
   const {
-    mediaViewer: {
-      chatId,
-      messageId,
-      isAvatarView,
-      standaloneMedia,
-    },
-  } = selectTabState(global, tabId);
+    chatId,
+    messageId,
+    isAvatarView,
+    standaloneMedia,
+  } = selectTabState(global, tabId).mediaViewer || {};
   return Boolean(standaloneMedia || (chatId && (isAvatarView || messageId)));
 }
 

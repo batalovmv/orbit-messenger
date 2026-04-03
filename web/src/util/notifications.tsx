@@ -53,7 +53,7 @@ function checkIfPushSupported() {
   if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.warn('[PUSH] Push notifications aren\'t supported.');
+      console.info('[PUSH] Push notifications aren\'t supported.');
     }
     return false;
   }
@@ -62,7 +62,7 @@ function checkIfPushSupported() {
   if (Notification.permission === 'denied') {
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.warn('[PUSH] The user has blocked push notifications.');
+      console.info('[PUSH] The user has blocked push notifications.');
     }
     return false;
   }
@@ -71,7 +71,7 @@ function checkIfPushSupported() {
   if (!('PushManager' in window)) {
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.warn('[PUSH] Push messaging isn\'t supported.');
+      console.info('[PUSH] Push messaging isn\'t supported.');
     }
     return false;
   }
@@ -84,7 +84,7 @@ export function checkIfNotificationsSupported() {
   if (!('Notification' in window)) {
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.warn('[PUSH] This browser does not support desktop notification');
+      console.info('[PUSH] This browser does not support desktop notification');
     }
     return false;
   }
@@ -92,7 +92,7 @@ export function checkIfNotificationsSupported() {
   if (Notification.permission === 'denied') {
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.warn('[PUSH] The user has blocked push notifications.');
+      console.info('[PUSH] The user has blocked push notifications.');
     }
     return false;
   }
@@ -261,7 +261,7 @@ export async function subscribe() {
       // subscribe to push messages
       if (DEBUG) {
         // eslint-disable-next-line no-console
-        console.warn('[PUSH] The user has blocked push notifications.');
+        console.info('[PUSH] The user has blocked push notifications.');
       }
     } else {
       // A problem occurred with the subscription, this can

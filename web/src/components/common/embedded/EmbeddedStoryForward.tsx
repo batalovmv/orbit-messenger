@@ -60,10 +60,8 @@ const EmbeddedStoryForward = ({
   const senderTitle = sender ? getPeerTitle(lang, sender) : forwardInfo.fromName;
 
   const openOriginalStory = useLastCallback(() => {
-    const { fromPeerId, storyId } = forwardInfo;
+    const { fromPeerId } = forwardInfo;
     if (!fromPeerId) return;
-
-    const isStoryReady = story && !('isDeleted' in story && story.isDeleted);
 
     openChat({ id: fromPeerId });
   });

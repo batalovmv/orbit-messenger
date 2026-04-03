@@ -4,7 +4,7 @@ import {
   useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiDraft, ApiStarsAmount, ApiTypeCurrencyAmount } from '../../../api/types';
+import type { ApiDraft, ApiTypeCurrencyAmount } from '../../../api/types';
 import type { ApiPeer } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 import { MAIN_THREAD_ID } from '../../../api/types';

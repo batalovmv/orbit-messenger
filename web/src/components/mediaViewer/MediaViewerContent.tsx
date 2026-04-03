@@ -243,7 +243,7 @@ export default memo(withGlobal<OwnProps>(
       origin,
       timestamp,
       threadId,
-    } = selectTabState(global).mediaViewer;
+    } = selectTabState(global).mediaViewer || {};
     const message = item.type === 'message' ? item.message : undefined;
     const textMessage = message;
     const viewableMedia = selectViewableMedia(global, origin, item);

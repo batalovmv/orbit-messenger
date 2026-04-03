@@ -1,10 +1,10 @@
 import {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
-import { getActions, getGlobal, withGlobal } from '../../global';
+import { getActions, getGlobal } from '../../global';
 
 import type {
-  ApiAvailableReaction, ApiEmojiStatusType, ApiReactionWithPaid, ApiSticker,
+  ApiAvailableReaction, ApiReactionWithPaid, ApiSticker,
 } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { StickerSetOrReactionsSetOrRecent } from '../../types';
@@ -75,10 +75,6 @@ type OwnProps = {
   onDismiss?: NoneToVoidFunction;
 };
 
-type StateProps = {
-  collectibleStatuses?: ApiEmojiStatusType[];
-};
-
 const ITEMS_PER_ROW_FALLBACK = 8;
 const ITEMS_MOBILE_PER_ROW_FALLBACK = 7;
 const ITEMS_MINI_MOBILE_PER_ROW_FALLBACK = 6;
@@ -106,7 +102,6 @@ const StickerSet = ({
   isTranslucent,
   noContextMenus,
   forcePlayback,
-  collectibleStatuses,
   observeIntersection,
   observeIntersectionForPlayingItems,
   observeIntersectionForShowingItems,
@@ -117,7 +112,7 @@ const StickerSet = ({
   onStickerFave,
   onStickerRemoveRecent,
   onDismiss,
-}: OwnProps & StateProps) => {
+}: OwnProps) => {
   const {
     clearRecentStickers,
     clearRecentCustomEmoji,
@@ -256,9 +251,6 @@ const StickerSet = ({
   const favoriteStickerIdsSet = useMemo(() => (
     favoriteStickers ? new Set(favoriteStickers.map(({ id }) => id)) : undefined
   ), [favoriteStickers]);
-  const collectibleEmojiIdsSet = useMemo(() => (
-    collectibleStatuses ? new Set(collectibleStatuses.map(({ documentId }) => documentId)) : undefined
-  ), [collectibleStatuses]);
   const withAddSetButton = !shouldHideHeader && !isRecent && !isStatusCollectible
     && isEmoji && !isPopular && !isChatEmojiSet
     && (!isInstalled || (!isCurrentUserPremium && !isSavedMessages));
@@ -374,9 +366,6 @@ const StickerSet = ({
             const reactionId = sticker.isCustomEmoji ? sticker.id : sticker.emoji;
             const isSelected = reactionId ? selectedReactionIds?.includes(reactionId) : undefined;
 
-            const withSparkles = stickerSet.id === COLLECTIBLE_STATUS_SET_ID
-              || collectibleEmojiIdsSet?.has(sticker.id);
-
             const component = (
               <StickerButton
                 key={sticker.id}
@@ -437,13 +426,7 @@ const StickerSet = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>(
-  (global): Complete<StateProps> => {
-    const collectibleStatuses = global.collectibleEmojiStatuses?.statuses;
-
-    return { collectibleStatuses };
-  },
-)(StickerSet));
+export default memo(StickerSet);
 
 function getItemsPerRowFallback(windowWidth: number): number {
   return windowWidth > MOBILE_WIDTH_THRESHOLD_PX

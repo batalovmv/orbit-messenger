@@ -51,4 +51,3 @@ export function updateStatisticsGraph<T extends GlobalState>(
     },
   }, tabId);
 }
-

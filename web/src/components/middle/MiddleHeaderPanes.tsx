@@ -29,6 +29,7 @@ import AudioPlayer from './panes/AudioPlayer';
 import BotVerificationPane from './panes/BotVerificationPane';
 import ChatReportPane from './panes/ChatReportPane';
 import HeaderPinnedMessage from './panes/HeaderPinnedMessage';
+
 import styles from './MiddleHeaderPanes.module.scss';
 
 type OwnProps = {

@@ -1,6 +1,6 @@
 import type {
   ApiChat, ApiChatFolder, ApiChatlistExportedInvite,
-  ApiChatMember, ApiDraft, ApiError, ApiMissingInvitedUser,
+  ApiChatMember, ApiDraft, ApiError,
   ApiPoll, ApiThreadInfo, ApiTopic, ApiTopicWithState, ApiUser,
   LinkContext,
 } from '../../../api/types';
@@ -765,11 +765,6 @@ addActionHandler('createChannel', async (global, actions, payload): Promise<void
   const {
     title, about, photo, memberIds, discussionChannelId, tabId = getCurrentTabId(),
   } = payload;
-  const isChannel = 'isChannel' in payload ? payload.isChannel : undefined;
-  const isSuperGroup = 'isSuperGroup' in payload ? payload.isSuperGroup : undefined;
-
-  const users = memberIds?.map((id) => selectUser(global, id))
-    .filter(Boolean);
 
   global = updateTabState(global, {
     chatCreation: {
@@ -808,7 +803,7 @@ addActionHandler('createChannel', async (global, actions, payload): Promise<void
     return;
   }
 
-  const { id: channelId, accessHash } = createdChannel;
+  const { id: channelId } = createdChannel;
 
   global = getGlobal();
   global = updateChat(global, channelId, createdChannel);
@@ -1030,7 +1025,7 @@ addActionHandler('createGroupChat', async (global, actions, payload): Promise<vo
   try {
     const result = await callApi('createGroupChat', {
       name: title,
-      memberIds: memberIds,
+      memberIds,
     });
 
     if (!result) {
@@ -2508,7 +2503,11 @@ addActionHandler('loadTopics', async (global, actions, payload): Promise<void> =
   global = updateTopicsInfo(global, chatId, {
     totalCount: result.count,
   });
-  global = updateListedTopicIds(global, chatId, result.topics.map((topicState: ApiTopicWithState) => topicState.topic.id));
+  global = updateListedTopicIds(
+    global,
+    chatId,
+    result.topics.map((topicState: ApiTopicWithState) => topicState.topic.id),
+  );
   Object.entries(result.draftsById || {}).forEach(([threadId, draft]) => {
     global = replaceThreadLocalStateParam(global, chatId, Number(threadId), 'draft', draft as ApiDraft | undefined);
   });
@@ -3360,10 +3359,10 @@ export async function loadFullChat<T extends GlobalState>(
   }
 
   if (groupCall) {
-    const existingGroupCall = selectGroupCall(global, groupCall.id!);
+    const existingGroupCall = selectGroupCall(global, groupCall.id);
     global = updateGroupCall(
       global,
-      groupCall.id!,
+      groupCall.id,
       omit(groupCall, ['connectionState', 'isLoaded']),
       undefined,
       existingGroupCall ? undefined : groupCall.participantsCount,

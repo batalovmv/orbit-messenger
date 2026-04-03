@@ -256,6 +256,8 @@
 "Info" = "Info";
 "SetUrlPlaceholder" = "Link";
 "Notifications" = "Notifications";
+"NotificationBannerChat" = "In {chat}";
+"AriaDismissNotificationBanner" = "Dismiss notification banner";
 "SavedMessagesInfo" = "Forward here to save";
 "BlockedListNotFound" = "No users found.";
 "TextCopied" = "Text copied to clipboard.";
@@ -1809,6 +1811,12 @@
 "ChannelsSearchContext" = "Channels";
 "SearchContextCaption" = "From {type}";
 "SearchFilterFrom" = "From:";
+"SearchFilterDate" = "Date:";
+"SearchFilterDateFrom" = "Date from";
+"SearchFilterDateTo" = "Date to";
+"SearchFilterDateFromValue" = "from {date}";
+"SearchFilterDateToValue" = "until {date}";
+"SearchFilterDateRangeValue" = "{from} - {to}";
 "FolderLinkTitleDescription" = "Anyone with this link can add {folder} folder and {chats} selected below.";
 "FolderLinkTitleDescriptionChats_one" = "the chat";
 "FolderLinkTitleDescriptionChats_other" = "the {count} chats";
@@ -2706,6 +2714,8 @@
 "AttachmentMenuUngroupAllMedia" = "Ungroup All Media";
 "AttachmentMenuEnableSpoiler" = "Enable Spoiler";
 "AttachmentMenuDisableSpoiler" = "Disable Spoiler";
+"OneTimeMedia" = "Одноразовое фото/видео";
+"OneTimeMediaViewed" = "Медиа просмотрено";
 "AttachmentReplacePhoto_one" = "Replace Photo";
 "AttachmentReplacePhoto_other" = "Replace {count} Photos";
 "AttachmentReplaceVideo_one" = "Replace Video";
@@ -2796,3 +2806,5 @@
 "ReplyToAnotherChat" = "Reply in Another Chat";
 "DoNotReply" = "Cancel Reply";
 "ChannelInfo" = "Channel Info";
+"OpenInNewTab" = "Open in New Tab";
+"PdfCannotPreview" = "PDF preview is not available in this browser";

@@ -1,20 +1,28 @@
 import type {
-  ApiChat,
   ApiAppConfig,
+  ApiChat,
+  ApiChatFolder,
   ApiConfig,
   ApiFormattedText,
+  ApiMessage,
+  ApiPeer,
   ApiPremiumPromo,
+  ApiPromoData,
+  ApiQuickReply,
   ApiSession,
   ApiStarGiftRegular,
   ApiSticker,
+  ApiStickerSet,
   ApiUser,
   ApiWallpaper,
   ApiWebPage,
 } from '../../types';
-import { DEFAULT_APP_CONFIG } from '../../../limits';
+import type { SaturnStickerPack } from '../types';
 
-import { getRegisteredAsset } from '../apiBuilders/symbols';
+import { DEFAULT_APP_CONFIG } from '../../../limits';
+import { buildApiStickerSet, getRegisteredAsset } from '../apiBuilders/symbols';
 import { ensureAuth, getBaseUrl, request } from '../client';
+import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 
 export {
   destroy, disconnect, init, setCurrentUser,
@@ -46,10 +54,19 @@ export async function downloadMedia(
 
   try {
     const token = await ensureAuth();
-    const asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
+    let asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
+
+    if (!asset && assetRef.kind === 'stickerSet') {
+      await hydrateStickerSetAsset(assetRef.id);
+      asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
+    }
 
     if (asset) {
       return fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress);
+    }
+
+    if (assetRef.kind === 'stickerSet') {
+      return undefined;
     }
 
     if (!/^[0-9a-f-]{36}$/i.test(assetRef.id)) {
@@ -64,6 +81,43 @@ export async function downloadMedia(
   } catch {
     return undefined;
   }
+}
+
+function decodeDataUrl(url: string) {
+  const match = url.match(/^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.*)$/);
+  if (!match) {
+    return undefined;
+  }
+
+  const mimeType = match[1] || 'application/octet-stream';
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3] || '';
+  const bytes = isBase64
+    ? Uint8Array.from(atob(payload), (char) => char.charCodeAt(0))
+    : encodeUtf8(decodeURIComponent(payload));
+
+  return {
+    mimeType,
+    blob: new Blob([bytes], { type: mimeType }),
+  };
+}
+
+function encodeUtf8(value: string) {
+  const encoded = encodeURIComponent(value);
+  const parts = encoded.split(/%([0-9A-F]{2})/i);
+  const bytes: number[] = [];
+
+  for (let i = 0; i < parts.length; i++) {
+    if (i % 2 === 1) {
+      bytes.push(parseInt(parts[i], 16));
+    } else {
+      for (const char of parts[i]) {
+        bytes.push(char.charCodeAt(0));
+      }
+    }
+  }
+
+  return new Uint8Array(bytes);
 }
 
 export function repairFileReference() {
@@ -113,6 +167,12 @@ export function fetchPeerProfileColors() {
   return Promise.resolve(undefined);
 }
 
+export function fetchPeerSettings(_peer: ApiPeer) {
+  return Promise.resolve({
+    settings: {},
+  });
+}
+
 export function fetchCountryList() {
   return Promise.resolve(undefined);
 }
@@ -125,6 +185,49 @@ export function fetchSponsoredPeer() {
 
 export function fetchChatFolders() {
   return Promise.resolve(undefined);
+}
+
+export function fetchRecommendedChatFolders() {
+  return Promise.resolve([] as ApiChatFolder[]);
+}
+
+export function toggleDialogFilterTags() {
+  return Promise.resolve(true);
+}
+
+export function sortChatFolders(folderIds: number[]) {
+  sendApiUpdate({
+    '@type': 'updateChatFoldersOrder',
+    orderedIds: folderIds,
+  });
+
+  return Promise.resolve(true);
+}
+
+export function editChatFolder({
+  id,
+  folderUpdate,
+}: {
+  id: number;
+  folderUpdate: ApiChatFolder;
+}) {
+  sendApiUpdate({
+    '@type': 'updateChatFolder',
+    id,
+    folder: folderUpdate,
+  });
+
+  return Promise.resolve(true);
+}
+
+export function deleteChatFolder(id: number) {
+  sendApiUpdate({
+    '@type': 'updateChatFolder',
+    id,
+    folder: undefined,
+  });
+
+  return Promise.resolve(true);
 }
 
 export function fetchPinnedDialogs() {
@@ -164,30 +267,21 @@ export function fetchGenericEmojiEffects() {
 
 export {
   fetchAvailableReactions,
+  fetchDefaultTagReactions,
   fetchMessageReactions,
   fetchMessageReactionsList,
+  fetchRecentReactions,
   sendReaction,
   setDefaultReaction,
   setChatEnabledReactions,
+  fetchTopReactions,
 } from './reactions';
 
 export function fetchAvailableEffects() {
   return Promise.resolve(undefined);
 }
 
-export function fetchTopReactions() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchRecentReactions() {
-  return Promise.resolve(undefined);
-}
-
 export function fetchDefaultReactions() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchDefaultTagReactions() {
   return Promise.resolve(undefined);
 }
 
@@ -207,12 +301,91 @@ export function fetchSavedReactionTags() {
   return Promise.resolve(undefined);
 }
 
-export async function fetchChat({ type, user }: { type?: string; user?: { id: string } } = {}) {
+export function fetchSavedChats() {
+  return Promise.resolve({
+    chatIds: [],
+    chats: [],
+    users: [],
+    userStatusesById: {},
+    notifyExceptionById: {},
+    draftsById: {},
+    lastMessageByChatId: {},
+    totalChatCount: 0,
+    messages: [],
+    polls: [],
+    threadInfos: [],
+    threadReadStatesById: {},
+  });
+}
+
+export function requestChatUpdate() {
+  return Promise.resolve(undefined);
+}
+
+export function getPasswordInfo(): Promise<{
+  hint?: string;
+  hasPassword: boolean;
+} | undefined> {
+  return Promise.resolve(undefined);
+}
+
+export function fetchPromoData(): Promise<ApiPromoData | undefined> {
+  return Promise.resolve(undefined);
+}
+
+export function loadAttachBots() {
+  return Promise.resolve(undefined);
+}
+
+export function fetchNotificationExceptions() {
+  return Promise.resolve(undefined);
+}
+
+export function fetchTopInlineBots() {
+  return Promise.resolve(undefined);
+}
+
+export function fetchTopBotApps() {
+  return Promise.resolve(undefined);
+}
+
+export function fetchPaidReactionPrivacy() {
+  return Promise.resolve(undefined);
+}
+
+export function fetchPremiumGifts(): Promise<{
+  set: ApiStickerSet;
+  stickers: ApiSticker[];
+} | undefined> {
+  return Promise.resolve(undefined);
+}
+
+export function fetchQuickReplies(): Promise<{
+  messages: ApiMessage[];
+  quickReplies: Record<number, ApiQuickReply>;
+} | undefined> {
+  return Promise.resolve(undefined);
+}
+
+export function fetchTonGifts(): Promise<{
+  set: ApiStickerSet;
+  stickers: ApiSticker[];
+} | undefined> {
+  return Promise.resolve(undefined);
+}
+
+export async function fetchChat({
+  type,
+  user,
+}: {
+  type?: string;
+  user?: Pick<ApiUser, 'id' | 'firstName' | 'lastName'>;
+} = {}) {
   // When opening a DM with a user, create/get the direct chat
   if (type === 'user' && user) {
     try {
-      const { createDirectChat: createDM } = await import('./chats');
-      const result = await createDM({ userId: user.id });
+      const { createDirectChatWithFallbackUser: createDM } = await import('./chats');
+      const result = await createDM({ user });
       if (result) {
         return { chat: result.chat };
       }
@@ -405,8 +578,109 @@ type StarGiftsResult = {
   users: ApiUser[] | undefined;
 };
 
-export function fetchAuthorizations(): Promise<AuthorizationsResult | undefined> {
-  return Promise.resolve(undefined);
+type SaturnAuthSession = {
+  id: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at?: string;
+};
+
+export async function fetchAuthorizations(): Promise<AuthorizationsResult | undefined> {
+  try {
+    const result = await request<{ sessions?: SaturnAuthSession[] }>('GET', '/auth/sessions');
+    const sessions = result.sessions || [];
+
+    const authorizations = sessions.reduce<Record<string, ApiSession>>((acc, session, index) => {
+      const parsed = parseSessionUserAgent(session.user_agent);
+      const timestamp = session.created_at ? Math.floor(new Date(session.created_at).getTime() / 1000) : 0;
+
+      acc[session.id] = {
+        hash: session.id,
+        isCurrent: index === 0,
+        isOfficialApp: false,
+        isPasswordPending: false,
+        deviceModel: parsed.deviceModel,
+        platform: parsed.platform,
+        systemVersion: parsed.systemVersion,
+        appName: 'Orbit Web',
+        appVersion: parsed.browserVersion,
+        dateCreated: timestamp,
+        dateActive: timestamp,
+        ip: session.ip_address || '',
+        country: '',
+        region: '',
+        areCallsEnabled: true,
+        areSecretChatsEnabled: true,
+      };
+
+      return acc;
+    }, {});
+
+    return {
+      authorizations,
+      ttlDays: 183,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function changeSessionTtl() {
+  return Promise.resolve(true);
+}
+
+export function changeSessionSettings() {
+  return Promise.resolve(true);
+}
+
+export async function terminateAuthorization(hash: string) {
+  try {
+    await request('DELETE', `/auth/sessions/${encodeURIComponent(hash)}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function terminateAllAuthorizations() {
+  try {
+    const result = await request<{ sessions?: SaturnAuthSession[] }>('GET', '/auth/sessions');
+    const sessions = result.sessions || [];
+
+    await Promise.all(
+      sessions
+        .slice(1)
+        .map((session) => request('DELETE', `/auth/sessions/${encodeURIComponent(session.id)}`)),
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function fetchWebAuthorizations() {
+  return Promise.resolve({
+    webAuthorizations: {},
+  });
+}
+
+export function terminateWebAuthorization() {
+  return Promise.resolve(true);
+}
+
+export function terminateAllWebAuthorizations() {
+  return Promise.resolve(true);
+}
+
+export function fetchAccountTTL() {
+  return Promise.resolve({
+    days: 365,
+  });
+}
+
+export function setAccountTTL() {
+  return Promise.resolve(true);
 }
 
 export function fetchWallpapers(): Promise<{ wallpapers: ApiWallpaper[] } | undefined> {
@@ -461,6 +735,81 @@ export function fetchDiceStickers() {
   return Promise.resolve(undefined);
 }
 
+function parseSessionUserAgent(userAgent?: string | null) {
+  const source = userAgent || '';
+  const browser = detectBrowser(source);
+  const os = detectOs(source);
+
+  return {
+    deviceModel: browser.name,
+    browserVersion: browser.version,
+    platform: os.name,
+    systemVersion: os.version,
+  };
+}
+
+function detectBrowser(userAgent: string) {
+  const checks: Array<{ pattern: RegExp; name: string }> = [
+    { pattern: /Edg\/([\d.]+)/i, name: 'Edge' },
+    { pattern: /OPR\/([\d.]+)/i, name: 'Opera' },
+    { pattern: /Firefox\/([\d.]+)/i, name: 'Firefox' },
+    { pattern: /SamsungBrowser\/([\d.]+)/i, name: 'SamsungBrowser' },
+    { pattern: /Chrome\/([\d.]+)/i, name: 'Chrome' },
+    { pattern: /Version\/([\d.]+).*Safari/i, name: 'Safari' },
+  ];
+
+  for (const { pattern, name } of checks) {
+    const match = userAgent.match(pattern);
+    if (match) {
+      return {
+        name,
+        version: match[1],
+      };
+    }
+  }
+
+  return {
+    name: 'Browser',
+    version: '',
+  };
+}
+
+function detectOs(userAgent: string) {
+  const checks: Array<{ pattern: RegExp; name: string; format?: (value: string) => string }> = [
+    { pattern: /Windows NT ([\d.]+)/i, name: 'Windows' },
+    {
+      pattern: /Android ([\d.]+)/i,
+      name: 'Android',
+    },
+    {
+      pattern: /(?:CPU (?:iPhone )?OS|iPhone OS) ([\d_]+)/i,
+      name: 'iOS',
+      format: (value) => value.replace(/_/g, '.'),
+    },
+    {
+      pattern: /Mac OS X ([\d_]+)/i,
+      name: 'macOS',
+      format: (value) => value.replace(/_/g, '.'),
+    },
+    { pattern: /Linux/i, name: 'Linux' },
+  ];
+
+  for (const { pattern, name, format } of checks) {
+    const match = userAgent.match(pattern);
+    if (match) {
+      return {
+        name,
+        version: format ? format(match[1] || '') : (match[1] || ''),
+      };
+    }
+  }
+
+  return {
+    name: 'Unknown',
+    version: '',
+  };
+}
+
 export {
   checkAuth, loginWithEmail, logout, provideAuthPhoneNumber, provideAuthCode,
   provideAuthPassword, provideAuthRegistration, registerWithInvite,
@@ -473,6 +822,7 @@ export {
 
 export {
   createDirectChat, createGroupChat, createChannel, fetchChats, fetchFullChat,
+  fetchChannelRecommendations,
   getChatInviteLink, getChatMembers, editChatTitle, editChatAbout,
   deleteChat, leaveChat, addChatMembers, deleteChatMember,
   updateChatAdmin, updateChatDefaultBannedRights, updateChatMemberBannedRights,
@@ -485,7 +835,7 @@ export {
 
 export {
   deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
-  fetchPinnedMessages, forwardMessages, markMessageListRead,
+  fetchPinnedMessages, forwardMessages, markMessageListRead, markMessagesRead,
   pinMessage, searchMessagesInChat, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
   fetchMessage, sendPollVote, closePoll, loadPollOptionResults, fetchScheduledHistory,
   sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage,
@@ -498,10 +848,17 @@ export {
 } from './messages';
 
 export { fetchDifference } from './sync';
-export { fetchLangPack, fetchLangStrings, fetchLanguages, oldFetchLangPack } from './settings';
+export {
+  fetchLangDifference,
+  fetchLangPack,
+  fetchLangStrings,
+  fetchLanguage,
+  fetchLanguages,
+  oldFetchLangPack,
+} from './settings';
 
 export {
-  uploadMedia, initChunkedUpload, uploadChunk, completeChunkedUpload,
+  uploadMedia, initChunkedUpload, uploadChunk, completeChunkedUpload, abortChunkedUpload, cancelMediaUpload,
   fetchMediaInfo, deleteMedia, fetchSharedMedia,
   updateChatPhoto, deleteChatPhoto,
 } from './media';
@@ -525,12 +882,13 @@ export async function unblockUser({ user }: { user: { id: string }; isOnlyStorie
 }
 
 export {
-  searchMessagesGlobal, searchUsersGlobal, searchChatsGlobal,
+  searchMessagesGlobal, searchMessagesInChatWithFilters, searchUsersGlobal, searchChatsGlobal,
+  searchPublicPosts,
 } from './search';
 
 function parseAssetRef(url: string) {
   const normalizedUrl = url.replace(/^\.\//, '');
-  const match = normalizedUrl.match(/(?:progressive\/)?(photo|video|document|sticker|stickerSet)([^/?&#]+)/);
+  const match = normalizedUrl.match(/(?:progressive\/)?(photo|video|document|stickerSet|sticker)([^/?&#]+)/);
   if (!match) {
     return undefined;
   }
@@ -565,6 +923,23 @@ function resolveRegisteredAsset(kind: string, id: string, isPreview: boolean) {
   };
 }
 
+async function hydrateStickerSetAsset(stickerSetId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(stickerSetId)) {
+    return;
+  }
+
+  try {
+    const pack = await request<SaturnStickerPack>('GET', `/stickers/sets/${stickerSetId}`);
+    if (!pack) {
+      return;
+    }
+
+    buildApiStickerSet(pack);
+  } catch {
+    // Ignore and let the caller fall back gracefully.
+  }
+}
+
 async function fetchBinary(
   url: string,
   mediaFormat?: number,
@@ -572,6 +947,25 @@ async function fetchBinary(
   mimeTypeHint?: string,
   onProgress?: (progress: number) => void,
 ) {
+  if (url.startsWith('data:')) {
+    const decoded = decodeDataUrl(url);
+    if (!decoded) {
+      return undefined;
+    }
+
+    if (onProgress) {
+      onProgress(1);
+    }
+
+    const mimeType = decoded.mimeType || mimeTypeHint || 'application/octet-stream';
+    if (mediaFormat === 1 /* ApiMediaFormat.Progressive */) {
+      const arrayBuffer = await decoded.blob.arrayBuffer();
+      return { arrayBuffer, mimeType, fullSize: arrayBuffer.byteLength };
+    }
+
+    return { dataBlob: decoded.blob, mimeType };
+  }
+
   const headers: Record<string, string> = {};
   if (token && (url.startsWith(getBaseUrl()) || url.startsWith('/'))) {
     headers.Authorization = `Bearer ${token}`;

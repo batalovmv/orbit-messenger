@@ -14,15 +14,17 @@
 
 ## Текущее состояние
 
-> **Активная фаза: Phase 3 — Media & Files (бэкенд готов, осталась frontend-интеграция)**
+> **Активная фаза: Phase 5 — Rich Messaging (rich messaging frontend/stabilization, reactions/stickers/GIF/polls/scheduled)**
 
 | Фаза | Статус | Что сделано |
 |------|--------|-------------|
 | Phase 0: Костяк | Done | Структура монорепо, docker-compose, миграции, CI |
 | Phase 1: Core Messaging | Done | auth + gateway + messaging + WebSocket + базовый фронтенд |
 | Phase 2: Groups & Channels | Done | Группы, каналы, роли, permissions, invite links |
-| Phase 3: Media & Files | **In Progress** | 8 backend endpoints, R2 storage, image/video/audio processing. Осталось: frontend UI wiring |
-| Phase 4–8 | Pending | Calls, Search, E2E, AI, Bots |
+| Phase 3: Media & Files | Done | Media service, R2 pipeline, Saturn upload/download wiring, MediaViewer/shared media foundation |
+| Phase 4: Search, Notifications & Settings | Done | Meilisearch, push/VAPID, privacy/settings, in-app banners, in-chat search wiring |
+| Phase 5: Rich Messaging | **In Progress** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring; идёт стабилизация фронтенда |
+| Phase 6–8 | Pending | Calls, E2E, AI, Bots |
 
 Подробный план: `PHASES.md` (1169 строк — читай секцию текущей фазы с offset)
 Полное ТЗ: `docs/TZ-ORBIT-MESSENGER.md`

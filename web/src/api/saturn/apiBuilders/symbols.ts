@@ -155,7 +155,7 @@ export function getRegisteredAsset(id: string, kind: AssetKind = 'document') {
 }
 
 export function buildStaticAssetDocument(id: string, emoji: string, title?: string): ApiDocument {
-  const dataUri = makeSvgDataUri(emoji);
+  const dataUri = makeSvgDataUri(emoji, 'transparent');
 
   registerAsset(id, {
     fileName: `${title || 'emoji'}.svg`,
@@ -191,7 +191,9 @@ export function buildApiSticker(
       ? 'application/x-tgsticker'
       : sticker.file_type === 'webm'
         ? 'video/webm'
-        : 'image/webp',
+        : sticker.file_type === 'svg'
+          ? 'image/svg+xml'
+          : 'image/webp',
     previewUrl,
     thumbnailDataUri,
   }, ['document', 'sticker']);

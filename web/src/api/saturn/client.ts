@@ -5,6 +5,8 @@ const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 60s before expiry
 const WS_PING_INTERVAL_MS = 25 * 1000;
 const WS_RECONNECT_BASE_MS = 1000;
 const WS_RECONNECT_MAX_MS = 30 * 1000;
+const ACCESS_TOKEN_STORAGE_KEY = 'saturn_access_token';
+const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'saturn_access_token_expires_at';
 
 let baseUrl = '';
 let accessToken: string | undefined;
@@ -38,6 +40,7 @@ let onReconnect: (() => void) | undefined;
 export function init(apiUrl: string, updateCallback: OnApiUpdate) {
   baseUrl = apiUrl.replace(/\/$/, '');
   onUpdate = updateCallback;
+  restorePersistedAccessToken();
 }
 
 export function getBaseUrl() {
@@ -47,6 +50,7 @@ export function getBaseUrl() {
 export function setAccessToken(token: string, expiresIn: number) {
   accessToken = token;
   tokenExpiresAt = Date.now() + expiresIn * 1000;
+  persistAccessToken();
 }
 
 export function getAccessToken() {
@@ -64,6 +68,7 @@ export async function ensureAuth(): Promise<string | undefined> {
 export function clearAuth() {
   accessToken = undefined;
   tokenExpiresAt = 0;
+  clearPersistedAccessToken();
 }
 
 async function ensureToken() {
@@ -105,14 +110,22 @@ export async function request<T>(
   method: string,
   path: string,
   body?: Record<string, unknown>,
-  options?: { noAuth?: boolean },
+  options?: { noAuth?: boolean; signal?: AbortSignal; skipAuthReady?: boolean },
 ): Promise<T> {
+  if (options?.signal?.aborted) {
+    throw createAbortError();
+  }
+
   if (!options?.noAuth) {
     // Wait for initial auth check to complete before making authenticated requests
-    if (authReadyPromise) {
+    if (authReadyPromise && !options?.skipAuthReady) {
       await authReadyPromise;
     }
     await ensureToken();
+  }
+
+  if (options?.signal?.aborted) {
+    throw createAbortError();
   }
 
   const headers: Record<string, string> = {
@@ -128,6 +141,7 @@ export async function request<T>(
     headers,
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
+    signal: options?.signal,
   });
 
   if (!response.ok) {
@@ -156,6 +170,64 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+function restorePersistedAccessToken() {
+  if (typeof sessionStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    const storedToken = sessionStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    const storedExpiresAt = Number(sessionStorage.getItem(ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY) || 0);
+
+    if (!storedToken || !storedExpiresAt || storedExpiresAt <= Date.now()) {
+      clearPersistedAccessToken();
+      return;
+    }
+
+    accessToken = storedToken;
+    tokenExpiresAt = storedExpiresAt;
+  } catch {
+    clearPersistedAccessToken();
+  }
+}
+
+function persistAccessToken() {
+  if (typeof sessionStorage === 'undefined' || !accessToken || !tokenExpiresAt) {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, accessToken);
+    sessionStorage.setItem(ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY, String(tokenExpiresAt));
+  } catch {
+    // Ignore storage failures and keep token in memory.
+  }
+}
+
+function clearPersistedAccessToken() {
+  if (typeof sessionStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    sessionStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function createAbortError() {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('Request aborted', 'AbortError');
+  }
+
+  const error = new Error('Request aborted');
+  error.name = 'AbortError';
+
+  return error;
 }
 
 // WebSocket management

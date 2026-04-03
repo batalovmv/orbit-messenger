@@ -1,20 +1,35 @@
 // Settings/localization methods for Saturn
 
-import type { ApiOldLangPack, ApiOldLangString, LangPackStringValuePlural } from '../../types';
 import type { LANG_PACKS } from '../../../config';
+import type { ApiOldLangPack, ApiOldLangString, LangPackStringValuePlural } from '../../types';
 
 import readFallbackStrings from '../../../util/data/readFallbackStrings';
 
 export async function fetchLangPack() {
-  // Saturn uses built-in localization from the TG Web A bundle
-  return undefined;
+  const fallbackData = await readFallbackStrings();
+
+  return {
+    version: fallbackData.langPack.version,
+    strings: fallbackData.langPack.strings,
+    keysToRemove: [],
+  };
+}
+
+export async function fetchLangDifference() {
+  return fetchLangPack();
 }
 
 export async function fetchLanguages() {
-  return [];
+  const fallbackData = await readFallbackStrings();
+  return [fallbackData.language];
 }
 
-export async function fetchLangStrings() {
+export async function fetchLanguage() {
+  const fallbackData = await readFallbackStrings();
+  return fallbackData.language;
+}
+
+export function fetchLangStrings() {
   return undefined;
 }
 
@@ -34,7 +49,7 @@ export async function oldFetchLangPack({ sourceLangPacks, langCode }: {
     } else if (typeof value === 'object' && 'isDeleted' in value) {
       // Skip deleted strings
     } else if (typeof value === 'object') {
-      const plural = value as LangPackStringValuePlural;
+      const plural: LangPackStringValuePlural = value;
       const oldString: ApiOldLangString = {
         zeroValue: plural.zero,
         oneValue: plural.one,

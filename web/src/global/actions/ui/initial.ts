@@ -3,6 +3,7 @@ import { addCallback } from '../../../lib/teact/teactn';
 import type { ApiNotification } from '../../../api/types';
 import type { LangCode } from '../../../types';
 import type { ActionReturnType, GlobalState } from '../../types';
+import type { InAppNotificationBanner } from '../../types';
 
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { IS_ELECTRON, IS_MULTIACCOUNT_SUPPORTED, IS_TAURI } from '../../../util/browser/globalEnvironment';
@@ -37,6 +38,7 @@ import { selectSharedSettings } from '../../selectors/sharedState';
 import { destroySharedStatePort, initSharedState } from '../../shared/sharedStateConnector';
 
 const HISTORY_ANIMATION_DURATION = 450;
+const MAX_NOTIFICATION_BANNERS = 3;
 
 setSystemThemeChangeCallback((theme) => {
   let global = getGlobal();
@@ -277,6 +279,21 @@ addActionHandler('showNotification', (global, actions, payload): ActionReturnTyp
   }, tabId);
 });
 
+addActionHandler('showNotificationBanner', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId(), ...banner } = payload;
+
+  banner.localId ||= `${banner.chatId}_${banner.messageId}`;
+
+  const newBanners = (selectTabState(global, tabId).notificationBanners || [])
+    .filter(({ localId }) => localId !== banner.localId);
+
+  newBanners.unshift(banner as InAppNotificationBanner);
+
+  return updateTabState(global, {
+    notificationBanners: newBanners.slice(0, MAX_NOTIFICATION_BANNERS),
+  }, tabId);
+});
+
 addActionHandler('dismissNotification', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload;
   const newNotifications = selectTabState(global, tabId)
@@ -284,5 +301,15 @@ addActionHandler('dismissNotification', (global, actions, payload): ActionReturn
 
   return updateTabState(global, {
     notifications: newNotifications,
+  }, tabId);
+});
+
+addActionHandler('dismissNotificationBanner', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload;
+  const newBanners = (selectTabState(global, tabId).notificationBanners || [])
+    .filter(({ localId }) => localId !== payload.localId);
+
+  return updateTabState(global, {
+    notificationBanners: newBanners,
   }, tabId);
 });

@@ -43,9 +43,9 @@ import {
 } from '../../../config';
 import { addTimestampEntities } from '../../../util/dates/timestamp';
 import { generateWaveform } from '../../../util/generateWaveform';
-import { decodeWaveform } from '../../../util/waveform';
 import { pick } from '../../../util/iteratees';
 import { toJSNumber } from '../../../util/numbers';
+import { decodeWaveform } from '../../../util/waveform';
 import {
   addMediaToLocalDb, addStoryToLocalDb, addWebPageMediaToLocalDb, type MediaRepairContext,
 } from '../helpers/localDb';

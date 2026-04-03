@@ -326,7 +326,7 @@ addActionHandler('loadNotificationExceptions', async (global): Promise<void> => 
 });
 
 addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
-  const [signUpNotification, notifyDefaults] = await Promise.all([
+  const [signUpNotification, _notifyDefaults] = await Promise.all([
     callApi('fetchContactSignUpSetting'),
     callApi('fetchNotifyDefaultSettings'),
   ]);

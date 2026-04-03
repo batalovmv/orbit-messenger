@@ -23,7 +23,6 @@ import {
   updateChat,
   updateChatFullInfo,
   updateChatListType,
-
   updateTopic,
 } from '../../reducers';
 import { removeUnreadReactions } from '../../reducers/reactions';
@@ -85,7 +84,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
           );
         }
       }
-
 
       const localAdminRights = localChat?.adminRights;
       const newAdminRights = update.chat.adminRights;

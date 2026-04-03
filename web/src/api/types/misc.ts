@@ -41,6 +41,7 @@ export interface ApiOnProgress {
   ): void;
 
   isCanceled?: boolean;
+  abort?: NoneToVoidFunction;
 }
 
 export interface ApiAttachment {
