@@ -60,8 +60,17 @@ type CloseNotificationData = {
   chatId: string;
 };
 
+const MAX_SHOWN_NOTIFICATIONS = 500;
 let lastSyncAt = new Date().valueOf();
 const shownNotifications = new Set<string>();
+
+function trackShownNotification(key: string) {
+  shownNotifications.add(key);
+  if (shownNotifications.size > MAX_SHOWN_NOTIFICATIONS) {
+    const first = shownNotifications.values().next().value;
+    if (first) shownNotifications.delete(first);
+  }
+}
 const clickBuffer: Record<string, FocusMessageData> = {};
 
 function getPushData(e: PushEvent): PushData | LegacyPushData | undefined {
@@ -234,16 +243,11 @@ async function hasMatchingNotification({
 }
 
 export function handlePush(e: PushEvent) {
+  const data = getPushData(e);
   if (DEBUG) {
     // eslint-disable-next-line no-console
-    console.log('[SW] Push received event', e);
-    if (e.data) {
-      // eslint-disable-next-line no-console
-      console.log('[SW] Push received with data', e.data.json());
-    }
+    console.log('[SW] Push received with data', data);
   }
-
-  const data = getPushData(e);
   if (!data) return;
   if (isLegacyPushData(data) && data.mute === LegacyBoolean.True) return;
 
@@ -341,7 +345,7 @@ export function handleClientMessage(e: ExtendableMessageEvent) {
       // Mark this notification as shown if it was handled locally
       const notificationKey = getNotificationKey(notification);
       if (notificationKey) {
-        shownNotifications.add(notificationKey);
+        trackShownNotification(notificationKey);
       }
       return showNotification(notification);
     })());

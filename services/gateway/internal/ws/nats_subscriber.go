@@ -440,8 +440,7 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 
 func shouldFetchChatMemberIDs(event string) bool {
 	switch event {
-	case EventNewMessage,
-		EventMessageUpdated,
+	case EventMessageUpdated,
 		EventMessageDeleted,
 		EventMessagesRead,
 		EventMessagePinned,
