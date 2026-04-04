@@ -201,6 +201,9 @@ export async function sendReaction({
     ...additions.map((emoji) => client.request('POST', `/messages/${uuid}/reactions`, { emoji })),
   ]);
 
+  // Refresh reactions from server to sync optimistic state with reality.
+  await fetchMessageReactions({ ids: [messageId], chat });
+
   return true;
 }
 
