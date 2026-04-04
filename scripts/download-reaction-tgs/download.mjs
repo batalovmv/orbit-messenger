@@ -2,9 +2,13 @@
 /**
  * Download Telegram reaction TGS animations via Bot API.
  *
- * Telegram stores reaction animations in internal sticker sets:
- * - "AnimatedEmojies" — animated emoji center icons
- * - "EmojiAnimations" — appear/effect animations
+ * Telegram stores reaction animations across multiple internal sticker sets:
+ * - "EmojiCenterAnimations"  — small looping center icon on the reaction counter
+ * - "EmojiAroundAnimations"  — burst/explosion effect around the reaction
+ * - "EmojiAppearAnimations"  — bounce-in animation when reaction appears in picker
+ * - "EmojiShortAnimations"   — short hover-loop animation in the picker (select)
+ * - "EmojiAnimations"        — large particle effect played above the message
+ * - "AnimatedEmojies"        — full-size animated emoji (activate animation)
  *
  * Usage: node download.mjs
  */
@@ -28,11 +32,15 @@ const REACTION_EMOJIS = [
   '💯', '🤣', '😎', '🤩', '💔', '✅',
 ];
 
-// Known Telegram internal sticker sets with emoji animations
-const STICKER_SET_NAMES = [
-  'AnimatedEmojies',
-  'EmojiAnimations',
-];
+// Each animation type maps to a specific Telegram sticker set
+const ANIMATION_SETS = {
+  center:   'EmojiCenterAnimations',   // small looping icon on reaction counter
+  around:   'EmojiAroundAnimations',   // burst effect around the reaction
+  appear:   'EmojiAppearAnimations',   // appear animation in picker
+  select:   'EmojiShortAnimations',    // hover-loop in picker
+  effect:   'EmojiAnimations',         // large particle effect above message
+  activate: 'AnimatedEmojies',         // full-size animation on click
+};
 
 async function botApi(method, params = {}) {
   const url = new URL(`${API_BASE}/${method}`);
@@ -59,81 +67,65 @@ function emojiToSafeId(emoji) {
     .join('_');
 }
 
+function normalizeEmoji(emoji) {
+  return emoji.replace(/\uFE0F/g, '');
+}
+
+function matchEmoji(stickerEmoji, targetEmoji) {
+  const a = normalizeEmoji(stickerEmoji);
+  const b = normalizeEmoji(targetEmoji);
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 async function main() {
   await mkdir(OUTPUT_DIR, { recursive: true });
 
-  const emojiToFiles = new Map();
-  REACTION_EMOJIS.forEach((e) => emojiToFiles.set(e, { center: null, effect: null }));
+  // Initialize manifest structure
+  const manifest = {};
+  REACTION_EMOJIS.forEach((e) => {
+    manifest[e] = { center: null, around: null, appear: null, select: null, effect: null, activate: null };
+  });
 
-  // Try to get sticker sets
-  for (const setName of STICKER_SET_NAMES) {
-    console.log(`\nFetching sticker set: ${setName}`);
+  let totalDownloaded = 0;
+
+  for (const [type, setName] of Object.entries(ANIMATION_SETS)) {
+    console.log(`\n━━━ Fetching "${setName}" for [${type}] ━━━`);
+    let set;
     try {
-      const set = await botApi('getStickerSet', { name: setName });
-      console.log(`  Found ${set.stickers.length} stickers in "${set.name}" (${set.title})`);
-
-      for (const sticker of set.stickers) {
-        const emoji = sticker.emoji;
-        if (!emoji) continue;
-
-        // Check if this emoji is one of our reaction emojis
-        const matchedEmoji = REACTION_EMOJIS.find((re) => re === emoji || re.includes(emoji) || emoji.includes(re.replace('\uFE0F', '')));
-        if (!matchedEmoji) continue;
-
-        const entry = emojiToFiles.get(matchedEmoji);
-        if (!entry) continue;
-
-        const type = sticker.is_animated ? 'tgs' : sticker.is_video ? 'webm' : 'webp';
-        if (type !== 'tgs') continue; // We only want TGS
-
-        // First TGS match goes to center, second to effect
-        if (!entry.center) {
-          entry.center = sticker;
-          console.log(`  ✓ ${matchedEmoji} center: file_id=${sticker.file_id.slice(0, 20)}...`);
-        } else if (!entry.effect) {
-          entry.effect = sticker;
-          console.log(`  ✓ ${matchedEmoji} effect: file_id=${sticker.file_id.slice(0, 20)}...`);
-        }
-      }
+      set = await botApi('getStickerSet', { name: setName });
+      console.log(`  Found ${set.stickers.length} stickers`);
     } catch (err) {
       console.error(`  ✗ Failed: ${err.message}`);
-    }
-  }
-
-  // Download all found TGS files
-  const manifest = {};
-  let downloaded = 0;
-
-  for (const emoji of REACTION_EMOJIS) {
-    const entry = emojiToFiles.get(emoji);
-    const safeId = emojiToSafeId(emoji);
-
-    manifest[emoji] = { center: null, effect: null };
-
-    if (entry?.center) {
-      try {
-        const data = await downloadFile(entry.center.file_id);
-        const fileName = `${safeId}_center.tgs`;
-        await writeFile(join(OUTPUT_DIR, fileName), data);
-        manifest[emoji].center = fileName;
-        downloaded++;
-        console.log(`Downloaded ${emoji} center → ${fileName} (${data.length} bytes)`);
-      } catch (err) {
-        console.error(`Failed to download ${emoji} center: ${err.message}`);
-      }
+      continue;
     }
 
-    if (entry?.effect) {
+    // For each reaction emoji, find the first matching TGS sticker
+    for (const targetEmoji of REACTION_EMOJIS) {
+      if (manifest[targetEmoji][type]) continue; // already have it
+
+      const sticker = set.stickers.find((s) => {
+        if (!s.emoji) return false;
+        if (!s.is_animated) return false; // only TGS
+        return matchEmoji(s.emoji, targetEmoji);
+      });
+
+      if (!sticker) continue;
+
+      const safeId = emojiToSafeId(targetEmoji);
+      const fileName = `${safeId}_${type}.tgs`;
+
       try {
-        const data = await downloadFile(entry.effect.file_id);
-        const fileName = `${safeId}_effect.tgs`;
+        const data = await downloadFile(sticker.file_id);
         await writeFile(join(OUTPUT_DIR, fileName), data);
-        manifest[emoji].effect = fileName;
-        downloaded++;
-        console.log(`Downloaded ${emoji} effect → ${fileName} (${data.length} bytes)`);
+        manifest[targetEmoji][type] = fileName;
+        totalDownloaded++;
+        console.log(`  ✓ ${targetEmoji} ${type} → ${fileName} (${data.length} bytes)`);
       } catch (err) {
-        console.error(`Failed to download ${emoji} effect: ${err.message}`);
+        console.error(`  ✗ ${targetEmoji} ${type}: ${err.message}`);
       }
+
+      // Small delay to avoid rate limiting
+      await new Promise((r) => setTimeout(r, 50));
     }
   }
 
@@ -141,14 +133,18 @@ async function main() {
   const manifestPath = join(OUTPUT_DIR, 'manifest.json');
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 
-  console.log(`\n=== Summary ===`);
-  console.log(`Downloaded: ${downloaded} TGS files`);
+  console.log(`\n═══ Summary ═══`);
+  console.log(`Downloaded: ${totalDownloaded} TGS files`);
   console.log(`Manifest: ${manifestPath}`);
 
-  // Report missing
-  const missing = REACTION_EMOJIS.filter((e) => !manifest[e]?.center);
-  if (missing.length > 0) {
-    console.log(`\nMissing center animations for: ${missing.join(', ')}`);
+  // Report coverage
+  for (const type of Object.keys(ANIMATION_SETS)) {
+    const missing = REACTION_EMOJIS.filter((e) => !manifest[e][type]);
+    if (missing.length > 0) {
+      console.log(`Missing ${type}: ${missing.join(', ')}`);
+    } else {
+      console.log(`${type}: ✓ all 22 emojis covered`);
+    }
   }
 }
 

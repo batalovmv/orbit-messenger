@@ -1,90 +1,178 @@
 {
   "❤️": {
     "center": "2764_fe0f_center.tgs",
-    "effect": "2764_fe0f_effect.tgs"
+    "around": "2764_fe0f_around.tgs",
+    "appear": "2764_fe0f_appear.tgs",
+    "select": "2764_fe0f_select.tgs",
+    "effect": "2764_fe0f_effect.tgs",
+    "activate": "2764_fe0f_activate.tgs"
   },
   "👍": {
     "center": "1f44d_center.tgs",
-    "effect": "1f44d_effect.tgs"
+    "around": "1f44d_around.tgs",
+    "appear": "1f44d_appear.tgs",
+    "select": "1f44d_select.tgs",
+    "effect": "1f44d_effect.tgs",
+    "activate": "1f44d_activate.tgs"
   },
   "👎": {
     "center": "1f44e_center.tgs",
-    "effect": "1f44e_effect.tgs"
+    "around": "1f44e_around.tgs",
+    "appear": "1f44e_appear.tgs",
+    "select": "1f44e_select.tgs",
+    "effect": "1f44e_effect.tgs",
+    "activate": "1f44e_activate.tgs"
   },
   "🔥": {
     "center": "1f525_center.tgs",
-    "effect": "1f525_effect.tgs"
+    "around": "1f525_around.tgs",
+    "appear": "1f525_appear.tgs",
+    "select": "1f525_select.tgs",
+    "effect": "1f525_effect.tgs",
+    "activate": "1f525_activate.tgs"
   },
   "🥰": {
     "center": "1f970_center.tgs",
-    "effect": "1f970_effect.tgs"
+    "around": "1f970_around.tgs",
+    "appear": "1f970_appear.tgs",
+    "select": "1f970_select.tgs",
+    "effect": "1f970_effect.tgs",
+    "activate": "1f970_activate.tgs"
   },
   "👏": {
     "center": "1f44f_center.tgs",
-    "effect": "1f44f_effect.tgs"
+    "around": "1f44f_around.tgs",
+    "appear": "1f44f_appear.tgs",
+    "select": "1f44f_select.tgs",
+    "effect": "1f44f_effect.tgs",
+    "activate": "1f44f_activate.tgs"
   },
   "😁": {
     "center": "1f601_center.tgs",
-    "effect": "1f601_effect.tgs"
+    "around": "1f601_around.tgs",
+    "appear": "1f601_appear.tgs",
+    "select": "1f601_select.tgs",
+    "effect": "1f601_effect.tgs",
+    "activate": "1f601_activate.tgs"
   },
   "🎉": {
     "center": "1f389_center.tgs",
-    "effect": "1f389_effect.tgs"
+    "around": "1f389_around.tgs",
+    "appear": "1f389_appear.tgs",
+    "select": "1f389_select.tgs",
+    "effect": "1f389_effect.tgs",
+    "activate": "1f389_activate.tgs"
   },
   "🤔": {
     "center": "1f914_center.tgs",
-    "effect": "1f914_effect.tgs"
+    "around": "1f914_around.tgs",
+    "appear": "1f914_appear.tgs",
+    "select": "1f914_select.tgs",
+    "effect": "1f914_effect.tgs",
+    "activate": "1f914_activate.tgs"
   },
   "😢": {
     "center": "1f622_center.tgs",
-    "effect": null
+    "around": "1f622_around.tgs",
+    "appear": "1f622_appear.tgs",
+    "select": "1f622_select.tgs",
+    "effect": null,
+    "activate": "1f622_activate.tgs"
   },
   "😡": {
     "center": "1f621_center.tgs",
-    "effect": "1f621_effect.tgs"
+    "around": "1f621_around.tgs",
+    "appear": "1f621_appear.tgs",
+    "select": "1f621_select.tgs",
+    "effect": "1f621_effect.tgs",
+    "activate": "1f621_activate.tgs"
   },
   "👀": {
     "center": "1f440_center.tgs",
-    "effect": "1f440_effect.tgs"
+    "around": "1f440_around.tgs",
+    "appear": "1f440_appear.tgs",
+    "select": "1f440_select.tgs",
+    "effect": "1f440_effect.tgs",
+    "activate": "1f440_activate.tgs"
   },
   "🤯": {
     "center": "1f92f_center.tgs",
-    "effect": "1f92f_effect.tgs"
+    "around": "1f92f_around.tgs",
+    "appear": "1f92f_appear.tgs",
+    "select": "1f92f_select.tgs",
+    "effect": "1f92f_effect.tgs",
+    "activate": "1f92f_activate.tgs"
   },
   "🤝": {
     "center": "1f91d_center.tgs",
-    "effect": "1f91d_effect.tgs"
+    "around": "1f91d_around.tgs",
+    "appear": "1f91d_appear.tgs",
+    "select": "1f91d_select.tgs",
+    "effect": "1f91d_effect.tgs",
+    "activate": "1f91d_activate.tgs"
   },
   "🙏": {
     "center": "1f64f_center.tgs",
-    "effect": "1f64f_effect.tgs"
+    "around": "1f64f_around.tgs",
+    "appear": "1f64f_appear.tgs",
+    "select": "1f64f_select.tgs",
+    "effect": "1f64f_effect.tgs",
+    "activate": "1f64f_activate.tgs"
   },
   "👌": {
     "center": "1f44c_center.tgs",
-    "effect": "1f44c_effect.tgs"
+    "around": "1f44c_around.tgs",
+    "appear": "1f44c_appear.tgs",
+    "select": "1f44c_select.tgs",
+    "effect": "1f44c_effect.tgs",
+    "activate": "1f44c_activate.tgs"
   },
   "💯": {
     "center": "1f4af_center.tgs",
-    "effect": null
+    "around": "1f4af_around.tgs",
+    "appear": "1f4af_appear.tgs",
+    "select": "1f4af_select.tgs",
+    "effect": null,
+    "activate": "1f4af_activate.tgs"
   },
   "🤣": {
     "center": "1f923_center.tgs",
-    "effect": "1f923_effect.tgs"
+    "around": "1f923_around.tgs",
+    "appear": "1f923_appear.tgs",
+    "select": "1f923_select.tgs",
+    "effect": "1f923_effect.tgs",
+    "activate": "1f923_activate.tgs"
   },
   "😎": {
     "center": "1f60e_center.tgs",
-    "effect": "1f60e_effect.tgs"
+    "around": "1f60e_around.tgs",
+    "appear": "1f60e_appear.tgs",
+    "select": "1f60e_select.tgs",
+    "effect": "1f60e_effect.tgs",
+    "activate": "1f60e_activate.tgs"
   },
   "🤩": {
     "center": "1f929_center.tgs",
-    "effect": "1f929_effect.tgs"
+    "around": "1f929_around.tgs",
+    "appear": "1f929_appear.tgs",
+    "select": "1f929_select.tgs",
+    "effect": "1f929_effect.tgs",
+    "activate": "1f929_activate.tgs"
   },
   "💔": {
     "center": "1f494_center.tgs",
-    "effect": "1f494_effect.tgs"
+    "around": "1f494_around.tgs",
+    "appear": "1f494_appear.tgs",
+    "select": "1f494_select.tgs",
+    "effect": "1f494_effect.tgs",
+    "activate": "1f494_activate.tgs"
   },
   "✅": {
-    "center": "2705_center.tgs",
-    "effect": "2705_effect.tgs"
+    "center": null,
+    "around": null,
+    "appear": null,
+    "select": null,
+    "effect": "2705_effect.tgs",
+    "activate": "2705_activate.tgs"
   }
 }
