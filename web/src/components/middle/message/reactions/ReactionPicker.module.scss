@@ -27,13 +27,11 @@
     --offset-x: -0.75rem;
     --offset-y: calc(100% + 0.625rem);
 
-    pointer-events: none;
     transform: scale(var(--animation-start-scale)) !important;
     transition: opacity 150ms cubic-bezier(0.2, 0, 0.2, 1), transform 150ms cubic-bezier(0.2, 0, 0.2, 1) !important;
   }
 
   &:global(.bubble.open) {
-    pointer-events: auto;
     transform: scale(1) !important;
   }
 

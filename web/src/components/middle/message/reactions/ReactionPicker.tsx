@@ -210,7 +210,7 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
     <Menu
       isOpen={isOpen}
       ref={menuRef}
-      className={buildClassName(styles.menu, 'ReactionPicker')}
+      className={buildClassName(styles.menu, !isOpen && styles.hidden, 'ReactionPicker')}
       bubbleClassName={buildClassName(
         styles.menuContent,
         !shouldUseFullPicker && !renderedStoryId && styles.onlyReactions,
