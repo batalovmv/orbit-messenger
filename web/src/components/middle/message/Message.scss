@@ -83,12 +83,14 @@
     justify-content: center;
 
     opacity: 0;
+    pointer-events: none;
 
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
     transition-delay: 0.2s;
 
     &.visible {
       opacity: 1 !important;
+      pointer-events: auto;
     }
 
     &:hover {
