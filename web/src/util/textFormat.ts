@@ -52,7 +52,8 @@ export function formatFileSize(lang: LangFn, bytes: number, decimals = 1): strin
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   const v = (bytes / (k ** i));
-  const value = v.toFixed(Math.max(decimals, 0));
+  const effectiveDecimals = i === 0 ? 0 : Math.max(decimals, 0);
+  const value = v.toFixed(effectiveDecimals);
 
   return lang(`MediaSize${FILE_SIZE_UNITS[i]}`, { size: value }, { pluralValue: v });
 }
