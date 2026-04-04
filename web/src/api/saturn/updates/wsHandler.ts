@@ -353,19 +353,6 @@ function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
         ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId),
       } as any,
   });
-
-  const options = Array.isArray(data.option_ids)
-    ? data.option_ids.filter((optionId): optionId is string => typeof optionId === 'string')
-    : undefined;
-
-  if (peerId && options) {
-    sendApiUpdate({
-      '@type': 'updateMessagePollVote',
-      pollId,
-      peerId,
-      options,
-    });
-  }
 }
 
 function buildApiPollFromWs(

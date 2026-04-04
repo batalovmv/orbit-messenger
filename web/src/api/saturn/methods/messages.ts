@@ -1259,15 +1259,6 @@ export async function sendPollVote({
       pollId: apiPoll.id,
       pollUpdate: apiPoll,
     });
-
-    if (currentUserId) {
-      sendApiUpdate({
-        '@type': 'updateMessagePollVote',
-        pollId: apiPoll.id,
-        peerId: currentUserId,
-        options,
-      });
-    }
   }
 
   return true;

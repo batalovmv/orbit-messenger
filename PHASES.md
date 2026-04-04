@@ -697,6 +697,8 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 8.2 (Search polish): middle search получил фильтры по типу сообщения, дате и отправителю; `/search` принимает alias-параметры `from/after/before` и типы `links/files`; клик по `#hashtag` открывает чистый поиск по тегу
 - [x] Шаг 8.1 (Reaction emoji parity): picker / reaction bubbles / selector используют Apple-style emoji-data-ios assets для static reaction render, Unicode fallback остаётся только для неподдержанных glyphs
 - [x] Шаг 7.1 (Poll parity + quiz explanation): poll UI приведён к TG Web A 1-в-1 (radio/checkbox до голосования, оригинальные spacing/result lines/button), quiz explanation/solution прокинут end-to-end через Saturn + messaging backend
+- [x] Шаг 8.3 (Manual QA hardening): убран неработающий `Checklist` из Orbit attach menu до появления backend/API поддержки, добавлен regression test на `canAttachToDoLists: false`
+- [x] Шаг 8.4 (Manual QA poll regression): `sendPollVote` и WS `poll_vote` больше не дублируют локальный инкремент поверх серверного poll state, добавлен regression test на корректные `100%`/`50%`
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
 - [x] Шаг 7.2 (Sticker render parity): preview/full sticker asset chain больше не путает `tgs/webm` с image-preview, sticker message attachments сохраняют `thumbnail_url`, picker covers и fallback-рендер используют `StickerView` для animated/video/static наборов
 

@@ -1,9 +1,14 @@
 import type { ApiChat, ApiMessage } from '../../types';
-import type { SaturnMessage } from '../types';
+import type { SaturnMessage, SaturnPoll } from '../types';
 
+import { registerMessageId } from '../apiBuilders/messages';
 import * as client from '../client';
 import * as apiUpdateEmitter from '../updates/apiUpdateEmitter';
-import { editMessage, setCurrentUserId } from './messages';
+import {
+  editMessage,
+  sendPollVote,
+  setCurrentUserId,
+} from './messages';
 
 describe('editMessage', () => {
   afterEach(() => {
@@ -127,5 +132,74 @@ describe('editMessage', () => {
       isFull: true,
       message,
     });
+  });
+});
+
+describe('sendPollVote', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('applies the server poll state without an extra optimistic increment', async () => {
+    const sendApiUpdate = jest.spyOn(apiUpdateEmitter, 'sendApiUpdate').mockImplementation(jest.fn());
+    jest.spyOn(client, 'request').mockResolvedValue({
+      id: 'poll-1',
+      message_id: 'message-uuid',
+      question: 'Everything synced?',
+      is_anonymous: true,
+      is_multiple: false,
+      is_quiz: false,
+      is_closed: false,
+      total_voters: 1,
+      created_at: '2026-04-04T07:41:48.194699Z',
+      options: [
+        {
+          id: 'option-1',
+          poll_id: 'poll-1',
+          text: 'Yes',
+          position: 0,
+          voters: 1,
+          is_chosen: true,
+        },
+        {
+          id: 'option-2',
+          poll_id: 'poll-1',
+          text: 'No',
+          position: 1,
+          voters: 0,
+        },
+      ],
+    } satisfies SaturnPoll);
+
+    setCurrentUserId('user-1');
+    registerMessageId('chat-1', 'message-uuid', 15);
+
+    const result = await sendPollVote({
+      chat: { id: 'chat-1' } as ApiChat,
+      messageId: 15,
+      options: ['option-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(client.request).toHaveBeenCalledWith('POST', '/messages/message-uuid/poll/vote', {
+      option_ids: ['option-1'],
+    });
+    expect(sendApiUpdate).toHaveBeenCalledTimes(1);
+    expect(sendApiUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      '@type': 'updateMessagePoll',
+      pollId: 'poll-1',
+      pollUpdate: expect.objectContaining({
+        results: expect.objectContaining({
+          totalVoters: 1,
+          results: expect.arrayContaining([
+            expect.objectContaining({
+              option: 'option-1',
+              votersCount: 1,
+              isChosen: true,
+            }),
+          ]),
+        }),
+      }),
+    }));
   });
 });
