@@ -497,6 +497,47 @@ chunked_upload:{uploadId}      TTL = 1 hour
 
 Паттерн: `{domain}:{id}` или `{domain}:{id1}:{id2}`. Все эфемерные ключи ОБЯЗАНЫ иметь TTL.
 
+## Реакции и стикеры — архитектурные решения
+
+### Реакции
+
+- **Только Unicode emoji** — бэкенд хранит `emoji TEXT` в `message_reactions`. Custom emoji реакции (document_id стикера) — запланированы после Phase 5
+- **Бэкенд валидация** — `AddReaction` отклоняет emoji длиннее 32 символов и UUID-подобные строки
+- **Frontend diff** — `sendReaction` загружает текущие реакции с сервера, вычисляет diff (removals/additions), отправляет параллельно. После — `fetchMessageReactions` refresh для синхронизации
+- **Quick-bar** — всегда статичные PNG/SVG иконки (`noAppearAnimation`), без Lottie анимаций. Это надёжнее и не ломается после state changes
+- **Доп паки** — стикеры из custom emoji паков при клике в reaction picker отправляют `sticker.emoji` как обычную Unicode реакцию
+
+### Стикеры
+
+- **URL rewriting** — `FillPreviewURLs()` на `Sticker` и `StickerPack` конвертирует MinIO URLs в gateway-relative `/media/{uuid}`. Frontend `toAbsoluteUrl` блокирует `http://minio|localhost` URLs как safety net
+- **Emoji fallback** — если `sticker.emoji` = undefined (media_attachments path), берётся из `richContent` JSON в `buildApiMessage`
+- **Serialization** — `serializeStickerForMessage` → JSON в `content` поле сообщения. При десериализации `buildStickerFromSerializedMessage` восстанавливает `ApiSticker`
+
+### Reaction TGS анимации
+
+126 файлов в `web/src/assets/tgs/reactions/` из 6 Telegram стикер-сетов:
+
+| Тип | Стикер-сет | Назначение | Используется в |
+|-----|-----------|-----------|---------------|
+| `center` | EmojiCenterAnimations | Маленькая loop-иконка на счётчике | `centerIcon` |
+| `around` | EmojiAroundAnimations | Burst/взрыв вокруг реакции | `aroundAnimation` |
+| `appear` | EmojiAppearAnimations | Появление в picker | `appearAnimation` |
+| `select` | EmojiShortAnimations | Hover-loop в picker | `selectAnimation` |
+| `effect` | EmojiAnimations | Большой эффект частиц | `effectAnimation` |
+| `activate` | AnimatedEmojies | Full-size emoji при клике | `activateAnimation` |
+
+Скрипт скачивания: `scripts/download-reaction-tgs/download.mjs`
+
+### Pointer-events правила для реакций
+
+Все animation overlay'ы в реакциях ОБЯЗАНЫ иметь `pointer-events: none`:
+- `ReactionAnimatedEmoji .root` — animation wrapper
+- `CustomEmojiEffect .root` — particle effect overlay
+- `ReactionSelectorReaction .AnimatedSticker` — Lottie player в picker
+- `ReactionSelectorReaction .staticIcon` — static emoji image
+- `.quick-reaction` — невидимая кнопка быстрой реакции (pointer-events: none когда opacity: 0)
+- `ReactionPicker .menu` — `display: none` когда `!isOpen` (z-index 10200, перекрывает всё)
+
 ## Saturn API конвенции (Frontend)
 
 ### Именование методов

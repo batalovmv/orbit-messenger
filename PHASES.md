@@ -702,6 +702,15 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
 - [x] Шаг 7.2 (Sticker render parity): preview/full sticker asset chain больше не путает `tgs/webm` с image-preview, sticker message attachments сохраняют `thumbnail_url`, picker covers и fallback-рендер используют `StickerView` для animated/video/static наборов
 - [x] Шаг 9 (Security audit): privacy settings enforcement в `GET /users/:id`, fix sender_id leak в anonymous channel NATS events, fix `media_ready` WS handler bug, ILIKE wildcard escaping, DB indexes (sender_id, reply_to_id), length constraints (polls.solution, sticker_packs.short_name), `updated_at` на chat_invite_links, WS reconnect → full sync, SettingsMain refactored to use callApi, NATS URL redacted from logs
+- [x] Шаг 10 (Reaction/Sticker stabilization):
+  - Fix: reaction emoji mapping — ReactionPicker всегда отправляет `{ type: 'emoji', emoticon }`, убран broken custom emoji path через customEmojis.byId
+  - Fix: sticker emoji backfill — media_attachments path теперь подхватывает emoji из richContent JSON
+  - Fix: MinIO URL leak prevention — `StickerPack.FillPreviewURLs()`, `toGatewayMediaURL` safety net, frontend `toAbsoluteUrl` блокирует MinIO/localhost URLs
+  - Fix: UUID-as-emoji validation — бэкенд отклоняет UUID в AddReaction, фронтенд валидирует в ReactionPicker и ReactionStaticEmoji
+  - Fix: pointer-events overlay chain (5 слоёв) — CustomEmojiEffect, ReactionAnimatedEmoji, .quick-reaction, ReactionSelectorReaction (.AnimatedSticker + .staticIcon), ReactionPicker (display:none when !isOpen)
+  - Feat: 126 TGS реакционных анимаций из 6 Telegram стикер-сетов (center/around/appear/select/effect/activate)
+  - Fix: quick-bar всегда static PNG (noAppearAnimation), overflow:hidden на .root
+  - Fix: fetchMessageReactions refresh после sendReaction для предотвращения state desync
 
 ### Проработка (Шаг 0)
 
