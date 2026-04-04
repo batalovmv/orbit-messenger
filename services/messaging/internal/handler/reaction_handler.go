@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log/slog"
+	"regexp"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -45,6 +46,9 @@ func (h *ReactionHandler) AddReaction(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&body); err != nil || body.Emoji == "" {
 		return response.Error(c, apperror.BadRequest("Emoji is required"))
+	}
+	if len(body.Emoji) > 32 || looksLikeUUID(body.Emoji) {
+		return response.Error(c, apperror.BadRequest("Invalid emoji"))
 	}
 	if err := h.svc.AddReaction(c.Context(), msgID, userID, body.Emoji); err != nil {
 		return response.Error(c, err)
@@ -152,4 +156,10 @@ func (h *ReactionHandler) SetAvailableReactions(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, 200, fiber.Map{"ok": true})
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func looksLikeUUID(s string) bool {
+	return uuidPattern.MatchString(s)
 }

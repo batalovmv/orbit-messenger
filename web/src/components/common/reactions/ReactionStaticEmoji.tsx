@@ -47,7 +47,7 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
   const cacheBuster = 1;
   const mediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
   const thumbDataUri = useThumbnail(staticIcon?.thumbnail);
-  const emojiImagePath = reaction.type === 'emoji'
+  const emojiImagePath = reaction.type === 'emoji' && reaction.emoticon.length <= 16
     ? getEmojiImagePath(reaction.emoticon, size && size > 32 ? 'big' : 'small')
     : undefined;
   const fallbackImagePath = thumbDataUri || emojiImagePath;

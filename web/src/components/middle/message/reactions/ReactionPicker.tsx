@@ -114,7 +114,9 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   }));
 
   const handleToggleCustomReaction = useLastCallback((sticker: ApiSticker) => {
-    if (!renderedChatId || !renderedMessageId || !sticker.emoji) {
+    // Guard: emoji must exist and be a real Unicode emoji, not a UUID or long ASCII string.
+    if (!renderedChatId || !renderedMessageId || !sticker.emoji || sticker.emoji.length > 16
+      || /^[0-9a-f]{8}-/.test(sticker.emoji)) {
       return;
     }
     // Saturn backend only supports Unicode emoji reactions, not custom emoji document IDs.
