@@ -193,7 +193,7 @@ const ReactionSelector: FC<OwnProps> = ({
                   isReady={isReady}
                   onToggleReaction={onToggleReaction}
                   reaction={reaction}
-                  noAppearAnimation={!canPlayAnimatedEmojis}
+                  noAppearAnimation
                   chosen={userReactionIndexes.has(i)}
                   isLocked={areReactionsLocked}
                   style={`--_appear-delay: ${i * FADE_IN_DELAY}ms`}
