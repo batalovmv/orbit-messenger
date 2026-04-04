@@ -192,9 +192,9 @@ func (s *AuthService) Logout(ctx context.Context, tokenStr, refreshToken string)
 	}
 
 	// Delete the refresh session from DB so the token cannot be reused.
-	// Require refresh token to prevent partial logout (access blacklisted but refresh still active).
 	if refreshToken == "" {
-		slog.Warn("logout called without refresh token, session not revoked", "token_hash", hash)
+		slog.Warn("logout called without refresh token, access blacklisted but refresh session not revoked", "token_hash", hash)
+		return apperror.BadRequest("Refresh token is required for complete logout")
 	} else {
 		refreshHash := hashToken(refreshToken)
 		if err := s.sessions.DeleteByTokenHash(ctx, refreshHash); err != nil {

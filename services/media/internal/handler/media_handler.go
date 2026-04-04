@@ -99,6 +99,8 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 		c.Set("Cache-Control", "public, max-age=31536000, immutable")
 		c.Set("Accept-Ranges", "bytes")
 		c.Set("Content-Length", fmt.Sprintf("%d", rr.PartSize))
+		c.Set("Content-Disposition", "attachment")
+		c.Set("X-Content-Type-Options", "nosniff")
 		if rr.ContentRange != "" {
 			c.Set("Content-Range", rr.ContentRange)
 		}
@@ -118,6 +120,8 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 	c.Set("Content-Type", contentType)
 	c.Set("Cache-Control", "public, max-age=31536000, immutable")
 	c.Set("Accept-Ranges", "bytes")
+	c.Set("Content-Disposition", "attachment")
+	c.Set("X-Content-Type-Options", "nosniff")
 
 	// Stream directly from S3 to response — never buffer entire file in memory.
 	// Files can be up to 2 GB; io.ReadAll would OOM on concurrent large downloads.

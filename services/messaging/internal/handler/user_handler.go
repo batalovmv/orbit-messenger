@@ -49,18 +49,11 @@ func (h *UserHandler) GetUser(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
 
-	// Check if requesting own profile (full data) or someone else's (strip PII)
 	callerID, _ := getUserID(c)
 
-	u, err := h.svc.GetUser(c.Context(), targetID)
+	u, err := h.svc.GetUserForViewer(c.Context(), callerID, targetID)
 	if err != nil {
 		return response.Error(c, err)
-	}
-
-	// Strip PII for non-self lookups
-	if callerID != targetID {
-		u.Email = ""
-		u.Phone = nil
 	}
 
 	return response.JSON(c, fiber.StatusOK, u)
@@ -104,7 +97,7 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 	}
 
 	if req.AvatarURL != nil && *req.AvatarURL != "" && !isValidAvatarURL(*req.AvatarURL) {
-		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be http(s)"))
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
 	}
 
 	u, err := h.svc.UpdateProfile(c.Context(), uid, req.DisplayName,

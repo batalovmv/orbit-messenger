@@ -19,7 +19,7 @@ func newTestScheduledService(
 	cs *mockChatStore,
 	rec *RecordingPublisher,
 ) *ScheduledMessageService {
-	return NewScheduledMessageService(ss, ms, ps, cs, rec, slog.Default())
+	return NewScheduledMessageService(ss, ms, ps, cs, nil, rec, nil, slog.Default())
 }
 
 func schedAssertAppError(t *testing.T, err error, wantStatus int) {
@@ -41,8 +41,11 @@ func TestSchedule_NotMember(t *testing.T) {
 	future := time.Now().Add(24 * time.Hour)
 
 	cs := &mockChatStore{
-		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
-			return false, "", nil
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group"}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return nil, nil
 		},
 	}
 	rec := &RecordingPublisher{}
@@ -62,8 +65,11 @@ func TestSchedule_PastTime(t *testing.T) {
 	past := time.Now().Add(-1 * time.Hour)
 
 	cs := &mockChatStore{
-		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
-			return true, "member", nil
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
 		},
 	}
 	rec := &RecordingPublisher{}
@@ -83,8 +89,11 @@ func TestSchedule_EmptyContent(t *testing.T) {
 	future := time.Now().Add(24 * time.Hour)
 
 	cs := &mockChatStore{
-		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
-			return true, "member", nil
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
 		},
 	}
 	rec := &RecordingPublisher{}
@@ -104,8 +113,11 @@ func TestSchedule_Success(t *testing.T) {
 	future := time.Now().Add(24 * time.Hour)
 
 	cs := &mockChatStore{
-		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
-			return true, "member", nil
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
 		},
 	}
 	rec := &RecordingPublisher{}
@@ -323,6 +335,12 @@ func TestDeliverPending_DeliversAndMarksSent(t *testing.T) {
 		},
 	}
 	cs := &mockChatStore{
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
+		},
 		getMemberIDsFn: func(ctx context.Context, cID uuid.UUID) ([]string, error) {
 			return []string{userID.String()}, nil
 		},
@@ -405,6 +423,12 @@ func TestSendNow_ScheduledPollCreatesPoll(t *testing.T) {
 		},
 	}
 	cs := &mockChatStore{
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
+		},
 		getMemberIDsFn: func(ctx context.Context, cID uuid.UUID) ([]string, error) {
 			return []string{userID.String()}, nil
 		},

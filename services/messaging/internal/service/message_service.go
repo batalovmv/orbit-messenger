@@ -166,6 +166,20 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		msgType = "text"
 	}
 
+	// Validate reply_to_id belongs to the same chat
+	if replyToID != nil {
+		replyMsg, err := s.messages.GetByID(ctx, *replyToID)
+		if err != nil {
+			return nil, fmt.Errorf("check reply message: %w", err)
+		}
+		if replyMsg == nil || replyMsg.IsDeleted {
+			return nil, apperror.BadRequest("Reply message not found")
+		}
+		if replyMsg.ChatID != chatID {
+			return nil, apperror.BadRequest("Cannot reply to a message from a different chat")
+		}
+	}
+
 	msg := &model.Message{
 		ChatID:    chatID,
 		SenderID:  &senderID,
@@ -205,7 +219,8 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		anonMsg.SenderID = nil
 		anonMsg.SenderName = ""
 		anonMsg.SenderAvatarURL = nil
-		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs, senderID.String())
+		// Omit senderID from NATS envelope to prevent leaking real author
+		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs)
 	} else {
 		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 	}
@@ -302,12 +317,64 @@ func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.U
 }
 
 func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.UUID, toChatID, senderID uuid.UUID) ([]model.Message, error) {
-	isMember, _, err := s.chats.IsMember(ctx, toChatID, senderID)
+	chat, err := s.chats.GetByID(ctx, toChatID)
 	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
+		return nil, fmt.Errorf("get target chat: %w", err)
 	}
-	if !isMember {
+	if chat == nil {
+		return nil, apperror.NotFound("Target chat not found")
+	}
+
+	member, err := s.chats.GetMember(ctx, toChatID, senderID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
 		return nil, apperror.Forbidden("Not a member of the target chat")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
+		return nil, apperror.Forbidden("You don't have permission to send messages")
+	}
+
+	// Block check in direct chats
+	if chat.Type == "direct" && s.blockedStore != nil {
+		members, _, _, err := s.chats.GetMembers(ctx, toChatID, "", 2)
+		if err != nil {
+			return nil, fmt.Errorf("get dm members: %w", err)
+		}
+		for _, m := range members {
+			if m.UserID == senderID {
+				continue
+			}
+			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, senderID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You cannot send messages to this user")
+			}
+			blocked, err = s.blockedStore.IsBlocked(ctx, senderID, m.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You have blocked this user")
+			}
+		}
+	}
+
+	// Slow mode check
+	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
+		redisKey := fmt.Sprintf("slowmode:%s:%s", toChatID, senderID)
+		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		if err != nil {
+			slog.Error("redis slow mode check failed", "error", err)
+			return nil, apperror.Internal("Slow mode check temporarily unavailable")
+		}
+		if exists > 0 {
+			return nil, apperror.TooManyRequests("Slow mode active")
+		}
 	}
 
 	// Batch fetch all messages in one query (instead of N queries)
@@ -319,6 +386,7 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	// IDOR: check membership in each unique source chat (1 query per unique chat, not per message)
 	sourceChatChecked := make(map[uuid.UUID]bool)
 	var toForward []model.Message
+	var origIDs []uuid.UUID
 	for i := range originals {
 		orig := &originals[i]
 		if orig.IsDeleted {
@@ -343,6 +411,7 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 			Entities:      orig.Entities,
 			ForwardedFrom: orig.SenderID,
 		})
+		origIDs = append(origIDs, orig.ID)
 	}
 
 	if len(toForward) == 0 {
@@ -352,6 +421,28 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	created, err := s.messages.CreateForwarded(ctx, toForward)
 	if err != nil {
 		return nil, fmt.Errorf("create forwarded: %w", err)
+	}
+
+	// Copy media attachments from originals to forwarded messages
+	if len(origIDs) == len(created) {
+		origMediaMap, mediaErr := s.messages.GetMediaByMessageIDs(ctx, origIDs)
+		if mediaErr != nil {
+			slog.Error("failed to get media for forwarded messages", "error", mediaErr)
+		} else {
+			for i, origID := range origIDs {
+				attachments, ok := origMediaMap[origID]
+				if !ok || len(attachments) == 0 {
+					continue
+				}
+				mediaIDs := make([]string, len(attachments))
+				for j, a := range attachments {
+					mediaIDs[j] = a.MediaID
+				}
+				if copyErr := s.messages.CopyMediaLinks(ctx, created[i].ID, mediaIDs); copyErr != nil {
+					slog.Error("failed to copy media for forwarded message", "orig_id", origID, "new_id", created[i].ID, "error", copyErr)
+				}
+			}
+		}
 	}
 
 	// Publish events for each forwarded message
@@ -519,6 +610,33 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		return nil, apperror.Forbidden("You don't have permission to send media")
 	}
 
+	// Block check: in direct chats, check if either user has blocked the other
+	if chat.Type == "direct" && s.blockedStore != nil {
+		members, _, _, err := s.chats.GetMembers(ctx, chatID, "", 2)
+		if err != nil {
+			return nil, fmt.Errorf("get dm members: %w", err)
+		}
+		for _, m := range members {
+			if m.UserID == senderID {
+				continue
+			}
+			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, senderID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You cannot send messages to this user")
+			}
+			blocked, err = s.blockedStore.IsBlocked(ctx, senderID, m.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You have blocked this user")
+			}
+		}
+	}
+
 	// Slow mode check
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
@@ -534,6 +652,20 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 				waitSec = chat.SlowModeSeconds
 			}
 			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", waitSec))
+		}
+	}
+
+	// Validate reply_to_id belongs to the same chat
+	if replyToID != nil {
+		replyMsg, err := s.messages.GetByID(ctx, *replyToID)
+		if err != nil {
+			return nil, fmt.Errorf("check reply message: %w", err)
+		}
+		if replyMsg == nil || replyMsg.IsDeleted {
+			return nil, apperror.BadRequest("Reply message not found")
+		}
+		if replyMsg.ChatID != chatID {
+			return nil, apperror.BadRequest("Cannot reply to a message from a different chat")
 		}
 	}
 
@@ -587,7 +719,7 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		anonMsg.SenderID = nil
 		anonMsg.SenderName = ""
 		anonMsg.SenderAvatarURL = nil
-		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs, senderID.String())
+		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs)
 	} else {
 		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 	}

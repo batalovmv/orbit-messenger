@@ -159,6 +159,26 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 	return result, rows.Err()
 }
 
+// CopyMediaLinks creates message_media links for a new message, copying from existing media IDs.
+func (s *messageStore) CopyMediaLinks(ctx context.Context, newMessageID uuid.UUID, mediaIDs []string) error {
+	for i, mediaID := range mediaIDs {
+		parsedID, err := uuid.Parse(mediaID)
+		if err != nil {
+			return fmt.Errorf("invalid media id %s: %w", mediaID, err)
+		}
+		_, err = s.pool.Exec(ctx,
+			`INSERT INTO message_media (message_id, media_id, position, is_spoiler)
+			 VALUES ($1, $2, $3, false)
+			 ON CONFLICT DO NOTHING`,
+			newMessageID, parsedID, i,
+		)
+		if err != nil {
+			return fmt.Errorf("copy media link %s: %w", mediaID, err)
+		}
+	}
+	return nil
+}
+
 // ListSharedMedia returns media from a specific chat, optionally filtered by type.
 // Each item includes the parent message context so the frontend can build full ApiMessage objects.
 func (s *messageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {

@@ -11,18 +11,22 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
+	"github.com/redis/go-redis/v9"
 )
 
 // ScheduledMessageService handles business logic for scheduled messages.
 type ScheduledMessageService struct {
-	scheduled store.ScheduledMessageStore
-	messages  store.MessageStore
-	polls     store.PollStore
-	chats     store.ChatStore
-	nats      Publisher
-	logger    *slog.Logger
+	scheduled    store.ScheduledMessageStore
+	messages     store.MessageStore
+	polls        store.PollStore
+	chats        store.ChatStore
+	blockedStore store.BlockedUsersStore
+	nats         Publisher
+	redis        *redis.Client
+	logger       *slog.Logger
 }
 
 type ScheduleMessageInput struct {
@@ -42,19 +46,23 @@ func NewScheduledMessageService(
 	messages store.MessageStore,
 	polls store.PollStore,
 	chats store.ChatStore,
+	blockedStore store.BlockedUsersStore,
 	nats Publisher,
+	rdb *redis.Client,
 	logger *slog.Logger,
 ) *ScheduledMessageService {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &ScheduledMessageService{
-		scheduled: scheduled,
-		messages:  messages,
-		polls:     polls,
-		chats:     chats,
-		nats:      nats,
-		logger:    logger,
+		scheduled:    scheduled,
+		messages:     messages,
+		polls:        polls,
+		chats:        chats,
+		blockedStore: blockedStore,
+		nats:         nats,
+		redis:        rdb,
+		logger:       logger,
 	}
 }
 
@@ -64,12 +72,44 @@ func (s *ScheduledMessageService) Schedule(
 	chatID, senderID uuid.UUID,
 	input ScheduleMessageInput,
 ) (*model.ScheduledMessage, error) {
-	isMember, _, err := s.chats.IsMember(ctx, chatID, senderID)
+	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
+		return nil, fmt.Errorf("get chat: %w", err)
 	}
-	if !isMember {
+	if chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	member, err := s.chats.GetMember(ctx, chatID, senderID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
 		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
+		return nil, apperror.Forbidden("You don't have permission to send messages")
+	}
+
+	// Block check in direct chats
+	if chat.Type == "direct" && s.blockedStore != nil {
+		members, _, _, err := s.chats.GetMembers(ctx, chatID, "", 2)
+		if err != nil {
+			return nil, fmt.Errorf("get dm members: %w", err)
+		}
+		for _, m := range members {
+			if m.UserID == senderID {
+				continue
+			}
+			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, senderID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("You cannot send messages to this user")
+			}
+		}
 	}
 
 	if !input.ScheduledAt.After(time.Now()) {
@@ -259,6 +299,47 @@ func (s *ScheduledMessageService) DeliverPending(ctx context.Context) (int, erro
 }
 
 func (s *ScheduledMessageService) deliver(ctx context.Context, scheduledMsg model.ScheduledMessage) (*model.Message, error) {
+	// Re-validate permissions at delivery time: user may have been removed/banned/blocked since scheduling
+	chat, err := s.chats.GetByID(ctx, scheduledMsg.ChatID)
+	if err != nil {
+		return nil, fmt.Errorf("get chat for delivery: %w", err)
+	}
+	if chat == nil {
+		return nil, apperror.NotFound("Chat no longer exists")
+	}
+
+	member, err := s.chats.GetMember(ctx, scheduledMsg.ChatID, scheduledMsg.SenderID)
+	if err != nil {
+		return nil, fmt.Errorf("get member for delivery: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Sender is no longer a member of this chat")
+	}
+
+	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
+		return nil, apperror.Forbidden("Sender no longer has permission to send messages")
+	}
+
+	// Block check at delivery time
+	if chat.Type == "direct" && s.blockedStore != nil {
+		members, _, _, err := s.chats.GetMembers(ctx, scheduledMsg.ChatID, "", 2)
+		if err != nil {
+			return nil, fmt.Errorf("get dm members for delivery: %w", err)
+		}
+		for _, m := range members {
+			if m.UserID == scheduledMsg.SenderID {
+				continue
+			}
+			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, scheduledMsg.SenderID)
+			if err != nil {
+				return nil, fmt.Errorf("check blocked at delivery: %w", err)
+			}
+			if blocked {
+				return nil, apperror.Forbidden("Sender is blocked by recipient")
+			}
+		}
+	}
+
 	msgType := scheduledMsg.Type
 	if msgType == "" {
 		msgType = "text"

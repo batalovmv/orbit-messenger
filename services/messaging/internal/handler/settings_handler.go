@@ -3,6 +3,8 @@ package handler
 import (
 	"errors"
 	"log/slog"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -285,6 +287,18 @@ func (h *SettingsHandler) SubscribePush(c *fiber.Ctx) error {
 
 	if !strings.HasPrefix(req.Endpoint, "https://") {
 		return response.Error(c, apperror.BadRequest("endpoint must start with https://"))
+	}
+	// SSRF protection: only allow known Web Push service hostnames
+	endpointURL, err := url.Parse(req.Endpoint)
+	if err != nil || endpointURL.Host == "" {
+		return response.Error(c, apperror.BadRequest("invalid push endpoint URL"))
+	}
+	// Block private/loopback IPs in the hostname
+	host := endpointURL.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return response.Error(c, apperror.BadRequest("push endpoint must not point to a private address"))
+		}
 	}
 	if req.P256DH == "" {
 		return response.Error(c, apperror.BadRequest("p256dh is required"))

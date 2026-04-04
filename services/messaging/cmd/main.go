@@ -103,7 +103,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
-	slog.Info("NATS connected", "url", natsURL)
+	slog.Info("NATS connected")
 
 	natsPublisher := service.NewNATSPublisher(nc)
 
@@ -145,7 +145,7 @@ func main() {
 
 	// Services
 	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb)
-	userSvc := service.NewUserService(userStore, chatStore)
+	userSvc := service.NewUserService(userStore, chatStore, privacyStore)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
@@ -167,7 +167,9 @@ func main() {
 		messageStore,
 		pollStore,
 		chatStore,
+		blockedStore,
 		natsPublisher,
+		rdb,
 		logger,
 	)
 
@@ -253,19 +255,22 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-messaging"})
 	})
 
-	// Register routes (gateway strips /api/v1, so messaging receives paths directly)
-	chatHandler.Register(app)
-	msgHandler.Register(app)
-	userHandler.Register(app)
-	inviteHandler.Register(app)
-	inviteHandler.RegisterPublic(app)
-	settingsHandler.Register(app)
-	searchHandler.Register(app)
-	reactionHandler.Register(app)
-	stickerHandler.Register(app)
-	gifHandler.Register(app)
-	pollHandler.Register(app)
-	scheduledHandler.Register(app)
+	// Register routes behind internal token middleware.
+	// X-User-ID is only trusted when X-Internal-Token is valid,
+	// preventing identity spoofing if the service is reached outside the gateway.
+	api := app.Group("", handler.RequireInternalToken(internalSecret))
+	chatHandler.Register(api)
+	msgHandler.Register(api)
+	userHandler.Register(api)
+	inviteHandler.Register(api)
+	inviteHandler.RegisterPublic(api)
+	settingsHandler.Register(api)
+	searchHandler.Register(api)
+	reactionHandler.Register(api)
+	stickerHandler.Register(api)
+	gifHandler.Register(api)
+	pollHandler.Register(api)
+	scheduledHandler.Register(api)
 
 	// Graceful shutdown
 	go func() {

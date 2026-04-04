@@ -358,6 +358,10 @@ func (m *mockMessageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs 
 	return nil, nil
 }
 
+func (m *mockMessageStore) CopyMediaLinks(ctx context.Context, newMessageID uuid.UUID, mediaIDs []string) error {
+	return nil
+}
+
 func (m *mockMessageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {
 	return nil, "", false, nil
 }
@@ -508,6 +512,34 @@ func (m *mockInviteStore) UpdateJoinRequestStatus(ctx context.Context, chatID, u
 func (m *mockInviteStore) DeleteJoinRequest(ctx context.Context, chatID, userID uuid.UUID) error {
 	if m.deleteJoinRequestFn != nil {
 		return m.deleteJoinRequestFn(ctx, chatID, userID)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Mock PrivacySettingsStore
+// ---------------------------------------------------------------------------
+
+type mockPrivacySettingsStore struct {
+	getByUserIDFn func(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error)
+	upsertFn      func(ctx context.Context, settings *model.PrivacySettings) error
+}
+
+func (m *mockPrivacySettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error) {
+	if m.getByUserIDFn != nil {
+		return m.getByUserIDFn(ctx, userID)
+	}
+	return &model.PrivacySettings{
+		UserID:   userID,
+		LastSeen: "everyone",
+		Avatar:   "everyone",
+		Phone:    "everyone",
+	}, nil
+}
+
+func (m *mockPrivacySettingsStore) Upsert(ctx context.Context, settings *model.PrivacySettings) error {
+	if m.upsertFn != nil {
+		return m.upsertFn(ctx, settings)
 	}
 	return nil
 }

@@ -96,9 +96,11 @@ orbit/
 
 ## Текущее состояние
 
-**Фаза: 0 — Костяк создан, код не написан.**
+**Фаза: 5 — Rich Messaging (in progress). Фазы 1–4 выполнены.**
 
-Следующий шаг: Phase 1 — Core Messaging (auth + gateway + messaging + фронтенд).
+Рабочие сервисы: auth, gateway, messaging, media (handler/service/store + тесты).
+Stub-сервисы: calls, ai, bots, integrations (health-check only, Phase 6–8).
+Фронтенд: форк TG Web A с Saturn API layer (~50 stub-методов, core chat UX работает).
 
 Подробный план: `PHASES.md`
 Полное ТЗ: `docs/TZ-ORBIT-MESSENGER.md`

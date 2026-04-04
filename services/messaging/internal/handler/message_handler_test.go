@@ -32,7 +32,7 @@ func newRichMessageApp(ms *mockMessageStore, cs *mockChatStore, ps *mockPollStor
 
 	var scheduledSvc *service.ScheduledMessageService
 	if ss != nil {
-		scheduledSvc = service.NewScheduledMessageService(ss, ms, nil, cs, nats, slog.Default())
+		scheduledSvc = service.NewScheduledMessageService(ss, ms, nil, cs, nil, nats, nil, slog.Default())
 	}
 
 	h := NewMessageHandler(msgSvc, pollSvc, scheduledSvc, nil, slog.Default())

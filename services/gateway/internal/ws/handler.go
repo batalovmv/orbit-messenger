@@ -263,6 +263,8 @@ func (h *Handler) handleClientMessage(conn *Conn, msg []byte) {
 	switch cm.Type {
 	case "typing":
 		h.handleTyping(conn, cm.Data)
+	case "stop_typing":
+		h.handleStopTyping(conn, cm.Data)
 	case "ping":
 		conn.Send(Envelope{Type: EventPong, Data: json.RawMessage(`{}`)})
 	}
@@ -357,6 +359,45 @@ func (h *Handler) handleTyping(conn *Conn, data json.RawMessage) {
 		h.typingMu.Unlock()
 	})
 	h.typingMu.Unlock()
+}
+
+func (h *Handler) handleStopTyping(conn *Conn, data json.RawMessage) {
+	var td TypingData
+	if err := json.Unmarshal(data, &td); err != nil || td.ChatID == "" {
+		return
+	}
+	if _, err := uuid.Parse(td.ChatID); err != nil {
+		return
+	}
+
+	chatID := td.ChatID
+	userID := conn.UserID
+
+	// Cancel auto-expire timer
+	key := chatID + ":" + userID
+	h.typingMu.Lock()
+	if timer, ok := h.typingTimers[key]; ok {
+		timer.Stop()
+		delete(h.typingTimers, key)
+	}
+	delete(h.typingDebounce, key)
+	h.typingMu.Unlock()
+
+	// Publish stop_typing immediately
+	stopData, _ := json.Marshal(map[string]string{
+		"chat_id": chatID,
+		"user_id": userID,
+	})
+	evt := NATSEvent{
+		Event:     EventStopTyping,
+		Data:      stopData,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	evtJSON, _ := json.Marshal(evt)
+	subject := "orbit.chat." + chatID + ".typing"
+	if err := h.NATS.Publish(subject, evtJSON); err != nil {
+		slog.Error("failed to publish stop_typing", "error", err)
+	}
 }
 
 // typingCleanupLoop periodically removes stale entries from typingDebounce map.

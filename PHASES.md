@@ -51,7 +51,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 ---
 
-## Phase 0: Костяк (текущая)
+## Phase 0: Костяк (done)
 
 **Цель:** Структура проекта, конфиги, документация.
 
@@ -680,7 +680,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 ---
 
-## Phase 5: Rich Messaging
+## Phase 5: Rich Messaging (текущая)
 
 **Цель:** Реакции, стикеры, GIF, опросы, scheduled messages. Всё бесплатно.
 **Сервисы:** messaging (расширить), gateway (WS)
@@ -701,6 +701,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Шаг 8.4 (Manual QA poll regression): `sendPollVote` и WS `poll_vote` больше не дублируют локальный инкремент поверх серверного poll state, добавлен regression test на корректные `100%`/`50%`
 - [x] Шаг 8.1 (Push stabilization): gateway Web Push теперь отправляет payload с `sequence_number` всем подписанным устройствам получателей кроме отправителя, Service Worker понимает gateway payload и корректно открывает чат/сообщение, in-app banners снова показываются на активной вкладке вне текущего чата
 - [x] Шаг 7.2 (Sticker render parity): preview/full sticker asset chain больше не путает `tgs/webm` с image-preview, sticker message attachments сохраняют `thumbnail_url`, picker covers и fallback-рендер используют `StickerView` для animated/video/static наборов
+- [x] Шаг 9 (Security audit): privacy settings enforcement в `GET /users/:id`, fix sender_id leak в anonymous channel NATS events, fix `media_ready` WS handler bug, ILIKE wildcard escaping, DB indexes (sender_id, reply_to_id), length constraints (polls.solution, sticker_packs.short_name), `updated_at` на chat_invite_links, WS reconnect → full sync, SettingsMain refactored to use callApi, NATS URL redacted from logs
 
 ### Проработка (Шаг 0)
 

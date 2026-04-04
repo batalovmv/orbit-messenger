@@ -101,7 +101,7 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 		var msgType *string
 		if raw := c.Query("type"); raw != "" {
 			switch strings.ToLower(raw) {
-			case "text", "photo", "video", "file", "files", "voice", "video_note", "sticker", "gif", "system", "link", "links":
+			case "text", "photo", "video", "file", "files", "voice", "videonote", "video_note", "sticker", "gif", "system", "link", "links":
 				canonicalType := canonicalizeMessageType(raw)
 				msgType = &canonicalType
 			default:
@@ -132,12 +132,10 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 
 	if err != nil {
 		h.logger.Error("search failed", "error", err, "scope", scope, "query", query, "user_id", uid)
-		// Return empty results instead of 500 when Meilisearch is down or misconfigured.
-		// Root cause: Meilisearch may not have indexed data or may be unreachable.
-		// The error is logged server-side for ops debugging.
-		return response.JSON(c, fiber.StatusOK, fiber.Map{
-			"results": []map[string]interface{}{},
-			"total":   0,
+		// Return 503 so clients and ops can detect search backend degradation
+		return response.JSON(c, fiber.StatusServiceUnavailable, fiber.Map{
+			"error":   "search_unavailable",
+			"message": "Search is temporarily unavailable",
 			"query":   query,
 			"scope":   scope,
 		})

@@ -261,7 +261,7 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 
 	validTypes := map[string]bool{
 		"": true, "text": true, "photo": true, "video": true, "file": true,
-		"voice": true, "video_note": true, "sticker": true, "gif": true, "system": true,
+		"voice": true, "videonote": true, "sticker": true, "gif": true, "system": true,
 	}
 	if !validTypes[req.Type] {
 		return response.Error(c, apperror.BadRequest("Invalid message type"))
@@ -369,7 +369,7 @@ func (h *MessageHandler) scheduleMessage(
 
 	validTypes := map[string]bool{
 		"": true, "text": true, "photo": true, "video": true, "file": true,
-		"voice": true, "video_note": true, "sticker": true, "gif": true, "poll": true, "system": true,
+		"voice": true, "videonote": true, "sticker": true, "gif": true, "poll": true, "system": true,
 	}
 	if !validTypes[req.Type] {
 		return response.Error(c, apperror.BadRequest("Invalid scheduled message type"))

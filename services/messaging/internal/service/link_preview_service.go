@@ -229,10 +229,11 @@ func parseOGTags(r io.Reader, rawURL string, parsed *url.URL) (*LinkPreview, err
 				case "og:type":
 					preview.Type = content
 				case "og:url":
-					// Validate og:url to prevent URL spoofing / phishing
+					// Validate og:url: must be same host to prevent phishing
 					if content != "" {
 						if ogURL, err := url.Parse(content); err == nil &&
-							(ogURL.Scheme == "http" || ogURL.Scheme == "https") {
+							(ogURL.Scheme == "http" || ogURL.Scheme == "https") &&
+							ogURL.Host == parsed.Host {
 							preview.URL = content
 						}
 					}

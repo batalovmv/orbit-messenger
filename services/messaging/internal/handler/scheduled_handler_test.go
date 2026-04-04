@@ -2,22 +2,40 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
 func newScheduledApp(ss *mockScheduledMessageStore, ms *mockMessageStore, cs *mockChatStore) *fiber.App {
 	app := fiber.New()
 	nats := service.NewNoopNATSPublisher()
-	svc := service.NewScheduledMessageService(ss, ms, nil, cs, nats, slog.Default())
+	svc := service.NewScheduledMessageService(ss, ms, nil, cs, nil, nats, nil, slog.Default())
 	h := NewScheduledHandler(svc, slog.Default())
 	h.Register(app)
 	return app
+}
+
+// validScheduledChatStore returns a mockChatStore that returns a valid chat+member,
+// so the service-layer permission checks pass through to the validation being tested.
+func validScheduledChatStore() *mockChatStore {
+	return &mockChatStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: id, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, chatID, userID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: userID, ChatID: chatID, Role: "member", Permissions: -1}, nil
+		},
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+	}
 }
 
 // --- ListScheduled ---
@@ -64,7 +82,7 @@ func TestSchedule_MissingUserID(t *testing.T) {
 }
 
 func TestSchedule_EmptyContent(t *testing.T) {
-	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, &mockChatStore{})
+	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, validScheduledChatStore())
 	req, _ := http.NewRequest(http.MethodPost, "/chats/"+uuid.New().String()+"/messages/scheduled",
 		bytes.NewBufferString(`{"content":"","scheduled_at":"2026-04-03T09:00:00Z"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -79,7 +97,7 @@ func TestSchedule_EmptyContent(t *testing.T) {
 }
 
 func TestSchedule_MissingScheduledAt(t *testing.T) {
-	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, &mockChatStore{})
+	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, validScheduledChatStore())
 	req, _ := http.NewRequest(http.MethodPost, "/chats/"+uuid.New().String()+"/messages/scheduled",
 		bytes.NewBufferString(`{"content":"hello"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -94,7 +112,7 @@ func TestSchedule_MissingScheduledAt(t *testing.T) {
 }
 
 func TestSchedule_InvalidScheduledAtFormat(t *testing.T) {
-	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, &mockChatStore{})
+	app := newScheduledApp(&mockScheduledMessageStore{}, &mockMessageStore{}, validScheduledChatStore())
 	req, _ := http.NewRequest(http.MethodPost, "/chats/"+uuid.New().String()+"/messages/scheduled",
 		bytes.NewBufferString(`{"content":"hello","scheduled_at":"not-a-date"}`))
 	req.Header.Set("Content-Type", "application/json")

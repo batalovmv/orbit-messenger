@@ -9,17 +9,17 @@ func SecurityHeadersMiddleware() fiber.Handler {
 		c.Set("X-Frame-Options", "DENY")
 		c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Set("X-XSS-Protection", "0") // Disabled per modern best practice; CSP is preferred
-		c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		c.Set("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()")
 		// CSP: restrict script/style sources; allow WebSocket connections; block object/embed.
 		// connect-src 'self' wss: — allows API calls and WebSocket upgrades.
 		// img-src 'self' blob: data: — allows inline thumbnails and blob URLs for media.
 		c.Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "+
+				"script-src 'self' 'wasm-unsafe-eval'; "+
 				"style-src 'self' 'unsafe-inline'; "+
-				"img-src 'self' blob: data:; "+
-				"media-src 'self' blob:; "+
-				"connect-src 'self' wss:; "+
+				"img-src 'self' blob: data: https:; "+
+				"media-src 'self' blob: https:; "+
+				"connect-src 'self' https: wss:; "+
 				"font-src 'self'; "+
 				"object-src 'none'; "+
 				"base-uri 'self'; "+

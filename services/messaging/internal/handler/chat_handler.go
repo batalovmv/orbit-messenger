@@ -567,7 +567,7 @@ func isValidAvatarURL(raw string) bool {
 	if len(raw) > 2048 {
 		return false
 	}
-	return len(raw) > 8 && (raw[:8] == "https://" || raw[:7] == "http://")
+	return len(raw) > 8 && raw[:8] == "https://"
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
