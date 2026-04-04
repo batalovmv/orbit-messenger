@@ -336,20 +336,19 @@ export function buildApiAvailableReaction(emoticon: string): ApiAvailableReactio
     activateAnimation,
   } = buildReactionDocuments(emoticon);
 
-  // Picker uses selectAnimation/appearAnimation to display the reaction visually.
-  // These MUST show the recognizable emoji animation (activate = big animated emoji from AnimatedEmojies).
-  // The appear/select TGS files are transition effects (pop-in, bursts), NOT the emoji itself.
-  const pickerAnimation = activateAnimation || centerIcon;
-
+  // selectAnimation (EmojiShortAnimations) — compact hover-loop designed for the 32px picker
+  // appearAnimation (EmojiAppearAnimations) — compact appear animation for the picker
+  // activateAnimation (AnimatedEmojies) — large full-size emoji, used for message effects only
+  // centerIcon (EmojiCenterAnimations) — small looping icon for reaction counter badge
   return {
     reaction: buildApiEmojiReaction(emoticon),
     title: emoticon,
-    selectAnimation: pickerAnimation,
-    appearAnimation: pickerAnimation,
-    activateAnimation: pickerAnimation,
+    selectAnimation: selectAnimation || appearAnimation || centerIcon,
+    appearAnimation: appearAnimation || selectAnimation || centerIcon,
+    activateAnimation: activateAnimation || selectAnimation || centerIcon,
     effectAnimation,
     staticIcon,
-    centerIcon: centerIcon || pickerAnimation,
+    centerIcon: centerIcon || selectAnimation,
     aroundAnimation,
   };
 }
