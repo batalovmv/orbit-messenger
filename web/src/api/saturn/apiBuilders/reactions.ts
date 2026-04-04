@@ -336,15 +336,20 @@ export function buildApiAvailableReaction(emoticon: string): ApiAvailableReactio
     activateAnimation,
   } = buildReactionDocuments(emoticon);
 
+  // Picker uses selectAnimation/appearAnimation to display the reaction visually.
+  // These MUST show the recognizable emoji animation (activate = big animated emoji from AnimatedEmojies).
+  // The appear/select TGS files are transition effects (pop-in, bursts), NOT the emoji itself.
+  const pickerAnimation = activateAnimation || centerIcon;
+
   return {
     reaction: buildApiEmojiReaction(emoticon),
     title: emoticon,
-    selectAnimation: selectAnimation || centerIcon,
-    appearAnimation: appearAnimation || centerIcon,
-    activateAnimation: activateAnimation || centerIcon,
+    selectAnimation: pickerAnimation,
+    appearAnimation: pickerAnimation,
+    activateAnimation: pickerAnimation,
     effectAnimation,
     staticIcon,
-    centerIcon,
+    centerIcon: centerIcon || pickerAnimation,
     aroundAnimation,
   };
 }
