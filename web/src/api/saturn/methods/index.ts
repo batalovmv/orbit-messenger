@@ -808,7 +808,7 @@ function detectOs(userAgent: string) {
 }
 
 export {
-  checkAuth, loginWithEmail, logout, provideAuthPhoneNumber, provideAuthCode,
+  checkAuth, createAuthInvite, loginWithEmail, logout, provideAuthPhoneNumber, provideAuthCode,
   provideAuthPassword, provideAuthRegistration, registerWithInvite,
   restartAuth, restartAuthWithQr, restartAuthWithPasskey, validateInviteCode,
 } from './auth';

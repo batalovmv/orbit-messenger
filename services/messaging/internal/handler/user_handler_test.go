@@ -17,7 +17,7 @@ import (
 // newUserApp creates a Fiber app wired with a UserHandler backed by the given mock store.
 func newUserApp(us *mockUserStore) *fiber.App {
 	app := fiber.New()
-	svc := service.NewUserService(us, &mockChatStore{})
+	svc := service.NewUserService(us, &mockChatStore{}, &mockPrivacySettingsStore{})
 	h := NewUserHandler(svc, slog.Default())
 	h.Register(app)
 	return app

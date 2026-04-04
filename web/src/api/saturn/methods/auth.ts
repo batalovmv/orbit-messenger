@@ -230,6 +230,13 @@ export async function checkAuth() {
   }
 }
 
+export async function createAuthInvite({ role, maxUses }: { role: string; maxUses: number }) {
+  return client.request<{ id: string; code: string }>('POST', '/auth/invites', {
+    role,
+    max_uses: maxUses,
+  });
+}
+
 export async function logout() {
   try {
     await client.request('POST', '/auth/logout');

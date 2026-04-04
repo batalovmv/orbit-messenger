@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -92,11 +93,18 @@ func (s *userStore) ListAll(ctx context.Context, limit int) ([]model.User, error
 	return users, rows.Err()
 }
 
+// escapeILIKE escapes special ILIKE characters (%, _) in search terms.
+func escapeILIKE(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
+
 func (s *userStore) Search(ctx context.Context, query string, limit int) ([]model.User, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
+	escaped := "%" + escapeILIKE(query) + "%"
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, email, display_name, avatar_url, bio, phone,
 		        status, custom_status, custom_status_emoji, role,
@@ -105,7 +113,7 @@ func (s *userStore) Search(ctx context.Context, query string, limit int) ([]mode
 		 WHERE display_name ILIKE $1 OR email ILIKE $1
 		 ORDER BY display_name
 		 LIMIT $2`,
-		"%"+query+"%", limit,
+		escaped, limit,
 	)
 	if err != nil {
 		return nil, err

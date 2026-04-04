@@ -129,7 +129,7 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       break;
     }
     case 'media_ready': {
-      handleMediaReady(data);
+      handleMediaReady(msg.data);
       break;
     }
     case 'media_upload_progress': {
@@ -343,14 +343,15 @@ function handleMediaReady(data: Record<string, unknown>) {
   // Invalidate the media loader cache so the next render re-fetches the updated asset
   // (e.g. video thumbnail that was generated asynchronously).
   // The component will re-request the media on next intersection.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sendApiUpdate({
-    '@type': 'updateMessageMediaReady' as any,
+    '@type': 'updateMessageMediaReady',
     mediaId,
     width: typeof data.width === 'number' ? data.width : undefined,
     height: typeof data.height === 'number' ? data.height : undefined,
     duration: typeof data.duration_seconds === 'number' ? data.duration_seconds : undefined,
     hasThumbnail: Boolean(data.has_thumbnail),
-  });
+  } as any);
 }
 
 function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {

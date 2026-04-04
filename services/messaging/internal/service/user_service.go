@@ -11,12 +11,13 @@ import (
 )
 
 type UserService struct {
-	users store.UserStore
-	chats store.ChatStore
+	users   store.UserStore
+	chats   store.ChatStore
+	privacy store.PrivacySettingsStore
 }
 
-func NewUserService(users store.UserStore, chats store.ChatStore) *UserService {
-	return &UserService{users: users, chats: chats}
+func NewUserService(users store.UserStore, chats store.ChatStore, privacy store.PrivacySettingsStore) *UserService {
+	return &UserService{users: users, chats: chats, privacy: privacy}
 }
 
 func (s *UserService) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
@@ -42,6 +43,59 @@ func (s *UserService) GetUser(ctx context.Context, userID uuid.UUID) (*model.Use
 	if u == nil {
 		return nil, apperror.NotFound("User not found")
 	}
+	return u, nil
+}
+
+// GetUserForViewer returns a user profile with privacy settings applied.
+// Fields are stripped based on the target's privacy preferences and
+// whether the viewer is a "contact" (shares a direct chat with the target).
+func (s *UserService) GetUserForViewer(ctx context.Context, viewerID, targetID uuid.UUID) (*model.User, error) {
+	u, err := s.users.GetByID(ctx, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if u == nil {
+		return nil, apperror.NotFound("User not found")
+	}
+
+	// Own profile — return everything
+	if viewerID == targetID {
+		return u, nil
+	}
+
+	// Strip PII that is never shown to others
+	u.Email = ""
+	u.Phone = nil
+
+	// Fetch privacy settings
+	ps, err := s.privacy.GetByUserID(ctx, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("get privacy settings: %w", err)
+	}
+
+	// Determine if viewer is a "contact" (has a direct chat with target)
+	isContact := false
+	if ps.LastSeen == "contacts" || ps.Avatar == "contacts" || ps.Phone == "contacts" {
+		dmID, _ := s.chats.GetDirectChat(ctx, viewerID, targetID)
+		isContact = dmID != nil
+	}
+
+	// Apply last_seen privacy
+	if ps.LastSeen == "nobody" || (ps.LastSeen == "contacts" && !isContact) {
+		u.LastSeenAt = nil
+		u.Status = ""
+	}
+
+	// Apply avatar privacy
+	if ps.Avatar == "nobody" || (ps.Avatar == "contacts" && !isContact) {
+		u.AvatarURL = nil
+	}
+
+	// Apply phone privacy
+	if ps.Phone == "nobody" || (ps.Phone == "contacts" && !isContact) {
+		u.Phone = nil
+	}
+
 	return u, nil
 }
 

@@ -7,7 +7,7 @@ import { SettingsScreens } from '../../../types';
 import {
   selectIsPremiumPurchaseBlocked,
 } from '../../../global/selectors';
-import { request } from '../../../api/saturn/client';
+import { callApi } from '../../../api/saturn';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -68,10 +68,8 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
 
   const handleCreateInvite = useLastCallback(async () => {
     try {
-      const result = await request<{ id: string; code: string }>('POST', '/auth/invites', {
-        role: 'member',
-        max_uses: 1,
-      });
+      const result = await callApi('createAuthInvite', { role: 'member', maxUses: 1 });
+      if (!result) return;
       await navigator.clipboard.writeText(result.code);
       showNotification({ message: `${lang('AdminInviteCreated')}: ${result.code}` });
     } catch {

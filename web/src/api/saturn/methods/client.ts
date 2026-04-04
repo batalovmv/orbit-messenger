@@ -4,7 +4,7 @@ import * as saturnClient from '../client';
 import { init as initUpdateEmitter, sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { initWsHandler, setWsCurrentUserId } from '../updates/wsHandler';
 import { checkAuth } from './auth';
-import { fetchChats, setCurrentUserId as setChatUserId } from './chats';
+import { setCurrentUserId as setChatUserId } from './chats';
 import { setCurrentUserId as setMsgUserId } from './messages';
 import { setCurrentUserId as setSearchUserId } from './search';
 
@@ -16,9 +16,9 @@ export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
   initUpdateEmitter(onUpdate);
   initWsHandler();
 
-  // On WS reconnect, re-fetch chats to sync any missed updates
+  // On WS reconnect, trigger a full sync so missed messages are fetched
   saturnClient.setOnReconnect(() => {
-    fetchChats({ limit: 50 }).catch(() => {});
+    sendApiUpdate({ '@type': 'requestSync' });
   });
 
   // Create auth gate — authenticated requests will wait until checkAuth completes

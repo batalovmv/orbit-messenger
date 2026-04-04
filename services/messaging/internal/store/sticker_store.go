@@ -156,12 +156,12 @@ func (s *stickerStore) Search(ctx context.Context, query string, limit int) ([]m
 		SELECT id, title, short_name, description, author_id, thumbnail_url, is_official,
 		       is_featured, is_animated, sticker_count, created_at, updated_at
 		FROM sticker_packs
-		WHERE title ILIKE '%' || $1 || '%'
-		   OR short_name ILIKE '%' || $1 || '%'
-		   OR COALESCE(description, '') ILIKE '%' || $1 || '%'
+		WHERE title ILIKE '%' || $1 || '%' ESCAPE '\'
+		   OR short_name ILIKE '%' || $1 || '%' ESCAPE '\'
+		   OR COALESCE(description, '') ILIKE '%' || $1 || '%' ESCAPE '\'
 		ORDER BY is_featured DESC, is_official DESC, title ASC, created_at DESC
 		LIMIT $2`,
-		query, limit,
+		escapeILIKE(query), limit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search sticker packs: %w", err)
