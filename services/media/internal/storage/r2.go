@@ -229,15 +229,23 @@ func (r *R2Client) AbortMultipartUpload(ctx context.Context, key, uploadID strin
 	return nil
 }
 
-// EnsureBucket creates the bucket if it doesn't exist (for local dev with MinIO).
+// EnsureBucket creates the bucket if it doesn't exist (for local dev with MinIO)
+// and sets a public-read policy so browser can fetch sticker/media assets directly.
 func (r *R2Client) EnsureBucket(ctx context.Context) error {
 	_, err := r.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &r.bucket})
-	if err == nil {
-		return nil
-	}
-	_, err = r.client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: &r.bucket})
 	if err != nil {
-		return fmt.Errorf("create bucket %s: %w", r.bucket, err)
+		_, err = r.client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: &r.bucket})
+		if err != nil {
+			return fmt.Errorf("create bucket %s: %w", r.bucket, err)
+		}
 	}
+
+	// Set public-read policy for dev (MinIO). In production R2 handles this via dashboard.
+	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, r.bucket)
+	_, _ = r.client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+		Bucket: &r.bucket,
+		Policy: &policy,
+	})
+
 	return nil
 }

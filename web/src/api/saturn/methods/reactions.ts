@@ -174,10 +174,16 @@ export async function sendReaction({
   const uuid = saturnId || resolveMessageUuid(chat.id, messageId);
   if (!uuid) return undefined;
 
+  // Saturn backend only supports Unicode emoji reactions.
+  // Custom emoji reactions are not supported — they should be resolved to emoji upstream.
   const desiredEmojiSet = new Set(
     (reactions || [])
-      .filter((reaction): reaction is Extract<ApiReaction, { type: 'emoji' }> => reaction.type === 'emoji')
-      .map((reaction) => reaction.emoticon),
+      .reduce<string[]>((acc, reaction) => {
+        if (reaction.type === 'emoji') {
+          acc.push(reaction.emoticon);
+        }
+        return acc;
+      }, []),
   );
 
   const summaries = await loadReactionSummaries(uuid) || [];
@@ -195,7 +201,6 @@ export async function sendReaction({
     ...additions.map((emoji) => client.request('POST', `/messages/${uuid}/reactions`, { emoji })),
   ]);
 
-  await fetchMessageReactions({ ids: [messageId], chat });
   return true;
 }
 

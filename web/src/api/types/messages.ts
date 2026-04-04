@@ -759,7 +759,6 @@ export interface ApiAvailableReaction {
   title: string;
   isInactive?: boolean;
   isPremium?: boolean;
-  isLocalCache?: true;
 }
 
 export interface ApiAvailableEffect {
@@ -767,7 +766,7 @@ export interface ApiAvailableEffect {
   emoticon: string;
   staticIconId?: string;
   effectAnimationId?: string;
-  effectStickerId: string;
+  effectStickerId?: string;
   isPremium?: boolean;
 }
 

@@ -285,7 +285,29 @@ export function fetchDefaultReactions() {
   return Promise.resolve(undefined);
 }
 
-export { getUserSettings as fetchNotifyDefaultSettings } from './settingsApi';
+const NOTIFY_DEFAULTS_KEY = 'orbit:notifyDefaults';
+
+export function fetchNotifyDefaultSettings() {
+  try {
+    const stored = localStorage.getItem(NOTIFY_DEFAULTS_KEY);
+    return Promise.resolve(stored ? JSON.parse(stored) : undefined);
+  } catch {
+    return Promise.resolve(undefined);
+  }
+}
+
+export function updateNotificationSettings(
+  peerType: string,
+  settings: { isMuted?: boolean; shouldShowPreviews?: boolean },
+) {
+  try {
+    const stored = localStorage.getItem(NOTIFY_DEFAULTS_KEY);
+    const current = stored ? JSON.parse(stored) : {};
+    current[peerType] = { ...current[peerType], ...settings };
+    localStorage.setItem(NOTIFY_DEFAULTS_KEY, JSON.stringify(current));
+  } catch { /* empty */ }
+  return Promise.resolve(true);
+}
 
 export function fetchPremiumPromo(): Promise<{ promo: ApiPremiumPromo } | undefined> {
   return Promise.resolve(undefined);
@@ -564,7 +586,7 @@ export function fetchContentSettings() {
 }
 
 export function fetchContactSignUpSetting() {
-  return Promise.resolve(undefined);
+  return Promise.resolve(false);
 }
 
 type AuthorizationsResult = { authorizations: Record<string, ApiSession>; ttlDays: number };

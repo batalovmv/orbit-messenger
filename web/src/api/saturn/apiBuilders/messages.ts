@@ -492,7 +492,12 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
 
   if (!msg.media_attachments?.length && richContent?.kind === 'sticker') {
     content.sticker = buildStickerFromSerializedMessage(richContent.sticker);
-  } else if (richContent?.kind === 'gif') {
+  } else if (content.sticker && richContent?.kind === 'sticker' && richContent.sticker.emoji) {
+    // Media attachment path doesn't carry the emoji — backfill from the serialized JSON content.
+    content.sticker = { ...content.sticker, emoji: richContent.sticker.emoji };
+  }
+
+  if (richContent?.kind === 'gif') {
     content.video = buildGifFromSerializedMessage(richContent.gif);
   }
 
@@ -543,6 +548,9 @@ export function buildApiScheduledMessage(msg: SaturnScheduledMessage): ApiMessag
 
   if (msg.media_attachments?.length) {
     buildMediaContent(content, msg.media_attachments);
+    if (content.sticker && richContent?.kind === 'sticker' && richContent.sticker.emoji) {
+      content.sticker = { ...content.sticker, emoji: richContent.sticker.emoji };
+    }
   } else if (richContent?.kind === 'sticker') {
     content.sticker = buildStickerFromSerializedMessage(richContent.sticker);
     content.text = undefined;

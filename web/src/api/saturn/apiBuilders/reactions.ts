@@ -18,47 +18,51 @@ import type {
 import { getAvatarPhotoId } from './avatars';
 import { buildStaticAssetDocument, registerAsset } from './symbols';
 
-import BrokenGift from '../../../assets/tgs/BrokenGift.tgs';
-import HandFilled from '../../../assets/tgs/calls/HandFilled.tgs';
-import HandOutline from '../../../assets/tgs/calls/HandOutline.tgs';
-import Diamond from '../../../assets/tgs/Diamond.tgs';
-import Flame from '../../../assets/tgs/general/Flame.tgs';
-import Fragment from '../../../assets/tgs/general/Fragment.tgs';
-import Mention from '../../../assets/tgs/general/Mention.tgs';
-import PartyPopper from '../../../assets/tgs/general/PartyPopper.tgs';
-import Invite from '../../../assets/tgs/invites/Invite.tgs';
-import ReadTime from '../../../assets/tgs/ReadTime.tgs';
-import Report from '../../../assets/tgs/Report.tgs';
-import Search from '../../../assets/tgs/Search.tgs';
-import DuckCake from '../../../assets/tgs/settings/DuckCake.tgs';
-import Passkeys from '../../../assets/tgs/settings/Passkeys.tgs';
-import StarReaction from '../../../assets/tgs/stars/StarReaction.tgs';
-import StarReactionEffect from '../../../assets/tgs/stars/StarReactionEffect.tgs';
+// Per-emoji reaction TGS — real Telegram animations downloaded via Bot API
+import HeartCenter from '../../../assets/tgs/reactions/2764_fe0f_center.tgs';
+import HeartEffect from '../../../assets/tgs/reactions/2764_fe0f_effect.tgs';
+import ThumbsUpCenter from '../../../assets/tgs/reactions/1f44d_center.tgs';
+import ThumbsUpEffect from '../../../assets/tgs/reactions/1f44d_effect.tgs';
+import ThumbsDownCenter from '../../../assets/tgs/reactions/1f44e_center.tgs';
+import ThumbsDownEffect from '../../../assets/tgs/reactions/1f44e_effect.tgs';
+import FireCenter from '../../../assets/tgs/reactions/1f525_center.tgs';
+import FireEffect from '../../../assets/tgs/reactions/1f525_effect.tgs';
+import HeartEyesCenter from '../../../assets/tgs/reactions/1f970_center.tgs';
+import HeartEyesEffect from '../../../assets/tgs/reactions/1f970_effect.tgs';
+import ClapCenter from '../../../assets/tgs/reactions/1f44f_center.tgs';
+import ClapEffect from '../../../assets/tgs/reactions/1f44f_effect.tgs';
+import GrinCenter from '../../../assets/tgs/reactions/1f601_center.tgs';
+import GrinEffect from '../../../assets/tgs/reactions/1f601_effect.tgs';
+import PartyCenter from '../../../assets/tgs/reactions/1f389_center.tgs';
+import PartyEffect from '../../../assets/tgs/reactions/1f389_effect.tgs';
+import ThinkingCenter from '../../../assets/tgs/reactions/1f914_center.tgs';
+import ThinkingEffect from '../../../assets/tgs/reactions/1f914_effect.tgs';
+import CryCenter from '../../../assets/tgs/reactions/1f622_center.tgs';
+import AngryCenter from '../../../assets/tgs/reactions/1f621_center.tgs';
+import AngryEffect from '../../../assets/tgs/reactions/1f621_effect.tgs';
+import EyesCenter from '../../../assets/tgs/reactions/1f440_center.tgs';
+import EyesEffect from '../../../assets/tgs/reactions/1f440_effect.tgs';
+import MindBlownCenter from '../../../assets/tgs/reactions/1f92f_center.tgs';
+import MindBlownEffect from '../../../assets/tgs/reactions/1f92f_effect.tgs';
+import HandshakeCenter from '../../../assets/tgs/reactions/1f91d_center.tgs';
+import HandshakeEffect from '../../../assets/tgs/reactions/1f91d_effect.tgs';
+import PrayCenter from '../../../assets/tgs/reactions/1f64f_center.tgs';
+import PrayEffect from '../../../assets/tgs/reactions/1f64f_effect.tgs';
+import OkCenter from '../../../assets/tgs/reactions/1f44c_center.tgs';
+import OkEffect from '../../../assets/tgs/reactions/1f44c_effect.tgs';
+import HundredCenter from '../../../assets/tgs/reactions/1f4af_center.tgs';
+import RoflCenter from '../../../assets/tgs/reactions/1f923_center.tgs';
+import RoflEffect from '../../../assets/tgs/reactions/1f923_effect.tgs';
+import CoolCenter from '../../../assets/tgs/reactions/1f60e_center.tgs';
+import CoolEffect from '../../../assets/tgs/reactions/1f60e_effect.tgs';
+import StarStruckCenter from '../../../assets/tgs/reactions/1f929_center.tgs';
+import StarStruckEffect from '../../../assets/tgs/reactions/1f929_effect.tgs';
+import BrokenHeartCenter from '../../../assets/tgs/reactions/1f494_center.tgs';
+import BrokenHeartEffect from '../../../assets/tgs/reactions/1f494_effect.tgs';
+import CheckCenter from '../../../assets/tgs/reactions/2705_center.tgs';
+import CheckEffect from '../../../assets/tgs/reactions/2705_effect.tgs';
 
-const REACTION_ANIMATION_ASSETS = {
-  BrokenGift,
-  Diamond,
-  ReadTime,
-  Report,
-  Search,
-  HandFilled,
-  HandOutline,
-  Flame,
-  Fragment,
-  Mention,
-  PartyPopper,
-  Invite,
-  DuckCake,
-  Passkeys,
-  StarReaction,
-  StarReactionEffect,
-} as const;
-
-type LocalAnimationKey = keyof typeof REACTION_ANIMATION_ASSETS;
-type ReactionAnimationPreset = {
-  center: LocalAnimationKey;
-  effect?: LocalAnimationKey;
-};
+type ReactionAnimationAsset = { center: string; effect: string };
 
 export const DEFAULT_AVAILABLE_REACTION_EMOJIS = [
   '❤️',
@@ -85,48 +89,30 @@ export const DEFAULT_AVAILABLE_REACTION_EMOJIS = [
   '✅',
 ];
 
-const DEFAULT_CENTER_ANIMATIONS: LocalAnimationKey[] = [
-  'StarReaction',
-  'PartyPopper',
-  'Flame',
-  'Mention',
-  'Diamond',
-  'Invite',
-  'ReadTime',
-  'DuckCake',
-];
-
-const DEFAULT_EFFECT_ANIMATIONS: LocalAnimationKey[] = [
-  'StarReactionEffect',
-  'PartyPopper',
-  'Flame',
-  'Fragment',
-  'Mention',
-];
-
-const REACTION_ANIMATION_PRESETS: Record<string, ReactionAnimationPreset> = {
-  '❤️': { center: 'StarReaction', effect: 'StarReactionEffect' },
-  '👍': { center: 'HandFilled', effect: 'Mention' },
-  '👎': { center: 'HandOutline', effect: 'Fragment' },
-  '🔥': { center: 'Flame', effect: 'Flame' },
-  '🥰': { center: 'StarReaction', effect: 'StarReactionEffect' },
-  '👏': { center: 'HandFilled', effect: 'PartyPopper' },
-  '😁': { center: 'DuckCake', effect: 'PartyPopper' },
-  '🎉': { center: 'PartyPopper', effect: 'PartyPopper' },
-  '🤔': { center: 'Search', effect: 'Search' },
-  '😢': { center: 'BrokenGift', effect: 'Fragment' },
-  '😡': { center: 'Report', effect: 'Fragment' },
-  '👀': { center: 'Search', effect: 'Mention' },
-  '🤯': { center: 'Fragment', effect: 'Fragment' },
-  '🤝': { center: 'Invite', effect: 'Mention' },
-  '🙏': { center: 'HandFilled', effect: 'Mention' },
-  '👌': { center: 'HandOutline', effect: 'Mention' },
-  '💯': { center: 'Diamond', effect: 'StarReactionEffect' },
-  '🤣': { center: 'DuckCake', effect: 'PartyPopper' },
-  '😎': { center: 'Passkeys', effect: 'StarReactionEffect' },
-  '🤩': { center: 'Diamond', effect: 'StarReactionEffect' },
-  '💔': { center: 'BrokenGift', effect: 'Fragment' },
-  '✅': { center: 'ReadTime', effect: 'Mention' },
+// Real per-emoji Telegram reaction animations (center icon + effect)
+const REACTION_ANIMATIONS: Record<string, ReactionAnimationAsset> = {
+  '❤️': { center: HeartCenter, effect: HeartEffect },
+  '👍': { center: ThumbsUpCenter, effect: ThumbsUpEffect },
+  '👎': { center: ThumbsDownCenter, effect: ThumbsDownEffect },
+  '🔥': { center: FireCenter, effect: FireEffect },
+  '🥰': { center: HeartEyesCenter, effect: HeartEyesEffect },
+  '👏': { center: ClapCenter, effect: ClapEffect },
+  '😁': { center: GrinCenter, effect: GrinEffect },
+  '🎉': { center: PartyCenter, effect: PartyEffect },
+  '🤔': { center: ThinkingCenter, effect: ThinkingEffect },
+  '😢': { center: CryCenter, effect: CryCenter },
+  '😡': { center: AngryCenter, effect: AngryEffect },
+  '👀': { center: EyesCenter, effect: EyesEffect },
+  '🤯': { center: MindBlownCenter, effect: MindBlownEffect },
+  '🤝': { center: HandshakeCenter, effect: HandshakeEffect },
+  '🙏': { center: PrayCenter, effect: PrayEffect },
+  '👌': { center: OkCenter, effect: OkEffect },
+  '💯': { center: HundredCenter, effect: HundredCenter },
+  '🤣': { center: RoflCenter, effect: RoflEffect },
+  '😎': { center: CoolCenter, effect: CoolEffect },
+  '🤩': { center: StarStruckCenter, effect: StarStruckEffect },
+  '💔': { center: BrokenHeartCenter, effect: BrokenHeartEffect },
+  '✅': { center: CheckCenter, effect: CheckEffect },
 };
 
 const LOCAL_REACTION_ASSET_SIZE = 128;
@@ -159,32 +145,23 @@ function getSafeReactionId(emoticon: string) {
     .join('_');
 }
 
-function getReactionAnimationPreset(emoticon: string, index: number): ReactionAnimationPreset {
-  const preset = REACTION_ANIMATION_PRESETS[emoticon];
-  if (preset) {
-    return preset;
-  }
-
-  return {
-    center: DEFAULT_CENTER_ANIMATIONS[index % DEFAULT_CENTER_ANIMATIONS.length],
-    effect: DEFAULT_EFFECT_ANIMATIONS[index % DEFAULT_EFFECT_ANIMATIONS.length],
-  };
+function getReactionAnimationAsset(emoticon: string): ReactionAnimationAsset | undefined {
+  return REACTION_ANIMATIONS[emoticon];
 }
 
 function buildLocalAnimatedReactionDocument(
   id: string,
   fileName: string,
   emoticon: string,
-  assetKey: LocalAnimationKey,
+  assetUrl: string,
 ): ApiDocument {
-  const url = REACTION_ANIMATION_ASSETS[assetKey];
   const thumbnailDataUri = buildReactionThumbnailDataUri(emoticon);
 
   registerAsset(id, {
     fileName,
-    fullUrl: url,
+    fullUrl: assetUrl,
     mimeType: LOCAL_REACTION_MIME_TYPE,
-    previewUrl: url,
+    previewUrl: assetUrl,
     thumbnailDataUri,
   }, ['document', 'sticker']);
 
@@ -193,7 +170,7 @@ function buildLocalAnimatedReactionDocument(
     id,
     fileName,
     mimeType: LOCAL_REACTION_MIME_TYPE,
-    size: url.length,
+    size: assetUrl.length,
     thumbnail: {
       dataUri: thumbnailDataUri,
       width: LOCAL_REACTION_ASSET_SIZE,
@@ -202,22 +179,30 @@ function buildLocalAnimatedReactionDocument(
   };
 }
 
-function buildReactionDocuments(emoticon: string, index: number) {
+function buildReactionDocuments(emoticon: string) {
   const safeId = getSafeReactionId(emoticon);
-  const preset = getReactionAnimationPreset(emoticon, index);
+  const asset = getReactionAnimationAsset(emoticon);
   const staticIcon = buildStaticAssetDocument(`reaction_static_${safeId}`, emoticon, 'reaction');
-  const centerIcon = buildLocalAnimatedReactionDocument(
-    `reaction_center_${safeId}`,
-    `reaction-${safeId}-center.tgs`,
-    emoticon,
-    preset.center,
-  );
-  const effectAnimation = buildLocalAnimatedReactionDocument(
-    `reaction_effect_${safeId}`,
-    `reaction-${safeId}-effect.tgs`,
-    emoticon,
-    preset.effect || preset.center,
-  );
+  const centerUrl = asset?.center;
+  const effectUrl = asset?.effect || centerUrl;
+
+  const centerIcon = centerUrl
+    ? buildLocalAnimatedReactionDocument(
+      `reaction_center_${safeId}`,
+      `reaction-${safeId}-center.tgs`,
+      emoticon,
+      centerUrl,
+    )
+    : undefined;
+
+  const effectAnimation = effectUrl
+    ? buildLocalAnimatedReactionDocument(
+      `reaction_effect_${safeId}`,
+      `reaction-${safeId}-effect.tgs`,
+      emoticon,
+      effectUrl,
+    )
+    : undefined;
 
   return {
     safeId,
@@ -234,12 +219,12 @@ export function buildApiEmojiReaction(emoticon: string): ApiReactionEmoji {
   };
 }
 
-export function buildApiAvailableReaction(emoticon: string, index = 0): ApiAvailableReaction {
+export function buildApiAvailableReaction(emoticon: string): ApiAvailableReaction {
   const {
     staticIcon,
     centerIcon,
     effectAnimation,
-  } = buildReactionDocuments(emoticon, index);
+  } = buildReactionDocuments(emoticon);
 
   return {
     reaction: buildApiEmojiReaction(emoticon),
@@ -251,33 +236,32 @@ export function buildApiAvailableReaction(emoticon: string, index = 0): ApiAvail
     staticIcon,
     centerIcon,
     aroundAnimation: effectAnimation,
-    isLocalCache: true,
   };
 }
 
 export function buildAvailableReactions(emojis = DEFAULT_AVAILABLE_REACTION_EMOJIS) {
-  return emojis.map((emoji, index) => buildApiAvailableReaction(emoji, index));
+  return emojis.map((emoji) => buildApiAvailableReaction(emoji));
 }
 
-export function buildApiAvailableReactionEffect(emoticon: string, index = 0): ApiAvailableEffect {
+export function buildApiAvailableReactionEffect(emoticon: string): ApiAvailableEffect {
   const {
     safeId,
     staticIcon,
     centerIcon,
     effectAnimation,
-  } = buildReactionDocuments(emoticon, index);
+  } = buildReactionDocuments(emoticon);
 
   return {
     id: `orbit_effect_${safeId}`,
     emoticon,
     staticIconId: staticIcon.id,
-    effectAnimationId: effectAnimation.id,
-    effectStickerId: centerIcon.id!,
+    effectAnimationId: effectAnimation?.id,
+    effectStickerId: centerIcon?.id,
   };
 }
 
 export function buildAvailableEffects(emojis = DEFAULT_AVAILABLE_REACTION_EMOJIS) {
-  return emojis.map((emoji, index) => buildApiAvailableReactionEffect(emoji, index));
+  return emojis.map((emoji) => buildApiAvailableReactionEffect(emoji));
 }
 
 export function buildApiChatReactions(reactions?: SaturnChatAvailableReactions): ApiChatReactions | undefined {

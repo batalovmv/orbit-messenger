@@ -114,12 +114,12 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   }));
 
   const handleToggleCustomReaction = useLastCallback((sticker: ApiSticker) => {
-    if (!renderedChatId || !renderedMessageId) {
+    if (!renderedChatId || !renderedMessageId || !sticker.emoji) {
       return;
     }
-    const reaction: ApiReaction = sticker.isCustomEmoji
-      ? { type: 'custom', documentId: sticker.id }
-      : { type: 'emoji', emoticon: sticker.emoji! };
+    // Saturn backend only supports Unicode emoji reactions, not custom emoji document IDs.
+    // Always resolve to the sticker's emoji regardless of isCustomEmoji flag.
+    const reaction: ApiReaction = { type: 'emoji', emoticon: sticker.emoji };
 
     toggleReaction({
       chatId: renderedChatId, messageId: renderedMessageId, reaction, shouldAddToRecent: true,

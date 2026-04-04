@@ -81,14 +81,13 @@ const ReactionAnimatedEmoji = ({
   const availableReaction = useMemo(() => (
     availableReactions?.find((r) => isSameReaction(r.reaction, reaction))
   ), [availableReactions, reaction]);
-  const hasLocalFallbackAnimation = Boolean(availableReaction?.isLocalCache);
-  const centerIconId = hasLocalFallbackAnimation ? undefined : availableReaction?.centerIcon?.id;
+  const centerIconId = availableReaction?.centerIcon?.id;
 
   const { customEmoji } = useCustomEmoji(isCustom ? reaction.documentId : undefined);
 
   const assignedEffectId = useMemo(() => {
     if (!isCustom) {
-      return hasLocalFallbackAnimation ? undefined : availableReaction?.aroundAnimation?.id;
+      return availableReaction?.aroundAnimation?.id;
     }
 
     if (!customEmoji) return undefined;
@@ -97,12 +96,8 @@ const ReactionAnimatedEmoji = ({
       type: 'emoji',
       emoticon: customEmoji.emoji || '',
     }));
-    const assignedId = matchingAvailableReaction && !matchingAvailableReaction.isLocalCache
-      ? matchingAvailableReaction.aroundAnimation?.id
-      : undefined;
-
-    return assignedId;
-  }, [availableReaction, availableReactions, customEmoji, hasLocalFallbackAnimation, isCustom]);
+    return matchingAvailableReaction?.aroundAnimation?.id;
+  }, [availableReaction, availableReactions, customEmoji, isCustom]);
 
   const effectId = useMemo(() => {
     if (assignedEffectId) {

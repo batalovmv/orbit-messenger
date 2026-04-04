@@ -140,10 +140,7 @@ func (h *StickerHandler) GetDocuments(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	for i := range stickers {
-		stickers[i].FillPreviewURLs()
-	}
-
+	// FillPreviewURLs is already called in service layer — no need to call again.
 	return response.JSON(c, 200, stickers)
 }
 

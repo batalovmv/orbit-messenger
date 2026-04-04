@@ -44,7 +44,7 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
   const staticIcon = resolvedAvailableReaction?.staticIcon;
   const staticIconId = staticIcon?.id;
   const mediaHash = staticIconId ? `document${staticIconId}` : undefined;
-  const cacheBuster = resolvedAvailableReaction?.isLocalCache ? 0 : 1;
+  const cacheBuster = 1;
   const mediaData = useMedia(mediaHash, false, undefined, undefined, cacheBuster);
   const thumbDataUri = useThumbnail(staticIcon?.thumbnail);
   const emojiImagePath = reaction.type === 'emoji'

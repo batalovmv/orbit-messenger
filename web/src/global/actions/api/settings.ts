@@ -348,7 +348,7 @@ addActionHandler('loadNotificationExceptions', async (global): Promise<void> => 
 });
 
 addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
-  const [signUpNotification, _notifyDefaults] = await Promise.all([
+  const [signUpNotification, notifyDefaults] = await Promise.all([
     callApi('fetchContactSignUpSetting'),
     callApi('fetchNotifyDefaultSettings'),
   ]);
@@ -357,6 +357,19 @@ addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
   global = replaceSettings(global, {
     hasContactJoinedNotifications: signUpNotification,
   });
+
+  if (notifyDefaults) {
+    const peerTypes = ['users', 'groups', 'channels'] as const;
+    for (const peerType of peerTypes) {
+      const peerSettings = notifyDefaults[peerType];
+      if (peerSettings) {
+        global = updateNotifyDefaults(global, peerType, {
+          mutedUntil: peerSettings.isMuted ? MUTE_INDEFINITE_TIMESTAMP : UNMUTE_TIMESTAMP,
+          shouldShowPreviews: peerSettings.shouldShowPreviews,
+        });
+      }
+    }
+  }
   setGlobal(global);
 });
 

@@ -86,6 +86,7 @@ func (s *StickerService) GetPack(ctx context.Context, packID, userID uuid.UUID) 
 		return nil, fmt.Errorf("check sticker pack install status: %w", err)
 	}
 	pack.IsInstalled = installed
+	pack.FillPreviewURLs()
 
 	return pack, nil
 }
@@ -103,6 +104,7 @@ func (s *StickerService) ListFeatured(ctx context.Context, userID uuid.UUID, lim
 			return nil, fmt.Errorf("check featured sticker pack install status: %w", err)
 		}
 		packs[i].IsInstalled = installed
+		packs[i].FillPreviewURLs()
 	}
 
 	return packs, nil
@@ -119,6 +121,9 @@ func (s *StickerService) Search(ctx context.Context, query string, limit int) ([
 	if err != nil {
 		return nil, fmt.Errorf("search sticker packs: %w", err)
 	}
+	for i := range packs {
+		packs[i].FillPreviewURLs()
+	}
 	return packs, nil
 }
 
@@ -131,6 +136,7 @@ func (s *StickerService) ListInstalled(ctx context.Context, userID uuid.UUID) ([
 
 	for i := range packs {
 		packs[i].IsInstalled = true
+		packs[i].FillPreviewURLs()
 	}
 
 	return packs, nil

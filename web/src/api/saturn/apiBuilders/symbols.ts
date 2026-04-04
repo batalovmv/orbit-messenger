@@ -71,6 +71,16 @@ function toAssetKey(kind: AssetKind, id: string) {
 
 function toAbsoluteUrl(url?: string) {
   if (!url) return undefined;
+  // Block internal MinIO/S3 URLs that leaked through without rewriting.
+  // These are unreachable from the browser and indicate a backend bug.
+  if (/^https?:\/\/(?:minio|localhost:\d{4}|127\.0\.0\.1)/.test(url)) {
+    // Extract media UUID from the URL path and rebuild as gateway-relative.
+    const uuidMatch = url.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    if (uuidMatch) {
+      return `${getBaseUrl()}/media/${uuidMatch[1]}`;
+    }
+    return undefined;
+  }
   if (/^(?:https?:|data:|blob:)/.test(url)) {
     return url;
   }

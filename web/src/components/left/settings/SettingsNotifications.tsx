@@ -174,7 +174,7 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
             label={lang('NotificationsSound')}
             min={0}
             max={10}
-            disabled={!areNotificationsSupported}
+            disabled={false}
             value={notificationSoundVolume}
             onChange={handleVolumeChange}
           />

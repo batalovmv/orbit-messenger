@@ -15,7 +15,7 @@ import type {
 import type { Signal } from '../../../util/signals';
 
 import { EDITABLE_INPUT_ID, EDITABLE_INPUT_MODAL_ID } from '../../../config';
-import { requestForcedReflow, requestMutation } from '../../../lib/fasterdom/fasterdom';
+import { requestForcedReflow, requestMeasure, requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { selectCanPlayAnimatedEmojis, selectIsInSelectMode } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { selectDraft } from '../../../global/selectors/threads';
@@ -529,7 +529,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     const captureFirstTab = debounce((e: KeyboardEvent) => {
       if (e.key === 'Tab' && !getIsDirectTextInputDisabled()) {
         e.preventDefault();
-        requestMutation(focusInput);
+        requestMeasure(focusInput);
       }
     }, TAB_INDEX_PRIORITY_TIMEOUT, true, false);
 

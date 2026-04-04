@@ -60,10 +60,6 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
 
   // Preload animations
   result.forEach((availableReaction) => {
-    if (availableReaction.isLocalCache) {
-      return;
-    }
-
     if (availableReaction.aroundAnimation) {
       mediaLoader.fetch(`sticker${availableReaction.aroundAnimation.id}`, ApiMediaFormat.BlobUrl);
     }

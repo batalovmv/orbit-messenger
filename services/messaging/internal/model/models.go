@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -274,6 +276,17 @@ type StickerPack struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
+// FillPreviewURLs rewrites internal storage URLs to gateway-relative paths on StickerPack.
+func (p *StickerPack) FillPreviewURLs() {
+	if p.ThumbnailURL != nil {
+		rewritten := toGatewayMediaURL(*p.ThumbnailURL)
+		p.ThumbnailURL = &rewritten
+	}
+	for i := range p.Stickers {
+		p.Stickers[i].FillPreviewURLs()
+	}
+}
+
 // Sticker represents a single sticker in a pack.
 type Sticker struct {
 	ID           uuid.UUID `json:"id"`
@@ -288,12 +301,48 @@ type Sticker struct {
 	PreviewURL   *string   `json:"preview_url,omitempty"`
 }
 
-// FillPreviewURLs populates ThumbnailURL and PreviewURL from FileURL for webp stickers.
+// FillPreviewURLs rewrites internal storage URLs to gateway-relative paths
+// and populates ThumbnailURL and PreviewURL from FileURL when not explicitly set.
 func (s *Sticker) FillPreviewURLs() {
-	if s.FileType == "webp" && s.ThumbnailURL == nil {
+	s.FileURL = toGatewayMediaURL(s.FileURL)
+	if s.ThumbnailURL == nil {
 		s.ThumbnailURL = &s.FileURL
-		s.PreviewURL = &s.FileURL
+	} else {
+		rewritten := toGatewayMediaURL(*s.ThumbnailURL)
+		s.ThumbnailURL = &rewritten
 	}
+	if s.PreviewURL == nil {
+		s.PreviewURL = &s.FileURL
+	} else {
+		rewritten := toGatewayMediaURL(*s.PreviewURL)
+		s.PreviewURL = &rewritten
+	}
+}
+
+// toGatewayMediaURL converts internal S3/MinIO URLs to gateway-relative paths.
+// Input:  http://minio:9000/orbit-media/file/{media_id}/original.octet-stream
+// Output: /media/{media_id}
+func toGatewayMediaURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	parts := strings.Split(strings.TrimPrefix(parsed.Path, "/"), "/")
+	for _, part := range parts {
+		if _, err := uuid.Parse(part); err == nil {
+			return "/media/" + part
+		}
+	}
+	// If this is an internal URL (has scheme+host) but no UUID was found,
+	// do NOT return the raw URL — it would leak internal infrastructure to the client.
+	if parsed.Scheme != "" && parsed.Host != "" {
+		return ""
+	}
+	// Already a relative path (e.g. /media/...) — return as-is.
+	return rawURL
 }
 
 // SavedGIF represents a user's saved GIF from Tenor.

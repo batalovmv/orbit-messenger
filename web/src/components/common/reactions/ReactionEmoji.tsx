@@ -55,7 +55,7 @@ const ReactionEmoji: FC<OwnProps> = ({
     availableReactions?.find((available) => isSameReaction(available.reaction, reaction))
   ), [availableReactions, reaction]);
   const thumbDataUri = availableReaction?.staticIcon?.thumbnail?.dataUri;
-  const hasAnimatedReaction = Boolean(availableReaction?.selectAnimation?.id) && !availableReaction?.isLocalCache;
+  const hasAnimatedReaction = Boolean(availableReaction?.selectAnimation?.id);
   const shouldUseStaticReaction = reaction.type === 'emoji' && !hasAnimatedReaction;
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
