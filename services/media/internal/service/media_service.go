@@ -341,6 +341,11 @@ func (s *MediaService) StreamFile(ctx context.Context, r2Key string) (io.ReadClo
 	return s.r2.GetObject(ctx, r2Key)
 }
 
+// StreamFileRange returns a byte range of a file from storage.
+func (s *MediaService) StreamFileRange(ctx context.Context, r2Key, rangeHeader string) (*storage.RangeResult, error) {
+	return s.r2.GetObjectRange(ctx, r2Key, rangeHeader)
+}
+
 // GetR2Key returns the R2 key for the given media and variant.
 func (s *MediaService) GetR2Key(ctx context.Context, id uuid.UUID, variant string) (string, error) {
 	m, err := s.store.GetByID(ctx, id)
@@ -755,13 +760,26 @@ func (s *MediaService) publishMediaReady(mediaID uuid.UUID) {
 		return
 	}
 
+	eventData := map[string]interface{}{
+		"media_id":          m.ID.String(),
+		"type":              m.Type,
+		"processing_status": m.ProcessingStatus,
+	}
+	if m.Width != nil {
+		eventData["width"] = *m.Width
+	}
+	if m.Height != nil {
+		eventData["height"] = *m.Height
+	}
+	if m.DurationSeconds != nil {
+		eventData["duration_seconds"] = *m.DurationSeconds
+	}
+	if m.ThumbnailR2Key != nil {
+		eventData["has_thumbnail"] = true
+	}
 	event := map[string]interface{}{
 		"event": "media_ready",
-		"data": map[string]interface{}{
-			"media_id":          m.ID.String(),
-			"type":              m.Type,
-			"processing_status": m.ProcessingStatus,
-		},
+		"data":  eventData,
 	}
 	data, err := json.Marshal(event)
 	if err != nil {

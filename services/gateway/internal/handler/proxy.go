@@ -95,6 +95,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		k := strings.ToLower(string(key))
 		switch k {
 		case "content-type", "content-disposition", "content-encoding",
+			"content-length", "content-range", "accept-ranges",
 			"cache-control", "etag", "last-modified", "x-request-id",
 			"set-cookie", "location":
 			c.Response().Header.AddBytesKV(key, value)

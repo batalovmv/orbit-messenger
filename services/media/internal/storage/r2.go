@@ -109,6 +109,45 @@ func (r *R2Client) GetObject(ctx context.Context, key string) (io.ReadCloser, st
 	return out.Body, contentType, nil
 }
 
+// RangeResult holds the response from a ranged S3 GET.
+type RangeResult struct {
+	Body         io.ReadCloser
+	ContentType  string
+	PartSize     int64
+	ContentRange string // e.g. "bytes 0-1023/4096"
+}
+
+// GetObjectRange fetches a byte range of a file from R2.
+// rangeHeader should be in HTTP Range format, e.g. "bytes=0-1023".
+func (r *R2Client) GetObjectRange(ctx context.Context, key, rangeHeader string) (*RangeResult, error) {
+	out, err := r.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &r.bucket,
+		Key:    &key,
+		Range:  &rangeHeader,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("r2 get range %s: %w", key, err)
+	}
+	contentType := "application/octet-stream"
+	if out.ContentType != nil {
+		contentType = *out.ContentType
+	}
+	partSize := int64(0)
+	if out.ContentLength != nil {
+		partSize = *out.ContentLength
+	}
+	contentRange := ""
+	if out.ContentRange != nil {
+		contentRange = *out.ContentRange
+	}
+	return &RangeResult{
+		Body:         out.Body,
+		ContentType:  contentType,
+		PartSize:     partSize,
+		ContentRange: contentRange,
+	}, nil
+}
+
 // PresignedGetURL generates a temporary download URL.
 func (r *R2Client) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	out, err := r.presigner.PresignGetObject(ctx, &s3.GetObjectInput{

@@ -129,6 +129,7 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       break;
     }
     case 'media_ready': {
+      handleMediaReady(data);
       break;
     }
     case 'media_upload_progress': {
@@ -335,6 +336,23 @@ async function handleReactionChanged(data: Record<string, unknown>) {
   });
 }
 
+function handleMediaReady(data: Record<string, unknown>) {
+  const mediaId = data.media_id as string | undefined;
+  if (!mediaId) return;
+
+  // Invalidate the media loader cache so the next render re-fetches the updated asset
+  // (e.g. video thumbnail that was generated asynchronously).
+  // The component will re-request the media on next intersection.
+  sendApiUpdate({
+    '@type': 'updateMessageMediaReady' as any,
+    mediaId,
+    width: typeof data.width === 'number' ? data.width : undefined,
+    height: typeof data.height === 'number' ? data.height : undefined,
+    duration: typeof data.duration_seconds === 'number' ? data.duration_seconds : undefined,
+    hasThumbnail: Boolean(data.has_thumbnail),
+  });
+}
+
 function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
   const poll = data.poll as Record<string, unknown> | undefined;
   const pollId = (poll?.id || data.poll_id) as string | undefined;
@@ -350,7 +368,7 @@ function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
         id: pollId,
         mediaType: 'poll',
         summary: isClosed ? { closed: true } : undefined,
-        ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId),
+        ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId, peerId),
       } as any,
   });
 }
@@ -359,6 +377,7 @@ function buildApiPollFromWs(
   poll?: Record<string, unknown>,
   isClosed = false,
   shouldKeepChoiceState = false,
+  voterId?: string,
 ) {
   if (!poll) {
     return isClosed ? { summary: { closed: true } } : undefined;
@@ -413,6 +432,7 @@ function buildApiPollFromWs(
           isCorrect: shouldKeepChoiceState && Boolean(option.is_correct) || undefined,
         })),
       totalVoters: Number(poll.total_voters || 0),
+      recentVoterIds: !poll.is_anonymous && voterId ? [voterId] : undefined,
       solution: typeof poll.solution === 'string' ? poll.solution : undefined,
       solutionEntities,
     },

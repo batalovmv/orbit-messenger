@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -67,6 +68,7 @@ func (h *MediaHandler) GetMedium(c *fiber.Ctx) error {
 }
 
 // streamVariant fetches a media variant (original/thumbnail/medium) from S3 and streams it.
+// Supports HTTP Range requests for progressive video playback.
 func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 	id, err := uuid.Parse(c.Params("id"))
 	if err != nil {
@@ -84,6 +86,29 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 		return h.mapError(c, err, "get r2 key for "+variant)
 	}
 
+	rangeHeader := c.Get("Range")
+
+	if rangeHeader != "" {
+		rr, err := h.svc.StreamFileRange(c.Context(), r2Key, rangeHeader)
+		if err != nil {
+			return h.mapError(c, err, "stream range "+variant)
+		}
+		defer rr.Body.Close()
+
+		c.Set("Content-Type", rr.ContentType)
+		c.Set("Cache-Control", "public, max-age=31536000, immutable")
+		c.Set("Accept-Ranges", "bytes")
+		c.Set("Content-Length", fmt.Sprintf("%d", rr.PartSize))
+		if rr.ContentRange != "" {
+			c.Set("Content-Range", rr.ContentRange)
+		}
+		c.Status(fiber.StatusPartialContent)
+		if _, err := io.Copy(c.Response().BodyWriter(), rr.Body); err != nil {
+			return h.mapError(c, err, "stream copy range "+variant)
+		}
+		return nil
+	}
+
 	body, contentType, err := h.svc.StreamFile(c.Context(), r2Key)
 	if err != nil {
 		return h.mapError(c, err, "stream "+variant)
@@ -92,6 +117,7 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 
 	c.Set("Content-Type", contentType)
 	c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	c.Set("Accept-Ranges", "bytes")
 
 	// Stream directly from S3 to response — never buffer entire file in memory.
 	// Files can be up to 2 GB; io.ReadAll would OOM on concurrent large downloads.

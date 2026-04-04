@@ -38,7 +38,10 @@ export function requestChannelDifference() {
 }
 
 export async function downloadMedia(
-  { url, mediaFormat }: { url: string; mediaFormat?: number; isHtmlAllowed?: boolean },
+  { url, mediaFormat, start, end }: {
+    url: string; mediaFormat?: number; isHtmlAllowed?: boolean;
+    start?: number; end?: number;
+  },
   onProgress?: (progress: number) => void,
 ) {
   const assetRef = parseAssetRef(url);
@@ -59,7 +62,7 @@ export async function downloadMedia(
     }
 
     if (asset) {
-      const result = await fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress);
+      const result = await fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress, start, end);
       if (result) {
         return result;
       }
@@ -73,7 +76,9 @@ export async function downloadMedia(
       return undefined;
     }
 
-    return fetchBinary(`${getBaseUrl()}${fallbackEndpoint}`, mediaFormat, token, asset?.mimeType, onProgress);
+    return fetchBinary(
+      `${getBaseUrl()}${fallbackEndpoint}`, mediaFormat, token, asset?.mimeType, onProgress, start, end,
+    );
   } catch {
     return undefined;
   }
@@ -995,6 +1000,8 @@ async function fetchBinary(
   token?: string,
   mimeTypeHint?: string,
   onProgress?: (progress: number) => void,
+  rangeStart?: number,
+  rangeEnd?: number,
 ) {
   if (url.startsWith('data:')) {
     const decoded = decodeDataUrl(url);
@@ -1020,8 +1027,13 @@ async function fetchBinary(
     headers.Authorization = `Bearer ${token}`;
   }
 
+  if (rangeStart !== undefined) {
+    const rangeEndStr = rangeEnd !== undefined ? String(rangeEnd) : '';
+    headers.Range = `bytes=${rangeStart}-${rangeEndStr}`;
+  }
+
   const response = await fetch(url, { headers, redirect: 'follow' });
-  if (!response.ok) {
+  if (!response.ok && response.status !== 206) {
     return undefined;
   }
 
@@ -1032,7 +1044,20 @@ async function fetchBinary(
   const mimeType = response.headers.get('content-type') || mimeTypeHint || 'application/octet-stream';
   if (mediaFormat === 1 /* ApiMediaFormat.Progressive */) {
     const arrayBuffer = await response.arrayBuffer();
-    return { arrayBuffer, mimeType, fullSize: arrayBuffer.byteLength };
+    // Derive full file size from Content-Range header (bytes 0-N/TOTAL) or fall back to body length
+    let fullSize = arrayBuffer.byteLength;
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) {
+      const totalMatch = contentRange.match(/\/(\d+)/);
+      if (totalMatch) {
+        fullSize = Number(totalMatch[1]);
+      }
+    } else if (rangeStart === undefined) {
+      // No range request — Content-Length is the full size
+      const cl = response.headers.get('content-length');
+      if (cl) fullSize = Number(cl);
+    }
+    return { arrayBuffer, mimeType, fullSize };
   }
 
   const dataBlob = await response.blob();
