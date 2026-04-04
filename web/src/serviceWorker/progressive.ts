@@ -33,12 +33,14 @@ export async function respondForProgressive(e: FetchEvent) {
   const { url } = e.request;
   const accountSlot = getAccountSlot(url);
   const range = e.request.headers.get('range');
-  const bytes = /^bytes=(\d+)-(\d+)?$/g.exec(range || '')!;
-  const start = Number(bytes[1]);
-  const originalEnd = Number(bytes[2]);
+  const bytes = /^bytes=(\d+)-(\d+)?$/g.exec(range || '');
+
+  // When no Range header (initial <video> request), treat as bytes=0-
+  const start = bytes ? Number(bytes[1]) : 0;
+  const originalEnd = bytes ? Number(bytes[2]) : NaN;
 
   let end = originalEnd;
-  if (!end || (end - start + 1) > DEFAULT_PART_SIZE) {
+  if (!end || Number.isNaN(end) || (end - start + 1) > DEFAULT_PART_SIZE) {
     end = start + DEFAULT_PART_SIZE - 1;
   }
 
@@ -107,6 +109,21 @@ export async function respondForProgressive(e: FetchEvent) {
   const partSize = Math.min(end - start + 1, arrayBuffer.byteLength);
   end = start + partSize - 1;
   const arrayBufferPart = arrayBuffer.slice(0, partSize);
+
+  // When the original request had no Range header, respond with 200 (full content)
+  // so <video> elements accept the response. Otherwise use 206 Partial Content.
+  if (!range) {
+    return new Response(arrayBufferPart, {
+      status: 200,
+      statusText: 'OK',
+      headers: [
+        ['Accept-Ranges', 'bytes'],
+        ['Content-Length', String(partSize)],
+        ['Content-Type', mimeType],
+      ],
+    });
+  }
+
   const headers: [string, string][] = [
     ['Content-Range', `bytes ${start}-${end}/${fullSize}`],
     ['Accept-Ranges', 'bytes'],
