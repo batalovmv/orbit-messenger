@@ -48,6 +48,8 @@ const sharedMediaCursors = new Map<string, string>();
 const SHARED_MEDIA_TYPE_MAP: Record<string, string> = {
   media: 'media',
   documents: 'file',
+  links: 'link',
+  audio: 'audio',
   voice: 'voice',
   gif: 'gif',
 };
@@ -568,7 +570,7 @@ export async function fetchMessages({
       requestPath,
     );
 
-    const messages = result.data.map((message) => {
+    const messages = (result.data || []).map((message) => {
       const apiMessage = buildApiMessage(message);
       if (currentUserId) {
         apiMessage.isOutgoing = message.sender_id === currentUserId;
@@ -578,7 +580,7 @@ export async function fetchMessages({
 
     return {
       messages,
-      polls: extractApiPolls(result.data),
+      polls: extractApiPolls(result.data || []),
       count: messages.length,
       topics: [] as any[],
       hasMore: result.has_more,
@@ -604,14 +606,14 @@ export async function fetchMessagesByDate({
   );
 
   return {
-    messages: result.data.map((message) => {
+    messages: (result.data || []).map((message) => {
       const apiMessage = buildApiMessage(message);
       if (currentUserId) {
         apiMessage.isOutgoing = message.sender_id === currentUserId;
       }
       return apiMessage;
     }),
-    polls: extractApiPolls(result.data),
+    polls: extractApiPolls(result.data || []),
     hasMore: result.has_more,
   };
 }
@@ -943,6 +945,23 @@ export async function deleteMessages({
   }
 }
 
+export async function deleteHistory({
+  chat,
+  shouldDeleteForAll,
+}: {
+  chat: ApiChat;
+  shouldDeleteForAll?: boolean;
+}) {
+  try {
+    await client.request('DELETE', `/chats/${chat.id}/messages`, {
+      clear_history: true,
+      for_everyone: shouldDeleteForAll || false,
+    });
+  } catch {
+    console.warn('[Saturn] deleteHistory not fully implemented on backend');
+  }
+}
+
 export async function forwardMessages({
   fromChatId,
   messageIds,
@@ -966,7 +985,7 @@ export async function forwardMessages({
     { message_ids: uuids, to_chat_id: toChatId },
   );
 
-  const messages = result.messages.map((message) => {
+  const messages = (result.messages || []).map((message) => {
     const apiMessage = buildApiMessage(message);
     apiMessage.isOutgoing = true;
     return apiMessage;
@@ -1195,7 +1214,7 @@ export async function searchMessagesInChat({
     `/chats/${chatId}/media?${params.toString()}`,
   );
 
-  const messages: ApiMessage[] = result.data.map((item) => {
+  const messages: ApiMessage[] = (result.data || []).map((item) => {
     const syntheticMessage: SaturnMessage = {
       id: item.message_id,
       chat_id: item.chat_id,

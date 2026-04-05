@@ -527,7 +527,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     }
 
     if (isPrivate) {
-      return oldLang('DeleteChatUser');
+      return oldLang('DeleteChat');
     }
 
     if (canDeleteChat) {
@@ -755,7 +755,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               icon={isBlocked ? 'user' : 'hand-stop'}
               onClick={isBlocked ? handleUnblock : handleBlock}
             >
-              {isBlocked ? oldLang('Unblock') : oldLang('BlockUser')}
+              {isBlocked ? oldLang('Unblock') : oldLang('BlockContact')}
             </MenuItem>
           )}
           {canLeave && (

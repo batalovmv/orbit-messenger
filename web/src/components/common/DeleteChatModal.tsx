@@ -151,7 +151,7 @@ const DeleteChatModal = ({
       return 'Group.LeaveGroup';
     }
 
-    return 'DeleteChatUser';
+    return 'DeleteChat';
   }
 
   function renderContent() {

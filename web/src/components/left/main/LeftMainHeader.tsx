@@ -280,7 +280,7 @@ const LeftMainHeader = ({
         >
           {searchContent}
         </SearchInput>
-        {isCurrentUserPremium && <StatusButton />}
+        {/* StatusButton (emoji status star) removed — Orbit has no Premium status feature */}
         {hasPasscode && (
           <Button
             round
@@ -289,7 +289,7 @@ const LeftMainHeader = ({
             color="translucent"
             ariaLabel={`${oldLang('ShortcutsController.Others.LockByPasscode')} (Ctrl+Shift+L)`}
             onClick={handleLockScreen}
-            className={buildClassName(!isCurrentUserPremium && 'extra-spacing')}
+            className="extra-spacing"
             iconName="lock"
           />
         )}

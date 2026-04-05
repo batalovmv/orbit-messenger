@@ -81,9 +81,10 @@ export async function searchUsers({ query, limit = 20 }: { query: string; limit?
     'GET', `/users?q=${encodeURIComponent(query)}&limit=${limit}`,
   );
 
-  const apiUsers = result.users.map(buildApiUser);
+  const users = result.users || [];
+  const apiUsers = users.map(buildApiUser);
 
-  result.users.forEach((user) => {
+  users.forEach((user) => {
     sendApiUpdate({
       '@type': 'updateUser',
       id: user.id,
@@ -94,7 +95,7 @@ export async function searchUsers({ query, limit = 20 }: { query: string; limit?
   return {
     users: apiUsers,
     userStatusesById: Object.fromEntries(
-      result.users.map((u) => [u.id, buildApiUserStatus(u)]),
+      users.map((u) => [u.id, buildApiUserStatus(u)]),
     ),
   };
 }
@@ -105,9 +106,10 @@ export async function fetchGlobalUsers({ limit = 50 }: { limit?: number } = {}) 
     'GET', `/users?q=&limit=${limit}`,
   );
 
-  const apiUsers = result.users.map(buildApiUser);
+  const users = result.users || [];
+  const apiUsers = users.map(buildApiUser);
 
-  result.users.forEach((user) => {
+  users.forEach((user) => {
     sendApiUpdate({
       '@type': 'updateUser',
       id: user.id,
@@ -118,7 +120,7 @@ export async function fetchGlobalUsers({ limit = 50 }: { limit?: number } = {}) 
   return {
     users: apiUsers,
     userStatusesById: Object.fromEntries(
-      result.users.map((u) => [u.id, buildApiUserStatus(u)]),
+      users.map((u) => [u.id, buildApiUserStatus(u)]),
     ),
   };
 }
@@ -198,4 +200,48 @@ export async function updateProfile({
   });
 
   return { user: apiUser };
+}
+
+export async function checkUsername(username: string): Promise<{ result?: boolean; error?: string }> {
+  try {
+    const usernameRegex = /^[a-zA-Z][a-zA-Z0-9_]{4,31}$/;
+    if (!usernameRegex.test(username)) {
+      return {
+        result: false,
+        error: 'Username must be 5-32 characters, start with a letter, and contain only letters, numbers, and underscores',
+      };
+    }
+
+    const response = await client.request<{ users: any[] }>(
+      'GET',
+      `/users?q=${encodeURIComponent(username)}&limit=1`,
+    );
+    const taken = response?.users?.some((u: any) => u.username?.toLowerCase() === username.toLowerCase());
+
+    return { result: !taken };
+  } catch {
+    return { result: undefined, error: 'Failed to check username' };
+  }
+}
+
+export async function updateUsername(username: string): Promise<boolean | undefined> {
+  try {
+    await client.request('PUT', '/users/me', { username });
+    return true;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function updateEmojiStatus(emojiStatus: any): Promise<boolean> {
+  if (!emojiStatus) {
+    await client.request('PUT', '/users/me', { custom_status: null, custom_status_emoji: null });
+  } else {
+    await client.request('PUT', '/users/me', {
+      custom_status: emojiStatus.title || '',
+      custom_status_emoji: emojiStatus.documentId || emojiStatus.emoji || '',
+    });
+  }
+
+  return true;
 }

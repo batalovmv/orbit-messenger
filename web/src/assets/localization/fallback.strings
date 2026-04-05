@@ -445,6 +445,7 @@
 "AutoDownloadFilesTitle" = "Auto-download files";
 "AutoplayMedia" = "Autoplay media";
 "GifsTab2" = "GIFs";
+"CustomEmoji" = "Custom Emoji";
 "DataAndStorageAutoplayVideos" = "Videos";
 "FirstName" = "First name (required)";
 "LastName" = "Last name";
@@ -1519,7 +1520,7 @@
 "AriaMenuDisableNightMode" = "Disable night mode";
 "AriaSettingsEditProfilePhoto" = "Edit profile photo";
 "MenuUIFeaturesSwitch" = "UI Features";
-"MenuTelegramFeatures" = "Telegram Features";
+"MenuTelegramFeatures" = "Orbit Features";
 "TelegramFeaturesUsername" = "TelegramTips";
 "RemoveEffect" = "Remove effect";
 "ReplyInPrivateMessage" = "Reply In Private Message";

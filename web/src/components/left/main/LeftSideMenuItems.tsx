@@ -36,6 +36,8 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 import AttachBotItem from '../../middle/composer/AttachBotItem';
+import Avatar from '../../common/Avatar';
+import FullNameTitle from '../../common/FullNameTitle';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
 import NestedMenuItem from '../../ui/NestedMenuItem';
@@ -90,7 +92,7 @@ const LeftSideMenuItems = ({
   const animationLevelValue = animationLevel !== ANIMATION_LEVEL_MIN
     ? (animationLevel === ANIMATION_LEVEL_MAX ? 'max' : 'mid') : 'min';
 
-  const withOtherVersions = !IS_TAURI && (window.location.hostname === PRODUCTION_HOSTNAME || IS_TEST);
+  const withOtherVersions = false; // Orbit has no alternative client versions
 
   const archivedUnreadChatsCount = useFolderManagerForUnreadCounters()[ARCHIVED_FOLDER_ID]?.chatsCount || 0;
 
@@ -146,13 +148,21 @@ const LeftSideMenuItems = ({
 
   return (
     <>
-      {IS_MULTIACCOUNT_SUPPORTED && currentUser && (
+      {currentUser && (
         <>
-          <AccountMenuItems
-            currentUser={currentUser}
-            totalLimit={accountsTotalLimit}
-            onSelectCurrent={onSelectSettings}
-          />
+          <MenuItem
+            className="account-menu-item"
+            customIcon={(
+              <Avatar
+                size="mini"
+                className="account-avatar"
+                peer={currentUser}
+              />
+            )}
+            onClick={onSelectSettings}
+          >
+            <FullNameTitle peer={currentUser} />
+          </MenuItem>
           <MenuSeparator />
         </>
       )}

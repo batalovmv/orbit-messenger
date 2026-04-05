@@ -224,7 +224,7 @@ export function getAllowedAttachmentOptions(
     canAttachMedia: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendMedia', chatFullInfo),
     canAttachPolls: !isStoryReply && !chat.isMonoforum
       && (isAdmin || !isUserRightBanned(chat, 'sendPolls', chatFullInfo))
-      && (!isUserId(chat.id) || isChatWithBot || isSavedMessages),
+      && (chat.type !== 'chatTypePrivate' || isChatWithBot || isSavedMessages),
     // Saturn API does not implement checklist/todo messages yet, so exposing the button is a dead-end.
     canAttachToDoLists: false,
     canSendStickers: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendStickers', chatFullInfo),

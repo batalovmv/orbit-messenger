@@ -65,6 +65,7 @@ const ScrollDownButton: FC<OwnProps> = ({
           autoClose
           positionX="right"
           positionY="bottom"
+          aria-hidden={!isContextMenuOpen}
         >
           <MenuItem icon="readchats" onClick={onReadAll}>{oldLang('MarkAllAsRead')}</MenuItem>
         </Menu>

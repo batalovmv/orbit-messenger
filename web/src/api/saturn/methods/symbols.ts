@@ -263,7 +263,7 @@ export async function fetchCustomEmoji({ documentId }: { documentId: string[] })
       );
 
       fetchedById = buildCollectionByKey(
-        fetched.map((sticker) => buildApiSticker(sticker, undefined, { isCustomEmoji: true })),
+        (fetched || []).map((sticker) => buildApiSticker(sticker, undefined, { isCustomEmoji: true })),
         'id',
       ) as Record<string, ApiSticker>;
     } catch {
@@ -306,6 +306,27 @@ export async function fetchAnimatedEmojis() {
 
 export async function fetchAnimatedEmojiEffects() {
   return fetchAnimatedEmojis();
+}
+
+export async function fetchDefaultStatusEmojis(): Promise<any> {
+  return {
+    set: { id: 'default-statuses', title: 'Default Statuses' },
+    stickers: [],
+  };
+}
+
+export async function fetchRecentEmojiStatuses(): Promise<any> {
+  return {
+    hash: '0',
+    emojiStatuses: [],
+  };
+}
+
+export async function fetchCollectibleEmojiStatuses(): Promise<any> {
+  return {
+    hash: '0',
+    emojiStatuses: [],
+  };
 }
 
 export function fetchStickersForEmoji({ emoji, hash }: { emoji: string; hash?: string }) {

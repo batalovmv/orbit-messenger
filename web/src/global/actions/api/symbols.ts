@@ -313,7 +313,7 @@ addActionHandler('loadUserCollectibleStatuses', async (global, actions): Promise
     },
   };
   setGlobal(global);
-  const documentIds = result.statuses.map(({ documentId }: { documentId: string }) => documentId);
+  const documentIds = (result.statuses || []).map(({ documentId }: { documentId: string }) => documentId);
 
   actions.loadCustomEmojis({ ids: documentIds });
 });

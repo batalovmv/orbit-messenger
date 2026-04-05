@@ -84,7 +84,7 @@ const SettingsStickers: FC<OwnProps & StateProps> = ({
     STICKERS_SCREEN_FALLBACKS.dynamicPackOrder,
   );
   const emojiPacksLabel = getStickerScreenText(
-    'StickersList.EmojiItem',
+    'CustomEmoji',
     STICKERS_SCREEN_FALLBACKS.emojiPacks,
   );
   const dynamicPackOrderInfo = getStickerScreenText(

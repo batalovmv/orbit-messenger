@@ -27,9 +27,9 @@ export enum SymbolMenuTabs {
 
 export const SYMBOL_MENU_TAB_TITLES: Record<SymbolMenuTabs, string> = {
   [SymbolMenuTabs.Emoji]: 'Emoji',
-  [SymbolMenuTabs.CustomEmoji]: 'StickersList.EmojiItem',
+  [SymbolMenuTabs.CustomEmoji]: 'CustomEmoji',
   [SymbolMenuTabs.Stickers]: 'AccDescrStickers',
-  [SymbolMenuTabs.GIFs]: 'GifsTab',
+  [SymbolMenuTabs.GIFs]: 'GifsTab2',
 };
 
 const SYMBOL_MENU_TAB_ICONS = {

@@ -1,9 +1,12 @@
-import type { ApiChat, ApiMessage, ApiPoll, ApiUser, ApiUserStatus } from '../../types';
+import type {
+  ApiChat, ApiChatInviteImporter, ApiMessage, ApiPoll, ApiUser, ApiUserStatus,
+} from '../../types';
 import type {
   SaturnChat,
   SaturnChatAvailableReactions,
   SaturnChatListItem,
   SaturnChatMember,
+  SaturnJoinRequest,
   SaturnPaginatedResponse,
   SaturnUser,
 } from '../types';
@@ -172,7 +175,8 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   const fullInfo = buildApiChatFullInfo(chat, membersResult.data, availableReactions);
 
   if (chat.type === 'direct') {
-    const peerMember = membersResult.data.find((member) => member.user_id !== currentUserId) || membersResult.data[0];
+    const members = membersResult.data || [];
+    const peerMember = members.find((member) => member.user_id !== currentUserId) || members[0];
     if (peerMember?.user_id) {
       apiChat.peerUserId = peerMember.user_id;
 
@@ -244,7 +248,7 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   return {
     chats: [apiChat],
     fullInfo,
-    members: membersResult.data.map(buildApiChatMember),
+    members: (membersResult.data || []).map(buildApiChatMember),
     userStatusesById: {},
   };
 }
@@ -477,13 +481,13 @@ export async function toggleSlowMode({ chatId, seconds }: { chatId: string; seco
 
 export async function fetchChatInviteImporters({ peer }: {
   peer: ApiChat; link?: string; offsetDate?: number; offsetUser?: ApiUser; limit?: number; isRequested?: boolean;
-}) {
-  const data = await client.request<any[]>('GET', `/chats/${peer.id}/join-requests`);
+}): Promise<{ importers: ApiChatInviteImporter[] }> {
+  const data = await client.request<SaturnJoinRequest[]>('GET', `/chats/${peer.id}/join-requests`);
   return {
-    importers: (data || []).map((item: any) => ({
-      userId: item.userId || item.user_id,
-      date: item.date,
-      about: item.about,
+    importers: (data || []).map((item) => ({
+      userId: item.user_id,
+      date: Math.floor(new Date(item.created_at).getTime() / 1000),
+      about: item.message,
     })),
   };
 }
@@ -514,11 +518,11 @@ export async function getChatMembers({
   sendApiUpdate({
     '@type': 'updateChatMembers',
     id: chatId,
-    replacedMembers: result.data.map(buildApiChatMember),
+    replacedMembers: (result.data || []).map(buildApiChatMember),
   });
 
   return {
-    members: result.data.map(buildApiChatMember),
+    members: (result.data || []).map(buildApiChatMember),
     hasMore: result.has_more,
   };
 }
