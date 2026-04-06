@@ -16,6 +16,7 @@ import { getTranslationFn } from '../../../util/localization';
 import { formatStarsAsText } from '../../../util/localization/format';
 import { throttle } from '../../../util/schedulers';
 import { callApi } from '../../../api/saturn';
+import { saveSearchQuery } from '../../../api/saturn/methods/search';
 import { isChatChannel, isChatGroup } from '../../helpers/chats';
 import { isApiPeerChat } from '../../helpers/peers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
@@ -193,6 +194,11 @@ async function searchMessagesGlobal<T extends GlobalState>(global: T, params: {
     query = '', type, context, offsetRate, offsetId, offsetPeer,
     peer, maxDate, minDate, shouldResetResultsByType, tabId = getCurrentTabId(),
   } = params;
+
+  // Save non-empty text queries to search history on the first page only
+  if (type === 'text' && query && !offsetId) {
+    saveSearchQuery(query).catch(() => {});
+  }
 
   if (type === 'publicPosts') {
     global = updateGlobalSearchFetchingStatus(global, { publicPosts: true }, tabId);

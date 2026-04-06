@@ -393,6 +393,10 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
   };
   setGlobal(global);
 
+  // Trigger the actual POST /calls request immediately instead of relying on
+  // PhoneCall component mount (which may not happen).
+  actions.connectToActivePhoneCall();
+
   actions.toggleGroupCallPanel({ force: false, tabId });
 });
 

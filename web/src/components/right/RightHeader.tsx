@@ -730,7 +730,12 @@ export default withGlobal<OwnProps>(
     const { query: stickerSearchQuery } = selectCurrentStickerSearch(global) || {};
     const { query: gifSearchQuery } = selectCurrentGifSearch(global) || {};
     const chat = chatId ? selectChat(global, chatId) : undefined;
-    const user = isProfile && chatId && isUserId(chatId) ? selectUser(global, chatId) : undefined;
+    // Saturn: for DM chats, chatId is a UUID (not a userId), so use peerUserId to resolve the peer
+    const dmPeerUserId = chat?.peerUserId;
+    const resolvedUserId = isProfile && chatId
+      ? (isUserId(chatId) ? chatId : dmPeerUserId)
+      : undefined;
+    const user = resolvedUserId ? selectUser(global, resolvedUserId) : undefined;
     const isChannel = chat && isChatChannel(chat);
     const isInsideTopic = chat?.isForum && Boolean(threadId && threadId !== MAIN_THREAD_ID);
     const topic = isInsideTopic ? selectTopic(global, chatId!, threadId!) : undefined;
