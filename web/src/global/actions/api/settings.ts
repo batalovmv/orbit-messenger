@@ -79,7 +79,8 @@ addActionHandler('updateProfile', async (global, actions, payload): Promise<void
   }
 
   if (firstName || lastName || about) {
-    const result = await callApi('updateProfile', { firstName, lastName, about });
+    const displayName = [firstName, lastName].filter(Boolean).join(' ') || firstName || '';
+    const result = await callApi('updateProfile', { displayName, bio: about });
     if (result) {
       global = getGlobal();
       const currentUser = currentUserId && selectUser(global, currentUserId);
@@ -364,7 +365,7 @@ addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
       const peerSettings = notifyDefaults[peerType];
       if (peerSettings) {
         global = updateNotifyDefaults(global, peerType, {
-          mutedUntil: peerSettings.isMuted ? MUTE_INDEFINITE_TIMESTAMP : UNMUTE_TIMESTAMP,
+          mutedUntil: peerSettings.mutedUntil ?? (peerSettings.isMuted ? MUTE_INDEFINITE_TIMESTAMP : UNMUTE_TIMESTAMP),
           shouldShowPreviews: peerSettings.shouldShowPreviews,
         });
       }
