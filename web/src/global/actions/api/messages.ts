@@ -1498,7 +1498,13 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
     return;
   }
 
-  const result = await callApi('fetchScheduledHistory', { chat });
+  let result;
+  try {
+    result = await callApi('fetchScheduledHistory', { chat });
+  } catch (err) {
+    // Silently ignore — scheduled messages are non-critical
+    return;
+  }
   if (!result) {
     return;
   }
@@ -1509,7 +1515,7 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
   const ids = Object.keys(byId).map(Number).sort((a, b) => b - a);
 
   global = getGlobal();
-  const existingThreadIds = Object.keys(global.messages.byChatId[chat.id]?.threadsById || {});
+  const existingThreadIds = Object.keys(global.messages.byChatId?.[chat.id]?.threadsById || {});
 
   global = replaceScheduledMessages(global, chat.id, byId as Record<number, ApiMessage>);
   polls?.forEach((poll: ApiPoll) => {

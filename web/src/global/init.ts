@@ -44,11 +44,13 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     };
   }
 
-  // Remove stale tab entries from previous sessions. Only keep the current tab —
-  // other live tabs will re-register themselves via BroadcastChannel.
+  // Register this tab. Preserve existing tabs — they are live tabs in other browser tabs.
+  // Only remove clearly stale entries (tabs that haven't updated in a long time are cleaned
+  // elsewhere via BroadcastChannel heartbeat).
   global = {
     ...global,
     byTabId: {
+      ...global.byTabId,
       [tabId]: initialTabState,
     },
   };
