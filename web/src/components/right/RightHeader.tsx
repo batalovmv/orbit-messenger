@@ -731,9 +731,8 @@ export default withGlobal<OwnProps>(
     const { query: gifSearchQuery } = selectCurrentGifSearch(global) || {};
     const chat = chatId ? selectChat(global, chatId) : undefined;
     // Saturn: for DM chats, chatId is a UUID (not a userId), so use peerUserId to resolve the peer
-    const dmPeerUserId = chat?.peerUserId;
     const resolvedUserId = isProfile && chatId
-      ? (isUserId(chatId) ? chatId : dmPeerUserId)
+      ? (chat?.peerUserId || (isUserId(chatId) ? chatId : undefined))
       : undefined;
     const user = resolvedUserId ? selectUser(global, resolvedUserId) : undefined;
     const isChannel = chat && isChatChannel(chat);

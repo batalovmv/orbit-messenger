@@ -366,7 +366,15 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
     return;
   }
 
-  const user = selectUser(global, userId);
+  // Saturn: in DM chats, HeaderActions passes chatId as userId.
+  // Resolve the actual peer user via chat.peerUserId when selectUser fails.
+  let user = selectUser(global, userId);
+  if (!user && chatId) {
+    const chat = selectChat(global, chatId);
+    if (chat?.peerUserId) {
+      user = selectUser(global, chat.peerUserId);
+    }
+  }
 
   if (!user) {
     return;
