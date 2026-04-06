@@ -13,6 +13,7 @@ import { omit } from '../../../util/iteratees';
 import * as langProvider from '../../../util/oldLangProvider';
 import { EMOJI_DATA, EMOJI_OFFSETS } from '../../../util/phoneCallEmojiConstants';
 import { callApi } from '../../../api/saturn';
+import { fetchICEServers, getActiveCallId, iceServersToConnections } from '../../../api/saturn/methods/calls';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import { updateGroupCall, updateGroupCallParticipant } from '../../reducers/calls';
 import { updateTabState } from '../../reducers/tabs';
@@ -106,8 +107,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         accessHash, state, connections, gB,
       } = call;
 
+      const isSaturnCall = !accessHash || accessHash === '';
+
       if (state === 'active' || state === 'accepted') {
-        if (!verifyPhoneCallProtocol(call.protocol)) {
+        if (!isSaturnCall && !verifyPhoneCallProtocol(call.protocol)) {
           const user = selectPhoneCallUser(global);
           if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
           actions.showNotification({
@@ -126,7 +129,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
           ...(call.needRating && { ratingPhoneCall: call }),
           isCallPanelVisible: undefined,
         }, getCurrentTabId());
-      } else if (state === 'accepted' && accessHash && gB) {
+      } else if (state === 'accepted' && !isSaturnCall && accessHash && gB) {
+        // DH confirmation — only for Telegram calls, never Saturn
         (async () => {
           const { gA, keyFingerprint, emojis } = await callApi('confirmPhoneCall', [gB, EMOJI_DATA, EMOJI_OFFSETS]);
 
@@ -146,33 +150,64 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             call, gA, keyFingerprint,
           });
         })();
-      } else if (state === 'active' && connections && phoneCall?.state !== 'active') {
-        if (!isOutgoing) {
-          callApi('receivedCall', { call });
+      } else if (state === 'active' && phoneCall?.state !== 'active') {
+        if (isSaturnCall) {
+          // Saturn path: fetch ICE servers if not already on the call, then join
           (async () => {
-            const { emojis } = await callApi('confirmPhoneCall', [call.gAOrB!, EMOJI_DATA, EMOJI_OFFSETS]);
-
-            global = getGlobal();
-            const newCall = {
-              ...global.phoneCall,
-              emojis,
-            } as ApiPhoneCall;
-
-            global = {
-              ...global,
-              phoneCall: newCall,
-            };
-            setGlobal(global);
+            let callConnections = connections;
+            if (!callConnections) {
+              const callId = getActiveCallId() || call.id;
+              if (callId) {
+                const iceServers = await fetchICEServers({ callId });
+                if (iceServers) {
+                  callConnections = iceServersToConnections(iceServers);
+                }
+              }
+              if (!callConnections || !callConnections.length) {
+                callConnections = [{
+                  ip: 'stun.l.google.com', ipv6: '', port: 19302,
+                  username: '', password: '', isStun: true,
+                }];
+              }
+            }
+            void joinPhoneCall(
+              callConnections,
+              actions.sendSignalingData,
+              isOutgoing,
+              Boolean(call?.isVideo),
+              true,
+              actions.apiUpdate,
+            );
           })();
+        } else if (connections) {
+          // Telegram path: DH confirmation + join
+          if (!isOutgoing) {
+            callApi('receivedCall', { call });
+            (async () => {
+              const { emojis } = await callApi('confirmPhoneCall', [call.gAOrB!, EMOJI_DATA, EMOJI_OFFSETS]);
+
+              global = getGlobal();
+              const newCall = {
+                ...global.phoneCall,
+                emojis,
+              } as ApiPhoneCall;
+
+              global = {
+                ...global,
+                phoneCall: newCall,
+              };
+              setGlobal(global);
+            })();
+          }
+          void joinPhoneCall(
+            connections,
+            actions.sendSignalingData,
+            isOutgoing,
+            Boolean(call?.isVideo),
+            Boolean(call.isP2pAllowed),
+            actions.apiUpdate,
+          );
         }
-        void joinPhoneCall(
-          connections,
-          actions.sendSignalingData,
-          isOutgoing,
-          Boolean(call?.isVideo),
-          Boolean(call.isP2pAllowed),
-          actions.apiUpdate,
-        );
       }
 
       return global;
@@ -203,6 +238,24 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       callApi('decodePhoneCallData', [update.data])?.then(processSignalingMessage);
+      break;
+    }
+    case 'updateWebRTCSignaling': {
+      // Saturn WebRTC signaling: parse JSON payload and feed to secret-sauce
+      const { phoneCall: currentCall } = global;
+      if (!currentCall) break;
+
+      const { signalingType, sdp, candidate } = update as any;
+      const rawData = signalingType === 'webrtc_ice_candidate' ? candidate : sdp;
+      if (!rawData) break;
+
+      try {
+        const message = JSON.parse(rawData);
+        processSignalingMessage(message);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[Calls] Failed to parse WebRTC signaling:', e);
+      }
       break;
     }
   }

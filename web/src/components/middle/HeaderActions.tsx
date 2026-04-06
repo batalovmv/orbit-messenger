@@ -225,7 +225,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
       openFrozenAccountModal();
       return;
     }
-    requestMasterAndRequestCall({ userId: chatId });
+    requestMasterAndRequestCall({ userId: chatId, chatId });
   });
 
   const handleHotkeySearchClick = useLastCallback((e: KeyboardEvent) => {

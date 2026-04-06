@@ -406,7 +406,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     if (isAccountFrozen) {
       openFrozenAccountModal();
     } else {
-      requestMasterAndRequestCall({ userId: chatId, isVideo: true });
+      requestMasterAndRequestCall({ userId: chatId, chatId, isVideo: true });
     }
     closeMenu();
   });
@@ -415,7 +415,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     if (isAccountFrozen) {
       openFrozenAccountModal();
     } else {
-      requestMasterAndRequestCall({ userId: chatId });
+      requestMasterAndRequestCall({ userId: chatId, chatId });
     }
     closeMenu();
   });

@@ -359,7 +359,7 @@ addActionHandler('requestMasterAndRequestCall', (global, actions, payload): Acti
 });
 
 addActionHandler('requestCall', (global, actions, payload): ActionReturnType => {
-  const { userId, isVideo, tabId = getCurrentTabId() } = payload;
+  const { userId, chatId, isVideo, tabId = getCurrentTabId() } = payload;
 
   if (global.phoneCall) {
     actions.toggleGroupCallPanel({ tabId });
@@ -376,6 +376,9 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
   global = getGlobal();
   void checkNavigatorUserMediaPermissions(global, actions, isVideo, tabId);
 
+  // In Saturn, DM chatId !== userId. Store it for the bridge method.
+  const resolvedChatId = chatId || userId;
+
   global = getGlobal();
   global = {
     ...global,
@@ -385,6 +388,7 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
       participantId: userId,
       isVideo,
       adminId: global.currentUserId,
+      accessHash: resolvedChatId,
     },
   };
   setGlobal(global);

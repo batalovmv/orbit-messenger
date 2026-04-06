@@ -395,7 +395,7 @@ export const GROUP_CALL_VOLUME_MULTIPLIER = 100;
 export const GROUP_CALL_DEFAULT_VOLUME = 100 * GROUP_CALL_VOLUME_MULTIPLIER;
 
 export const ONE_TIME_MEDIA_TTL_SECONDS = 2147483647;
-export const IS_CALLS_ENABLED = false;
+export const IS_CALLS_ENABLED = true;
 
 // Premium
 export const PREMIUM_FEATURE_SECTIONS = [

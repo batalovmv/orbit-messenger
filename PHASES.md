@@ -907,9 +907,18 @@ Signaling: WebSocket через gateway
 - [x] sendWebRtcOffer, sendWebRtcAnswer, sendIceCandidate, fetchIceServers
 - [~] inviteToCall, setCallSpeaker — deferred to Pion SFU integration
 
+### Frontend: WebRTC P2P Wiring
+
+- [x] ICE server fetch + ApiPhoneCallConnection conversion (requestCall, acceptCall)
+- [x] sendSignalingData → WS transport (InitialSetup→offer/answer, Candidates→ice_candidate, MediaState)
+- [x] updateWebRTCSignaling handler → processSignalingMessage (incoming signaling from WS)
+- [x] Saturn call path bypasses DH crypto (verifyPhoneCallProtocol, confirmPhoneCall)
+- [x] wsHandler: handleCallIncoming/Accepted set activeCallId/PeerId correctly
+- [x] ApiUpdateWebRTCSignaling type added to ApiUpdate union
+
 ### Дополнительные фичи
 
-- [ ] Ringtone + vibration на входящий — требует frontend WebRTC PeerConnection wiring
+- [~] Ringtone + vibration на входящий — ringtone works via TG Web A call UI, vibration TODO
 - [ ] Push-уведомление на звонок когда app закрыт — high-priority push
 - [ ] Network quality indicator — Nice to Have
 - [ ] Call rating после завершения — Nice to Have

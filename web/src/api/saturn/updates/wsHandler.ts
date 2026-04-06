@@ -502,6 +502,11 @@ function handleCallIncoming(data: Record<string, unknown>) {
   // Don't show incoming call if we initiated it
   if (initiatorId === currentUserId) return;
 
+  // Set active call state for signaling
+  const { setActiveCallId, setActiveCallPeerId } = require('../methods/calls');
+  setActiveCallId(callId);
+  setActiveCallPeerId(initiatorId);
+
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
@@ -511,15 +516,27 @@ function handleCallIncoming(data: Record<string, unknown>) {
       adminId: initiatorId,
       participantId: currentUserId || '',
       isVideo,
+      isP2pAllowed: true,
     },
   });
 }
 
 function handleCallAccepted(data: Record<string, unknown>) {
   const callId = data.call_id as string;
-  const userId = data.user_id as string;
+  const acceptorId = data.user_id as string;
+  // initiator_id comes from the nested call object or top-level
+  const callObj = data.call as Record<string, unknown> | undefined;
+  const initiatorId = (callObj?.initiator_id || data.initiator_id) as string;
 
   if (!callId) return;
+
+  // Set peer ID: if we're the initiator, peer is the acceptor; otherwise peer is the initiator
+  const { setActiveCallPeerId } = require('../methods/calls');
+  if (initiatorId === currentUserId) {
+    setActiveCallPeerId(acceptorId);
+  } else {
+    setActiveCallPeerId(initiatorId || '');
+  }
 
   sendApiUpdate({
     '@type': 'updatePhoneCall',
@@ -527,8 +544,8 @@ function handleCallAccepted(data: Record<string, unknown>) {
       id: callId,
       accessHash: '',
       state: 'active',
-      adminId: userId || '',
-      participantId: currentUserId || '',
+      adminId: initiatorId || currentUserId || '',
+      participantId: acceptorId || currentUserId || '',
     },
   });
 }
@@ -592,7 +609,6 @@ function handleWebRTCSignaling(type: string, data: Record<string, unknown>) {
 
   if (!callId || !senderId) return;
 
-  // Emit as a custom update so call action handlers can process it
   sendApiUpdate({
     '@type': 'updateWebRTCSignaling',
     signalingType: type,
@@ -600,7 +616,7 @@ function handleWebRTCSignaling(type: string, data: Record<string, unknown>) {
     senderId,
     sdp: data.sdp as string | undefined,
     candidate: data.candidate as string | undefined,
-  } as any);
+  });
 }
 
 function buildWsPollEntity(entity: SaturnMessageEntity) {

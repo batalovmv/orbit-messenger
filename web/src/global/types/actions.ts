@@ -2203,6 +2203,7 @@ export interface ActionPayloads {
 
   requestCall: {
     userId: string;
+    chatId?: string;
     isVideo?: boolean;
   } & WithTabId;
   sendSignalingData: P2pMessage;

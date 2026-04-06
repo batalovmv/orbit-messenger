@@ -41,7 +41,7 @@ export {
 // Phase 6: Call methods
 export {
   getDhConfig, requestPhoneCall, createPhoneCallState, destroyPhoneCallState,
-  acceptPhoneCall, encodePhoneCallData, sendSignalingData, setCallRating,
+  acceptPhoneCall, encodePhoneCallData, decodePhoneCallData, sendSignalingData, setCallRating,
   requestCall, acceptCall, discardCall, receivedCall, confirmCall,
   createGroupCall, joinGroupCall, leaveGroupCall, discardGroupCall,
   getGroupCall, fetchGroupCallParticipants, editGroupCallParticipant,

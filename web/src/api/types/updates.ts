@@ -148,6 +148,7 @@ export type ApiUpdateChatTypingStatus = {
   id: string;
   threadId?: ThreadId;
   typingStatus: ApiTypingStatus | undefined;
+  userId?: string;
 };
 
 export type ApiUpdateChatTypingDraft = {
@@ -347,6 +348,15 @@ export type ApiUpdateVideoProcessingPending = {
   chatId: string;
   localId: number;
   newScheduledMessageId: number;
+};
+
+export type ApiUpdateMessageMediaReady = {
+  '@type': 'updateMessageMediaReady';
+  mediaId: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  hasThumbnail?: boolean;
 };
 
 export type ApiUpdateMessageSendFailed = {
@@ -711,6 +721,15 @@ export type ApiUpdatePhoneCallConnectionState = {
   connectionState: RTCPeerConnectionState;
 };
 
+export type ApiUpdateWebRTCSignaling = {
+  '@type': 'updateWebRTCSignaling';
+  signalingType: string;
+  callId: string;
+  senderId: string;
+  sdp?: string;
+  candidate?: string;
+};
+
 export type ApiUpdateWebViewResultSent = {
   '@type': 'updateWebViewResultSent';
   queryId: string;
@@ -925,6 +944,7 @@ export type ApiUpdate = (
   ApiDeleteParticipantHistory | ApiUpdateMessageSendSucceeded | ApiUpdateMessageSendFailed |
   ApiUpdateServiceNotification | ApiDeleteContact | ApiUpdateUser | ApiUpdateUserStatus |
   ApiUpdateUserFullInfo | ApiUpdateVideoProcessingPending | ApiUpdatePeerSettings | ApiUpdateUserAlreadyAuthorized |
+  ApiUpdateMessageMediaReady |
   ApiUpdateAvatar | ApiUpdateMessageImage | ApiUpdateDraftMessage | ApiUpdateScheduledMessageSendFailed |
   ApiUpdateError | ApiUpdateResetContacts | ApiUpdateStartEmojiInteraction | ApiUpdateThreadReadState |
   ApiUpdateFavoriteStickers | ApiUpdateStickerSet | ApiUpdateStickerSets | ApiUpdateStickerSetsOrder |
@@ -939,7 +959,7 @@ export type ApiUpdate = (
   ApiUpdateGroupCallConnectionState | ApiUpdateGroupCallLeavePresentation | ApiUpdateGroupCallChatId |
   ApiUpdatePendingJoinRequests | ApiUpdatePaymentVerificationNeeded | ApiUpdatePaymentStateCompleted |
   ApiUpdatePhoneCall | ApiUpdatePhoneCallSignalingData | ApiUpdatePhoneCallMediaState |
-  ApiUpdatePhoneCallConnectionState | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
+  ApiUpdatePhoneCallConnectionState | ApiUpdateWebRTCSignaling | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
   ApiUpdateMessageExtendedMedia | ApiUpdateConfig | ApiUpdateTopicNotifySettings | ApiUpdatePinnedTopic |
   ApiUpdatePinnedTopicsOrder | ApiUpdateTopic | ApiUpdateTopics | ApiUpdateRecentEmojiStatuses |
   ApiUpdateRecentReactions | ApiUpdateStory | ApiUpdateReadStories | ApiUpdateDeleteStory | ApiUpdateSentStoryReaction |

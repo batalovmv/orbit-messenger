@@ -11,6 +11,9 @@ import {
 } from '../../../lib/secret-sauce';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { callApi } from '../../../api/saturn';
+import {
+  getActiveCallId, getActiveCallPeerId, sendICECandidate, sendWebRTCAnswer, sendWebRTCOffer,
+} from '../../../api/saturn/methods/calls';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
   removeGroupCall,
@@ -257,7 +260,9 @@ addActionHandler('connectToActivePhoneCall', async (global, actions): Promise<vo
 
   const gAHash = await callApi('requestPhoneCall', [dhConfig]);
 
-  const result = await callApi('requestCall', { user, gAHash, isVideo: phoneCall.isVideo });
+  const result = await callApi('requestCall', {
+    user, gAHash, isVideo: phoneCall.isVideo, chatId: phoneCall.accessHash,
+  });
 
   if (!result) {
     if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
@@ -280,19 +285,37 @@ addActionHandler('acceptCall', async (global): Promise<void> => {
 
 addActionHandler('sendSignalingData', (global, actions, payload): ActionReturnType => {
   const { phoneCall } = global;
-  if (!phoneCall) {
-    return;
+  if (!phoneCall) return;
+
+  const callId = getActiveCallId() || phoneCall.id;
+  const peerId = getActiveCallPeerId() || phoneCall.participantId || phoneCall.adminId;
+
+  if (!callId || !peerId) return;
+
+  const isOutgoing = phoneCall.adminId === global.currentUserId;
+  const msg = payload as { '@type': string; [key: string]: any };
+  const json = JSON.stringify(msg);
+
+  switch (msg['@type']) {
+    case 'InitialSetup':
+      // Outgoing caller sends offer, incoming callee sends answer
+      if (isOutgoing) {
+        sendWebRTCOffer(callId, peerId, json);
+      } else {
+        sendWebRTCAnswer(callId, peerId, json);
+      }
+      break;
+    case 'Candidates':
+      // Send each ICE candidate
+      sendICECandidate(callId, peerId, json);
+      break;
+    case 'MediaState':
+      // Send media state updates via offer channel (reusing the signaling path)
+      sendWebRTCOffer(callId, peerId, json);
+      break;
+    default:
+      break;
   }
-
-  const data = JSON.stringify(payload);
-
-  (async () => {
-    const encodedData = await callApi('encodePhoneCallData', [data]);
-
-    if (!encodedData) return;
-
-    callApi('sendSignalingData', { data: encodedData, call: phoneCall });
-  })();
 });
 
 addActionHandler('closeCallRatingModal', (global, actions, payload): ActionReturnType => {

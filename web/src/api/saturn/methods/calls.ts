@@ -1,4 +1,5 @@
 import type { ApiPhoneCall, ApiUser } from '../../types';
+import type { ApiPhoneCallConnection, ApiCallProtocol } from '../../../lib/secret-sauce';
 
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { request, sendWsMessage } from '../client';
@@ -34,6 +35,45 @@ interface ICEServer {
   urls: string[];
   username?: string;
   credential?: string;
+}
+
+const DEFAULT_PROTOCOL: ApiCallProtocol = {
+  libraryVersions: ['4.0.0'],
+  minLayer: 92,
+  maxLayer: 92,
+  isUdpP2p: true,
+  isUdpReflector: true,
+};
+
+function parseIceServerUrl(url: string): { host: string; port: number; isTurn: boolean; isStun: boolean } {
+  // Handles: stun:host:port, turn:host:port, stun:host, turn:host?transport=udp
+  const isTurn = url.startsWith('turn:');
+  const isStun = url.startsWith('stun:');
+  const withoutScheme = url.replace(/^(stun|turn|turns):/, '');
+  const withoutParams = withoutScheme.split('?')[0];
+  const parts = withoutParams.split(':');
+  const host = parts[0];
+  const port = parts[1] ? parseInt(parts[1], 10) : (isTurn ? 3478 : 19302);
+  return { host, port, isTurn, isStun };
+}
+
+export function iceServersToConnections(servers: ICEServer[]): ApiPhoneCallConnection[] {
+  const connections: ApiPhoneCallConnection[] = [];
+  for (const server of servers) {
+    for (const url of server.urls) {
+      const { host, port, isTurn, isStun } = parseIceServerUrl(url);
+      connections.push({
+        ip: host,
+        ipv6: '',
+        port,
+        username: server.username || '',
+        password: server.credential || '',
+        isTurn,
+        isStun,
+      });
+    }
+  }
+  return connections;
 }
 
 // Store the current active call ID for signaling
@@ -213,7 +253,14 @@ export function acceptPhoneCall() {
   return Promise.resolve(new Uint8Array(0));
 }
 
-export function encodePhoneCallData() {
+export function encodePhoneCallData(args: [string]) {
+  // Saturn doesn't encrypt signaling — pass through as-is
+  return Promise.resolve(args[0]);
+}
+
+export function decodePhoneCallData(args: [number[]]) {
+  // Saturn signaling arrives as JSON string, not encrypted bytes
+  // The data comes as-is from WS, already a string
   return Promise.resolve(undefined);
 }
 
@@ -228,17 +275,15 @@ export function setCallRating() {
 }
 
 export async function requestCall({
-  user, isVideo,
+  user, isVideo, chatId: providedChatId,
 }: {
   user: ApiUser;
   gAHash?: Uint8Array;
   isVideo?: boolean;
+  chatId?: string;
 }) {
-  // Find or create a direct chat with the user, then create a call
-  const { fetchChats } = await import('./chats');
-  // We need the chat ID for this user — look up direct chats
-  const chatId = user.id; // In Saturn, direct chat ID equals the DM target's user ID for simplicity
-  // Actually we need to find the direct chat. For now, we'll use the user ID as member.
+  // In Saturn, DM chatId !== userId. Use provided chatId, fall back to userId for TG compat.
+  const chatId = providedChatId || user.id;
   const call = await createCall({
     chatId,
     type: isVideo ? 'video' : 'voice',
@@ -251,18 +296,31 @@ export async function requestCall({
   activeCallId = call.id;
   activeCallPeerId = user.id;
 
-  // Dispatch updatePhoneCall so UI shows "requesting" state
+  // Fetch ICE servers for WebRTC connection
+  const iceServers = await fetchICEServers({ callId: call.id });
+  const connections = iceServers ? iceServersToConnections(iceServers) : [];
+
+  // Ensure at least a public STUN server is available
+  if (!connections.length) {
+    connections.push({
+      ip: 'stun.l.google.com', ipv6: '', port: 19302,
+      username: '', password: '', isStun: true,
+    });
+  }
+
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
       id: call.id,
-      visId: call.id,
-      visAccessHash: '',
+      accessHash: '',
       state: 'requesting',
       adminId: call.initiator_id,
       participantId: user.id,
       isVideo: call.type === 'video',
       isOutgoing: true,
+      connections,
+      protocol: DEFAULT_PROTOCOL,
+      isP2pAllowed: true,
     } as ApiPhoneCall,
   });
 
@@ -279,12 +337,27 @@ export async function acceptCall({
   if (!result) return undefined;
 
   activeCallId = call.id;
+  activeCallPeerId = call.adminId;
+
+  // Fetch ICE servers for WebRTC connection
+  const iceServers = await fetchICEServers({ callId: call.id });
+  const connections = iceServers ? iceServersToConnections(iceServers) : [];
+
+  if (!connections.length) {
+    connections.push({
+      ip: 'stun.l.google.com', ipv6: '', port: 19302,
+      username: '', password: '', isStun: true,
+    });
+  }
 
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
       ...call,
       state: 'active',
+      connections,
+      protocol: DEFAULT_PROTOCOL,
+      isP2pAllowed: true,
     },
   });
 
