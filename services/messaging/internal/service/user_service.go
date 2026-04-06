@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -10,14 +11,24 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
+// userSearchIndexer is the minimal interface needed to update the user search index.
+type userSearchIndexer interface {
+	IndexUser(userID, displayName, email, role string) error
+}
+
 type UserService struct {
 	users   store.UserStore
 	chats   store.ChatStore
 	privacy store.PrivacySettingsStore
+	search  userSearchIndexer
 }
 
-func NewUserService(users store.UserStore, chats store.ChatStore, privacy store.PrivacySettingsStore) *UserService {
-	return &UserService{users: users, chats: chats, privacy: privacy}
+func NewUserService(users store.UserStore, chats store.ChatStore, privacy store.PrivacySettingsStore, search ...userSearchIndexer) *UserService {
+	svc := &UserService{users: users, chats: chats, privacy: privacy}
+	if len(search) > 0 {
+		svc.search = search[0]
+	}
+	return svc
 }
 
 func (s *UserService) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
@@ -99,7 +110,7 @@ func (s *UserService) GetUserForViewer(ctx context.Context, viewerID, targetID u
 	return u, nil
 }
 
-func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName string, bio, phone, avatarURL, customStatus, customStatusEmoji *string) (*model.User, error) {
+func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName *string, bio, phone, avatarURL, customStatus, customStatusEmoji *string) (*model.User, error) {
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
@@ -108,8 +119,8 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displ
 		return nil, apperror.NotFound("User not found")
 	}
 
-	if displayName != "" {
-		u.DisplayName = displayName
+	if displayName != nil {
+		u.DisplayName = *displayName
 	}
 	if bio != nil {
 		u.Bio = bio
@@ -130,12 +141,97 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displ
 	if err := s.users.Update(ctx, u); err != nil {
 		return nil, fmt.Errorf("update user: %w", err)
 	}
+
+	if s.search != nil {
+		if indexErr := s.search.IndexUser(u.ID.String(), u.DisplayName, u.Email, u.Role); indexErr != nil {
+			// Non-fatal: search index is eventually consistent.
+			slog.WarnContext(ctx, "search: failed to index user", "user_id", u.ID, "error", indexErr)
+		}
+	}
+
 	return u, nil
 }
 
-func (s *UserService) SearchUsers(ctx context.Context, query string, limit int) ([]model.User, error) {
+func (s *UserService) SearchUsers(ctx context.Context, viewerID uuid.UUID, query string, limit int) ([]model.User, error) {
+	var users []model.User
+	var err error
 	if query == "" {
-		return s.users.ListAll(ctx, limit)
+		users, err = s.users.ListAll(ctx, limit)
+	} else {
+		users, err = s.users.Search(ctx, query, limit)
 	}
-	return s.users.Search(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.applyPrivacyToList(ctx, viewerID, users); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+// applyPrivacyToList strips restricted fields from each user in the list
+// based on that user's privacy settings and whether the viewer is a contact.
+func (s *UserService) applyPrivacyToList(ctx context.Context, viewerID uuid.UUID, users []model.User) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	// Collect IDs, skip self (self sees own full profile via GetMe)
+	ids := make([]uuid.UUID, 0, len(users))
+	for _, u := range users {
+		if u.ID != viewerID {
+			ids = append(ids, u.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	privacyMap, err := s.privacy.GetByUserIDs(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("get privacy settings: %w", err)
+	}
+
+	// Determine contact set: fetch all DM partner IDs of viewerID in one call
+	contactIDs, err := s.chats.GetContactIDs(ctx, viewerID)
+	if err != nil {
+		return fmt.Errorf("get contact ids: %w", err)
+	}
+	contactSet := make(map[uuid.UUID]bool, len(contactIDs))
+	for _, id := range contactIDs {
+		if parsed, err := uuid.Parse(id); err == nil {
+			contactSet[parsed] = true
+		}
+	}
+
+	for i := range users {
+		u := &users[i]
+		if u.ID == viewerID {
+			continue
+		}
+		// Email is never exposed to others
+		u.Email = ""
+
+		ps, ok := privacyMap[u.ID]
+		if !ok {
+			// No privacy row → defaults: phone=contacts, rest=everyone
+			u.Phone = nil
+			continue
+		}
+
+		isContact := contactSet[u.ID]
+
+		if ps.LastSeen == "nobody" || (ps.LastSeen == "contacts" && !isContact) {
+			u.LastSeenAt = nil
+			u.Status = ""
+		}
+		if ps.Avatar == "nobody" || (ps.Avatar == "contacts" && !isContact) {
+			u.AvatarURL = nil
+		}
+		if ps.Phone == "nobody" || (ps.Phone == "contacts" && !isContact) {
+			u.Phone = nil
+		}
+	}
+
+	return nil
 }

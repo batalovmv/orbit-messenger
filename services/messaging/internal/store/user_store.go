@@ -63,8 +63,8 @@ func (s *userStore) UpdateStatus(ctx context.Context, userID, status string, las
 }
 
 func (s *userStore) ListAll(ctx context.Context, limit int) ([]model.User, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
+	if limit <= 0 {
+		limit = 10000
 	}
 
 	rows, err := s.pool.Query(ctx,

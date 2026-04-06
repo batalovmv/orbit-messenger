@@ -677,6 +677,57 @@ func TestPinMessage_MemberWithoutPermission_Forbidden(t *testing.T) {
 	msgAssertAppError(t, err, 403)
 }
 
+func TestUnpinAll_PublishesNATSEvent(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	memberIDs := []string{userID.String(), uuid.New().String()}
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return true, "admin", nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return memberIDs, nil
+		},
+	}
+	ms := &mockMessageStore{
+		unpinAllFn: func(_ context.Context, gotChatID uuid.UUID) error {
+			if gotChatID != chatID {
+				t.Fatalf("unexpected chat id: %s", gotChatID)
+			}
+			return nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	if err := svc.UnpinAll(context.Background(), chatID, userID); err != nil {
+		t.Fatalf("UnpinAll: %v", err)
+	}
+
+	events := rec.FindByEvent("unpin_all")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 unpin_all event, got %d", len(events))
+	}
+	if events[0].Subject != "orbit.chat."+chatID.String()+".message.updated" {
+		t.Fatalf("unexpected subject: %s", events[0].Subject)
+	}
+	if events[0].SenderID != userID.String() {
+		t.Fatalf("unexpected sender id: %s", events[0].SenderID)
+	}
+	if len(events[0].MemberIDs) != len(memberIDs) {
+		t.Fatalf("unexpected member ids count: %d", len(events[0].MemberIDs))
+	}
+
+	payload, ok := events[0].Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected payload type: %T", events[0].Data)
+	}
+	if payload["chat_id"] != chatID.String() {
+		t.Fatalf("unexpected chat_id payload: %v", payload["chat_id"])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // EditMessage — only author
 // ---------------------------------------------------------------------------

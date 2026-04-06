@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -22,6 +23,8 @@ type PollStore interface {
 	ListByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID]*model.Poll, error)
 	// Vote records a vote. Returns error if poll is closed or option invalid.
 	Vote(ctx context.Context, pollID, optionID, userID uuid.UUID) error
+	// VoteAtomic records one or more votes atomically for a user.
+	VoteAtomic(ctx context.Context, pollID, userID uuid.UUID, optionIDs []uuid.UUID, isMultiple bool) error
 	// Unvote removes a user's vote on a specific option.
 	Unvote(ctx context.Context, pollID, optionID, userID uuid.UUID) error
 	// UnvoteAll removes all of a user's votes on a poll.
@@ -29,7 +32,7 @@ type PollStore interface {
 	// Close marks a poll as closed.
 	Close(ctx context.Context, pollID uuid.UUID) error
 	// GetVoters returns users who voted for a specific option (non-anonymous polls only).
-	GetVoters(ctx context.Context, pollID, optionID uuid.UUID, limit int) ([]model.PollVote, error)
+	GetVoters(ctx context.Context, pollID, optionID uuid.UUID, limit int, cursor string) ([]model.PollVote, string, bool, error)
 	// HasVoted checks if a user has voted on any option in a poll.
 	HasVoted(ctx context.Context, pollID, userID uuid.UUID) (bool, error)
 	// GetUserVotes returns the option IDs the user voted for in a poll.
@@ -238,6 +241,45 @@ func (s *pollStore) Vote(ctx context.Context, pollID, optionID, userID uuid.UUID
 	return s.explainVoteNoop(ctx, pollID, optionID)
 }
 
+func (s *pollStore) VoteAtomic(ctx context.Context, pollID, userID uuid.UUID, optionIDs []uuid.UUID, isMultiple bool) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if !isMultiple {
+		_, err = tx.Exec(ctx,
+			`DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2`,
+			pollID, userID,
+		)
+		if err != nil {
+			return fmt.Errorf("clear votes: %w", err)
+		}
+	}
+
+	for _, optionID := range optionIDs {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO poll_votes (poll_id, option_id, user_id)
+			 SELECT p.id, po.id, $3
+			 FROM polls p
+			 JOIN poll_options po ON po.id = $2 AND po.poll_id = p.id
+			 WHERE p.id = $1 AND p.is_closed = FALSE
+			 ON CONFLICT (poll_id, user_id, option_id) DO NOTHING`,
+			pollID, optionID, userID,
+		)
+		if err != nil {
+			return fmt.Errorf("vote: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	return nil
+}
+
 func (s *pollStore) Unvote(ctx context.Context, pollID, optionID, userID uuid.UUID) error {
 	_, err := s.pool.Exec(ctx,
 		`DELETE FROM poll_votes WHERE poll_id = $1 AND option_id = $2 AND user_id = $3`,
@@ -285,21 +327,34 @@ func (s *pollStore) Close(ctx context.Context, pollID uuid.UUID) error {
 	return nil
 }
 
-func (s *pollStore) GetVoters(ctx context.Context, pollID, optionID uuid.UUID, limit int) ([]model.PollVote, error) {
+func (s *pollStore) GetVoters(
+	ctx context.Context,
+	pollID, optionID uuid.UUID,
+	limit int,
+	cursor string,
+) ([]model.PollVote, string, bool, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 
-	rows, err := s.pool.Query(ctx,
-		`SELECT poll_id, option_id, user_id, voted_at
-		 FROM poll_votes
-		 WHERE poll_id = $1 AND option_id = $2
-		 ORDER BY voted_at DESC
-		 LIMIT $3`,
-		pollID, optionID, limit,
-	)
+	args := []any{pollID, optionID, limit + 1}
+	query := `SELECT poll_id, option_id, user_id, voted_at
+		  FROM poll_votes
+		  WHERE poll_id = $1 AND option_id = $2`
+
+	if cursor != "" {
+		cursorTime, err := time.Parse(time.RFC3339Nano, cursor)
+		if err == nil {
+			query += ` AND voted_at < $4`
+			args = append(args, cursorTime)
+		}
+	}
+
+	query += ` ORDER BY voted_at DESC LIMIT $3`
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list poll voters: %w", err)
+		return nil, "", false, fmt.Errorf("list poll voters: %w", err)
 	}
 	defer rows.Close()
 
@@ -307,11 +362,25 @@ func (s *pollStore) GetVoters(ctx context.Context, pollID, optionID uuid.UUID, l
 	for rows.Next() {
 		var vote model.PollVote
 		if err := rows.Scan(&vote.PollID, &vote.OptionID, &vote.UserID, &vote.VotedAt); err != nil {
-			return nil, fmt.Errorf("scan poll voter: %w", err)
+			return nil, "", false, fmt.Errorf("scan poll voter: %w", err)
 		}
 		votes = append(votes, vote)
 	}
-	return votes, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, "", false, err
+	}
+
+	hasMore := len(votes) > limit
+	if hasMore {
+		votes = votes[:limit]
+	}
+
+	var nextCursor string
+	if hasMore && len(votes) > 0 {
+		nextCursor = votes[len(votes)-1].VotedAt.Format(time.RFC3339Nano)
+	}
+
+	return votes, nextCursor, hasMore, nil
 }
 
 func (s *pollStore) HasVoted(ctx context.Context, pollID, userID uuid.UUID) (bool, error) {

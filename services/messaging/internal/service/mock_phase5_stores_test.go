@@ -16,6 +16,7 @@ type mockReactionStore struct {
 	addFn                   func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	removeFn                func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	removeAllByUserFn       func(ctx context.Context, messageID, userID uuid.UUID) error
+	replaceUserReactionFn   func(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	listByMessageFn         func(ctx context.Context, messageID uuid.UUID) ([]model.ReactionSummary, error)
 	listByMessageIDsFn      func(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.ReactionSummary, error)
 	listUsersByEmojiFn      func(ctx context.Context, messageID uuid.UUID, emoji string, cursor string, limit int) ([]model.Reaction, string, bool, error)
@@ -41,6 +42,13 @@ func (m *mockReactionStore) Remove(ctx context.Context, messageID, userID uuid.U
 func (m *mockReactionStore) RemoveAllByUser(ctx context.Context, messageID, userID uuid.UUID) error {
 	if m.removeAllByUserFn != nil {
 		return m.removeAllByUserFn(ctx, messageID, userID)
+	}
+	return nil
+}
+
+func (m *mockReactionStore) ReplaceUserReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+	if m.replaceUserReactionFn != nil {
+		return m.replaceUserReactionFn(ctx, messageID, userID, emoji)
 	}
 	return nil
 }
@@ -108,10 +116,11 @@ type mockPollStore struct {
 	getByMessageIDFn         func(ctx context.Context, messageID uuid.UUID) (*model.Poll, error)
 	listByMessageIDsFn       func(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID]*model.Poll, error)
 	voteFn                   func(ctx context.Context, pollID, optionID, userID uuid.UUID) error
+	voteAtomicFn             func(ctx context.Context, pollID, userID uuid.UUID, optionIDs []uuid.UUID, isMultiple bool) error
 	unvoteFn                 func(ctx context.Context, pollID, optionID, userID uuid.UUID) error
 	unvoteAllFn              func(ctx context.Context, pollID, userID uuid.UUID) error
 	closeFn                  func(ctx context.Context, pollID uuid.UUID) error
-	getVotersFn              func(ctx context.Context, pollID, optionID uuid.UUID, limit int) ([]model.PollVote, error)
+	getVotersFn              func(ctx context.Context, pollID, optionID uuid.UUID, limit int, cursor string) ([]model.PollVote, string, bool, error)
 	hasVotedFn               func(ctx context.Context, pollID, userID uuid.UUID) (bool, error)
 	getUserVotesFn           func(ctx context.Context, pollID, userID uuid.UUID) ([]uuid.UUID, error)
 	listUserVotesByPollIDsFn func(ctx context.Context, pollIDs []uuid.UUID, userID uuid.UUID) (map[uuid.UUID][]uuid.UUID, error)
@@ -169,6 +178,20 @@ func (m *mockPollStore) Vote(ctx context.Context, pollID, optionID, userID uuid.
 	return nil
 }
 
+func (m *mockPollStore) VoteAtomic(ctx context.Context, pollID, userID uuid.UUID, optionIDs []uuid.UUID, isMultiple bool) error {
+	if m.voteAtomicFn != nil {
+		return m.voteAtomicFn(ctx, pollID, userID, optionIDs, isMultiple)
+	}
+	for _, optionID := range optionIDs {
+		if m.voteFn != nil {
+			if err := m.voteFn(ctx, pollID, optionID, userID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (m *mockPollStore) Unvote(ctx context.Context, pollID, optionID, userID uuid.UUID) error {
 	if m.unvoteFn != nil {
 		return m.unvoteFn(ctx, pollID, optionID, userID)
@@ -190,11 +213,16 @@ func (m *mockPollStore) Close(ctx context.Context, pollID uuid.UUID) error {
 	return nil
 }
 
-func (m *mockPollStore) GetVoters(ctx context.Context, pollID, optionID uuid.UUID, limit int) ([]model.PollVote, error) {
+func (m *mockPollStore) GetVoters(
+	ctx context.Context,
+	pollID, optionID uuid.UUID,
+	limit int,
+	cursor string,
+) ([]model.PollVote, string, bool, error) {
 	if m.getVotersFn != nil {
-		return m.getVotersFn(ctx, pollID, optionID, limit)
+		return m.getVotersFn(ctx, pollID, optionID, limit, cursor)
 	}
-	return nil, nil
+	return nil, "", false, nil
 }
 
 func (m *mockPollStore) HasVoted(ctx context.Context, pollID, userID uuid.UUID) (bool, error) {
@@ -421,13 +449,13 @@ func (m *mockGIFStore) RemoveByTenorID(ctx context.Context, userID uuid.UUID, te
 // ---------------------------------------------------------------------------
 
 type mockScheduledMessageStore struct {
-	createFn      func(ctx context.Context, msg *model.ScheduledMessage) error
-	getByIDFn     func(ctx context.Context, id uuid.UUID) (*model.ScheduledMessage, error)
-	listByChatFn  func(ctx context.Context, chatID, senderID uuid.UUID) ([]model.ScheduledMessage, error)
-	updateFn      func(ctx context.Context, id uuid.UUID, content *string, entities []byte, scheduledAt *time.Time) error
-	deleteFn      func(ctx context.Context, id, senderID uuid.UUID) error
-	markSentFn    func(ctx context.Context, id uuid.UUID) error
-	listPendingFn func(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error)
+	createFn               func(ctx context.Context, msg *model.ScheduledMessage) error
+	getByIDFn              func(ctx context.Context, id uuid.UUID) (*model.ScheduledMessage, error)
+	listByChatFn           func(ctx context.Context, chatID, senderID uuid.UUID) ([]model.ScheduledMessage, error)
+	updateFn               func(ctx context.Context, id uuid.UUID, content *string, entities []byte, scheduledAt *time.Time) error
+	deleteFn               func(ctx context.Context, id, senderID uuid.UUID) error
+	markSentFn             func(ctx context.Context, id uuid.UUID) error
+	claimAndMarkPendingFn  func(ctx context.Context, limit int) ([]model.ScheduledMessage, error)
 }
 
 func (m *mockScheduledMessageStore) Create(ctx context.Context, msg *model.ScheduledMessage) error {
@@ -475,9 +503,9 @@ func (m *mockScheduledMessageStore) MarkSent(ctx context.Context, id uuid.UUID) 
 	return nil
 }
 
-func (m *mockScheduledMessageStore) ListPending(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error) {
-	if m.listPendingFn != nil {
-		return m.listPendingFn(ctx, now)
+func (m *mockScheduledMessageStore) ClaimAndMarkPending(ctx context.Context, limit int) ([]model.ScheduledMessage, error) {
+	if m.claimAndMarkPendingFn != nil {
+		return m.claimAndMarkPendingFn(ctx, limit)
 	}
 	return nil, nil
 }

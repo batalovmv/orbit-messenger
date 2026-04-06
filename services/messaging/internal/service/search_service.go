@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,14 +29,19 @@ const (
 type SearchService struct {
 	client    SearchClient
 	chatStore store.ChatStore
+	userStore store.UserStore
 }
 
 // NewSearchService creates a new SearchService.
-func NewSearchService(client SearchClient, chatStore store.ChatStore) *SearchService {
-	return &SearchService{
+func NewSearchService(client SearchClient, chatStore store.ChatStore, userStore ...store.UserStore) *SearchService {
+	svc := &SearchService{
 		client:    client,
 		chatStore: chatStore,
 	}
+	if len(userStore) > 0 {
+		svc.userStore = userStore[0]
+	}
+	return svc
 }
 
 // SearchMessages searches messages visible to userID, applying optional filters.
@@ -198,6 +204,108 @@ func (s *SearchService) userChatIDs(ctx context.Context, userID uuid.UUID) ([]st
 func validateSearchQuery(query string) error {
 	if strings.TrimSpace(query) == "" {
 		return apperror.BadRequest("search query must not be empty")
+	}
+	return nil
+}
+
+// IndexUser adds or updates a user document in the search index.
+func (s *SearchService) IndexUser(userID, displayName, email, role string) error {
+	doc := search.BuildUserDocument(userID, displayName, email, role)
+	if err := s.client.IndexDocuments(indexUsers, []interface{}{doc}); err != nil {
+		return fmt.Errorf("index user: %w", err)
+	}
+	return nil
+}
+
+// DeleteUser removes a user document from the search index.
+func (s *SearchService) DeleteUser(userID string) error {
+	if err := s.client.DeleteDocument(indexUsers, userID); err != nil {
+		return fmt.Errorf("delete user from index: %w", err)
+	}
+	return nil
+}
+
+// IndexChat adds or updates a chat document in the search index.
+// Only group and channel chats are indexed; direct chats are skipped.
+func (s *SearchService) IndexChat(chatID, chatType, name, description string) error {
+	if chatType == "direct" {
+		return nil
+	}
+	doc := search.BuildChatDocument(chatID, chatType, name, description)
+	if err := s.client.IndexDocuments(indexChats, []interface{}{doc}); err != nil {
+		return fmt.Errorf("index chat: %w", err)
+	}
+	return nil
+}
+
+// DeleteChat removes a chat document from the search index.
+func (s *SearchService) DeleteChat(chatID string) error {
+	if err := s.client.DeleteDocument(indexChats, chatID); err != nil {
+		return fmt.Errorf("delete chat from index: %w", err)
+	}
+	return nil
+}
+
+// BootstrapIndices populates the Meilisearch users and chats indices from the
+// database on service startup. Errors are non-fatal — logged but not returned.
+func (s *SearchService) BootstrapIndices(ctx context.Context) {
+	if s.userStore != nil {
+		if err := s.bootstrapUsers(ctx); err != nil {
+			// Non-fatal: search works without bootstrap, just may miss old data.
+			slog.WarnContext(ctx, "search bootstrap: index users failed", "error", err)
+		}
+	}
+	if err := s.bootstrapChats(ctx); err != nil {
+		slog.WarnContext(ctx, "search bootstrap: index chats failed", "error", err)
+	}
+}
+
+func (s *SearchService) bootstrapUsers(ctx context.Context) error {
+	users, err := s.userStore.ListAll(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("list all users: %w", err)
+	}
+	if len(users) == 0 {
+		return nil
+	}
+	docs := make([]interface{}, 0, len(users))
+	for _, u := range users {
+		docs = append(docs, search.BuildUserDocument(u.ID.String(), u.DisplayName, u.Email, u.Role))
+	}
+	if err := s.client.IndexDocuments(indexUsers, docs); err != nil {
+		return fmt.Errorf("index users: %w", err)
+	}
+	return nil
+}
+
+func (s *SearchService) bootstrapChats(ctx context.Context) error {
+	chats, err := s.chatStore.ListAll(ctx, 0)
+	if err != nil {
+		return fmt.Errorf("list all chats: %w", err)
+	}
+	if len(chats) == 0 {
+		return nil
+	}
+	docs := make([]interface{}, 0, len(chats))
+	for _, c := range chats {
+		if c.Type == "direct" {
+			continue
+		}
+		name := ""
+		if c.Name != nil {
+			name = *c.Name
+		}
+		description := ""
+		if c.Description != nil {
+			description = *c.Description
+		}
+		docs = append(docs, search.BuildChatDocument(c.ID.String(), c.Type, name, description))
+	}
+	if len(docs) == 0 {
+		return nil
+	}
+	if err := s.client.IndexDocuments(indexChats, docs); err != nil {
+		return fmt.Errorf("index chats: %w", err)
 	}
 	return nil
 }

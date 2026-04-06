@@ -545,6 +545,62 @@ func TestCreateDirectChat_SelfDM_Rejected(t *testing.T) {
 	assertAppError(t, err, 400)
 }
 
+func TestCreateDirectChat_NATS_ChatCreated(t *testing.T) {
+	userID := uuid.New()
+	otherUserID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getDirectChatFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*uuid.UUID, error) {
+			if gotUserID != userID || gotOtherUserID != otherUserID {
+				t.Fatalf("unexpected direct chat lookup args: %s %s", gotUserID, gotOtherUserID)
+			}
+			return nil, nil
+		},
+		createDirectFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*model.Chat, error) {
+			if gotUserID != userID || gotOtherUserID != otherUserID {
+				t.Fatalf("unexpected create direct args: %s %s", gotUserID, gotOtherUserID)
+			}
+
+			chatType := "direct"
+			return &model.Chat{
+				ID:   chatID,
+				Type: chatType,
+			}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	chat, err := svc.CreateDirectChat(context.Background(), userID, otherUserID)
+	if err != nil {
+		t.Fatalf("CreateDirectChat: %v", err)
+	}
+
+	if chat.ID != chatID {
+		t.Fatalf("expected chat ID %s, got %s", chatID, chat.ID)
+	}
+
+	events := rec.FindByEvent("chat_created")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 chat_created event, got %d", len(events))
+	}
+
+	ev := events[0]
+	if !strings.Contains(ev.Subject, chatID.String()) {
+		t.Fatalf("subject should contain chat ID, got %q", ev.Subject)
+	}
+	if len(ev.MemberIDs) != 2 {
+		t.Fatalf("expected 2 member IDs, got %d", len(ev.MemberIDs))
+	}
+	if ev.MemberIDs[0] != userID.String() || ev.MemberIDs[1] != otherUserID.String() {
+		t.Fatalf("unexpected member IDs: %#v", ev.MemberIDs)
+	}
+	if ev.SenderID != userID.String() {
+		t.Fatalf("expected sender ID %s, got %s", userID, ev.SenderID)
+	}
+}
+
 func TestCreateChat_ChannelDefaultPerms0(t *testing.T) {
 	ownerID := uuid.New()
 	rec := &RecordingPublisher{}

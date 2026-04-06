@@ -216,16 +216,8 @@ func (s *PollService) Vote(ctx context.Context, messageID, userID uuid.UUID, opt
 		return nil, apperror.Forbidden("Not a member of this chat")
 	}
 
-	if !poll.IsMultiple {
-		if err := s.polls.UnvoteAll(ctx, poll.ID, userID); err != nil {
-			return nil, fmt.Errorf("clear previous vote: %w", err)
-		}
-	}
-
-	for _, optionID := range uniqueOptionIDs {
-		if err := s.polls.Vote(ctx, poll.ID, optionID, userID); err != nil {
-			return nil, fmt.Errorf("vote on poll: %w", err)
-		}
+	if err := s.polls.VoteAtomic(ctx, poll.ID, userID, uniqueOptionIDs, poll.IsMultiple); err != nil {
+		return nil, fmt.Errorf("atomic vote: %w", err)
 	}
 
 	updated, err := s.polls.GetByID(ctx, poll.ID)
@@ -350,16 +342,22 @@ func (s *PollService) ClosePoll(ctx context.Context, messageID, userID uuid.UUID
 }
 
 // GetPollVoters returns voters for a specific poll option (non-anonymous only).
-func (s *PollService) GetPollVoters(ctx context.Context, messageID, userID uuid.UUID, optionID uuid.UUID, limit int) ([]model.PollVote, error) {
+func (s *PollService) GetPollVoters(
+	ctx context.Context,
+	messageID, userID uuid.UUID,
+	optionID uuid.UUID,
+	limit int,
+	cursor string,
+) ([]model.PollVote, string, bool, error) {
 	poll, err := s.polls.GetByMessageID(ctx, messageID)
 	if err != nil {
-		return nil, fmt.Errorf("get poll by message: %w", err)
+		return nil, "", false, fmt.Errorf("get poll by message: %w", err)
 	}
 	if poll == nil {
-		return nil, apperror.NotFound("Poll not found")
+		return nil, "", false, apperror.NotFound("Poll not found")
 	}
 	if poll.IsAnonymous {
-		return nil, apperror.BadRequest("Anonymous poll voters are not available")
+		return nil, "", false, apperror.BadRequest("Anonymous poll voters are not available")
 	}
 
 	validOption := false
@@ -370,34 +368,34 @@ func (s *PollService) GetPollVoters(ctx context.Context, messageID, userID uuid.
 		}
 	}
 	if !validOption {
-		return nil, apperror.BadRequest("Invalid option ID")
+		return nil, "", false, apperror.BadRequest("Invalid option ID")
 	}
 
 	msg, err := s.messages.GetByID(ctx, messageID)
 	if err != nil {
-		return nil, fmt.Errorf("get poll message: %w", err)
+		return nil, "", false, fmt.Errorf("get poll message: %w", err)
 	}
 	if msg == nil {
-		return nil, apperror.NotFound("Message not found")
+		return nil, "", false, apperror.NotFound("Message not found")
 	}
 
 	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
+		return nil, "", false, fmt.Errorf("check membership: %w", err)
 	}
 	if !isMember {
-		return nil, apperror.Forbidden("Not a member of this chat")
+		return nil, "", false, apperror.Forbidden("Not a member of this chat")
 	}
 
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
 
-	voters, err := s.polls.GetVoters(ctx, poll.ID, optionID, limit)
+	voters, nextCursor, hasMore, err := s.polls.GetVoters(ctx, poll.ID, optionID, limit, cursor)
 	if err != nil {
-		return nil, fmt.Errorf("get poll voters: %w", err)
+		return nil, "", false, fmt.Errorf("get poll voters: %w", err)
 	}
-	return voters, nil
+	return voters, nextCursor, hasMore, nil
 }
 
 func (s *PollService) HydrateMessagePolls(ctx context.Context, userID uuid.UUID, msgs []model.Message) error {

@@ -292,7 +292,7 @@ func TestSendNow_NotOwner(t *testing.T) {
 
 func TestDeliverPending_NoPendingMessages(t *testing.T) {
 	ss := &mockScheduledMessageStore{
-		listPendingFn: func(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error) {
+		claimAndMarkPendingFn: func(ctx context.Context, limit int) ([]model.ScheduledMessage, error) {
 			return nil, nil
 		},
 	}
@@ -315,16 +315,10 @@ func TestDeliverPending_DeliversAndMarksSent(t *testing.T) {
 	content := "Happy birthday!"
 
 	ss := &mockScheduledMessageStore{
-		listPendingFn: func(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error) {
+		claimAndMarkPendingFn: func(ctx context.Context, limit int) ([]model.ScheduledMessage, error) {
 			return []model.ScheduledMessage{
-				{ID: msgID, ChatID: chatID, SenderID: userID, Content: &content, Type: "text"},
+				{ID: msgID, ChatID: chatID, SenderID: userID, Content: &content, Type: "text", IsSent: true},
 			}, nil
-		},
-		markSentFn: func(ctx context.Context, id uuid.UUID) error {
-			if id != msgID {
-				t.Fatalf("expected markSent for %s, got %s", msgID, id)
-			}
-			return nil
 		},
 	}
 	ms := &mockMessageStore{

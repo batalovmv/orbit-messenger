@@ -506,5 +506,69 @@ func TestUnvote_PollClosed(t *testing.T) {
 	pollAssertAppError(t, err, 400)
 }
 
+func TestGetPollVoters_UsesCursorPagination(t *testing.T) {
+	msgID := uuid.New()
+	userID := uuid.New()
+	pollID := uuid.New()
+	optionID := uuid.New()
+	chatID := uuid.New()
+	votedAt := time.Now().UTC().Round(0)
+
+	var gotLimit int
+	var gotCursor string
+
+	ps := &mockPollStore{
+		getByMessageIDFn: func(ctx context.Context, mID uuid.UUID) (*model.Poll, error) {
+			return &model.Poll{
+				ID:        pollID,
+				MessageID: mID,
+				Options:   []model.PollOption{{ID: optionID}},
+			}, nil
+		},
+		getVotersFn: func(ctx context.Context, pID, oID uuid.UUID, limit int, cursor string) ([]model.PollVote, string, bool, error) {
+			gotLimit = limit
+			gotCursor = cursor
+			return []model.PollVote{{
+				PollID:   pID,
+				OptionID: oID,
+				UserID:   uuid.New(),
+				VotedAt:  votedAt,
+			}}, "next-cursor", true, nil
+		},
+	}
+	ms := &mockMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: id, ChatID: chatID}, nil
+		},
+	}
+	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+	}
+	rec := &RecordingPublisher{}
+	svc := newTestPollService(ps, ms, cs, rec)
+
+	voters, nextCursor, hasMore, err := svc.GetPollVoters(context.Background(), msgID, userID, optionID, 25, "cursor-token")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if gotLimit != 25 {
+		t.Fatalf("expected limit 25, got %d", gotLimit)
+	}
+	if gotCursor != "cursor-token" {
+		t.Fatalf("expected cursor token to be forwarded, got %q", gotCursor)
+	}
+	if nextCursor != "next-cursor" {
+		t.Fatalf("expected next cursor, got %q", nextCursor)
+	}
+	if !hasMore {
+		t.Fatal("expected hasMore to be true")
+	}
+	if len(voters) != 1 {
+		t.Fatalf("expected 1 voter, got %d", len(voters))
+	}
+}
+
 // Suppress unused
 var _ = time.Now

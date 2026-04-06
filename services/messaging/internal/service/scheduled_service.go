@@ -91,6 +91,11 @@ func (s *ScheduledMessageService) Schedule(
 	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
 		return nil, apperror.Forbidden("You don't have permission to send messages")
 	}
+	if len(input.MediaIDs) > 0 {
+		if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMedia) {
+			return nil, apperror.Forbidden("You don't have permission to send media")
+		}
+	}
 
 	// Block check in direct chats
 	if chat.Type == "direct" && s.blockedStore != nil {
@@ -108,6 +113,13 @@ func (s *ScheduledMessageService) Schedule(
 			}
 			if blocked {
 				return nil, apperror.Forbidden("You cannot send messages to this user")
+			}
+			blockedBySender, err := s.blockedStore.IsBlocked(ctx, senderID, m.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("check sender block: %w", err)
+			}
+			if blockedBySender {
+				return nil, apperror.Forbidden("You have blocked this user")
 			}
 		}
 	}
@@ -267,10 +279,16 @@ func (s *ScheduledMessageService) SendNow(ctx context.Context, msgID, userID uui
 
 // DeliverPending finds and delivers all messages whose scheduled_at <= now.
 // Called by the cron job every 10 seconds.
+//
+// Uses ClaimAndMarkPending which atomically marks messages as sent before
+// delivering them, preventing double-delivery when multiple workers run
+// concurrently. If delivery fails after claiming, the message stays marked
+// as sent (acceptable trade-off: one missed delivery vs. duplicate delivery).
 func (s *ScheduledMessageService) DeliverPending(ctx context.Context) (int, error) {
-	pending, err := s.scheduled.ListPending(ctx, time.Now())
+	const batchSize = 100
+	pending, err := s.scheduled.ClaimAndMarkPending(ctx, batchSize)
 	if err != nil {
-		return 0, fmt.Errorf("list pending scheduled messages: %w", err)
+		return 0, fmt.Errorf("claim pending scheduled messages: %w", err)
 	}
 	if len(pending) == 0 {
 		return 0, nil
@@ -283,12 +301,6 @@ func (s *ScheduledMessageService) DeliverPending(ctx context.Context) (int, erro
 		if _, err := s.deliver(ctx, scheduledMsg); err != nil {
 			s.logger.Error("failed to deliver scheduled message", "scheduled_id", scheduledMsg.ID, "chat_id", scheduledMsg.ChatID, "error", err)
 			deliveryErrs = append(deliveryErrs, fmt.Errorf("deliver %s: %w", scheduledMsg.ID, err))
-			continue
-		}
-
-		if err := s.scheduled.MarkSent(ctx, scheduledMsg.ID); err != nil {
-			s.logger.Error("failed to mark scheduled message as sent", "scheduled_id", scheduledMsg.ID, "chat_id", scheduledMsg.ChatID, "error", err)
-			deliveryErrs = append(deliveryErrs, fmt.Errorf("mark sent %s: %w", scheduledMsg.ID, err))
 			continue
 		}
 
@@ -319,6 +331,11 @@ func (s *ScheduledMessageService) deliver(ctx context.Context, scheduledMsg mode
 	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMessages) {
 		return nil, apperror.Forbidden("Sender no longer has permission to send messages")
 	}
+	if len(scheduledMsg.MediaIDs) > 0 {
+		if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanSendMedia) {
+			return nil, apperror.Forbidden("Sender no longer has permission to send media")
+		}
+	}
 
 	// Block check at delivery time
 	if chat.Type == "direct" && s.blockedStore != nil {
@@ -336,6 +353,13 @@ func (s *ScheduledMessageService) deliver(ctx context.Context, scheduledMsg mode
 			}
 			if blocked {
 				return nil, apperror.Forbidden("Sender is blocked by recipient")
+			}
+			blockedBySender, err := s.blockedStore.IsBlocked(ctx, scheduledMsg.SenderID, m.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("check sender block: %w", err)
+			}
+			if blockedBySender {
+				return nil, apperror.Forbidden("You have blocked this user")
 			}
 		}
 	}

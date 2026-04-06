@@ -21,6 +21,8 @@ type ReactionStore interface {
 	Remove(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	// RemoveAllByUser removes all reactions by a user from a message.
 	RemoveAllByUser(ctx context.Context, messageID, userID uuid.UUID) error
+	// ReplaceUserReaction atomically replaces a user's reaction on a message.
+	ReplaceUserReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
 	// ListByMessage returns all reactions for a message grouped by emoji.
 	ListByMessage(ctx context.Context, messageID uuid.UUID) ([]model.ReactionSummary, error)
 	// ListByMessageIDs returns grouped reactions for many messages in one query.
@@ -77,6 +79,38 @@ func (s *reactionStore) RemoveAllByUser(ctx context.Context, messageID, userID u
 	if err != nil {
 		return fmt.Errorf("remove all reactions by user: %w", err)
 	}
+	return nil
+}
+
+func (s *reactionStore) ReplaceUserReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx,
+		`DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2`,
+		messageID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("remove existing: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO message_reactions (message_id, user_id, emoji)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
+		messageID, userID, emoji,
+	)
+	if err != nil {
+		return fmt.Errorf("add reaction: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
 	return nil
 }
 

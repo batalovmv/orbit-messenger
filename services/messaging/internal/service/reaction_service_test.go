@@ -140,6 +140,18 @@ func TestAddReaction_Success_PublishesEvent(t *testing.T) {
 		getAvailableReactionsFn: func(ctx context.Context, cID uuid.UUID) (*model.ChatAvailableReactions, error) {
 			return &model.ChatAvailableReactions{ChatID: cID, Mode: "all"}, nil
 		},
+		replaceUserReactionFn: func(ctx context.Context, messageID, reactingUserID uuid.UUID, emoji string) error {
+			if messageID != msgID {
+				t.Fatalf("unexpected message id: %s", messageID)
+			}
+			if reactingUserID != userID {
+				t.Fatalf("unexpected user id: %s", reactingUserID)
+			}
+			if emoji != "👍" {
+				t.Fatalf("unexpected emoji: %s", emoji)
+			}
+			return nil
+		},
 	}
 	rec := &RecordingPublisher{}
 	svc := newTestReactionService(rs, ms, cs, rec)

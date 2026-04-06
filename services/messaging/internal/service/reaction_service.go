@@ -74,13 +74,8 @@ func (s *ReactionService) AddReaction(ctx context.Context, messageID, userID uui
 		return apperror.BadRequest("Invalid reactions mode")
 	}
 
-	// Enforce one reaction per user per message: remove any existing reactions first.
-	if err := s.reactions.RemoveAllByUser(ctx, messageID, userID); err != nil {
-		return fmt.Errorf("remove existing reactions: %w", err)
-	}
-
-	if err := s.reactions.Add(ctx, messageID, userID, emoji); err != nil {
-		return fmt.Errorf("add reaction: %w", err)
+	if err := s.reactions.ReplaceUserReaction(ctx, messageID, userID, emoji); err != nil {
+		return fmt.Errorf("replace reaction: %w", err)
 	}
 
 	s.publishReactionEvent(ctx, msg, "reaction_added", map[string]any{

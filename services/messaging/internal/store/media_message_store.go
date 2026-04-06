@@ -32,6 +32,19 @@ func (s *messageStore) CreateWithMedia(ctx context.Context, msg *model.Message, 
 		return fmt.Errorf("get sequence: %w", err)
 	}
 
+	// S2 fix: verify all media files were uploaded by the sender (prevent IDOR)
+	var ownedCount int
+	err = tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM media WHERE id = ANY($1) AND uploader_id = $2`,
+		mediaIDs, msg.SenderID,
+	).Scan(&ownedCount)
+	if err != nil {
+		return fmt.Errorf("check media ownership: %w", err)
+	}
+	if ownedCount != len(mediaIDs) {
+		return fmt.Errorf("media ownership check failed: %w", model.ErrMediaNotOwned)
+	}
+
 	var isOneTime bool
 	err = tx.QueryRow(ctx,
 		`SELECT COALESCE(bool_or(is_one_time), false)

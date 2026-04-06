@@ -26,8 +26,11 @@ type ScheduledMessageStore interface {
 	Delete(ctx context.Context, id, senderID uuid.UUID) error
 	// MarkSent marks a scheduled message as sent.
 	MarkSent(ctx context.Context, id uuid.UUID) error
-	// ListPending returns all scheduled messages due for delivery (scheduled_at <= now, is_sent = false).
-	ListPending(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error)
+	// ClaimAndMarkPending atomically claims and marks as sent all scheduled messages
+	// due for delivery (scheduled_at <= now, is_sent = false). Uses a CTE with
+	// FOR UPDATE SKIP LOCKED inside a single UPDATE statement so concurrent workers
+	// cannot double-deliver the same message. Returns the claimed messages.
+	ClaimAndMarkPending(ctx context.Context, limit int) ([]model.ScheduledMessage, error)
 }
 
 type scheduledMessageStore struct {
@@ -170,17 +173,31 @@ func (s *scheduledMessageStore) MarkSent(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
-func (s *scheduledMessageStore) ListPending(ctx context.Context, now time.Time) ([]model.ScheduledMessage, error) {
-	rows, err := s.pool.Query(ctx,
-		scheduledMessageSelectQuery(`
-			WHERE sm.scheduled_at <= $1 AND sm.is_sent = false
-			ORDER BY sm.scheduled_at ASC, sm.created_at ASC
-		 FOR UPDATE SKIP LOCKED`,
-		),
-		now,
-	)
+func (s *scheduledMessageStore) ClaimAndMarkPending(ctx context.Context, limit int) ([]model.ScheduledMessage, error) {
+	// Atomically select and mark as sent in one statement.
+	// The CTE picks candidate rows with FOR UPDATE SKIP LOCKED so concurrent
+	// workers each get a disjoint set — no double-delivery is possible.
+	rows, err := s.pool.Query(ctx, `
+		WITH pending AS (
+			SELECT id FROM scheduled_messages
+			WHERE is_sent = FALSE
+			  AND scheduled_at <= NOW()
+			ORDER BY scheduled_at ASC, created_at ASC
+			LIMIT $1
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE scheduled_messages sm
+		SET is_sent = TRUE, sent_at = NOW(), updated_at = NOW()
+		FROM pending p
+		WHERE sm.id = p.id
+		RETURNING sm.id, sm.chat_id, sm.sender_id, sm.content, sm.entities,
+		          sm.reply_to_id,
+		          (SELECT rm.sequence_number FROM messages rm WHERE rm.id = sm.reply_to_id) AS reply_to_seq,
+		          sm.type, sm.media_ids, sm.is_spoiler, sm.poll_payload, sm.scheduled_at,
+		          sm.is_sent, sm.sent_at, sm.created_at, sm.updated_at
+	`, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list pending scheduled messages: %w", err)
+		return nil, fmt.Errorf("claim pending scheduled messages: %w", err)
 	}
 	defer rows.Close()
 
@@ -188,7 +205,7 @@ func (s *scheduledMessageStore) ListPending(ctx context.Context, now time.Time) 
 	for rows.Next() {
 		var msg model.ScheduledMessage
 		if err := scanScheduledMessageRow(rows, &msg); err != nil {
-			return nil, fmt.Errorf("scan pending scheduled message: %w", err)
+			return nil, fmt.Errorf("scan claimed scheduled message: %w", err)
 		}
 		messages = append(messages, msg)
 	}

@@ -180,13 +180,14 @@ func TestGetMemberIDs_RequiresMembership(t *testing.T) {
 	}
 
 	app := newChatApp(cs)
-	req, _ := http.NewRequest(http.MethodGet, "/chats/"+chatID.String()+"/member-ids", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/internal/chats/"+chatID.String()+"/member-ids", nil)
 	req.Header.Set("X-User-ID", userID.String())
 
 	resp, err := app.Test(req, -1)
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
+	// Route requires X-Internal-Token — without it the handler returns 403.
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("non-member should get 403, got %d", resp.StatusCode)
 	}

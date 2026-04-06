@@ -109,10 +109,11 @@ func (h *PollHandler) GetVoters(c *fiber.Ctx) error {
 	}
 
 	limit := c.QueryInt("limit", 50)
-	voters, err := h.svc.GetPollVoters(c.Context(), msgID, userID, optionID, limit)
+	cursor := c.Query("cursor")
+	voters, nextCursor, hasMore, err := h.svc.GetPollVoters(c.Context(), msgID, userID, optionID, limit, cursor)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	return response.Paginated(c, voters, "", false)
+	return response.Paginated(c, voters, nextCursor, hasMore)
 }
