@@ -358,6 +358,7 @@ type NotificationSettingsStore interface {
 	Upsert(ctx context.Context, settings *model.NotificationSettings) error
 	Delete(ctx context.Context, userID, chatID uuid.UUID) error
 	ListMutedUserIDs(ctx context.Context, chatID uuid.UUID, userIDs []string) ([]string, error)
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]model.NotificationSettings, error)
 }
 
 type notificationSettingsStore struct {
@@ -450,6 +451,32 @@ func (s *notificationSettingsStore) ListMutedUserIDs(ctx context.Context, chatID
 	}
 
 	return mutedUserIDs, nil
+}
+
+func (s *notificationSettingsStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.NotificationSettings, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id, chat_id, muted_until, sound, show_preview
+		 FROM notification_settings
+		 WHERE user_id = $1`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("notificationSettingsStore.ListByUser: %w", err)
+	}
+	defer rows.Close()
+
+	var result []model.NotificationSettings
+	for rows.Next() {
+		var ns model.NotificationSettings
+		if err := rows.Scan(&ns.UserID, &ns.ChatID, &ns.MutedUntil, &ns.Sound, &ns.ShowPreview); err != nil {
+			return nil, fmt.Errorf("notificationSettingsStore.ListByUser scan: %w", err)
+		}
+		result = append(result, ns)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("notificationSettingsStore.ListByUser rows: %w", err)
+	}
+	return result, nil
 }
 
 // ─── PushSubscriptionStore ───────────────────────────────────────────────────

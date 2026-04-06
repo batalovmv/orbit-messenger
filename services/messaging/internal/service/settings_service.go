@@ -239,6 +239,10 @@ func (s *SettingsService) GetMutedUserIDs(ctx context.Context, chatID uuid.UUID,
 	return mutedUserIDs, nil
 }
 
+func (s *SettingsService) ListNotificationExceptions(ctx context.Context, userID uuid.UUID) ([]model.NotificationSettings, error) {
+	return s.notifStore.ListByUser(ctx, userID)
+}
+
 func (s *SettingsService) GetGlobalNotifySettings(ctx context.Context, userID uuid.UUID) (*model.GlobalNotifySettings, error) {
 	return s.userSettingsStore.GetGlobalNotifySettings(ctx, userID)
 }

@@ -140,6 +140,10 @@ func (m *mockNotificationSettingsStore) ListMutedUserIDs(ctx context.Context, ch
 	return nil, nil
 }
 
+func (m *mockNotificationSettingsStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.NotificationSettings, error) {
+	return nil, nil
+}
+
 func newSettingsApp(pushStore *mockPushSubscriptionStore, notifStore *mockNotificationSettingsStore, internalSecret string) *fiber.App {
 	app := fiber.New()
 	settingsSvc := service.NewSettingsService(

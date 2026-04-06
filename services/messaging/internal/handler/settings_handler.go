@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -55,6 +56,7 @@ func (h *SettingsHandler) Register(app fiber.Router) {
 	app.Delete("/users/me/blocked/:userId", h.UnblockUser)
 	app.Get("/users/me/settings/notifications", h.GetGlobalNotifySettings)
 	app.Put("/users/me/settings/notifications", h.UpdateGlobalNotifySettings)
+	app.Get("/users/me/notification-exceptions", h.ListNotificationExceptions)
 	app.Put("/chats/:id/notifications", h.UpdateChatNotifications)
 	app.Get("/chats/:id/notifications", h.GetChatNotifications)
 	app.Delete("/chats/:id/notifications", h.DeleteChatNotifications)
@@ -458,9 +460,40 @@ func (h *SettingsHandler) UpdateGlobalNotifySettings(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	// Read current settings first to merge with partial update
+	current, _ := h.settingsSvc.GetGlobalNotifySettings(c.Context(), uid)
+
 	var req model.GlobalNotifySettings
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	// Merge: use current values as defaults, overwrite only fields present in request body
+	if current != nil {
+		merged := *current
+		// Parse raw body to detect which fields were actually sent
+		var raw map[string]interface{}
+		if err := json.Unmarshal(c.Body(), &raw); err == nil {
+			if _, ok := raw["users_muted"]; ok {
+				merged.UsersMuted = req.UsersMuted
+			}
+			if _, ok := raw["groups_muted"]; ok {
+				merged.GroupsMuted = req.GroupsMuted
+			}
+			if _, ok := raw["channels_muted"]; ok {
+				merged.ChannelsMuted = req.ChannelsMuted
+			}
+			if _, ok := raw["users_preview"]; ok {
+				merged.UsersPreview = req.UsersPreview
+			}
+			if _, ok := raw["groups_preview"]; ok {
+				merged.GroupsPreview = req.GroupsPreview
+			}
+			if _, ok := raw["channels_preview"]; ok {
+				merged.ChannelsPreview = req.ChannelsPreview
+			}
+			req = merged
+		}
 	}
 
 	if err := h.settingsSvc.UpdateGlobalNotifySettings(c.Context(), uid, &req); err != nil {
@@ -473,4 +506,22 @@ func (h *SettingsHandler) UpdateGlobalNotifySettings(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, gs)
+}
+
+func (h *SettingsHandler) ListNotificationExceptions(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	exceptions, err := h.settingsSvc.ListNotificationExceptions(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if exceptions == nil {
+		exceptions = []model.NotificationSettings{}
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"exceptions": exceptions})
 }

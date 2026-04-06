@@ -464,8 +464,44 @@ export function loadAttachBots() {
   return Promise.resolve(undefined);
 }
 
-export function fetchNotificationExceptions() {
-  return Promise.resolve(undefined);
+export async function fetchNotificationExceptions() {
+  try {
+    const result = await request<{
+      exceptions: Array<{
+        user_id: string;
+        chat_id: string;
+        muted_until?: string;
+        sound: string;
+        show_preview: boolean;
+      }>;
+    }>('GET', '/users/me/notification-exceptions');
+
+    if (!result?.exceptions?.length) return undefined;
+
+    const MUTE_INDEFINITE_TIMESTAMP = 2147483647;
+    const exceptionsById: Record<string, {
+      mutedUntil?: number;
+      hasSound?: boolean;
+      isSilentPosting?: boolean;
+      shouldShowPreviews?: boolean;
+    }> = {};
+
+    for (const ex of result.exceptions) {
+      const isMuted = ex.muted_until
+        ? new Date(ex.muted_until).getTime() > Date.now()
+        : false;
+
+      exceptionsById[ex.chat_id] = {
+        mutedUntil: isMuted ? MUTE_INDEFINITE_TIMESTAMP : 0,
+        hasSound: ex.sound !== 'none',
+        shouldShowPreviews: ex.show_preview,
+      };
+    }
+
+    return exceptionsById;
+  } catch {
+    return undefined;
+  }
 }
 
 export function fetchTopInlineBots() {
