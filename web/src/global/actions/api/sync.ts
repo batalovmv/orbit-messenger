@@ -197,7 +197,7 @@ async function _loadAndReplaceMessages<T extends GlobalState>(global: T, actions
       global = getGlobal();
       const { chatId: newCurrentChatId } = selectCurrentMessageList(global, tabId) || {};
 
-      if (result && newCurrentChatId === currentChatId) {
+      if (result && result.messages && newCurrentChatId === currentChatId) {
         const currentChatMessages = selectChatMessages(global, currentChatId);
         const localMessages = currentChatId === SERVICE_NOTIFICATIONS_USER_ID
           ? global.serviceNotifications.filter(({ isDeleted }) => !isDeleted).map(({ message }) => message)

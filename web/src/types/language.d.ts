@@ -393,6 +393,7 @@ export interface LangPair {
   'AutoDownloadFilesTitle': undefined;
   'AutoplayMedia': undefined;
   'GifsTab2': undefined;
+  'CustomEmoji': undefined;
   'DataAndStorageAutoplayVideos': undefined;
   'FirstName': undefined;
   'LastName': undefined;

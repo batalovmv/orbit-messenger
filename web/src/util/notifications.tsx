@@ -331,7 +331,7 @@ export async function subscribe() {
     const deviceToken = serializePushSubscription(pushSubscription);
     if (DEBUG) {
       // eslint-disable-next-line no-console
-      console.log('[PUSH] Received push subscription: ', deviceToken);
+      console.log('[PUSH] Subscription endpoint registered');
     }
     await callApi('registerDevice', pushSubscription);
     setDeviceToken({ token: deviceToken });

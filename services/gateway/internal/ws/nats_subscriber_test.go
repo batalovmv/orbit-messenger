@@ -158,7 +158,7 @@ func TestSubscriber_HandleEvent_RichMessageEventsFallbackToMemberFetch(t *testin
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
 
-				wantPath := fmt.Sprintf("/chats/%s/member-ids", chatID)
+				wantPath := fmt.Sprintf("/internal/chats/%s/member-ids", chatID)
 				if r.URL.Path != wantPath {
 					t.Errorf("unexpected request path: want %q, got %q", wantPath, r.URL.Path)
 				}

@@ -175,7 +175,15 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'updateChatTypingStatus': {
-      const { id, threadId = MAIN_THREAD_ID, typingStatus } = update;
+      const { id, threadId = MAIN_THREAD_ID, typingStatus, userId } = update;
+
+      if (!typingStatus && userId) {
+        const currentTypingStatus = selectThreadLocalStateParam(global, id, threadId, 'typingStatus');
+        if (currentTypingStatus && currentTypingStatus.userId !== userId) {
+          return undefined;
+        }
+      }
+
       global = replaceThreadLocalStateParam(global, id, threadId, 'typingStatus', typingStatus);
       setGlobal(global);
 

@@ -10,12 +10,10 @@ const SILENCED_METHODS = new Set([
   'acceptLinkUrlAuth',
   'acceptPhoneCall',
   'answerCallbackButton',
-  'checkChatInvite',
   'fetchPremiumPromo',
   'fetchSavedGifs',
   'fetchStickerSetsForEmoji',
   'fetchTopInlineBots',
-  'fetchTopReactions',
   'requestMainWebView',
   'requestSimpleWebView',
 ]);

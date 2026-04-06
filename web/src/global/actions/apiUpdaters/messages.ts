@@ -428,6 +428,129 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       break;
     }
 
+    case 'updateMessageMediaReady' as typeof update['@type']: {
+      const {
+        mediaId, width, height, duration, hasThumbnail,
+      } = update as {
+        mediaId?: string;
+        width?: number;
+        height?: number;
+        duration?: number;
+        hasThumbnail?: boolean;
+      };
+
+      if (!mediaId) {
+        break;
+      }
+
+      let isUpdated = false;
+
+      outer: for (const chatId of Object.keys(global.messages.byChatId)) {
+        const chatMessages = selectChatMessages(global, chatId);
+        if (!chatMessages) {
+          continue;
+        }
+
+        for (const messageId of Object.keys(chatMessages)) {
+          const numericMessageId = Number(messageId);
+          const currentMessage = chatMessages[numericMessageId];
+
+          if (!currentMessage?.content) {
+            continue;
+          }
+
+          const {
+            photo, video, document, voice,
+          } = currentMessage.content;
+
+          const hasMedia = photo?.id === mediaId
+            || video?.id === mediaId
+            || document?.id === mediaId
+            || voice?.id === mediaId;
+
+          if (!hasMedia) {
+            continue;
+          }
+
+          const updatedContent = { ...currentMessage.content };
+          let hasContentChanges = false;
+
+          if (photo?.id === mediaId && width !== undefined && height !== undefined) {
+            updatedContent.photo = {
+              ...photo,
+              sizes: [{ width, height, type: 'y' as const }],
+            };
+            hasContentChanges = true;
+          }
+
+          if (video?.id === mediaId) {
+            const updatedVideo = { ...video };
+
+            if (width !== undefined) {
+              updatedVideo.width = width;
+              hasContentChanges = true;
+            }
+
+            if (height !== undefined) {
+              updatedVideo.height = height;
+              hasContentChanges = true;
+            }
+
+            if (duration !== undefined) {
+              updatedVideo.duration = duration;
+              hasContentChanges = true;
+            }
+
+            if (hasThumbnail) {
+              updatedVideo.hasVideoPreview = true;
+              hasContentChanges = true;
+            }
+
+            updatedContent.video = updatedVideo;
+          }
+
+          if (document?.id === mediaId) {
+            const updatedDocument = { ...document };
+
+            if (width !== undefined && height !== undefined) {
+              updatedDocument.mediaSize = { width, height };
+              hasContentChanges = true;
+
+              if (hasThumbnail) {
+                updatedDocument.previewPhotoSizes = [{ width, height, type: 'y' as const }];
+              }
+            }
+
+            updatedContent.document = updatedDocument;
+          }
+
+          if (voice?.id === mediaId && duration !== undefined) {
+            updatedContent.voice = {
+              ...voice,
+              duration,
+            };
+            hasContentChanges = true;
+          }
+
+          if (!hasContentChanges) {
+            break outer;
+          }
+
+          global = updateChatMessage(global, chatId, numericMessageId, {
+            content: updatedContent,
+          });
+          isUpdated = true;
+          break outer;
+        }
+      }
+
+      if (isUpdated) {
+        setGlobal(global);
+      }
+
+      break;
+    }
+
     case 'updateQuickReplyMessage': {
       const { id, message, poll, webPage } = update;
 

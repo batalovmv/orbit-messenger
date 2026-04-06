@@ -1,6 +1,8 @@
 import type { OnApiUpdate } from '../types';
 import type { SaturnErrorResponse, SaturnLoginResponse, SaturnWsMessage } from './types';
 
+import { DEBUG } from '../../config';
+
 const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 60s before expiry
 const WS_PING_INTERVAL_MS = 25 * 1000;
 const WS_RECONNECT_BASE_MS = 1000;
@@ -274,20 +276,39 @@ export function connectWs() {
     ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
     startPing();
-    onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateReady' });
-
-    // On reconnect, re-fetch chats to sync missed updates
-    if (wsHasConnectedBefore) {
-      onReconnect?.();
-    }
-    wsHasConnectedBefore = true;
+    onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
   };
 
   ws.onmessage = (event) => {
     try {
       const msg: SaturnWsMessage = JSON.parse(event.data as string);
       // eslint-disable-next-line no-console
-      if (msg.type !== 'pong') console.log('[Saturn WS] Received:', msg.type, msg.data);
+      if (DEBUG && msg.type !== 'pong') console.log('[Saturn WS] Received:', msg.type);
+
+      if (msg.type === 'auth_ok') {
+        onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateReady' });
+        if (wsHasConnectedBefore) {
+          onReconnect?.();
+        }
+        wsHasConnectedBefore = true;
+        return;
+      }
+
+      if (msg.type === 'error') {
+        // eslint-disable-next-line no-console
+        console.error('[Saturn WS] Server error:', msg.data);
+        const errorData = msg.data as { message?: unknown } | undefined;
+        const errorMsg = typeof errorData?.message === 'string'
+          ? errorData.message.toLowerCase()
+          : 'unknown error';
+        if (errorMsg.includes('auth') || errorMsg.includes('token') || errorMsg.includes('unauthorized')) {
+          onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateBroken' });
+          wsIntentionalClose = true;
+          ws?.close();
+          return;
+        }
+      }
+
       handleWsMessage(msg);
     } catch {
       // Ignore malformed messages

@@ -126,6 +126,10 @@ export async function fetchAvailableEffects() {
   const emojis: ApiSticker[] = [];
 
   for (const effect of effects) {
+    if (!effect.effectStickerId) {
+      continue;
+    }
+
     if (effect.effectAnimationId) {
       const document = documentsMap.get(effect.effectStickerId);
       const emoji = document && buildStickerFromDocument(document, false, effect.isPremium);
