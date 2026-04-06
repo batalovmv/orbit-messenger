@@ -11,6 +11,7 @@ import (
 var (
 	ErrMediaNotFound    = errors.New("media not found")
 	ErrNotUploader      = errors.New("forbidden: not the uploader")
+	ErrAccessDenied     = errors.New("forbidden: access denied")
 	ErrNoThumbnail      = errors.New("no thumbnail available")
 	ErrNoMedium         = errors.New("no medium resolution available")
 	ErrUploadNotFound   = errors.New("chunked upload not found or expired")

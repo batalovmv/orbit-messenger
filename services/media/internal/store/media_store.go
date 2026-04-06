@@ -25,6 +25,9 @@ type Store interface {
 	GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]*MessageMediaRow, error)
 	LinkToMessage(ctx context.Context, messageID, mediaID uuid.UUID, position int, isSpoiler bool) error
 	CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]string, error)
+	// CanAccess returns true if the user may download the media:
+	// they are the uploader OR the media is attached to at least one message.
+	CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error)
 }
 
 // MediaStore handles PostgreSQL operations for media.
@@ -240,6 +243,23 @@ func (s *MediaStore) LinkToMessage(ctx context.Context, messageID, mediaID uuid.
 		 ON CONFLICT DO NOTHING`,
 		messageID, mediaID, position, isSpoiler)
 	return err
+}
+
+// CanAccess returns true if userID is the uploader OR the media is attached to at least one message
+// (i.e. it's been published and any chat member who loaded the message can view it).
+func (s *MediaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
+	var ok bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM media
+			WHERE id = $1
+			  AND (uploader_id = $2 OR EXISTS(SELECT 1 FROM message_media WHERE media_id = $1))
+		)`, mediaID, userID,
+	).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("can access media %s: %w", mediaID, err)
+	}
+	return ok, nil
 }
 
 // CleanupOrphaned deletes media not linked to any message and older than maxAge.

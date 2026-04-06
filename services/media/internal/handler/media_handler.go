@@ -75,7 +75,12 @@ func (h *MediaHandler) streamVariant(c *fiber.Ctx, variant string) error {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
 	}
 
-	r2Key, err := h.svc.GetR2Key(c.Context(), id, variant)
+	userID, err := uuid.Parse(c.Get("X-User-ID"))
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user context"))
+	}
+
+	r2Key, err := h.svc.GetR2Key(c.Context(), id, userID, variant)
 	if err != nil {
 		if errors.Is(err, model.ErrNoThumbnail) {
 			return response.Error(c, apperror.NotFound("Thumbnail not available"))
@@ -139,7 +144,12 @@ func (h *MediaHandler) GetInfo(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid media ID"))
 	}
 
-	media, err := h.svc.GetInfo(c.Context(), id)
+	userID, err := uuid.Parse(c.Get("X-User-ID"))
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user context"))
+	}
+
+	media, err := h.svc.GetInfo(c.Context(), id, userID)
 	if err != nil {
 		return h.mapError(c, err, "get info")
 	}
@@ -174,6 +184,8 @@ func (h *MediaHandler) mapError(c *fiber.Ctx, err error, operation string) error
 		return response.Error(c, apperror.NotFound("Media not found"))
 	case errors.Is(err, model.ErrNotUploader):
 		return response.Error(c, apperror.Forbidden("Only the uploader can perform this action"))
+	case errors.Is(err, model.ErrAccessDenied):
+		return response.Error(c, apperror.Forbidden("Access denied"))
 	case errors.Is(err, model.ErrFileTooLarge):
 		return response.Error(c, apperror.BadRequest("File too large"))
 	case errors.Is(err, model.ErrMIMENotAllowed):

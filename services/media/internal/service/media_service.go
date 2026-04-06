@@ -347,7 +347,17 @@ func (s *MediaService) StreamFileRange(ctx context.Context, r2Key, rangeHeader s
 }
 
 // GetR2Key returns the R2 key for the given media and variant.
-func (s *MediaService) GetR2Key(ctx context.Context, id uuid.UUID, variant string) (string, error) {
+// userID is used to enforce access control (S3 fix): the caller must be the uploader
+// or the media must be attached to at least one published message.
+func (s *MediaService) GetR2Key(ctx context.Context, id, userID uuid.UUID, variant string) (string, error) {
+	ok, err := s.store.CanAccess(ctx, id, userID)
+	if err != nil {
+		return "", fmt.Errorf("access check: %w", err)
+	}
+	if !ok {
+		return "", model.ErrAccessDenied
+	}
+
 	m, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return "", err
@@ -414,7 +424,16 @@ func (s *MediaService) GetMediumURL(ctx context.Context, id uuid.UUID) (string, 
 }
 
 // GetInfo returns media metadata.
-func (s *MediaService) GetInfo(ctx context.Context, id uuid.UUID) (*model.Media, error) {
+// userID is used to enforce access control (S3 fix).
+func (s *MediaService) GetInfo(ctx context.Context, id, userID uuid.UUID) (*model.Media, error) {
+	ok, err := s.store.CanAccess(ctx, id, userID)
+	if err != nil {
+		return nil, fmt.Errorf("access check: %w", err)
+	}
+	if !ok {
+		return nil, model.ErrAccessDenied
+	}
+
 	m, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
