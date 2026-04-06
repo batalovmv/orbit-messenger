@@ -267,6 +267,8 @@ func (h *Handler) handleClientMessage(conn *Conn, msg []byte) {
 		h.handleStopTyping(conn, cm.Data)
 	case "ping":
 		conn.Send(Envelope{Type: EventPong, Data: json.RawMessage(`{}`)})
+	case EventWebRTCOffer, EventWebRTCAnswer, EventWebRTCICECandidate:
+		h.handleSignalingRelay(conn, cm.Type, cm.Data)
 	}
 }
 
@@ -419,6 +421,53 @@ func (h *Handler) typingCleanupLoop() {
 			return
 		}
 	}
+}
+
+// handleSignalingRelay relays WebRTC signaling messages (offer/answer/ICE) directly
+// between connected clients without NATS roundtrip for minimal latency.
+func (h *Handler) handleSignalingRelay(conn *Conn, eventType string, data json.RawMessage) {
+	var sd SignalingData
+	if err := json.Unmarshal(data, &sd); err != nil || sd.CallID == "" || sd.TargetUserID == "" {
+		return
+	}
+
+	// Validate UUIDs to prevent injection
+	if _, err := uuid.Parse(sd.CallID); err != nil {
+		return
+	}
+	if _, err := uuid.Parse(sd.TargetUserID); err != nil {
+		return
+	}
+
+	// Rate limit: reuse per-connection burst limiter (max 10 per 100ms)
+	conn.mu.Lock()
+	now := time.Now()
+	if now.Sub(conn.lastTyping) < 100*time.Millisecond {
+		conn.typingBurst++
+		if conn.typingBurst > 30 { // higher limit for signaling (ICE can be bursty)
+			conn.mu.Unlock()
+			return
+		}
+	} else {
+		conn.typingBurst = 0
+	}
+	conn.lastTyping = now
+	conn.mu.Unlock()
+
+	// Inject sender_id from the authenticated connection (never trust client-supplied value)
+	// Re-marshal with sender_id injected
+	relayData := make(map[string]json.RawMessage)
+	json.Unmarshal(data, &relayData)
+	senderJSON, _ := json.Marshal(conn.UserID)
+	relayData["sender_id"] = senderJSON
+
+	finalData, _ := json.Marshal(relayData)
+	envelope := Envelope{
+		Type: eventType,
+		Data: finalData,
+	}
+
+	h.Hub.SendToUser(sd.TargetUserID, envelope)
 }
 
 func (h *Handler) publishStatusChange(userID, status string) {

@@ -80,17 +80,20 @@ services:
       timeout: 3s
       retries: 5
 
-  # coturn — раскомментировать при Phase 6 (Calls)
-  # coturn:
-  #   image: coturn/coturn:4.6
-  #   ports:
-  #     - "3478:3478/tcp"
-  #     - "3478:3478/udp"
-  #   command: >
-  #     -n --log-file=stdout
-  #     --realm=${TURN_REALM:-orbit.local}
-  #     --user=${TURN_USER:-orbit}:${TURN_PASSWORD}
-  #     --lt-cred-mech
+  coturn:
+    image: coturn/coturn:4.6
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-49200:49152-49200/udp"
+    command: >
+      -n --log-file=stdout
+      --realm=${TURN_REALM:-orbit.local}
+      --user=${TURN_USER:-orbit}:${TURN_PASSWORD:-orbit}
+      --lt-cred-mech
+      --fingerprint
+      --min-port=49152
+      --max-port=49200
 
   # ============================================================
   # Application services
@@ -109,6 +112,7 @@ services:
       AUTH_SERVICE_URL: http://auth:8081
       MESSAGING_SERVICE_URL: http://messaging:8082
       MEDIA_SERVICE_URL: http://media:8083
+      CALLS_SERVICE_URL: http://calls:8084
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
@@ -121,6 +125,7 @@ services:
       auth: { condition: service_started }
       messaging: { condition: service_started }
       media: { condition: service_started }
+      calls: { condition: service_started }
 
   auth:
     build:
@@ -185,6 +190,24 @@ services:
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }
       minio: { condition: service_healthy }
+
+  calls:
+    build:
+      context: .
+      dockerfile: services/calls/Dockerfile
+    ports:
+      - "127.0.0.1:8084:8084"
+    environment:
+      PORT: "8084"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      TURN_URL: turn:coturn:3478
+      TURN_USER: ${TURN_USER:-orbit}
+      TURN_PASSWORD: ${TURN_PASSWORD:-orbit}
+    depends_on:
+      postgres: { condition: service_healthy }
+      nats: { condition: service_healthy }
 
   web:
     build:

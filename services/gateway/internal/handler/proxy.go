@@ -31,6 +31,7 @@ type ProxyConfig struct {
 	AuthServiceURL      string
 	MessagingServiceURL string
 	MediaServiceURL     string
+	CallsServiceURL     string
 	FrontendURL         string
 	InternalSecret      string
 }
@@ -233,6 +234,45 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 			})
 		}
 		return nil
+	})
+
+	// Calls routes: proxy with JWT, standard timeouts
+	callsClient := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+	apiGroup.All("/calls/*", func(c *fiber.Ctx) error {
+		url := cfg.CallsServiceURL + sanitizeProxyPath(c.Path())
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, callsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("calls proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Calls service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+	apiGroup.All("/calls", func(c *fiber.Ctx) error {
+		url := cfg.CallsServiceURL + sanitizeProxyPath(c.Path())
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, callsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("calls proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Calls service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+
+	// Block /internal/* paths — these are service-to-service only, not for user traffic
+	apiGroup.All("/internal/*", func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "forbidden", "message": "Internal endpoints are not accessible via API", "status": 403,
+		})
 	})
 
 	// Messaging routes: proxy with JWT already validated by middleware

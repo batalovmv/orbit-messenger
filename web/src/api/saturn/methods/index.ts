@@ -38,6 +38,17 @@ export {
   destroy, disconnect, init, setCurrentUser,
 } from './client';
 
+// Phase 6: Call methods
+export {
+  getDhConfig, requestPhoneCall, createPhoneCallState, destroyPhoneCallState,
+  acceptPhoneCall, encodePhoneCallData, sendSignalingData, setCallRating,
+  requestCall, acceptCall, discardCall, receivedCall, confirmCall,
+  createGroupCall, joinGroupCall, leaveGroupCall, discardGroupCall,
+  getGroupCall, fetchGroupCallParticipants, editGroupCallParticipant,
+  editGroupCallTitle, exportGroupCallInvite,
+  joinGroupCallPresentation, leaveGroupCallPresentation, toggleGroupCallStartSubscription,
+} from './calls';
+
 // Stubs for methods called during TG Web A initialization
 export function fetchNearestCountry() {
   return Promise.resolve('US');

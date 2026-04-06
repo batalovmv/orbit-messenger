@@ -28,7 +28,31 @@ const (
 
 	EventMediaUploadProgress = "media_upload_progress"
 	EventMediaReady          = "media_ready"
+
+	// Call events
+	EventCallIncoming          = "call_incoming"
+	EventCallAccepted          = "call_accepted"
+	EventCallDeclined          = "call_declined"
+	EventCallEnded             = "call_ended"
+	EventCallParticipantJoined = "call_participant_joined"
+	EventCallParticipantLeft   = "call_participant_left"
+	EventCallMuted             = "call_muted"
+	EventCallUnmuted           = "call_unmuted"
+	EventScreenShareStarted    = "screen_share_started"
+	EventScreenShareStopped    = "screen_share_stopped"
+
+	// WebRTC signaling (client-to-client relay via gateway)
+	EventWebRTCOffer        = "webrtc_offer"
+	EventWebRTCAnswer       = "webrtc_answer"
+	EventWebRTCICECandidate = "webrtc_ice_candidate"
 )
+
+// SignalingData is the payload for WebRTC signaling events relayed through the gateway.
+type SignalingData struct {
+	CallID       string `json:"call_id"`
+	TargetUserID string `json:"target_user_id"`
+	SenderID     string `json:"sender_id,omitempty"`
+}
 
 // Envelope is the standard WebSocket message format.
 type Envelope struct {

@@ -65,6 +65,10 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.member.*",
 		"orbit.user.*.mention",
 		"orbit.media.*.ready",
+		// Call events (Phase 6)
+		"orbit.call.*.lifecycle",
+		"orbit.call.*.participant",
+		"orbit.call.*.media",
 	}
 
 	for _, subj := range subjects {
@@ -456,6 +460,14 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
+	// Call events: route directly to specified members
+	if isCallEvent(event.Event) {
+		if len(event.MemberIDs) > 0 {
+			s.hub.SendToUsers(event.MemberIDs, envelope, "")
+		}
+		return
+	}
+
 	// For user status events, fetch contacts from messaging service
 	// and only send to users who share a chat (not all online users)
 	if event.Event == EventUserStatus {
@@ -480,6 +492,24 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		default:
 			slog.Warn("nats: goroutine limit reached, dropping status fetch")
 		}
+	}
+}
+
+func isCallEvent(event string) bool {
+	switch event {
+	case EventCallIncoming,
+		EventCallAccepted,
+		EventCallDeclined,
+		EventCallEnded,
+		EventCallParticipantJoined,
+		EventCallParticipantLeft,
+		EventCallMuted,
+		EventCallUnmuted,
+		EventScreenShareStarted,
+		EventScreenShareStopped:
+		return true
+	default:
+		return false
 	}
 }
 

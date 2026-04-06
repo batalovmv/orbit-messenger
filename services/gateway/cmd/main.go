@@ -36,6 +36,7 @@ func main() {
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
+	callsServiceURL := config.EnvOr("CALLS_URL", config.EnvOr("CALLS_SERVICE_URL", "http://localhost:8084"))
 	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
 	vapidPublicKey := config.EnvOr("VAPID_PUBLIC_KEY", "")
 	vapidPrivateKey := config.EnvOr("VAPID_PRIVATE_KEY", "")
@@ -181,6 +182,7 @@ func main() {
 		AuthServiceURL:      authServiceURL,
 		MessagingServiceURL: messagingServiceURL,
 		MediaServiceURL:     mediaServiceURL,
+		CallsServiceURL:     callsServiceURL,
 		FrontendURL:         frontendURL,
 		InternalSecret:      internalSecret,
 	})

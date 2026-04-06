@@ -89,11 +89,19 @@ async function handleWsMessage(msg: SaturnWsMessage) {
     }
     case 'chat_deleted': {
       const payload = msg.data;
+      const chatId = payload.chat_id as string;
       sendApiUpdate({
         '@type': 'updateChat',
-        id: payload.chat_id as string,
-        chat: { isRestricted: true } as any,
+        id: chatId,
+        chat: {
+          isRestricted: true,
+          isNotJoined: true,
+        } as any,
       });
+      sendApiUpdate({
+        '@type': 'updateChatLeave',
+        id: chatId,
+      } as any);
       break;
     }
     case 'chat_member_added': {
@@ -104,15 +112,24 @@ async function handleWsMessage(msg: SaturnWsMessage) {
     }
     case 'chat_member_removed': {
       const payload = msg.data;
+      const chatId = payload.chat_id as string;
       if (payload.user_id === currentUserId) {
         sendApiUpdate({
           '@type': 'updateChat',
-          id: payload.chat_id as string,
-          chat: { isRestricted: true } as any,
+          id: chatId,
+          chat: {
+            isRestricted: true,
+            isNotJoined: true,
+            isForbidden: true,
+          } as any,
         });
+        sendApiUpdate({
+          '@type': 'updateChatLeave',
+          id: chatId,
+        } as any);
       } else {
         const { fetchFullChat } = await import('../methods/chats');
-        fetchFullChat({ id: payload.chat_id as string });
+        fetchFullChat({ id: chatId });
       }
       break;
     }
@@ -135,6 +152,36 @@ async function handleWsMessage(msg: SaturnWsMessage) {
     case 'media_upload_progress': {
       break;
     }
+    // Phase 6: Call events
+    case 'call_incoming':
+      handleCallIncoming(msg.data);
+      break;
+    case 'call_accepted':
+      handleCallAccepted(msg.data);
+      break;
+    case 'call_declined':
+      handleCallDeclined(msg.data);
+      break;
+    case 'call_ended':
+      handleCallEnded(msg.data);
+      break;
+    case 'call_participant_joined':
+    case 'call_participant_left':
+      // Group call participant changes — future implementation
+      break;
+    case 'call_muted':
+    case 'call_unmuted':
+      handleCallMuteChanged(msg.data);
+      break;
+    case 'screen_share_started':
+    case 'screen_share_stopped':
+      // Screen share state changes — future implementation
+      break;
+    case 'webrtc_offer':
+    case 'webrtc_answer':
+    case 'webrtc_ice_candidate':
+      handleWebRTCSignaling(msg.type, msg.data);
+      break;
     default:
       break;
   }
@@ -236,7 +283,7 @@ function handleMessagePinChanged(data: Record<string, unknown>) {
   });
 }
 
-function handleMessagesRead(data: Record<string, unknown>) {
+async function handleMessagesRead(data: Record<string, unknown>) {
   const chatId = data.chat_id as string;
   const userId = data.user_id as string;
   const lastReadUuid = data.last_read_message_id as string | undefined;
@@ -244,7 +291,12 @@ function handleMessagesRead(data: Record<string, unknown>) {
   if (!lastReadUuid) return;
 
   const lastReadSeqNum = getMessageSeqNum(lastReadUuid);
-  if (!lastReadSeqNum) return;
+  if (!lastReadSeqNum) {
+    // Fallback: UUID not in local map (e.g. after reconnect/reload) — refresh chat to get current read state
+    const { fetchFullChat } = await import('../methods/chats');
+    fetchFullChat({ id: chatId });
+    return;
+  }
 
   // If someone else read our messages → update outbox (shows ✓✓)
   // If we read someone's messages → update inbox
@@ -300,6 +352,7 @@ function handleStopTyping(data: Record<string, unknown>) {
     '@type': 'updateChatTypingStatus',
     id: chatId,
     typingStatus: undefined,
+    userId,
   });
 }
 
@@ -340,10 +393,6 @@ function handleMediaReady(data: Record<string, unknown>) {
   const mediaId = data.media_id as string | undefined;
   if (!mediaId) return;
 
-  // Invalidate the media loader cache so the next render re-fetches the updated asset
-  // (e.g. video thumbnail that was generated asynchronously).
-  // The component will re-request the media on next intersection.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sendApiUpdate({
     '@type': 'updateMessageMediaReady',
     mediaId,
@@ -438,6 +487,120 @@ function buildApiPollFromWs(
       solutionEntities,
     },
   };
+}
+
+// Phase 6: Call event handlers
+
+function handleCallIncoming(data: Record<string, unknown>) {
+  const call = data as Record<string, unknown>;
+  const callId = (call.id || data.call_id) as string;
+  const initiatorId = (call.initiator_id) as string;
+  const isVideo = call.type === 'video';
+
+  if (!callId || !initiatorId) return;
+
+  // Don't show incoming call if we initiated it
+  if (initiatorId === currentUserId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCall',
+    call: {
+      id: callId,
+      accessHash: '',
+      state: 'requested',
+      adminId: initiatorId,
+      participantId: currentUserId || '',
+      isVideo,
+    },
+  });
+}
+
+function handleCallAccepted(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const userId = data.user_id as string;
+
+  if (!callId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCall',
+    call: {
+      id: callId,
+      accessHash: '',
+      state: 'active',
+      adminId: userId || '',
+      participantId: currentUserId || '',
+    },
+  });
+}
+
+function handleCallDeclined(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+
+  if (!callId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCall',
+    call: {
+      id: callId,
+      accessHash: '',
+      state: 'discarded',
+      reason: 'busy',
+    },
+  });
+}
+
+function handleCallEnded(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const durationSeconds = data.duration_seconds as number | undefined;
+  const rawReason = (data.reason || 'hangup') as string;
+  const reason = (['missed', 'disconnect', 'hangup', 'busy'].includes(rawReason)
+    ? rawReason
+    : 'hangup') as 'missed' | 'disconnect' | 'hangup' | 'busy';
+
+  if (!callId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCall',
+    call: {
+      id: callId,
+      accessHash: '',
+      state: 'discarded',
+      reason,
+      duration: durationSeconds,
+    },
+  });
+}
+
+function handleCallMuteChanged(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const userId = data.user_id as string;
+  const isMuted = Boolean(data.muted);
+
+  if (!callId || !userId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCallMediaState',
+    visId: callId,
+    visAccessHash: '',
+    visIsMuted: isMuted,
+  } as any);
+}
+
+function handleWebRTCSignaling(type: string, data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const senderId = data.sender_id as string;
+
+  if (!callId || !senderId) return;
+
+  // Emit as a custom update so call action handlers can process it
+  sendApiUpdate({
+    '@type': 'updateWebRTCSignaling',
+    signalingType: type,
+    callId,
+    senderId,
+    sdp: data.sdp as string | undefined,
+    candidate: data.candidate as string | undefined,
+  } as any);
 }
 
 function buildWsPollEntity(entity: SaturnMessageEntity) {
