@@ -311,7 +311,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 
 **Localization:**
 - [x] fetchLangPack, fetchLanguages
-- [ ] fetchLanguage (отдельный метод) — deferred, fetchLanguages covers Phase 1 needs
+- [x] fetchLanguage — реализован в Saturn settings.ts (fallback strings)
 
 **UI features (TG Web A):**
 - [x] Optimistic UI (clock → ✓ → ✓✓) — inherited from TG Web A fork
@@ -415,7 +415,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] Парсинг @username в тексте сообщения → entities массив (message_service.go)
 - [x] Автокомплит @mention в ChatInput (TG Web A useMentionTooltip + groupChatMembers from withGlobal)
 - [x] WS-уведомление на @mention (NATS orbit.user.*.mention → gateway → WS)
-- [ ] Push-уведомление на @mention (FCM/APNs) → Phase 4
+- [x] Push-уведомление на @mention — enriched mention NATS payload + gateway enqueueMentionPushDispatch (bypass mute)
 - [x] Backend: хранение mention entities в message, notification при @mention
 
 ### Channels vs Groups
@@ -427,7 +427,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 ### Frontend: Saturn API методы (~30)
 
 - [x] createChannel, editChatTitle, editChatAbout (editChatDescription)
-- [ ] updateChatPhoto, deleteChatPhoto → Phase 3 (media upload required)
+- [x] updateChatPhoto, deleteChatPhoto — реализованы в Saturn media.ts, экспортированы
 - [x] addChatMembers, deleteChatMember, leaveChat
 - [x] deleteChat (deleteChannel = same endpoint)
 - [x] fetchMembers, searchMembers (member search for @mentions)
@@ -535,13 +535,13 @@ r2://orbit-media/
 
 ### Фичи
 
-- [ ] Drag & Drop в чат (TG Web A UI exists, needs Saturn API wiring)
-- [ ] Clipboard paste (Ctrl+V для скриншотов) (TG Web A UI exists, needs wiring)
-- [ ] Preview перед отправкой + caption (TG Web A UI exists, needs wiring)
+- [x] Drag & Drop в чат — TG Web A DropArea (2 зоны: quick/generic) + AttachmentModal + Saturn sendMediaMessage wiring работает
+- [x] Clipboard paste (Ctrl+V для скриншотов) — TG Web A встроенный handler, Saturn wiring через тот же AttachmentModal
+- [x] Preview перед отправкой + caption — AttachmentModal с превью, caption, send → работает
 - [x] One-time media (self-destruct) — toggle в AttachmentModal, blur preview + one-time modal для photo/video, Saturn wiring и viewed placeholder готовы
-- [ ] Media spoiler (blur до клика) — DB flags ready, UI deferred
+- [x] Media spoiler (blur до клика) — MediaSpoiler компонент + is_spoiler в Saturn wire format + send/receive path работает
 - [x] Albums (несколько фото в одном сообщении) — grouped_id маппится в groupedId/isInAlbum и рендерится через Album
-- [ ] Media gallery tab в чате — fetchSharedMedia endpoint ready, UI deferred
+- [x] Media gallery tab в чате — fetchSharedMedia Saturn wiring + backend GET /chats/:id/media + Profile tab UI работает
 - [~] GIF: Tenor API прокси — defer to Phase 5 (Rich Messaging)
 - [x] PDF preview — first-page canvas render in chat + page count + dedicated inline viewer
 
@@ -590,7 +590,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 - [x] POST /push/subscribe — регистрация push-подписки
 - [x] DELETE /push/subscribe — отписка
-- [~] PUT /users/me/notifications — глобальные настройки уведомлений — deferred, per-chat настройки достаточны
+- [x] GET/PUT /users/me/settings/notifications — глобальные настройки уведомлений per chat type (migration 031, backend + Saturn wiring)
 - [x] PUT /chats/:id/notifications — per-chat (mute, sound)
 - [x] GET /chats/:id/notifications — получить настройки
 - [x] DELETE /chats/:id/notifications — сбросить (unmute)
@@ -660,12 +660,13 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] Frontend: Meilisearch hits hydration (`message/user/chat` → `ApiMessage`/`ApiUser`/`ApiChat`) + global/middle search rendering
 - [~] searchChatMessages — уже есть из Phase 1 (searchMessagesInChat)
 - [x] searchHashtag — реализован через action layer (isHashtag flag → performMiddleSearch)
-- [~] fetchSearchHistory, getMessageByDate — deferred, бэкенд готов
+- [x] fetchSearchHistory — migration 032, GET/POST/DELETE /search/history, Saturn methods, реализовано
+- [x] getMessageByDate (findFirstMessageIdAfterDate) — Saturn method → GET /chats/:id/history?date=&limit=1, calendar UI уже работает
 
 **Notifications:**
 - [x] subscribePush (registerDevice), unsubscribePush
 - [x] getChatNotifySettings, updateChatNotifySettings, deleteChatNotifySettings
-- [~] updateGlobalNotifySettings, resetNotifySettings — deferred
+- [x] updateGlobalNotifySettings — migration 031, GET/PUT /users/me/settings/notifications, Saturn wiring заменил localStorage
 
 **Settings:**
 - [x] getPrivacySettings, setPrivacySettings, fetchBlockedUsers, blockUser, unblockUser (+ in-flight dedup для privacy requests)
@@ -804,7 +805,9 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 - [x] fetchScheduledHistory, sendScheduledMessages, editScheduledMessage, deleteScheduledMessages, rescheduleMessage — Saturn wiring закрыт для text/reply/media/poll flows; recurring repeat UI intentionally disabled until backend support
 
 **Other:**
-- [ ] fetchSavedMessages, toggleSavedDialogPinned, fetchCommonChats
+- [x] fetchCommonChats — GET /users/:id/common-chats, Saturn wiring + sendApiUpdate для чатов в Profile
+- [x] fetchSavedMessages — GET /users/me/saved-chat (lazy creation), migration 033, Saturn fetchSavedChats
+- [ ] toggleSavedDialogPinned — Saturn wiring не подключён (только GramJS path)
 
 ### No Premium — всё бесплатно
 

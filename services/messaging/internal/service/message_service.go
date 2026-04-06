@@ -144,17 +144,18 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		}
 	}
 
-	// Slow mode: check Redis TTL key (admin/owner bypass)
+	// Slow mode: atomic check-and-set BEFORE creating the message
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		ttl := time.Duration(chat.SlowModeSeconds) * time.Second
+		wasSet, err := s.redis.SetNX(ctx, redisKey, "1", ttl).Result()
 		if err != nil {
 			slog.Error("redis slow mode check failed", "error", err)
 			return nil, apperror.Internal("Slow mode check temporarily unavailable")
 		}
-		if exists > 0 {
-			ttl, ttlErr := s.redis.TTL(ctx, redisKey).Result()
-			waitSec := int(ttl.Seconds())
+		if !wasSet {
+			remaining, ttlErr := s.redis.TTL(ctx, redisKey).Result()
+			waitSec := int(remaining.Seconds())
 			if ttlErr != nil || waitSec <= 0 {
 				waitSec = chat.SlowModeSeconds
 			}
@@ -198,14 +199,6 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		return msg, nil // Still return the message even if we can't get full info
 	}
 
-	// Slow mode: set cooldown after successful send
-	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
-		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		if err := s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second).Err(); err != nil {
-			slog.Error("redis slow mode set failed", "error", err, "chat_id", chatID, "user_id", senderID)
-		}
-	}
-
 	// Publish to NATS
 	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
 	if err != nil {
@@ -240,9 +233,14 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 					}
 					mentionSubject := fmt.Sprintf("orbit.user.%s.mention", e.UserID)
 					s.nats.Publish(mentionSubject, "mention", map[string]interface{}{
-						"chat_id":    chatID.String(),
-						"message_id": msg.ID.String(),
-						"sender_id":  senderID.String(),
+						"id":              full.ID.String(),
+						"chat_id":         chatID.String(),
+						"message_id":      msg.ID.String(),
+						"sender_id":       senderID.String(),
+						"type":            full.Type,
+						"content":         full.Content,
+						"sender_name":     full.SenderName,
+						"sequence_number": full.SequenceNumber,
 					}, []string{e.UserID})
 				}
 			}
@@ -364,16 +362,22 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 		}
 	}
 
-	// Slow mode check
+	// Slow mode: atomic check-and-set BEFORE creating the message
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", toChatID, senderID)
-		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		ttl := time.Duration(chat.SlowModeSeconds) * time.Second
+		wasSet, err := s.redis.SetNX(ctx, redisKey, "1", ttl).Result()
 		if err != nil {
 			slog.Error("redis slow mode check failed", "error", err)
 			return nil, apperror.Internal("Slow mode check temporarily unavailable")
 		}
-		if exists > 0 {
-			return nil, apperror.TooManyRequests("Slow mode active")
+		if !wasSet {
+			remaining, ttlErr := s.redis.TTL(ctx, redisKey).Result()
+			waitSec := int(remaining.Seconds())
+			if ttlErr != nil || waitSec <= 0 {
+				waitSec = chat.SlowModeSeconds
+			}
+			return nil, apperror.TooManyRequests(fmt.Sprintf("Slow mode: wait %d seconds", waitSec))
 		}
 	}
 
@@ -532,7 +536,26 @@ func (s *MessageService) UnpinAll(ctx context.Context, chatID, userID uuid.UUID)
 		}
 	}
 
-	return s.messages.UnpinAll(ctx, chatID)
+	if err := s.messages.UnpinAll(ctx, chatID); err != nil {
+		return err
+	}
+
+	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
+	if err != nil {
+		slog.Error("failed to get member IDs for unpin_all", "error", err, "chat_id", chatID)
+	} else {
+		s.nats.Publish(
+			fmt.Sprintf("orbit.chat.%s.message.updated", chatID),
+			"unpin_all",
+			map[string]interface{}{
+				"chat_id": chatID.String(),
+			},
+			memberIDs,
+			userID.String(),
+		)
+	}
+
+	return nil
 }
 
 func (s *MessageService) publishPinEvent(ctx context.Context, chatID, msgID uuid.UUID, pinned bool) {
@@ -637,17 +660,18 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		}
 	}
 
-	// Slow mode check
+	// Slow mode: atomic check-and-set BEFORE creating the message
 	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
 		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		exists, err := s.redis.Exists(ctx, redisKey).Result()
+		ttl := time.Duration(chat.SlowModeSeconds) * time.Second
+		wasSet, err := s.redis.SetNX(ctx, redisKey, "1", ttl).Result()
 		if err != nil {
 			slog.Error("redis slow mode check failed", "error", err)
 			return nil, apperror.Internal("Slow mode check temporarily unavailable")
 		}
-		if exists > 0 {
-			ttl, ttlErr := s.redis.TTL(ctx, redisKey).Result()
-			waitSec := int(ttl.Seconds())
+		if !wasSet {
+			remaining, ttlErr := s.redis.TTL(ctx, redisKey).Result()
+			waitSec := int(remaining.Seconds())
 			if ttlErr != nil || waitSec <= 0 {
 				waitSec = chat.SlowModeSeconds
 			}
@@ -688,6 +712,9 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	}
 
 	if err := s.messages.CreateWithMedia(ctx, msg, mediaIDs, isSpoiler); err != nil {
+		if errors.Is(err, model.ErrMediaNotOwned) {
+			return nil, apperror.Forbidden("You can only attach media files that you uploaded")
+		}
 		return nil, fmt.Errorf("create media message: %w", err)
 	}
 
@@ -699,14 +726,6 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 
 	// Enrich with media attachments
 	s.enrichMessageMedia(ctx, full)
-
-	// Slow mode cooldown
-	if chat.SlowModeSeconds > 0 && !permissions.IsAdminOrOwner(member.Role) {
-		redisKey := fmt.Sprintf("slowmode:%s:%s", chatID, senderID)
-		if err := s.redis.Set(ctx, redisKey, "1", time.Duration(chat.SlowModeSeconds)*time.Second).Err(); err != nil {
-			slog.Error("redis slow mode set failed", "error", err, "chat_id", chatID, "user_id", senderID)
-		}
-	}
 
 	// Publish to NATS
 	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)

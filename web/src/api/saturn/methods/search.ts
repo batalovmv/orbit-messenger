@@ -749,3 +749,20 @@ export async function searchPublicPosts({
     offsetId,
   });
 }
+
+// ─── Search History ────────────────────────────────────────────────────────
+
+export async function fetchSearchHistory(limit = 10) {
+  const result = await request<{ history: Array<{ query: string; scope: string; created_at: string }> }>(
+    'GET', `/search/history?limit=${limit}`,
+  );
+  return result?.history || [];
+}
+
+export async function saveSearchQuery(query: string, scope = 'global') {
+  await request('POST', '/search/history', { query, scope });
+}
+
+export async function clearSearchHistory() {
+  await request('DELETE', '/search/history');
+}

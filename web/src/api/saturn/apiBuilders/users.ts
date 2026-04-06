@@ -51,5 +51,6 @@ export function buildApiUserFullInfo(user: SaturnUser): ApiUserFullInfo {
   return {
     bio: user.bio || undefined,
     profilePhoto: buildAvatarPhoto(user.id, user.avatar_url),
+    commonChatsCount: 1, // Hint to show tab; real count loaded by loadCommonChats
   };
 }

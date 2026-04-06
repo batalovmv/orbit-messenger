@@ -57,6 +57,14 @@ func (s *noopPrivacySettingsStore) GetByUserID(context.Context, uuid.UUID) (*mod
 	return &model.PrivacySettings{}, nil
 }
 
+func (s *noopPrivacySettingsStore) GetByUserIDs(_ context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*model.PrivacySettings, error) {
+	result := make(map[uuid.UUID]*model.PrivacySettings, len(userIDs))
+	for _, uid := range userIDs {
+		result[uid] = &model.PrivacySettings{}
+	}
+	return result, nil
+}
+
 func (s *noopPrivacySettingsStore) Upsert(context.Context, *model.PrivacySettings) error {
 	return nil
 }
@@ -86,6 +94,14 @@ func (s *noopUserSettingsStore) GetByUserID(context.Context, uuid.UUID) (*model.
 }
 
 func (s *noopUserSettingsStore) Upsert(context.Context, *model.UserSettings) error {
+	return nil
+}
+
+func (s *noopUserSettingsStore) GetGlobalNotifySettings(context.Context, uuid.UUID) (*model.GlobalNotifySettings, error) {
+	return &model.GlobalNotifySettings{UsersPreview: true, GroupsPreview: true, ChannelsPreview: true}, nil
+}
+
+func (s *noopUserSettingsStore) UpdateGlobalNotifySettings(context.Context, uuid.UUID, *model.GlobalNotifySettings) error {
 	return nil
 }
 

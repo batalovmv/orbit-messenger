@@ -39,6 +39,9 @@ type ChatStore interface {
 	SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error
 	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error
+	ListAll(ctx context.Context, limit int) ([]model.Chat, error)
+	GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error)
+	GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
 }
 
 type chatStore struct {
@@ -661,6 +664,136 @@ func (s *chatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, enabled
 		chatID, enabled,
 	)
 	return err
+}
+
+func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error) {
+	if limit <= 0 {
+		limit = 10000
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, type, name, description, avatar_url, created_by,
+		        is_encrypted, max_members, default_permissions, slow_mode_seconds,
+		        is_signatures, created_at, updated_at
+		 FROM chats
+		 ORDER BY created_at
+		 LIMIT $1`, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var chats []model.Chat
+	for rows.Next() {
+		var c model.Chat
+		if err := rows.Scan(
+			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
+			&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.IsSignatures, &c.CreatedAt, &c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		chats = append(chats, c)
+	}
+	return chats, rows.Err()
+}
+
+func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx,
+		`SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
+		        c.is_encrypted, c.max_members, c.default_permissions, c.slow_mode_seconds,
+		        c.is_signatures, c.created_at, c.updated_at
+		 FROM chats c
+		 JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = $1
+		 JOIN chat_members cm2 ON cm2.chat_id = c.id AND cm2.user_id = $2
+		 WHERE c.type IN ('group', 'channel')
+		   AND cm1.role != 'banned' AND cm2.role != 'banned'
+		 ORDER BY c.name
+		 LIMIT $3`, userA, userB, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get common chats: %w", err)
+	}
+	defer rows.Close()
+
+	var chats []model.Chat
+	for rows.Next() {
+		var c model.Chat
+		if err := rows.Scan(
+			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
+			&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.IsSignatures, &c.CreatedAt, &c.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		chats = append(chats, c)
+	}
+	return chats, rows.Err()
+}
+
+func (s *chatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error) {
+	// Check saved_messages_lookup first
+	var chatID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`SELECT chat_id FROM saved_messages_lookup WHERE user_id = $1`, userID,
+	).Scan(&chatID)
+	if err == nil {
+		return s.GetByID(ctx, chatID)
+	}
+	if err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("get saved chat: %w", err)
+	}
+
+	// Create new saved chat
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	chat := &model.Chat{}
+	name := "Saved Messages"
+	err = tx.QueryRow(ctx,
+		`INSERT INTO chats (type, name, created_by)
+		 VALUES ('direct', $1, $2)
+		 RETURNING id, type, name, description, avatar_url, created_by,
+		           is_encrypted, max_members, default_permissions, slow_mode_seconds,
+		           is_signatures, created_at, updated_at`,
+		name, userID,
+	).Scan(&chat.ID, &chat.Type, &chat.Name, &chat.Description, &chat.AvatarURL, &chat.CreatedBy,
+		&chat.IsEncrypted, &chat.MaxMembers, &chat.DefaultPermissions, &chat.SlowModeSeconds,
+		&chat.IsSignatures, &chat.CreatedAt, &chat.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("create saved chat: %w", err)
+	}
+
+	// Add user as sole member
+	_, err = tx.Exec(ctx,
+		`INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, 'owner')`,
+		chat.ID, userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("add saved chat member: %w", err)
+	}
+
+	// Register in lookup table
+	_, err = tx.Exec(ctx,
+		`INSERT INTO saved_messages_lookup (user_id, chat_id) VALUES ($1, $2)
+		 ON CONFLICT (user_id) DO NOTHING`,
+		userID, chat.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("save lookup: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit saved chat: %w", err)
+	}
+
+	return chat, nil
 }
 
 func canonicalOrder(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {

@@ -203,6 +203,18 @@ func (m *mockChatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]
 	return nil, nil
 }
 
+func (m *mockChatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error) {
+	return nil, nil
+}
+
+func (m *mockChatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
+	return nil, nil
+}
+
+func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error) {
+	return nil, nil
+}
+
 // ---------------------------------------------------------------------------
 // Mock MessageStore
 // ---------------------------------------------------------------------------
@@ -521,8 +533,9 @@ func (m *mockInviteStore) DeleteJoinRequest(ctx context.Context, chatID, userID 
 // ---------------------------------------------------------------------------
 
 type mockPrivacySettingsStore struct {
-	getByUserIDFn func(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error)
-	upsertFn      func(ctx context.Context, settings *model.PrivacySettings) error
+	getByUserIDFn  func(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error)
+	getByUserIDsFn func(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*model.PrivacySettings, error)
+	upsertFn       func(ctx context.Context, settings *model.PrivacySettings) error
 }
 
 func (m *mockPrivacySettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error) {
@@ -535,6 +548,22 @@ func (m *mockPrivacySettingsStore) GetByUserID(ctx context.Context, userID uuid.
 		Avatar:   "everyone",
 		Phone:    "everyone",
 	}, nil
+}
+
+func (m *mockPrivacySettingsStore) GetByUserIDs(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*model.PrivacySettings, error) {
+	if m.getByUserIDsFn != nil {
+		return m.getByUserIDsFn(ctx, userIDs)
+	}
+	result := make(map[uuid.UUID]*model.PrivacySettings, len(userIDs))
+	for _, uid := range userIDs {
+		result[uid] = &model.PrivacySettings{
+			UserID:   uid,
+			LastSeen: "everyone",
+			Avatar:   "everyone",
+			Phone:    "everyone",
+		}
+	}
+	return result, nil
 }
 
 func (m *mockPrivacySettingsStore) Upsert(ctx context.Context, settings *model.PrivacySettings) error {

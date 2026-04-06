@@ -53,6 +53,8 @@ func (h *SettingsHandler) Register(app fiber.Router) {
 	app.Get("/users/me/blocked", h.ListBlockedUsers)
 	app.Post("/users/me/blocked/:userId", h.BlockUser)
 	app.Delete("/users/me/blocked/:userId", h.UnblockUser)
+	app.Get("/users/me/settings/notifications", h.GetGlobalNotifySettings)
+	app.Put("/users/me/settings/notifications", h.UpdateGlobalNotifySettings)
 	app.Put("/chats/:id/notifications", h.UpdateChatNotifications)
 	app.Get("/chats/:id/notifications", h.GetChatNotifications)
 	app.Delete("/chats/:id/notifications", h.DeleteChatNotifications)
@@ -299,6 +301,17 @@ func (h *SettingsHandler) SubscribePush(c *fiber.Ctx) error {
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 			return response.Error(c, apperror.BadRequest("push endpoint must not point to a private address"))
 		}
+	} else {
+		// Resolve hostname to guard against DNS rebinding attacks
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("cannot resolve push endpoint hostname"))
+		}
+		for _, ip := range ips {
+			if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+				return response.Error(c, apperror.BadRequest("push endpoint resolves to a private or loopback address"))
+			}
+		}
 	}
 	if req.P256DH == "" {
 		return response.Error(c, apperror.BadRequest("p256dh is required"))
@@ -423,4 +436,41 @@ func (h *SettingsHandler) ListMutedUsers(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"muted_user_ids": mutedUserIDs})
+}
+
+func (h *SettingsHandler) GetGlobalNotifySettings(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	gs, err := h.settingsSvc.GetGlobalNotifySettings(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, gs)
+}
+
+func (h *SettingsHandler) UpdateGlobalNotifySettings(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	var req model.GlobalNotifySettings
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if err := h.settingsSvc.UpdateGlobalNotifySettings(c.Context(), uid, &req); err != nil {
+		return response.Error(c, err)
+	}
+
+	gs, err := h.settingsSvc.GetGlobalNotifySettings(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, gs)
 }

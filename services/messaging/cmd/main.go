@@ -142,14 +142,15 @@ func main() {
 	gifStore := store.NewGIFStore(pool)
 	pollStore := store.NewPollStore(pool)
 	scheduledStore := store.NewScheduledMessageStore(pool)
+	searchHistoryStore := store.NewSearchHistoryStore(pool)
 
 	// Services
+	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb)
-	userSvc := service.NewUserService(userStore, chatStore, privacyStore)
+	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
-	searchSvc := service.NewSearchService(searchClient, chatStore)
 	reactionSvc := service.NewReactionService(reactionStore, messageStore, chatStore, natsPublisher, logger)
 	telegramStickerClient := service.NewTelegramBotStickerClient(telegramBotToken, logger)
 	stickerMediaUploader := service.NewMediaServiceStickerUploader(mediaServiceURL, internalSecret, logger)
@@ -161,7 +162,7 @@ func main() {
 	tenorClient := tenor.NewClientFromEnv(rdb, logger)
 	gifSvc := service.NewGIFService(gifStore, tenorClient, logger)
 	pollSvc := service.NewPollService(pollStore, messageStore, chatStore, natsPublisher, logger)
-	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher, pollSvc)
+	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher, pollSvc, service.WithChatSearchIndexer(searchSvc))
 	scheduledSvc := service.NewScheduledMessageService(
 		scheduledStore,
 		messageStore,
@@ -227,6 +228,15 @@ func main() {
 			os.Exit(1)
 		}
 		defer indexer.Stop()
+
+		// Populate users and chats indices from DB on startup (non-fatal).
+		go func() {
+			bootstrapCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			slog.Info("search: bootstrapping user and chat indices")
+			searchSvc.BootstrapIndices(bootstrapCtx)
+			slog.Info("search: bootstrap complete")
+		}()
 	}
 
 	cronCtx, cancelCron := context.WithCancel(context.Background())
@@ -236,10 +246,10 @@ func main() {
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)
 	msgHandler := handler.NewMessageHandler(msgSvc, pollSvc, scheduledSvc, linkPreviewSvc, logger).SetReactionService(reactionSvc)
-	userHandler := handler.NewUserHandler(userSvc, logger)
+	userHandler := handler.NewUserHandler(userSvc, logger, chatSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsSvc, pushStore, logger, internalSecret)
-	searchHandler := handler.NewSearchHandler(searchSvc, logger)
+	searchHandler := handler.NewSearchHandler(searchSvc, logger, searchHistoryStore)
 	reactionHandler := handler.NewReactionHandler(reactionSvc, logger)
 	stickerHandler := handler.NewStickerHandler(stickerSvc, logger)
 	gifHandler := handler.NewGIFHandler(gifSvc, logger)

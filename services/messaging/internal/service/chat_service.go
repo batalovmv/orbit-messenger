@@ -12,29 +12,48 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
+// chatSearchIndexer is the minimal interface needed to keep the chat search index in sync.
+type chatSearchIndexer interface {
+	IndexChat(chatID, chatType, name, description string) error
+	DeleteChat(chatID string) error
+}
+
 type ChatService struct {
 	chats    store.ChatStore
 	messages store.MessageStore
 	nats     Publisher
 	polls    messagePollHydrator
+	search   chatSearchIndexer
 }
 
 type messagePollHydrator interface {
 	HydrateMessagePolls(ctx context.Context, userID uuid.UUID, msgs []model.Message) error
 }
 
+// ChatServiceOption applies an optional configuration to ChatService.
+type ChatServiceOption func(*ChatService)
+
+// WithChatSearchIndexer attaches a search indexer to the ChatService.
+func WithChatSearchIndexer(s chatSearchIndexer) ChatServiceOption {
+	return func(c *ChatService) { c.search = s }
+}
+
 func NewChatService(
 	chats store.ChatStore,
 	messages store.MessageStore,
 	nats Publisher,
-	pollHydrators ...messagePollHydrator,
+	opts ...interface{},
 ) *ChatService {
-	var polls messagePollHydrator
-	if len(pollHydrators) > 0 {
-		polls = pollHydrators[0]
+	svc := &ChatService{chats: chats, messages: messages, nats: nats}
+	for _, o := range opts {
+		switch v := o.(type) {
+		case messagePollHydrator:
+			svc.polls = v
+		case ChatServiceOption:
+			v(svc)
+		}
 	}
-
-	return &ChatService{chats: chats, messages: messages, nats: nats, polls: polls}
+	return svc
 }
 
 func (s *ChatService) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
@@ -152,6 +171,21 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 	if err != nil {
 		return nil, fmt.Errorf("create DM: %w", err)
 	}
+
+	if s.nats != nil {
+		memberIDs := []string{userID.String(), otherUserID.String()}
+		s.nats.Publish(
+			fmt.Sprintf("orbit.chat.%s.lifecycle", chat.ID),
+			"chat_created",
+			chat,
+			memberIDs,
+			userID.String(),
+		)
+	}
+
+	// Direct chats are not indexed (IndexChat skips them).
+	s.indexChat(chat)
+
 	return chat, nil
 }
 
@@ -209,6 +243,8 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 		userID.String(),
 	)
 
+	s.indexChat(chat)
+
 	return chat, nil
 }
 
@@ -258,6 +294,8 @@ func (s *ChatService) UpdateChat(ctx context.Context, chatID, userID uuid.UUID, 
 		userID.String(),
 	)
 
+	s.indexChat(chat)
+
 	return chat, nil
 }
 
@@ -300,6 +338,8 @@ func (s *ChatService) ClearChatPhoto(ctx context.Context, chatID, userID uuid.UU
 		userID.String(),
 	)
 
+	s.indexChat(chat)
+
 	return chat, nil
 }
 
@@ -328,6 +368,12 @@ func (s *ChatService) DeleteChat(ctx context.Context, chatID, userID uuid.UUID) 
 		memberIDs,
 		userID.String(),
 	)
+
+	if s.search != nil {
+		if err := s.search.DeleteChat(chatID.String()); err != nil {
+			slog.WarnContext(ctx, "search: failed to delete chat from index", "chat_id", chatID, "error", err)
+		}
+	}
 
 	return nil
 }
@@ -679,4 +725,30 @@ func (s *ChatService) GetMembers(ctx context.Context, chatID, userID uuid.UUID, 
 // GetMemberIDs returns just the user IDs of chat members (lightweight, for internal use).
 func (s *ChatService) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
 	return s.chats.GetMemberIDs(ctx, chatID)
+}
+
+func (s *ChatService) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
+	return s.chats.GetCommonChats(ctx, userA, userB, limit)
+}
+
+func (s *ChatService) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error) {
+	return s.chats.GetOrCreateSavedChat(ctx, userID)
+}
+
+// indexChat upserts a chat document into the search index. Non-fatal — logs on error.
+func (s *ChatService) indexChat(chat *model.Chat) {
+	if s.search == nil || chat == nil {
+		return
+	}
+	name := ""
+	if chat.Name != nil {
+		name = *chat.Name
+	}
+	description := ""
+	if chat.Description != nil {
+		description = *chat.Description
+	}
+	if err := s.search.IndexChat(chat.ID.String(), chat.Type, name, description); err != nil {
+		slog.Warn("search: failed to index chat", "chat_id", chat.ID, "error", err)
+	}
 }

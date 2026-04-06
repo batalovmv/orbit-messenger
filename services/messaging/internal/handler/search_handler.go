@@ -10,22 +10,34 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
+	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
 type SearchHandler struct {
-	searchSvc *service.SearchService
-	logger    *slog.Logger
+	searchSvc    *service.SearchService
+	historyStore store.SearchHistoryStore
+	logger       *slog.Logger
 }
 
-func NewSearchHandler(searchSvc *service.SearchService, logger *slog.Logger) *SearchHandler {
-	return &SearchHandler{
+func NewSearchHandler(searchSvc *service.SearchService, logger *slog.Logger, opts ...interface{}) *SearchHandler {
+	h := &SearchHandler{
 		searchSvc: searchSvc,
 		logger:    logger,
 	}
+	for _, opt := range opts {
+		if hs, ok := opt.(store.SearchHistoryStore); ok {
+			h.historyStore = hs
+		}
+	}
+	return h
 }
 
 func (h *SearchHandler) Register(app fiber.Router) {
+	app.Get("/search/history", h.GetSearchHistory)
+	app.Post("/search/history", h.SaveSearchHistory)
+	app.Delete("/search/history", h.ClearSearchHistory)
 	app.Get("/search", h.Search)
 }
 
@@ -185,4 +197,79 @@ func parseSearchTime(value string, shouldUseEndOfDay bool) (time.Time, error) {
 	}
 
 	return dateOnly, nil
+}
+
+func (h *SearchHandler) GetSearchHistory(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if h.historyStore == nil {
+		return response.JSON(c, fiber.StatusOK, fiber.Map{"history": []interface{}{}})
+	}
+
+	limit := c.QueryInt("limit", 10)
+	entries, err := h.historyStore.List(c.Context(), uid, limit)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if entries == nil {
+		entries = []model.SearchHistoryEntry{}
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"history": entries})
+}
+
+func (h *SearchHandler) SaveSearchHistory(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if h.historyStore == nil {
+		return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+	}
+
+	var req struct {
+		Query string `json:"query"`
+		Scope string `json:"scope"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	query := strings.TrimSpace(req.Query)
+	if query == "" {
+		return response.Error(c, apperror.BadRequest("query is required"))
+	}
+
+	scope := req.Scope
+	if scope == "" {
+		scope = "global"
+	}
+
+	if err := h.historyStore.Save(c.Context(), uid, query, scope); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+}
+
+func (h *SearchHandler) ClearSearchHistory(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if h.historyStore == nil {
+		return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+	}
+
+	if err := h.historyStore.Clear(c.Context(), uid); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
 }

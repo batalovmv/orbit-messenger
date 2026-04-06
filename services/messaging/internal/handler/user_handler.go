@@ -13,18 +13,26 @@ import (
 )
 
 type UserHandler struct {
-	svc    *service.UserService
-	logger *slog.Logger
+	svc     *service.UserService
+	chatSvc *service.ChatService
+	logger  *slog.Logger
 }
 
-func NewUserHandler(svc *service.UserService, logger *slog.Logger) *UserHandler {
-	return &UserHandler{svc: svc, logger: logger}
+func NewUserHandler(svc *service.UserService, logger *slog.Logger, opts ...interface{}) *UserHandler {
+	h := &UserHandler{svc: svc, logger: logger}
+	for _, opt := range opts {
+		if cs, ok := opt.(*service.ChatService); ok {
+			h.chatSvc = cs
+		}
+	}
+	return h
 }
 
 func (h *UserHandler) Register(app fiber.Router) {
 	app.Get("/users/me", h.GetMe)
 	app.Put("/users/me", h.UpdateProfile)
 	app.Get("/users/:id/contacts", h.GetContactIDs)
+	app.Get("/users/:id/common-chats", h.GetCommonChats)
 	app.Get("/users/:id", h.GetUser)
 	app.Get("/users", h.SearchUsers)
 }
@@ -66,7 +74,7 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		DisplayName       string  `json:"display_name"`
+		DisplayName       *string `json:"display_name"`
 		Bio               *string `json:"bio"`
 		Phone             *string `json:"phone"`
 		AvatarURL         *string `json:"avatar_url"`
@@ -77,8 +85,10 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
-	if vErr := validator.RequireString(req.DisplayName, "display_name", 1, 64); vErr != nil {
-		return response.Error(c, vErr)
+	if req.DisplayName != nil {
+		if vErr := validator.RequireString(*req.DisplayName, "display_name", 1, 64); vErr != nil {
+			return response.Error(c, vErr)
+		}
 	}
 	if req.Bio != nil {
 		if vErr := validator.RequireString(*req.Bio, "bio", 0, 500); vErr != nil {
@@ -97,7 +107,11 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 	}
 
 	if req.AvatarURL != nil && *req.AvatarURL != "" && !isValidAvatarURL(*req.AvatarURL) {
-		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https or /media/ path"))
+	}
+	if req.AvatarURL != nil && *req.AvatarURL != "" {
+		normalized := normalizeAvatarURL(*req.AvatarURL)
+		req.AvatarURL = &normalized
 	}
 
 	u, err := h.svc.UpdateProfile(c.Context(), uid, req.DisplayName,
@@ -145,18 +159,37 @@ func (h *UserHandler) SearchUsers(c *fiber.Ctx) error {
 		limit = 100
 	}
 
-	users, err := h.svc.SearchUsers(c.Context(), query, limit)
+	users, err := h.svc.SearchUsers(c.Context(), callerID, query, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	// Strip PII for non-self results (consistent with GetUser)
-	for i := range users {
-		if users[i].ID != callerID {
-			users[i].Email = ""
-			users[i].Phone = nil
-		}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"users": users})
+}
+
+func (h *UserHandler) GetCommonChats(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
 	}
 
-	return response.JSON(c, fiber.StatusOK, fiber.Map{"users": users})
+	targetID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	if h.chatSvc == nil {
+		return response.Error(c, apperror.Internal("common chats not available"))
+	}
+
+	limit := c.QueryInt("limit", 100)
+	chats, err := h.chatSvc.GetCommonChats(c.Context(), uid, targetID, limit)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"chats": chats,
+		"count": len(chats),
+	})
 }

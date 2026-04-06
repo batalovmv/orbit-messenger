@@ -238,3 +238,11 @@ func (s *SettingsService) GetMutedUserIDs(ctx context.Context, chatID uuid.UUID,
 
 	return mutedUserIDs, nil
 }
+
+func (s *SettingsService) GetGlobalNotifySettings(ctx context.Context, userID uuid.UUID) (*model.GlobalNotifySettings, error) {
+	return s.userSettingsStore.GetGlobalNotifySettings(ctx, userID)
+}
+
+func (s *SettingsService) UpdateGlobalNotifySettings(ctx context.Context, userID uuid.UUID, gs *model.GlobalNotifySettings) error {
+	return s.userSettingsStore.UpdateGlobalNotifySettings(ctx, userID, gs)
+}

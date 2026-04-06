@@ -64,6 +64,7 @@ import {
   addChatMembers,
   addChats,
   addMessages,
+  addNotifyException,
   addNotifyExceptions,
   addSimilarBots,
   addUsers,
@@ -734,6 +735,9 @@ addActionHandler('updateChatMutedState', (global, actions, payload): ActionRetur
   }
   if (!chat?.id) return;
 
+  global = addNotifyException(global, chatId, { mutedUntil });
+  setGlobal(global);
+
   void callApi('updateChatNotifySettings', { chat, settings: { mutedUntil } });
 });
 
@@ -745,6 +749,9 @@ addActionHandler('updateChatSilentPosting', (global, actions, payload): ActionRe
     return;
   }
   if (!chat?.id) return;
+
+  global = addNotifyException(global, chatId, { isSilentPosting: isEnabled });
+  setGlobal(global);
 
   void callApi('updateChatNotifySettings', { chat, settings: { isSilentPosting: isEnabled } });
 });

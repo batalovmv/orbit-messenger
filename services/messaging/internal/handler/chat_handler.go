@@ -2,6 +2,7 @@ package handler
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -27,7 +28,8 @@ func NewChatHandler(svc *service.ChatService, logger *slog.Logger, internalSecre
 }
 
 func (h *ChatHandler) Register(app fiber.Router) {
-	// Order matters: /chats/direct BEFORE /chats/:id
+	// Order matters: specific routes BEFORE /chats/:id
+	app.Get("/users/me/saved-chat", h.GetSavedChat)
 	app.Get("/chats", h.ListChats)
 	app.Post("/chats/direct", h.CreateDirectChat)
 	app.Post("/chats", h.CreateChat)
@@ -40,7 +42,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Patch("/chats/:id/members/me", h.UpdateOwnMemberPreferences)
 	app.Patch("/chats/:id/members/:userId", h.UpdateMemberRole)
 	app.Get("/chats/:id/members/:userId", h.GetMember)
-	app.Get("/chats/:id/member-ids", h.GetMemberIDs)
+	app.Get("/internal/chats/:id/member-ids", h.GetMemberIDs)
 	app.Get("/chats/:id/admins", h.GetAdmins)
 	app.Put("/chats/:id/permissions", h.UpdateDefaultPermissions)
 	app.Put("/chats/:id/members/:userId/permissions", h.UpdateMemberPermissions)
@@ -153,7 +155,11 @@ func (h *ChatHandler) UpdateChat(c *fiber.Ctx) error {
 	}
 
 	if req.AvatarURL != nil && !isValidAvatarURL(*req.AvatarURL) {
-		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https or /media/ path"))
+	}
+	if req.AvatarURL != nil && *req.AvatarURL != "" {
+		normalized := normalizeAvatarURL(*req.AvatarURL)
+		req.AvatarURL = &normalized
 	}
 
 	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, req.Name, req.Description, req.AvatarURL)
@@ -231,9 +237,15 @@ func (h *ChatHandler) RemoveMember(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
 	}
 
-	targetID, err := uuid.Parse(c.Params("userId"))
-	if err != nil {
-		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	userIDParam := c.Params("userId")
+	var targetID uuid.UUID
+	if userIDParam == "me" {
+		targetID = uid
+	} else {
+		targetID, err = uuid.Parse(userIDParam)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid user ID"))
+		}
 	}
 
 	if err := h.svc.RemoveMember(c.Context(), chatID, uid, targetID); err != nil {
@@ -481,26 +493,16 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 	return response.Paginated(c, members, nextCursor, hasMore)
 }
 
-// GetMemberIDs returns just the user IDs of a chat (internal, for gateway typing fanout).
+// GetMemberIDs returns just the user IDs of a chat (internal-only, for gateway fanout).
+// Registered under /internal/ prefix — blocked from user traffic by gateway proxy.
 func (h *ChatHandler) GetMemberIDs(c *fiber.Ctx) error {
+	if err := requireInternalRequest(c, h.internalSecret); err != nil {
+		return response.Error(c, err)
+	}
+
 	chatID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
-	}
-
-	// Internal service-to-service calls (with valid X-Internal-Token) skip membership check
-	if !isInternalRequest(c, h.internalSecret) {
-		callerID, err := getUserID(c)
-		if err != nil {
-			return response.Error(c, err)
-		}
-		isMember, err := h.svc.IsMember(c.Context(), chatID, callerID)
-		if err != nil {
-			return response.Error(c, err)
-		}
-		if !isMember {
-			return response.Error(c, apperror.Forbidden("Not a member of this chat"))
-		}
 	}
 
 	ids, err := h.svc.GetMemberIDs(c.Context(), chatID)
@@ -532,8 +534,9 @@ func (h *ChatHandler) UpdateChatPhoto(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("avatar_url is required"))
 	}
 	if !isValidAvatarURL(req.AvatarURL) {
-		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https"))
+		return response.Error(c, apperror.BadRequest("Invalid avatar URL: must be https or /media/ path"))
 	}
+	req.AvatarURL = normalizeAvatarURL(req.AvatarURL)
 
 	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, nil, nil, &req.AvatarURL)
 	if err != nil {
@@ -562,12 +565,76 @@ func (h *ChatHandler) DeleteChatPhoto(c *fiber.Ctx) error {
 	return response.JSON(c, fiber.StatusOK, chat)
 }
 
-// isValidAvatarURL checks that a URL is safe for use as an avatar (https only, no data/javascript URIs).
+// isValidAvatarURL checks that a URL is safe for use as an avatar.
+// Accepts https:// URLs and gateway-relative /media/{uuid} paths.
 func isValidAvatarURL(raw string) bool {
 	if len(raw) > 2048 {
 		return false
 	}
-	return len(raw) > 8 && raw[:8] == "https://"
+	if len(raw) > 8 && raw[:8] == "https://" {
+		return true
+	}
+	// Also accept already-normalized gateway-relative paths.
+	return len(raw) > 7 && raw[:7] == "/media/"
+}
+
+// normalizeAvatarURL converts a presigned R2 URL to a stable gateway-relative
+// /media/{uuid} path. If the input is already gateway-relative, it is returned
+// unchanged. Presigned URLs look like:
+//
+//	https://<bucket>/photos/{uuid}/original.webp?X-Amz-Signature=...
+//
+// We extract the UUID segment from the path (second path component after the
+// leading slash) and build /media/{uuid}.
+func normalizeAvatarURL(raw string) string {
+	// Already normalized.
+	if len(raw) > 7 && raw[:7] == "/media/" {
+		return raw
+	}
+	// Try to extract UUID from path segments of an https URL.
+	// Strip query string first.
+	path := raw
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+	// Strip scheme+host: find third slash (after "https://host/...").
+	count := 0
+	start := 0
+	for i, ch := range path {
+		if ch == '/' {
+			count++
+			if count == 3 {
+				start = i
+				break
+			}
+		}
+	}
+	if count < 3 {
+		return raw // unrecognized format — keep as-is
+	}
+	// path segment after host: e.g. "/photos/{uuid}/original.webp"
+	segments := strings.Split(strings.TrimPrefix(path[start:], "/"), "/")
+	// segments[0] = type (photos/videos/files), segments[1] = uuid
+	if len(segments) >= 2 {
+		if _, err := uuid.Parse(segments[1]); err == nil {
+			return "/media/" + segments[1]
+		}
+	}
+	return raw
+}
+
+func (h *ChatHandler) GetSavedChat(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chat, err := h.svc.GetOrCreateSavedChat(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, chat)
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {

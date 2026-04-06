@@ -23,6 +23,16 @@ import { DEFAULT_APP_CONFIG } from '../../../limits';
 import { buildApiStickerSet, getRegisteredAsset } from '../apiBuilders/symbols';
 import { ensureAuth, getBaseUrl, request } from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+import {
+  deleteChat,
+  editChatAbout,
+  editChatTitle,
+  exportChatInviteLink,
+  fetchChatInviteInfo,
+  joinChat,
+  leaveChat,
+} from './chats';
+import { fetchMessageLink } from './messages';
 
 export {
   destroy, disconnect, init, setCurrentUser,
@@ -255,6 +265,9 @@ export {
   fetchCustomEmoji,
   fetchCustomEmojiSets,
   fetchFeaturedEmojiStickers,
+  fetchDefaultStatusEmojis,
+  fetchRecentEmojiStatuses,
+  fetchCollectibleEmojiStatuses,
   fetchStickersForEmoji,
   fetchGifs,
   searchGifs,
@@ -285,28 +298,49 @@ export function fetchDefaultReactions() {
   return Promise.resolve(undefined);
 }
 
-const NOTIFY_DEFAULTS_KEY = 'orbit:notifyDefaults';
-
-export function fetchNotifyDefaultSettings() {
+export async function fetchNotifyDefaultSettings() {
   try {
-    const stored = localStorage.getItem(NOTIFY_DEFAULTS_KEY);
-    return Promise.resolve(stored ? JSON.parse(stored) : undefined);
+    const result = await request<{
+      users_muted: boolean; groups_muted: boolean; channels_muted: boolean;
+      users_preview: boolean; groups_preview: boolean; channels_preview: boolean;
+    }>('GET', '/users/me/settings/notifications');
+
+    return {
+      users: {
+        mutedUntil: result.users_muted ? 2147483647 : 0,
+        shouldShowPreviews: result.users_preview,
+      },
+      groups: {
+        mutedUntil: result.groups_muted ? 2147483647 : 0,
+        shouldShowPreviews: result.groups_preview,
+      },
+      channels: {
+        mutedUntil: result.channels_muted ? 2147483647 : 0,
+        shouldShowPreviews: result.channels_preview,
+      },
+    };
   } catch {
-    return Promise.resolve(undefined);
+    return undefined;
   }
 }
 
-export function updateNotificationSettings(
+export async function updateNotificationSettings(
   peerType: string,
   settings: { isMuted?: boolean; shouldShowPreviews?: boolean },
 ) {
+  // Map peerType + settings to backend fields
+  const body: Record<string, boolean> = {};
+  if (settings.isMuted !== undefined) {
+    body[`${peerType}_muted`] = settings.isMuted;
+  }
+  if (settings.shouldShowPreviews !== undefined) {
+    body[`${peerType}_preview`] = settings.shouldShowPreviews;
+  }
+
   try {
-    const stored = localStorage.getItem(NOTIFY_DEFAULTS_KEY);
-    const current = stored ? JSON.parse(stored) : {};
-    current[peerType] = { ...current[peerType], ...settings };
-    localStorage.setItem(NOTIFY_DEFAULTS_KEY, JSON.stringify(current));
+    await request('PUT', '/users/me/settings/notifications', body);
   } catch { /* empty */ }
-  return Promise.resolve(true);
+  return true;
 }
 
 export function fetchPremiumPromo(): Promise<{ promo: ApiPremiumPromo } | undefined> {
@@ -320,32 +354,95 @@ export function updateIsOnline() {
   return Promise.resolve(undefined);
 }
 
-export function fetchSavedChats() {
-  return Promise.resolve({
-    chatIds: [],
-    chats: [],
-    users: [],
-    userStatusesById: {},
-    notifyExceptionById: {},
-    draftsById: {},
-    lastMessageByChatId: {},
-    totalChatCount: 0,
-    messages: [],
-    polls: [],
-    threadInfos: [],
-    threadReadStatesById: {},
-  });
+export async function fetchSavedChats() {
+  try {
+    const chatData = await request<any>('GET', '/users/me/saved-chat');
+    if (!chatData?.id) {
+      return undefined;
+    }
+    const { buildApiChat: build } = await import('../apiBuilders/chats');
+    const chat = build(chatData);
+    sendApiUpdate({ '@type': 'updateChat', id: chat.id, chat });
+    return {
+      chatIds: [chat.id],
+      chats: [chat],
+      users: [],
+      userStatusesById: {},
+      notifyExceptionById: {},
+      draftsById: {},
+      lastMessageByChatId: {},
+      totalChatCount: 1,
+      messages: [],
+      polls: [],
+      threadInfos: [],
+      threadReadStatesById: {},
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export function requestChatUpdate() {
   return Promise.resolve(undefined);
 }
 
-export function getPasswordInfo(): Promise<{
-  hint?: string;
-  hasPassword: boolean;
-} | undefined> {
-  return Promise.resolve(undefined);
+export async function updateChatTitle(chat: ApiChat, title: string) {
+  return editChatTitle({ chatId: chat.id, title });
+}
+
+export async function updateChatAbout(chat: ApiChat, about: string) {
+  return editChatAbout({ chatId: chat.id, about });
+}
+
+export async function checkChatInvite(hash: string) {
+  return fetchChatInviteInfo({ hash });
+}
+
+export async function importChatInvite(hash: string) {
+  return joinChat({ hash });
+}
+
+export async function exportChatInvite({
+  chat, title, expireDate, usageLimit, isRequestNeeded,
+}: {
+  chat: ApiChat;
+  title?: string;
+  expireDate?: number;
+  usageLimit?: number;
+  isRequestNeeded?: boolean;
+}) {
+  return exportChatInviteLink({
+    chatId: chat.id,
+    title,
+    expireDate,
+    usageLimit,
+    isRequestNeeded,
+  });
+}
+
+export function exportMessageLink({
+  chat, messageId,
+}: {
+  chat: ApiChat;
+  messageId: number;
+}) {
+  return fetchMessageLink({ chatId: chat.id, messageId });
+}
+
+export async function joinChannel({ channelId }: { channelId: string }) {
+  return request('POST', `/chats/${channelId}/join`);
+}
+
+export async function leaveChannel({ channelId }: { channelId: string }) {
+  return leaveChat({ chatId: channelId });
+}
+
+export async function deleteChannel({ channelId }: { channelId: string }) {
+  return deleteChat({ chatId: channelId });
+}
+
+export async function deleteChatUser({ chat, user }: { chat: ApiChat; user: ApiUser }) {
+  return request('DELETE', `/chats/${chat.id}/members/${user.id}`);
 }
 
 export function fetchPromoData(): Promise<ApiPromoData | undefined> {
@@ -421,8 +518,32 @@ export function fetchUsers() {
   return Promise.resolve(undefined);
 }
 
-export function fetchCommonChats() {
-  return Promise.resolve(undefined);
+export async function fetchCommonChats({ user }: { user: ApiUser; maxId?: string }) {
+  const result = await request<{ chats: any[]; count: number }>(
+    'GET', `/users/${user.id}/common-chats?limit=100`,
+  );
+  if (!result?.chats?.length) return undefined;
+
+  const { buildApiChat: build } = await import('../apiBuilders/chats');
+  const chats = result.chats.map(build);
+  const chatIds = chats.map((c) => c.id);
+
+  // Add chats to global state so Profile can render them
+  for (const chat of chats) {
+    sendApiUpdate({ '@type': 'updateChat', id: chat.id, chat });
+  }
+
+  return { chatIds, count: result.count };
+}
+
+export async function findFirstMessageIdAfterDate({
+  chat, timestamp,
+}: { chat: ApiChat; timestamp: number }) {
+  const { fetchMessagesByDate: fetchByDate } = await import('./messages');
+  const isoDate = new Date(timestamp * 1000).toISOString();
+  const result = await fetchByDate({ chatId: chat.id, date: isoDate, limit: 1 });
+  if (!result?.messages?.length) return undefined;
+  return result.messages[0].id;
 }
 
 // fetchMembers re-exported from ./chats
@@ -590,7 +711,6 @@ export function fetchContactSignUpSetting() {
 }
 
 type AuthorizationsResult = { authorizations: Record<string, ApiSession>; ttlDays: number };
-type RecentEmojiStatusesResult = { hash: string; emojiStatuses: ApiSticker[] };
 type StarGiftsResult = {
   gifts: ApiStarGiftRegular[];
   chats: ApiChat[] | undefined;
@@ -703,7 +823,29 @@ export function setAccountTTL() {
 }
 
 export function fetchWallpapers(): Promise<{ wallpapers: ApiWallpaper[] } | undefined> {
-  return Promise.resolve(undefined);
+  return Promise.resolve({
+    wallpapers: [],
+  });
+}
+
+export function uploadWallpaper(file: File): Promise<{ wallpaper: ApiWallpaper }> {
+  const url = URL.createObjectURL(file);
+  const slug = `local-${Date.now()}`;
+
+  return Promise.resolve({
+    wallpaper: {
+      slug,
+      document: {
+        mediaType: 'document',
+        id: slug,
+        fileName: file.name,
+        size: file.size,
+        mimeType: file.type,
+        blobUrl: url,
+        previewBlobUrl: url,
+      },
+    },
+  });
 }
 
 export function fetchPasskeys() {
@@ -731,18 +873,6 @@ export function fetchEmojiKeywords() {
 }
 
 export function fetchTimezones() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchCollectibleEmojiStatuses() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchDefaultStatusEmojis() {
-  return Promise.resolve(undefined);
-}
-
-export function fetchRecentEmojiStatuses(): Promise<RecentEmojiStatusesResult | undefined> {
   return Promise.resolve(undefined);
 }
 
@@ -835,8 +965,19 @@ export {
   restartAuth, restartAuthWithQr, restartAuthWithPasskey, validateInviteCode,
 } from './auth';
 
+export { getPasswordInfo, checkPassword, updatePassword, clearPassword } from './twoFaSettings';
+
 export {
-  fetchCurrentUser, fetchFullUser, fetchGlobalUsers, fetchUser, searchChats, searchUsers, updateProfile,
+  checkUsername,
+  fetchCurrentUser,
+  fetchFullUser,
+  fetchGlobalUsers,
+  fetchUser,
+  searchChats,
+  searchUsers,
+  updateProfile,
+  updateEmojiStatus,
+  updateUsername,
 } from './users';
 
 export {
@@ -853,7 +994,7 @@ export {
 } from './chats';
 
 export {
-  deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
+  deleteHistory, deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
   fetchPinnedMessages, forwardMessages, markMessageListRead, markMessagesRead,
   pinMessage, searchMessagesInChat, sendMessage, sendMessageAction, unpinAllMessages, unpinMessage,
   fetchMessage, sendPollVote, closePoll, loadPollOptionResults, fetchScheduledHistory,

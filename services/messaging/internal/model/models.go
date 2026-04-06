@@ -13,6 +13,7 @@ import (
 // Sentinel errors
 var (
 	ErrPushSubscriptionLimitReached = errors.New("maximum of 10 push subscriptions per user")
+	ErrMediaNotOwned                = errors.New("media file does not belong to the sender")
 )
 
 type User struct {
@@ -191,6 +192,30 @@ type UserSettings struct {
 	DNDUntil    *string   `json:"dnd_until,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	// Global notification defaults per chat type
+	NotifyUsersMuted      bool `json:"notify_users_muted"`
+	NotifyGroupsMuted     bool `json:"notify_groups_muted"`
+	NotifyChannelsMuted   bool `json:"notify_channels_muted"`
+	NotifyUsersPreview    bool `json:"notify_users_preview"`
+	NotifyGroupsPreview   bool `json:"notify_groups_preview"`
+	NotifyChannelsPreview bool `json:"notify_channels_preview"`
+}
+
+type GlobalNotifySettings struct {
+	UsersMuted      bool `json:"users_muted"`
+	GroupsMuted     bool `json:"groups_muted"`
+	ChannelsMuted   bool `json:"channels_muted"`
+	UsersPreview    bool `json:"users_preview"`
+	GroupsPreview   bool `json:"groups_preview"`
+	ChannelsPreview bool `json:"channels_preview"`
+}
+
+type SearchHistoryEntry struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Query     string    `json:"query"`
+	Scope     string    `json:"scope"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type NotificationSettings struct {

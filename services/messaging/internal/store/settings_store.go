@@ -16,6 +16,7 @@ import (
 
 type PrivacySettingsStore interface {
 	GetByUserID(ctx context.Context, userID uuid.UUID) (*model.PrivacySettings, error)
+	GetByUserIDs(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*model.PrivacySettings, error)
 	Upsert(ctx context.Context, settings *model.PrivacySettings) error
 }
 
@@ -57,6 +58,59 @@ func (s *privacySettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID
 		return nil, fmt.Errorf("privacySettingsStore.GetByUserID: %w", err)
 	}
 	return ps, nil
+}
+
+func (s *privacySettingsStore) GetByUserIDs(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]*model.PrivacySettings, error) {
+	result := make(map[uuid.UUID]*model.PrivacySettings, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id, last_seen, avatar, phone, calls, groups, forwarded, created_at, updated_at
+		 FROM privacy_settings
+		 WHERE user_id = ANY($1)`,
+		userIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("privacySettingsStore.GetByUserIDs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		ps := &model.PrivacySettings{}
+		if err := rows.Scan(
+			&ps.UserID, &ps.LastSeen, &ps.Avatar, &ps.Phone,
+			&ps.Calls, &ps.Groups, &ps.Forwarded,
+			&ps.CreatedAt, &ps.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("privacySettingsStore.GetByUserIDs scan: %w", err)
+		}
+		result[ps.UserID] = ps
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("privacySettingsStore.GetByUserIDs rows: %w", err)
+	}
+
+	// Fill defaults for users with no row in privacy_settings
+	now := time.Now()
+	for _, uid := range userIDs {
+		if _, ok := result[uid]; !ok {
+			result[uid] = &model.PrivacySettings{
+				UserID:    uid,
+				LastSeen:  "everyone",
+				Avatar:    "everyone",
+				Phone:     "contacts",
+				Calls:     "everyone",
+				Groups:    "everyone",
+				Forwarded: "everyone",
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+		}
+	}
+
+	return result, nil
 }
 
 func (s *privacySettingsStore) Upsert(ctx context.Context, settings *model.PrivacySettings) error {
@@ -178,6 +232,8 @@ func (s *blockedUsersStore) Unblock(ctx context.Context, userID, blockedID uuid.
 type UserSettingsStore interface {
 	GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserSettings, error)
 	Upsert(ctx context.Context, settings *model.UserSettings) error
+	GetGlobalNotifySettings(ctx context.Context, userID uuid.UUID) (*model.GlobalNotifySettings, error)
+	UpdateGlobalNotifySettings(ctx context.Context, userID uuid.UUID, s *model.GlobalNotifySettings) error
 }
 
 type userSettingsStore struct {
@@ -192,7 +248,9 @@ func (s *userSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (
 	us := &model.UserSettings{}
 	err := s.pool.QueryRow(ctx,
 		`SELECT user_id, theme, language, font_size, send_by_enter,
-		        dnd_from, dnd_until, created_at, updated_at
+		        dnd_from, dnd_until, created_at, updated_at,
+		        notify_users_muted, notify_groups_muted, notify_channels_muted,
+		        notify_users_preview, notify_groups_preview, notify_channels_preview
 		 FROM user_settings
 		 WHERE user_id = $1`,
 		userID,
@@ -200,17 +258,22 @@ func (s *userSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		&us.UserID, &us.Theme, &us.Language, &us.FontSize, &us.SendByEnter,
 		&us.DNDFrom, &us.DNDUntil,
 		&us.CreatedAt, &us.UpdatedAt,
+		&us.NotifyUsersMuted, &us.NotifyGroupsMuted, &us.NotifyChannelsMuted,
+		&us.NotifyUsersPreview, &us.NotifyGroupsPreview, &us.NotifyChannelsPreview,
 	)
 	if err == pgx.ErrNoRows {
 		now := time.Now()
 		return &model.UserSettings{
-			UserID:      userID,
-			Theme:       "auto",
-			Language:    "ru",
-			FontSize:    16,
-			SendByEnter: true,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			UserID:                userID,
+			Theme:                 "auto",
+			Language:              "ru",
+			FontSize:              16,
+			SendByEnter:           true,
+			NotifyUsersPreview:    true,
+			NotifyGroupsPreview:   true,
+			NotifyChannelsPreview: true,
+			CreatedAt:             now,
+			UpdatedAt:             now,
 		}, nil
 	}
 	if err != nil {
@@ -237,6 +300,53 @@ func (s *userSettingsStore) Upsert(ctx context.Context, settings *model.UserSett
 	)
 	if err != nil {
 		return fmt.Errorf("userSettingsStore.Upsert: %w", err)
+	}
+	return nil
+}
+
+func (s *userSettingsStore) GetGlobalNotifySettings(ctx context.Context, userID uuid.UUID) (*model.GlobalNotifySettings, error) {
+	gs := &model.GlobalNotifySettings{
+		UsersPreview:    true,
+		GroupsPreview:   true,
+		ChannelsPreview: true,
+	}
+	err := s.pool.QueryRow(ctx,
+		`SELECT notify_users_muted, notify_groups_muted, notify_channels_muted,
+		        notify_users_preview, notify_groups_preview, notify_channels_preview
+		 FROM user_settings WHERE user_id = $1`,
+		userID,
+	).Scan(
+		&gs.UsersMuted, &gs.GroupsMuted, &gs.ChannelsMuted,
+		&gs.UsersPreview, &gs.GroupsPreview, &gs.ChannelsPreview,
+	)
+	if err == pgx.ErrNoRows {
+		return gs, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("userSettingsStore.GetGlobalNotifySettings: %w", err)
+	}
+	return gs, nil
+}
+
+func (s *userSettingsStore) UpdateGlobalNotifySettings(ctx context.Context, userID uuid.UUID, gs *model.GlobalNotifySettings) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO user_settings (user_id, notify_users_muted, notify_groups_muted, notify_channels_muted,
+		                            notify_users_preview, notify_groups_preview, notify_channels_preview,
+		                            created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		 ON CONFLICT (user_id) DO UPDATE SET
+		   notify_users_muted      = EXCLUDED.notify_users_muted,
+		   notify_groups_muted     = EXCLUDED.notify_groups_muted,
+		   notify_channels_muted   = EXCLUDED.notify_channels_muted,
+		   notify_users_preview    = EXCLUDED.notify_users_preview,
+		   notify_groups_preview   = EXCLUDED.notify_groups_preview,
+		   notify_channels_preview = EXCLUDED.notify_channels_preview,
+		   updated_at              = NOW()`,
+		userID, gs.UsersMuted, gs.GroupsMuted, gs.ChannelsMuted,
+		gs.UsersPreview, gs.GroupsPreview, gs.ChannelsPreview,
+	)
+	if err != nil {
+		return fmt.Errorf("userSettingsStore.UpdateGlobalNotifySettings: %w", err)
 	}
 	return nil
 }

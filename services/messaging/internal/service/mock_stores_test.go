@@ -184,6 +184,18 @@ func (m *mockChatStore) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]
 	return nil, nil
 }
 
+func (m *mockChatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error) {
+	return nil, nil
+}
+
+func (m *mockChatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
+	return nil, nil
+}
+
+func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error) {
+	return nil, nil
+}
+
 // ---------------------------------------------------------------------------
 // mockMessageStore
 // ---------------------------------------------------------------------------

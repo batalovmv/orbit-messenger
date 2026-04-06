@@ -207,6 +207,49 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 	}
 }
 
+// enqueueMentionPushDispatch dispatches push for @mentions, bypassing mute checks.
+func (s *Subscriber) enqueueMentionPushDispatch(event NATSEvent, memberIDs []string) {
+	if s.pushDispatcher == nil || len(memberIDs) == 0 {
+		return
+	}
+
+	s.runAsync(
+		"mention_push_dispatch",
+		func() {
+			var msg pushMessageData
+			if err := json.Unmarshal(event.Data, &msg); err != nil {
+				slog.Warn("nats: failed to decode mention payload for push", "error", err)
+				return
+			}
+			if msg.ChatID == "" || msg.ID == "" {
+				return
+			}
+
+			recipients := make([]string, 0, len(memberIDs))
+			for _, userID := range memberIDs {
+				if userID == "" || userID == event.SenderID {
+					continue
+				}
+				recipients = append(recipients, userID)
+			}
+			if len(recipients) == 0 {
+				return
+			}
+
+			// Skip mute check — @mention always pushes per spec
+			payload, err := buildPushPayload(msg)
+			if err != nil {
+				slog.Warn("nats: failed to marshal mention push payload", "error", err)
+				return
+			}
+
+			if err := s.pushDispatcher.SendToUsers(recipients, payload); err != nil {
+				slog.Error("nats: mention push dispatch failed", "error", err, "chat_id", msg.ChatID)
+			}
+		},
+	)
+}
+
 func (s *Subscriber) fetchMutedUserIDs(chatID string, userIDs []string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -392,12 +435,14 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
-	// For mention events, send to the mentioned user
+	// For mention events, send to the mentioned user + push (bypass mute per spec)
 	if event.Event == "mention" {
 		if len(event.MemberIDs) > 0 {
 			for _, uid := range event.MemberIDs {
 				s.hub.SendToUser(uid, envelope)
 			}
+			// Push even if muted — @mention always notifies
+			s.enqueueMentionPushDispatch(event, event.MemberIDs)
 		}
 		return
 	}
@@ -488,7 +533,7 @@ func (s *Subscriber) fetchChatMemberIDs(chatID string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	url := fmt.Sprintf("%s/chats/%s/member-ids", s.messagingServiceURL, chatID)
+	url := fmt.Sprintf("%s/internal/chats/%s/member-ids", s.messagingServiceURL, chatID)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		slog.Warn("failed to create member-ids request", "chat_id", chatID, "error", err)
