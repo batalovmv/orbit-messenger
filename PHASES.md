@@ -833,17 +833,17 @@ Long-press → реакция → анимация. Стикер-пикер → 
 
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 6, `docs/TZ-ORBIT-MESSENGER.md` §11.6
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 6, `docs/TZ-ORBIT-MESSENGER.md` §11.6
 - [ ] Изучить Pion WebRTC Go library — SFU vs MCU, room management, codec support
-- [ ] Изучить coturn — конфигурация, REST API для credential rotation, HA (single point of failure!)
-- [ ] Изучить TG Web A calls UI — какие WebRTC events ожидает? Какой signaling protocol?
-- [ ] Спроектировать: WS signaling flow (offer → answer → ICE → connected) через gateway
-- [ ] Спроектировать: как gateway маршрутизирует signaling events к calls сервису?
-- [ ] Продумать: P2P vs SFU routing — автоматический выбор (2 участника → P2P, >2 → SFU)
+- [x] Изучить coturn — конфигурация, REST API для credential rotation, HA (single point of failure!)
+- [x] Изучить TG Web A calls UI — какие WebRTC events ожидает? Какой signaling protocol?
+- [x] Спроектировать: WS signaling flow (offer → answer → ICE → connected) через gateway
+- [x] Спроектировать: как gateway маршрутизирует signaling events к calls сервису?
+- [x] Продумать: P2P vs SFU routing — автоматический выбор (2 участника → P2P, >2 → SFU)
 - [ ] Продумать: screen sharing — getDisplayMedia API, как мультиплексировать с камерой?
 - [ ] Продумать: push для звонков — высокоприоритетный push когда app закрыт
-- [ ] Оценить: coturn HA — нужен fallback сервер или достаточно одного для 150 юзеров?
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Оценить: coturn HA — нужен fallback сервер или достаточно одного для 150 юзеров?
+- [x] Составить порядок реализации и предложить пользователю
 
 ### Architecture
 
@@ -856,63 +856,63 @@ Signaling: WebSocket через gateway
 
 ### Backend: Endpoints (12)
 
-- [ ] POST /calls — инициировать звонок
-- [ ] PUT /calls/:id/accept — принять
-- [ ] PUT /calls/:id/decline — отклонить
-- [ ] PUT /calls/:id/end — завершить
-- [ ] GET /calls/:id — статус звонка
-- [ ] GET /calls/history — история звонков
-- [ ] POST /calls/:id/participants — добавить участника (group)
-- [ ] DELETE /calls/:id/participants/:userId — удалить участника
-- [ ] PUT /calls/:id/mute — mute/unmute
-- [ ] PUT /calls/:id/screen-share/start — начать шаринг
-- [ ] PUT /calls/:id/screen-share/stop — остановить шаринг
-- [ ] GET /calls/:id/ice-servers — получить TURN/STUN credentials
+- [x] POST /calls — инициировать звонок
+- [x] PUT /calls/:id/accept — принять
+- [x] PUT /calls/:id/decline — отклонить
+- [x] PUT /calls/:id/end — завершить
+- [x] GET /calls/:id — статус звонка
+- [x] GET /calls/history — история звонков
+- [x] POST /calls/:id/participants — добавить участника (group)
+- [x] DELETE /calls/:id/participants/:userId — удалить участника
+- [x] PUT /calls/:id/mute — mute/unmute
+- [x] PUT /calls/:id/screen-share/start — начать шаринг
+- [x] PUT /calls/:id/screen-share/stop — остановить шаринг
+- [x] GET /calls/:id/ice-servers — получить TURN/STUN credentials
 
 ### WebSocket Signaling (11 событий)
 
 **Server → Client:**
-- [ ] `call_incoming` — входящий звонок (ringtone)
-- [ ] `call_accepted` — собеседник принял
-- [ ] `call_declined` — собеседник отклонил
-- [ ] `call_ended` — звонок завершён
-- [ ] `call_participant_joined` — присоединился к групповому
-- [ ] `call_participant_left` — покинул групповой
+- [x] `call_incoming` — входящий звонок (ringtone)
+- [x] `call_accepted` — собеседник принял
+- [x] `call_declined` — собеседник отклонил
+- [x] `call_ended` — звонок завершён
+- [x] `call_participant_joined` — присоединился к групповому
+- [x] `call_participant_left` — покинул групповой
 
 **Bidirectional:**
-- [ ] `webrtc_offer` — SDP offer
-- [ ] `webrtc_answer` — SDP answer
-- [ ] `webrtc_ice_candidate` — ICE candidate
-- [ ] `call_muted` / `call_unmuted` — статус микрофона
-- [ ] `screen_share_started` / `screen_share_stopped`
+- [x] `webrtc_offer` — SDP offer
+- [x] `webrtc_answer` — SDP answer
+- [x] `webrtc_ice_candidate` — ICE candidate
+- [x] `call_muted` / `call_unmuted` — статус микрофона
+- [x] `screen_share_started` / `screen_share_stopped`
 
 ### Database (2 таблицы)
 
 **calls:**
-- [ ] id, type (voice/video), mode (p2p/group), chat_id, initiator_id
-- [ ] status (ringing/active/ended/missed/declined)
-- [ ] started_at, ended_at, duration_seconds, created_at
+- [x] id, type (voice/video), mode (p2p/group), chat_id, initiator_id
+- [x] status (ringing/active/ended/missed/declined)
+- [x] started_at, ended_at, duration_seconds, created_at
 
 **call_participants:**
-- [ ] call_id + user_id PK, joined_at, left_at
-- [ ] is_muted, is_camera_off, is_screen_sharing
+- [x] call_id + user_id PK, joined_at, left_at
+- [x] is_muted, is_camera_off, is_screen_sharing
 
 ### Frontend: Saturn API методы (~20)
 
-- [ ] createCall, acceptCall, declineCall, hangUp
-- [ ] joinGroupCall, leaveGroupCall
-- [ ] toggleCallMute, toggleCallCamera
-- [ ] startScreenShare, stopScreenShare
-- [ ] fetchCallParticipants, fetchCallHistory, rateCall
-- [ ] sendWebRtcOffer, sendWebRtcAnswer, sendIceCandidate, fetchIceServers
-- [ ] inviteToCall, setCallSpeaker
+- [x] createCall, acceptCall, declineCall, hangUp
+- [~] joinGroupCall, leaveGroupCall — stubs, full implementation requires Pion SFU
+- [x] toggleCallMute, toggleCallCamera
+- [x] startScreenShare, stopScreenShare
+- [~] fetchCallParticipants, fetchCallHistory, rateCall — history done, rateCall stub
+- [x] sendWebRtcOffer, sendWebRtcAnswer, sendIceCandidate, fetchIceServers
+- [~] inviteToCall, setCallSpeaker — deferred to Pion SFU integration
 
 ### Дополнительные фичи
 
-- [ ] Ringtone + vibration на входящий
-- [ ] Push-уведомление на звонок когда app закрыт
-- [ ] Network quality indicator
-- [ ] Call rating после завершения (Nice to Have)
+- [ ] Ringtone + vibration на входящий — требует frontend WebRTC PeerConnection wiring
+- [ ] Push-уведомление на звонок когда app закрыт — high-priority push
+- [ ] Network quality indicator — Nice to Have
+- [ ] Call rating после завершения — Nice to Have
 
 ### Критерий "готово"
 
