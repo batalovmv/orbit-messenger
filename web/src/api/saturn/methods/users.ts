@@ -169,7 +169,7 @@ export async function searchChats({ query }: { query: string }) {
 
   return {
     accountResultIds: peerIds,
-    globalResultIds: peerIds,
+    globalResultIds: [],
   };
 }
 

@@ -299,6 +299,11 @@
 
   text-align: initial;
 
+  // Prevent blocking mention/inline tooltips when SymbolMenu is closed
+  .Menu:not(.open) & {
+    pointer-events: none;
+  }
+
   &:not(.shown) {
     display: block;
   }

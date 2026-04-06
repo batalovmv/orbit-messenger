@@ -377,7 +377,11 @@ function buildSearchParams({
   appendSearchParam(params, 'from', fromUserId);
   appendSearchParam(params, 'after', dateFrom);
   appendSearchParam(params, 'before', dateTo);
-  appendSearchParam(params, 'type', type);
+  // Only pass message types that Saturn backend supports; ignore TG-specific types like 'text', 'channels'
+  const SUPPORTED_TYPES = ['photo', 'video', 'file', 'voice', 'video_note', 'sticker', 'gif'];
+  if (type && SUPPORTED_TYPES.includes(type)) {
+    appendSearchParam(params, 'type', type);
+  }
 
   if (hasMedia !== undefined) {
     params.set('has_media', String(hasMedia));

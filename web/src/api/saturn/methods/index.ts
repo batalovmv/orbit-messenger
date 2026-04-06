@@ -58,6 +58,14 @@ export function requestChannelDifference() {
   return Promise.resolve(undefined);
 }
 
+export function fetchPopularAppBots() {
+  return Promise.resolve(undefined);
+}
+
+export function checkSearchPostsFlood() {
+  return Promise.resolve(undefined);
+}
+
 export async function downloadMedia(
   { url, mediaFormat, start, end }: {
     url: string; mediaFormat?: number; isHtmlAllowed?: boolean;
