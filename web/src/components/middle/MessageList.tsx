@@ -875,10 +875,9 @@ export default memo(withGlobal<OwnProps>(
     const tabState = selectTabState(global);
     const currentUserId = global.currentUserId!;
     const chat = selectChat(global, chatId);
-    const dmPeerUserId = selectDmPeerUserId(global, chatId);
-    const resolvedUserId = dmPeerUserId || chatId;
-    const user = selectUser(global, resolvedUserId);
-    const userFullInfo = selectUserFullInfo(global, resolvedUserId);
+    const peerUserId = chat?.peerUserId;
+    const user = peerUserId ? selectUser(global, peerUserId) : selectUser(global, chatId);
+    const userFullInfo = peerUserId ? selectUserFullInfo(global, peerUserId) : selectUserFullInfo(global, chatId);
     const readState = selectThreadReadState(global, chatId, threadId);
     if (!chat) {
       return { currentUserId } as Complete<StateProps>;

@@ -53,9 +53,10 @@ export function selectIsChatWithSelf<T extends GlobalState>(global: T, chatId: s
 // Saturn: resolve the peer userId for a DM chat. In TG Web A chatId === userId,
 // but in Saturn they are different UUIDs. Use this whenever you need the user
 // behind a DM chat (instead of selectUser(global, chatId) which always fails).
+// IMPORTANT: returns ONLY chat.peerUserId — no fallback through selectUser to avoid
+// oscillating return values that cause infinite re-renders in withGlobal.
 export function selectDmPeerUserId<T extends GlobalState>(global: T, chatId: string) {
-  const chat = global.chats.byId[chatId];
-  return chat?.peerUserId || (selectUser(global, chatId) ? chatId : undefined);
+  return global.chats.byId[chatId]?.peerUserId;
 }
 
 // Saturn: reverse lookup — find DM chat by the peer's userId.
@@ -125,27 +126,30 @@ export function selectIsTrustedBot<T extends GlobalState>(global: T, botId: stri
 }
 
 export function selectChatType<T extends GlobalState>(global: T, chatId: string): ApiChatType | undefined {
-  const peerUserId = selectDmPeerUserId(global, chatId);
-  const botUserId = peerUserId || chatId;
-  const bot = selectBot(global, botUserId);
-  if (bot) {
-    return 'bots';
-  }
+  const chat = selectChat(global, chatId);
+  if (!chat) return undefined;
 
-  const user = selectUser(global, botUserId);
-  if (user) {
+  // Saturn: DM chats have type 'chatTypePrivate' with peerUserId
+  const peerUserId = chat.peerUserId;
+  if (peerUserId) {
+    const bot = selectBot(global, peerUserId);
+    if (bot) return 'bots';
     return 'users';
   }
 
-  const chat = selectChat(global, chatId);
-  if (!chat) return undefined;
+  // TG-style fallback: check if chatId is itself a userId
+  const user = selectUser(global, chatId);
+  if (user) {
+    const bot = selectBot(global, chatId);
+    return bot ? 'bots' : 'users';
+  }
 
   return 'chats';
 }
 
 export function selectIsChatBotNotStarted<T extends GlobalState>(global: T, chatId: string) {
-  const botUserId = selectDmPeerUserId(global, chatId) || chatId;
-  const bot = selectBot(global, botUserId);
+  const peerUserId = global.chats.byId[chatId]?.peerUserId;
+  const bot = selectBot(global, peerUserId || chatId);
   if (!bot) {
     return false;
   }

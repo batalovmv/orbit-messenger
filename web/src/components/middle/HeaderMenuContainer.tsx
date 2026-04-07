@@ -793,18 +793,17 @@ export default memo(withGlobal<OwnProps>(
     if (!chat || isRestricted) {
       return {} as Complete<StateProps>;
     }
-    const isPrivate = isUserId(chat.id);
-    const dmPeerUserId = isPrivate ? selectDmPeerUserId(global, chatId) : undefined;
-    const resolvedUserId = dmPeerUserId || chatId;
-    const user = isPrivate ? selectUser(global, resolvedUserId) : undefined;
+    const isPrivate = chat.type === 'chatTypePrivate';
+    const peerUserId = chat.peerUserId;
+    const user = peerUserId ? selectUser(global, peerUserId) : undefined;
     const canAddContact = user && getCanAddContact(user);
     const isMainThread = threadId === MAIN_THREAD_ID;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global) || {};
     const canReportChat = isMainThread && !user && isChatGroup(chat) && !isChatAdmin(chat);
 
-    const chatBot = !isSystemBot(chatId) ? selectBot(global, resolvedUserId) : undefined;
-    const userFullInfo = isPrivate ? selectUserFullInfo(global, resolvedUserId) : undefined;
+    const chatBot = !isSystemBot(chatId) ? selectBot(global, peerUserId || chatId) : undefined;
+    const userFullInfo = peerUserId ? selectUserFullInfo(global, peerUserId) : undefined;
     const chatFullInfo = !isPrivate ? selectChatFullInfo(global, chatId) : undefined;
     const fullInfo = userFullInfo || chatFullInfo;
     const canGift = selectCanGift(global, chatId);

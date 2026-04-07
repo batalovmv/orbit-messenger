@@ -2562,12 +2562,12 @@ export default memo(withGlobal<OwnProps>(
   }): Complete<StateProps> => {
     const appConfig = global.appConfig;
     const chat = selectChat(global, chatId);
-    const dmPeerUserId = selectDmPeerUserId(global, chatId);
-    const chatBot = !isSystemBot(chatId) ? selectBot(global, dmPeerUserId || chatId) : undefined;
+    const peerUserId = chat?.peerUserId;
+    const chatBot = !isSystemBot(chatId) ? selectBot(global, peerUserId || chatId) : undefined;
     const isChatWithBot = Boolean(chatBot);
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
-    const isChatWithUser = isUserId(chatId);
-    const userFullInfo = dmPeerUserId ? selectUserFullInfo(global, dmPeerUserId) : undefined;
+    const isChatWithUser = chat?.type === 'chatTypePrivate';
+    const userFullInfo = peerUserId ? selectUserFullInfo(global, peerUserId) : undefined;
     const paidMessagesStars = selectPeerPaidMessagesStars(global, chatId);
 
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
