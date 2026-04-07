@@ -214,13 +214,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
           scroller.classList.toggle('overflown', isOverflown);
         }
 
-        if (willSend) {
-          // Delay to next frame to sync with sending animation
-          requestMutation(exec);
-          return undefined;
-        } else {
-          return exec;
-        }
+        requestMutation(exec);
+        return undefined;
       });
     });
   });

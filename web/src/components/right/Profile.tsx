@@ -43,6 +43,7 @@ import {
   selectChatMessages,
   selectCurrentSharedMediaSearch,
   selectIsChatRestricted,
+  selectIsChatWithSelf,
   selectIsCurrentUserPremium,
   selectIsRightColumnShown,
   selectMonoforumChannel,
@@ -1044,7 +1045,7 @@ export default memo(withGlobal<OwnProps>(
     const { byId: usersById, statusesById: userStatusesById } = global.users;
     const { byId: chatsById } = global.chats;
 
-    const isSavedMessages = chatId === global.currentUserId && !isOwnProfile;
+    const isSavedMessages = !isOwnProfile && chatId ? selectIsChatWithSelf(global, chatId) : false;
     const isSavedDialog = !isOwnProfile ? getIsSavedDialog(chatId, threadId, global.currentUserId) : undefined;
 
     const isGroup = chat && isChatGroup(chat);

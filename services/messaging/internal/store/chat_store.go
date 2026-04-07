@@ -93,7 +93,8 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		    SELECT u.id, u.display_name, u.avatar_url, u.status, u.last_seen_at
 		    FROM chat_members ocm
 		    JOIN users u ON u.id = ocm.user_id
-		    WHERE ocm.chat_id = c.id AND ocm.user_id != $1 AND c.type = 'direct'
+		    WHERE ocm.chat_id = c.id AND c.type = 'direct'
+		    ORDER BY (ocm.user_id = $1) ASC
 		    LIMIT 1
 		) ou ON c.type = 'direct'
 		WHERE cm.user_id = $1
