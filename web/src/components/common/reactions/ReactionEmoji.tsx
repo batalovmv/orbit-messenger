@@ -9,6 +9,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import { EMOJI_SIZE_PICKER } from '../../../config';
 import { getDocumentMediaHash, isSameReaction } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
+import { getLocalReactionTgsUrl } from '../../../api/saturn/apiBuilders/reactions';
 import { LOCAL_TGS_URLS } from '../helpers/animatedAssets';
 
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
@@ -55,14 +56,18 @@ const ReactionEmoji: FC<OwnProps> = ({
     availableReactions?.find((available) => isSameReaction(available.reaction, reaction))
   ), [availableReactions, reaction]);
   const thumbDataUri = availableReaction?.staticIcon?.thumbnail?.dataUri;
-  const hasAnimatedReaction = Boolean(availableReaction?.selectAnimation?.id);
+  // Use bundled TGS URL directly — bypasses the fragile useMedia→downloadMedia pipeline
+  const localTgsUrl = reaction.type === 'emoji'
+    ? getLocalReactionTgsUrl(reaction.emoticon, 'select')
+    : undefined;
+  const hasAnimatedReaction = Boolean(localTgsUrl || availableReaction?.selectAnimation?.id);
   const shouldUseStaticReaction = reaction.type === 'emoji' && !hasAnimatedReaction;
   const coords = useCoordsInSharedCanvas(ref, sharedCanvasRef);
   const mediaData = useMedia(
-    hasAnimatedReaction && availableReaction?.selectAnimation
+    !localTgsUrl && hasAnimatedReaction && availableReaction?.selectAnimation
       ? getDocumentMediaHash(availableReaction.selectAnimation, 'full')
       : undefined,
-    !hasAnimatedReaction,
+    !(!localTgsUrl && hasAnimatedReaction),
   );
 
   const {
@@ -82,12 +87,12 @@ const ReactionEmoji: FC<OwnProps> = ({
     }
   }, [handleContextMenuClose, onContextMenu, handleContextMenuHide, isContextMenuOpen, reaction]);
 
-  const tgsUrl = reaction.type === 'paid' ? LOCAL_TGS_URLS.StarReaction : mediaData;
+  const tgsUrl = reaction.type === 'paid' ? LOCAL_TGS_URLS.StarReaction : (localTgsUrl || mediaData);
   const handleClick = useLastCallback(() => {
     onClick(reaction);
   });
 
-  const transitionClassNames = useMediaTransitionDeprecated(mediaData);
+  const transitionClassNames = useMediaTransitionDeprecated(tgsUrl);
   const fullClassName = buildClassName(
     styles.root,
     isSelected && styles.selected,
@@ -131,8 +136,8 @@ const ReactionEmoji: FC<OwnProps> = ({
           size={EMOJI_SIZE_PICKER}
           isLowPriority
           className={transitionClassNames}
-          sharedCanvas={sharedCanvasRef!.current || undefined}
-          sharedCanvasCoords={coords}
+          sharedCanvas={localTgsUrl ? undefined : (sharedCanvasRef!.current || undefined)}
+          sharedCanvasCoords={localTgsUrl ? undefined : coords}
           forceAlways={forcePlayback}
         />
       )}

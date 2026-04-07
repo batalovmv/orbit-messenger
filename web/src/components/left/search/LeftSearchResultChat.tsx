@@ -61,6 +61,10 @@ const LeftSearchResultChat = ({
   const { requestMainWebView, updateChatMutedState, openQuickPreview } = getActions();
   const lang = useLang();
 
+  if (!chat && !user) {
+    return undefined;
+  }
+
   const [isMuteModalOpen, openMuteModal, closeMuteModal] = useFlag();
   const [isChatFolderModalOpen, openChatFolderModal, closeChatFolderModal] = useFlag();
   const [shouldRenderChatFolderModal, markRenderChatFolderModal, unmarkRenderChatFolderModal] = useFlag();

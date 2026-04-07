@@ -302,6 +302,7 @@
   // Prevent blocking mention/inline tooltips when SymbolMenu is closed
   .Menu:not(.open):not(.ReactionPicker) & {
     pointer-events: none;
+    visibility: hidden;
   }
 
   &:not(.shown) {

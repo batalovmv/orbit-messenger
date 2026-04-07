@@ -2,7 +2,7 @@ import type {
   ApiAvailableEffect, ApiMessage, ApiReactionEmoji, ApiSticker, ApiTopicWithState,
 } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
-import { ApiMediaFormat, MAIN_THREAD_ID } from '../../../api/types';
+import { MAIN_THREAD_ID } from '../../../api/types';
 
 import { GENERAL_REFETCH_INTERVAL } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
@@ -10,12 +10,11 @@ import {
   buildCollectionByCallback, buildCollectionByKey, omit,
 } from '../../../util/iteratees';
 import { getMessageKey } from '../../../util/keys/messageKey';
-import * as mediaLoader from '../../../util/mediaLoader';
+
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { callApi } from '../../../api/saturn';
 import { sendReaction as sendReactionApi } from '../../../api/saturn/methods/reactions';
 import {
-  getDocumentMediaHash,
   getReactionKey,
   getUserReactions,
   isMessageLocal,
@@ -58,21 +57,8 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
     return;
   }
 
-  // Preload animations
-  result.forEach((availableReaction) => {
-    if (availableReaction.aroundAnimation) {
-      mediaLoader.fetch(`sticker${availableReaction.aroundAnimation.id}`, ApiMediaFormat.BlobUrl);
-    }
-    if (availableReaction.centerIcon) {
-      mediaLoader.fetch(`sticker${availableReaction.centerIcon.id}`, ApiMediaFormat.BlobUrl);
-    }
-    if (availableReaction.appearAnimation) {
-      mediaLoader.fetch(`sticker${availableReaction.appearAnimation.id}`, ApiMediaFormat.BlobUrl);
-    }
-    if (availableReaction.selectAnimation) {
-      mediaLoader.fetch(getDocumentMediaHash(availableReaction.selectAnimation, 'full')!, ApiMediaFormat.BlobUrl);
-    }
-  });
+  // Local TGS animations are loaded directly by components via webpack URLs,
+  // no need to preload through the mediaLoader pipeline
 
   global = getGlobal();
   global = {

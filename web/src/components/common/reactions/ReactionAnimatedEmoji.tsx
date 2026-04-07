@@ -13,6 +13,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import { getStickerHashById, isSameReaction } from '../../../global/helpers';
 import { selectPerformanceSettingsValue, selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
+import { getLocalReactionTgsUrl } from '../../../api/saturn/apiBuilders/reactions';
 import { roundToNearestEven } from '../../../util/math';
 import { REM } from '../helpers/mediaDimensions';
 
@@ -116,18 +117,25 @@ const ReactionAnimatedEmoji = ({
 
   const isIntersecting = useIsIntersecting(ref, observeIntersection);
 
-  const mediaHashCenterIcon = centerIconId && getStickerHashById(centerIconId);
-  const mediaHashEffect = effectId && getStickerHashById(effectId);
+  const emoticon = reaction.type === 'emoji' ? reaction.emoticon : undefined;
+  const localCenterUrl = emoticon ? getLocalReactionTgsUrl(emoticon, 'center') : undefined;
+  const localAroundUrl = emoticon ? getLocalReactionTgsUrl(emoticon, 'around') : undefined;
+
+  const mediaHashCenterIcon = !localCenterUrl && centerIconId ? getStickerHashById(centerIconId) : undefined;
+  const mediaHashEffect = !localAroundUrl && effectId ? getStickerHashById(effectId) : undefined;
 
   const mediaDataCenterIcon = useMedia(mediaHashCenterIcon);
   const mediaDataEffect = useMedia(mediaHashEffect);
+
+  const resolvedCenterIcon = localCenterUrl || mediaDataCenterIcon;
+  const resolvedEffect = localAroundUrl || mediaDataEffect;
 
   const activeReaction = useMemo(() => (
     activeReactions?.find((active) => isSameReaction(active, reaction))
   ), [activeReactions, reaction]);
 
   const shouldPlayEffect = Boolean(
-    withEffects && activeReaction && (isCustom || mediaDataCenterIcon) && mediaDataEffect,
+    withEffects && activeReaction && (isCustom || resolvedCenterIcon) && resolvedEffect,
   );
   const shouldPlayCenter = isIntersecting && ((shouldPlayEffect && !withEffectOnly) || shouldLoop);
   const {
@@ -185,7 +193,7 @@ const ReactionAnimatedEmoji = ({
           key={`${centerIconId}-${size}`}
           className={buildClassName(styles.animatedIcon, centerAnimationClassNames)}
           size={roundToNearestEven(size * CENTER_ICON_MULTIPLIER)}
-          tgsUrl={mediaDataCenterIcon}
+          tgsUrl={resolvedCenterIcon}
           play={isIntersecting && !shouldPause}
           noLoop={!shouldLoop}
           onLoad={markAnimationLoaded}
@@ -199,7 +207,7 @@ const ReactionAnimatedEmoji = ({
             key={`${effectId}-${effectSize}`}
             className={buildClassName(styles.effect, animationClassNames)}
             size={effectSize}
-            tgsUrl={mediaDataEffect}
+            tgsUrl={resolvedEffect}
             play={isIntersecting}
             noLoop
             onEnded={handleEnded}

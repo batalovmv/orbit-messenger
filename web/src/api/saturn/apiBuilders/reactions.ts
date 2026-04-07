@@ -357,6 +357,14 @@ export function buildAvailableReactions(emojis = DEFAULT_AVAILABLE_REACTION_EMOJ
   return emojis.map((emoji) => buildApiAvailableReaction(emoji));
 }
 
+// Direct lookup for local bundled TGS URLs — bypasses the download pipeline
+export function getLocalReactionTgsUrl(
+  emoticon: string,
+  type: keyof ReactionAnimationAsset,
+): string | undefined {
+  return REACTION_ANIMATIONS[emoticon]?.[type];
+}
+
 export function buildApiAvailableReactionEffect(emoticon: string): ApiAvailableEffect {
   const {
     safeId,

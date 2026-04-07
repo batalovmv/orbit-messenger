@@ -188,27 +188,16 @@ const StickerPicker: FC<OwnProps & StateProps> = ({
       });
     }
 
-    const userSetIds = [...(addedSetIds || [])];
-    if (chatStickerSetId) {
-      userSetIds.unshift(chatStickerSetId);
-    }
-
-    const existingAddedSetIds = Object.values(pickTruthy(stickerSetsById, userSetIds));
-
-    return [
-      ...defaultSets,
-      ...existingAddedSetIds,
-    ];
+    // Extra sticker packs temporarily hidden — only show default sets (Favorites + Recent)
+    return defaultSets;
   }, [
-    addedSetIds,
-    stickerSetsById,
     favoriteStickers,
     recentStickers,
-    chatStickerSetId,
     lang,
     effectStickers,
     isForEffects,
     effectEmojis,
+    addedSetIds,
   ]);
 
   const noPopulatedSets = useMemo(() => (
