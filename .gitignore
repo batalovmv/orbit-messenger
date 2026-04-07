@@ -73,3 +73,11 @@ test_*.html
 
 # === Saturn ===
 .saturn/
+
+# === Working artifacts (screenshots, AI prompts, temp binaries) ===
+artifacts/
+docs/bugfix-prompt.md
+docs/codex-preamble.md
+docs/codex-tasks.md
+docs/phase6-prompt.md
+scripts/import-telegram-stickers/import-stickers-linux
