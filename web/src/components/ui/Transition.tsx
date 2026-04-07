@@ -3,7 +3,7 @@ import { beginHeavyAnimation, useEffect, useLayoutEffect, useRef } from '@teact'
 import { addExtraClass, removeExtraClass, setExtraStyles, toggleExtraClass } from '@teact/teact-dom';
 import { getGlobal } from '../../global';
 
-import { requestForcedReflow, requestMutation } from '../../lib/fasterdom/fasterdom';
+import { requestForcedReflow, requestMeasure, requestMutation } from '../../lib/fasterdom/fasterdom';
 import { selectCanAnimateInterface } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 import { waitForAnimationEnd, waitForTransitionEnd } from '../../util/cssAnimationEndListeners';
@@ -275,39 +275,41 @@ function Transition({
     toggleExtraClass(container, `Transition-${name}Backwards`, isBackwards);
 
     function onAnimationEnd() {
-      const activeElement = container.querySelector<HTMLDivElement>(`.${CLASSES.active}`);
-      const { clientHeight } = activeElement || {};
+      requestMeasure(() => {
+        const activeElement = container.querySelector<HTMLDivElement>(`.${CLASSES.active}`);
+        const { clientHeight } = activeElement || {};
 
-      requestMutation(() => {
-        if (activeKey !== currentKeyRef.current) {
+        requestMutation(() => {
+          if (activeKey !== currentKeyRef.current) {
+            endHeavyAnimation();
+            return;
+          }
+
+          removeExtraClass(container, `Transition-${name}`);
+          removeExtraClass(container, `Transition-${name}Backwards`);
+
+          childNodes.forEach((node, i) => {
+            if (node instanceof HTMLElement) {
+              removeExtraClass(node, CLASSES.from);
+              removeExtraClass(node, CLASSES.to);
+              toggleExtraClass(node, CLASSES.active, i === activeIndex);
+              toggleExtraClass(node, CLASSES.inactive, i !== activeIndex);
+            }
+          });
+
+          if (shouldRestoreHeight) {
+            if (activeElement) {
+              setExtraStyles(activeElement, { height: 'auto' });
+              setExtraStyles(container, { height: `${clientHeight}px` });
+            }
+          }
+
+          onStop?.();
           endHeavyAnimation();
-          return;
-        }
+          isAnimatingRef.current = false;
 
-        removeExtraClass(container, `Transition-${name}`);
-        removeExtraClass(container, `Transition-${name}Backwards`);
-
-        childNodes.forEach((node, i) => {
-          if (node instanceof HTMLElement) {
-            removeExtraClass(node, CLASSES.from);
-            removeExtraClass(node, CLASSES.to);
-            toggleExtraClass(node, CLASSES.active, i === activeIndex);
-            toggleExtraClass(node, CLASSES.inactive, i !== activeIndex);
-          }
+          cleanup();
         });
-
-        if (shouldRestoreHeight) {
-          if (activeElement) {
-            setExtraStyles(activeElement, { height: 'auto' });
-            setExtraStyles(container, { height: `${clientHeight}px` });
-          }
-        }
-
-        onStop?.();
-        endHeavyAnimation();
-        isAnimatingRef.current = false;
-
-        cleanup();
       });
     }
 
@@ -513,31 +515,33 @@ function performSlideOptimized(
   });
 
   waitForTransitionEnd(toSlide, () => {
-    const clientHeight = toSlide instanceof HTMLElement ? toSlide.clientHeight : undefined;
+    requestMeasure(() => {
+      const clientHeight = toSlide instanceof HTMLElement ? toSlide.clientHeight : undefined;
 
-    requestMutation(() => {
-      if (activeKey !== currentKeyRef.current) {
+      requestMutation(() => {
+        if (activeKey !== currentKeyRef.current) {
+          endHeavyAnimation();
+          return;
+        }
+
+        if (fromSlide instanceof HTMLElement) {
+          setExtraStyles(fromSlide, {
+            transition: 'none',
+            transform: '',
+          });
+        }
+
+        if (shouldRestoreHeight && clientHeight && toSlide instanceof HTMLElement) {
+          setExtraStyles(toSlide, { height: 'auto' });
+          setExtraStyles(container, { height: `${clientHeight}px` });
+        }
+
+        onStop?.();
         endHeavyAnimation();
-        return;
-      }
+        isAnimatingRef.current = false;
 
-      if (fromSlide instanceof HTMLElement) {
-        setExtraStyles(fromSlide, {
-          transition: 'none',
-          transform: '',
-        });
-      }
-
-      if (shouldRestoreHeight && clientHeight && toSlide instanceof HTMLElement) {
-        setExtraStyles(toSlide, { height: 'auto' });
-        setExtraStyles(container, { height: `${clientHeight}px` });
-      }
-
-      onStop?.();
-      endHeavyAnimation();
-      isAnimatingRef.current = false;
-
-      cleanup();
+        cleanup();
+      });
     });
   });
 }

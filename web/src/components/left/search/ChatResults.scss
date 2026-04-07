@@ -40,5 +40,8 @@
 
 .menuOwner {
   position: relative;
-  min-height: 20rem;
+
+  &:has(.search-section) {
+    min-height: 20rem;
+  }
 }
