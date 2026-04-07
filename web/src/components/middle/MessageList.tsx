@@ -622,9 +622,11 @@ const MessageList = ({
       addExtraClass(container.parentElement!, FORCE_MESSAGES_SCROLL_CLASS);
 
       setTimeout(() => {
-        if (container.parentElement) {
-          removeExtraClass(container.parentElement, FORCE_MESSAGES_SCROLL_CLASS);
-        }
+        requestMutation(() => {
+          if (container.parentElement) {
+            removeExtraClass(container.parentElement, FORCE_MESSAGES_SCROLL_CLASS);
+          }
+        });
       }, MESSAGE_ANIMATION_DURATION);
     }
 

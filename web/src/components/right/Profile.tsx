@@ -42,6 +42,7 @@ import {
   selectChatFullInfo,
   selectChatMessages,
   selectCurrentSharedMediaSearch,
+  selectDmPeerUserId,
   selectIsChatRestricted,
   selectIsChatWithSelf,
   selectIsCurrentUserPremium,
@@ -1025,10 +1026,12 @@ export default memo(withGlobal<OwnProps>(
   (global, {
     chatId, threadId, isMobile,
   }): Complete<StateProps> => {
-    const user = selectUser(global, chatId);
     const chat = selectChat(global, chatId);
+    const dmPeerUserId = selectDmPeerUserId(global, chatId);
+    const resolvedUserId = dmPeerUserId || chatId;
+    const user = selectUser(global, resolvedUserId);
     const chatFullInfo = selectChatFullInfo(global, chatId);
-    const userFullInfo = selectUserFullInfo(global, chatId);
+    const userFullInfo = user ? selectUserFullInfo(global, resolvedUserId) : undefined;
     const messagesById = selectChatMessages(global, chatId);
 
     const tabState = selectTabState(global);

@@ -193,7 +193,9 @@ export function captureEvents(element: HTMLElement, options: CaptureOptions) {
     }
 
     if (withCursor) {
-      document.body.classList.add('cursor-grabbing');
+      requestMutation(() => {
+        document.body.classList.add('cursor-grabbing');
+      });
     }
 
     options.onCapture?.(e);
@@ -202,7 +204,9 @@ export function captureEvents(element: HTMLElement, options: CaptureOptions) {
   function onRelease(e?: MouseEvent | TouchEvent) {
     if (captureEvent) {
       if (options.withCursor) {
-        document.body.classList.remove('cursor-grabbing');
+        requestMutation(() => {
+          document.body.classList.remove('cursor-grabbing');
+        });
       }
 
       document.removeEventListener('mouseup', onRelease);

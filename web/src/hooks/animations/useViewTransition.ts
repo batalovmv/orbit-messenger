@@ -137,8 +137,10 @@ export function useViewTransition(): ViewTransitionController {
 }
 
 function cleanUp(types?: VTTypes) {
-  types?.getTypes().forEach((type) => {
-    document.documentElement.classList.remove(`${VT_TYPE_CLASS_PREFIX}${type}`);
+  requestMutation(() => {
+    types?.getTypes().forEach((type) => {
+      document.documentElement.classList.remove(`${VT_TYPE_CLASS_PREFIX}${type}`);
+    });
+    document.documentElement.classList.remove(VT_CLASS_NAME);
   });
-  document.documentElement.classList.remove(VT_CLASS_NAME);
 }

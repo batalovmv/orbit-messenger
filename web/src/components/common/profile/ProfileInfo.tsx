@@ -25,6 +25,7 @@ import {
   selectChat,
   selectCurrentMessageList,
   selectCustomEmoji,
+  selectDmPeerUserId,
   selectPeer,
   selectPeerHasProfileBackground,
   selectPeerPhotos,
@@ -575,10 +576,11 @@ const ProfileInfo = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { peerId }): Complete<StateProps> => {
-    const peer = selectPeer(global, peerId);
-    const user = selectUser(global, peerId);
-    const userFullInfo = user ? selectUserFullInfo(global, peerId) : undefined;
-    const userStatus = selectUserStatus(global, peerId);
+    const resolvedUserId = selectDmPeerUserId(global, peerId) || peerId;
+    const peer = selectPeer(global, peerId) || selectPeer(global, resolvedUserId);
+    const user = selectUser(global, resolvedUserId);
+    const userFullInfo = user ? selectUserFullInfo(global, resolvedUserId) : undefined;
+    const userStatus = selectUserStatus(global, resolvedUserId);
     const chat = selectChat(global, peerId);
     const profilePhotos = selectPeerPhotos(global, peerId);
     const { mediaIndex, chatId: avatarOwnerId } = selectTabState(global).mediaViewer || {};
