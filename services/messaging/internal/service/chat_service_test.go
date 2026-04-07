@@ -524,14 +524,30 @@ func TestDeleteChat_OnlyOwnerCanDelete(t *testing.T) {
 	assertAppError(t, err, 403)
 }
 
-func TestCreateDirectChat_SelfDM_Rejected(t *testing.T) {
+func TestCreateDirectChat_SelfDM_Allowed(t *testing.T) {
 	userID := uuid.New()
+	chatID := uuid.New()
 	rec := &RecordingPublisher{}
-	cs := &mockChatStore{}
+	cs := &mockChatStore{
+		getDirectChatFn: func(_ context.Context, _, _ uuid.UUID) (*uuid.UUID, error) {
+			return nil, nil // no existing self-DM
+		},
+		createDirectFn: func(_ context.Context, u1, u2 uuid.UUID) (*model.Chat, error) {
+			if u1 != u2 {
+				t.Fatal("expected self-DM: user1 == user2")
+			}
+			return &model.Chat{ID: chatID, Type: "direct"}, nil
+		},
+	}
 
 	svc := newTestChatService(cs, rec)
-	_, err := svc.CreateDirectChat(context.Background(), userID, userID)
-	assertAppError(t, err, 400)
+	chat, err := svc.CreateDirectChat(context.Background(), userID, userID)
+	if err != nil {
+		t.Fatalf("expected self-DM to succeed, got: %v", err)
+	}
+	if chat.ID != chatID {
+		t.Fatalf("expected chatID %s, got %s", chatID, chat.ID)
+	}
 }
 
 func TestCreateDirectChat_NATS_ChatCreated(t *testing.T) {

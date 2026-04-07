@@ -6,7 +6,7 @@ import type { EmojiData, EmojiModule, EmojiRawData } from '../../../../util/emoj
 import type { Signal } from '../../../../util/signals';
 
 import { EDITABLE_INPUT_CSS_SELECTOR, EDITABLE_INPUT_ID } from '../../../../config';
-import { requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import { selectCustomEmojiForEmojis } from '../../../../global/selectors';
 import { uncompressEmoji } from '../../../../util/emoji/emoji';
 import focusEditableElement from '../../../../util/focusEditableElement';
@@ -127,8 +127,10 @@ export default function useEmojiTooltip(
         ? document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR)!
         : document.getElementById(inputId) as HTMLDivElement;
 
-      requestNextMutation(() => {
-        focusEditableElement(messageInput, true, true);
+      requestMutation(() => {
+        requestMeasure(() => {
+          focusEditableElement(messageInput, true, true);
+        });
       });
     }
 

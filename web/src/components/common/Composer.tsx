@@ -51,7 +51,7 @@ import {
   SERVICE_NOTIFICATIONS_USER_ID,
   STARS_CURRENCY_CODE,
 } from '../../config';
-import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../lib/fasterdom/fasterdom';
 import {
   canEditMedia,
   getAllowedAttachmentOptions,
@@ -667,8 +667,10 @@ const Composer = ({
     }
 
     // If selection is outside of input, set cursor at the end of input
-    requestNextMutation(() => {
-      focusEditableElement(messageInput);
+    requestMutation(() => {
+      requestMeasure(() => {
+        focusEditableElement(messageInput);
+      });
     });
   });
 
@@ -1425,9 +1427,11 @@ const Composer = ({
       insertFormattedTextAndUpdateCursor(requestedDraft, undefined, true);
       resetOpenChatWithDraft();
 
-      requestNextMutation(() => {
-        const messageInput = document.getElementById(editableInputId)!;
-        focusEditableElement(messageInput, true);
+      requestMutation(() => {
+        requestMeasure(() => {
+          const messageInput = document.getElementById(editableInputId)!;
+          focusEditableElement(messageInput, true);
+        });
       });
     }
   }, [editableInputId, requestedDraft, resetOpenChatWithDraft, setHtml]);

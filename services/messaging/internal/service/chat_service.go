@@ -151,10 +151,6 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*m
 }
 
 func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID) (*model.Chat, error) {
-	if userID == otherUserID {
-		return nil, apperror.BadRequest("Cannot create DM with yourself")
-	}
-
 	existing, err := s.chats.GetDirectChat(ctx, userID, otherUserID)
 	if err != nil {
 		return nil, fmt.Errorf("check existing DM: %w", err)

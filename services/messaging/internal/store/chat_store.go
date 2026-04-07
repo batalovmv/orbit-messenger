@@ -280,12 +280,20 @@ func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID
 		return nil, err
 	}
 
-	// Add both users as members
-	_, err = tx.Exec(ctx,
-		`INSERT INTO chat_members (chat_id, user_id, role, permissions)
-		 VALUES ($1, $2, 'member', $4), ($1, $3, 'member', $4)`,
-		chat.ID, user1, user2, permissions.PermissionsUnset,
-	)
+	// Add members (self-DM: single member; regular DM: two members)
+	if user1 == user2 {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO chat_members (chat_id, user_id, role, permissions)
+			 VALUES ($1, $2, 'member', $3)`,
+			chat.ID, user1, permissions.PermissionsUnset,
+		)
+	} else {
+		_, err = tx.Exec(ctx,
+			`INSERT INTO chat_members (chat_id, user_id, role, permissions)
+			 VALUES ($1, $2, 'member', $4), ($1, $3, 'member', $4)`,
+			chat.ID, user1, user2, permissions.PermissionsUnset,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}

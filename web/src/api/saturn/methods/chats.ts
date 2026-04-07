@@ -24,6 +24,10 @@ export function setCurrentUserId(userId: string) {
   currentUserId = userId;
 }
 
+export function getCurrentUserId(): string | undefined {
+  return currentUserId;
+}
+
 export async function fetchChats({
   limit = 50, cursor,
 }: {

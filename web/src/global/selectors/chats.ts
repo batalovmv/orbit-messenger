@@ -44,7 +44,10 @@ export function selectChatListLoadingParameters<T extends GlobalState>(
 }
 
 export function selectIsChatWithSelf<T extends GlobalState>(global: T, chatId: string) {
-  return chatId === global.currentUserId;
+  if (chatId === global.currentUserId) return true;
+  // Saturn: DM chat has a distinct UUID; detect via peerUserId
+  const chat = global.chats.byId[chatId];
+  return Boolean(chat && chat.type === 'chatTypePrivate' && chat.peerUserId === global.currentUserId);
 }
 
 export function selectIsChatWithBot<T extends GlobalState>(global: T, chatId: string) {

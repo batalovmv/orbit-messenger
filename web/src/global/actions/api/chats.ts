@@ -245,7 +245,11 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
 
   if (!chat) {
     if (selectIsChatWithSelf(global, id)) {
-      void callApi('fetchChat', { type: 'self' });
+      void callApi('fetchChat', { type: 'self' }).then((result) => {
+        if (result?.chat) {
+          actions.openChat({ id: result.chat.id, shouldReplaceHistory: true, tabId });
+        }
+      });
     } else {
       const user = selectUser(global, id);
       if (user) {

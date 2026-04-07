@@ -9,7 +9,7 @@ import { MAIN_THREAD_ID } from '../../api/types';
 import { ManagementScreens } from '../../types';
 
 import { COCOON_EMOJI_ID, IS_CALLS_ENABLED } from '../../config';
-import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../lib/fasterdom/fasterdom';
 import {
   getIsSavedDialog,
   isAnonymousForwardsChat,
@@ -202,8 +202,8 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
 
     if (noAnimation) {
       // The second RAF is necessary because Teact must update the state and render the async component
-      requestMeasure(() => {
-        requestNextMutation(setFocusInSearchInput);
+      requestMutation(() => {
+        requestMeasure(setFocusInSearchInput);
       });
     } else {
       setFocusInSearchInput();

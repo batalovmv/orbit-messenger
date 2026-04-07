@@ -6,7 +6,7 @@ import {
 } from '../../lib/teact/teact';
 
 import { MIN_PASSWORD_LENGTH } from '../../config';
-import { requestMutation } from '../../lib/fasterdom/fasterdom';
+import { requestMeasure } from '../../lib/fasterdom/fasterdom';
 import { IS_TAURI } from '../../util/browser/globalEnvironment';
 import { IS_TOUCH_ENV } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
@@ -77,7 +77,7 @@ const PasswordForm: FC<OwnProps> = ({
 
   useEffect(() => {
     if (error) {
-      requestMutation(() => {
+      requestMeasure(() => {
         inputRef.current!.focus();
         inputRef.current!.select();
       });

@@ -14,7 +14,7 @@ import type {
 } from '../../../types';
 
 import { ANONYMOUS_USER_ID } from '../../../config';
-import { requestMeasure, requestMutation, requestNextMutation } from '../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../lib/fasterdom/fasterdom';
 import {
   getIsSavedDialog, getReactionKey, isChatGroup, isSameReaction, isSystemBot,
 } from '../../../global/helpers';
@@ -306,11 +306,13 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
     updateMiddleSearch({ chatId: chat.id, threadId, update: { requestedQuery: undefined } });
     setIsLoading(true);
 
-    requestNextMutation(() => {
-      const input = inputRef.current;
-      if (!input) return;
-      focusEditableElement(input, true, true);
-      markFocused();
+    requestMutation(() => {
+      requestMeasure(() => {
+        const input = inputRef.current;
+        if (!input) return;
+        focusEditableElement(input, true, true);
+        markFocused();
+      });
     });
   }, [chat?.id, requestedQuery, threadId]);
 

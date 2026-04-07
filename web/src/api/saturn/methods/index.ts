@@ -535,6 +535,23 @@ export async function fetchChat({
   type?: string;
   user?: Pick<ApiUser, 'id' | 'firstName' | 'lastName'>;
 } = {}) {
+  // Self-chat (Saved Messages): create/get DM with yourself
+  if (type === 'self') {
+    try {
+      const { createDirectChat, getCurrentUserId } = await import('./chats');
+      const selfId = getCurrentUserId();
+      if (selfId) {
+        const result = await createDirectChat({ userId: selfId });
+        if (result) {
+          return { chat: result.chat };
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return undefined;
+  }
+
   // When opening a DM with a user, create/get the direct chat
   if (type === 'user' && user) {
     try {
