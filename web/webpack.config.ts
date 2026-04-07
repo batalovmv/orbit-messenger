@@ -43,7 +43,7 @@ const CSP = `
   default-src 'self';
   connect-src 'self' https://*.saturn.ac wss://*.saturn.ac blob:
     ${APP_ENV === 'development' ? 'http://localhost:* ws://localhost:* ipc:' : ''};
-  script-src 'self' 'wasm-unsafe-eval';
+  script-src 'self' 'wasm-unsafe-eval'${APP_ENV === 'development' ? " 'unsafe-inline'" : ''};
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob:;
   media-src 'self' blob: data:;
@@ -118,7 +118,8 @@ export default function createConfig(
         },
       ],
       headers: {
-        'Content-Security-Policy': CSP,
+        // CSP is set via <meta> tag in index.html — no HTTP header needed.
+        // Duplicate headers cause the browser to enforce the most restrictive union.
       },
     },
 
