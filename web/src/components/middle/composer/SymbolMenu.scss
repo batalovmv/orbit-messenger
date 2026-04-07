@@ -185,6 +185,13 @@
   flex-direction: column;
   margin-bottom: 0.75rem;
 
+  // Prevent blocking mention/inline tooltips when SymbolMenu is closed
+  // useShowTransition puts .open on .bubble, not .Menu
+  .bubble:not(.open) & {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
   &-header {
     display: flex;
     align-items: center;
@@ -300,7 +307,7 @@
   text-align: initial;
 
   // Prevent blocking mention/inline tooltips when SymbolMenu is closed
-  .Menu:not(.open):not(.ReactionPicker) & {
+  .bubble:not(.open) & {
     pointer-events: none;
     visibility: hidden;
   }
