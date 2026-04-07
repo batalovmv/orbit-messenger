@@ -126,9 +126,10 @@ if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
           console.error('[SW] ServiceWorker not available');
         }
 
-        if (!IS_IOS && !IS_ANDROID && !IS_TEST) {
-          getActions().showDialog?.({ data: { message: 'SERVICE_WORKER_DISABLED', hasErrorKey: true } });
-        }
+        // Saturn uses REST for media, not SW streaming — skip the warning dialog
+        // if (!IS_IOS && !IS_ANDROID && !IS_TEST) {
+        //   getActions().showDialog?.({ data: { message: 'SERVICE_WORKER_DISABLED', hasErrorKey: true } });
+        // }
       }
     } catch (err) {
       if (DEBUG) {

@@ -260,8 +260,16 @@ addActionHandler('openChat', (global, actions, payload): ActionReturnType => {
           }
         });
       } else if (id && /^[0-9a-f]{8}-/.test(id)) {
-        // Saturn: UUID not found in users or chats — try fetching as group/channel
-        void callApi('fetchFullChat', { id });
+        // Saturn: UUID not found in users or chats — try fetching as user DM first, fall back to group/channel
+        void callApi('fetchChat', { type: 'user', user: { id } as ApiUser }).then((result) => {
+          if (result?.chat) {
+            actions.openChat({ id: result.chat.id, shouldReplaceHistory: true, tabId });
+          }
+        }).catch(() => {
+          void callApi('fetchFullChat', { id }).catch(() => {
+            // Neither user DM nor group/channel — ignore silently
+          });
+        });
       }
     }
   } else if (isChatOnlySummary && !chat.isMin) {

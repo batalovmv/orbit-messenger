@@ -116,7 +116,7 @@ const ReactionEmoji: FC<OwnProps> = ({
           withTranslucentThumb
           forceAlways={forcePlayback}
         />
-      ) : shouldUseStaticReaction ? (
+      ) : shouldUseStaticReaction || !tgsUrl ? (
         <ReactionStaticEmoji
           reaction={reaction}
           availableReaction={availableReaction}

@@ -69,12 +69,15 @@ const EmojiStatusAccessModal: FC<OwnProps & StateProps> = ({
   }, [isOpen, stickerSet, isAccountFrozen]);
 
   const mockPeerWithStatus = useMemo(() => {
-    if (!currentUser || !stickerSet?.stickers) return undefined;
+    if (!currentUser || !stickerSet?.stickers?.length) return undefined;
+    const safeIndex = currentStatusIndex % stickerSet.stickers.length;
+    const sticker = stickerSet.stickers[safeIndex];
+    if (!sticker) return undefined;
     return {
       ...currentUser,
       emojiStatus: {
         type: 'regular',
-        documentId: stickerSet.stickers[currentStatusIndex].id,
+        documentId: sticker.id,
       },
     } satisfies ApiUser;
   }, [currentUser, stickerSet, currentStatusIndex]);

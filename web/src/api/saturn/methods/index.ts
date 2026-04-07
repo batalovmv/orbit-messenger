@@ -81,7 +81,6 @@ export async function downloadMedia(
   const isPreview = size === 'm' || size === 's' || size === 'a';
 
   try {
-    const token = await ensureAuth();
     let asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
     const fallbackEndpoint = buildMediaEndpoint(assetRef.id, isPreview);
 
@@ -90,7 +89,10 @@ export async function downloadMedia(
       asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
     }
 
+    // Local assets (data: URLs, webpack bundles) don't need auth
     if (asset) {
+      const isLocalAsset = asset.url.startsWith('data:') || !asset.url.startsWith('http');
+      const token = isLocalAsset ? undefined : await ensureAuth();
       const result = await fetchBinary(asset.url, mediaFormat, token, asset.mimeType, onProgress, start, end);
       if (result) {
         return result;
@@ -105,6 +107,7 @@ export async function downloadMedia(
       return undefined;
     }
 
+    const token = await ensureAuth();
     return fetchBinary(
       `${getBaseUrl()}${fallbackEndpoint}`, mediaFormat, token, asset?.mimeType, onProgress, start, end,
     );

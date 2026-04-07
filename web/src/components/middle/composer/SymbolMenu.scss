@@ -300,7 +300,7 @@
   text-align: initial;
 
   // Prevent blocking mention/inline tooltips when SymbolMenu is closed
-  .Menu:not(.open) & {
+  .Menu:not(.open):not(.ReactionPicker) & {
     pointer-events: none;
   }
 

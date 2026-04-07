@@ -87,7 +87,8 @@ async function ensureToken() {
 
 async function refreshToken(): Promise<void> {
   try {
-    const response = await fetch(`${baseUrl}/auth/refresh`, {
+    const url = baseUrl || `${window.location.origin}/api/v1`;
+    const response = await fetch(`${url}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -139,7 +140,8 @@ export async function request<T>(
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  const effectiveBase = baseUrl || `${window.location.origin}/api/v1`;
+  const response = await fetch(`${effectiveBase}${path}`, {
     method,
     headers,
     credentials: 'include',
