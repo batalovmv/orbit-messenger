@@ -58,6 +58,25 @@ export function selectDmPeerUserId<T extends GlobalState>(global: T, chatId: str
   return chat?.peerUserId || (selectUser(global, chatId) ? chatId : undefined);
 }
 
+// Saturn: reverse lookup — find DM chat by the peer's userId.
+// In TG Web A selectChat(global, userId) works because chatId === userId for DMs.
+// In Saturn we need to scan chats for one with matching peerUserId.
+export function selectChatByPeerUserId<T extends GlobalState>(global: T, userId: string) {
+  // Fast path: if userId is itself a chatId (TG-style)
+  const direct = global.chats.byId[userId];
+  if (direct) return direct;
+
+  // Saturn: scan for DM chat with this peerUserId
+  const chatsById = global.chats.byId;
+  for (const chatId of Object.keys(chatsById)) {
+    const chat = chatsById[chatId];
+    if (chat.type === 'chatTypePrivate' && chat.peerUserId === userId) {
+      return chat;
+    }
+  }
+  return undefined;
+}
+
 export function selectIsChatWithBot<T extends GlobalState>(global: T, chatId: string) {
   const userId = selectDmPeerUserId(global, chatId) || chatId;
   const user = selectUser(global, userId);

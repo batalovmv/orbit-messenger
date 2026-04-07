@@ -13,6 +13,7 @@ import { isUserBot } from '../../../global/helpers';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
 import {
   selectChat,
+  selectChatByPeerUserId,
   selectNotifyDefaults,
   selectNotifyException,
   selectTabState,
@@ -343,7 +344,7 @@ const ManageUser: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global, { userId }): Complete<StateProps> => {
     const user = selectUser(global, userId);
-    const chat = selectChat(global, userId);
+    const chat = selectChat(global, userId) || selectChatByPeerUserId(global, userId);
     const userFullInfo = selectUserFullInfo(global, userId);
     const { progress } = selectTabState(global).management;
     const isMuted = chat && getIsChatMuted(chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id));

@@ -114,6 +114,7 @@ import {
 import {
   selectCanForwardMessage,
   selectChat,
+  selectChatByPeerUserId,
   selectChatFullInfo,
   selectChatLastMessageId,
   selectChatMessage,
@@ -589,7 +590,7 @@ addActionHandler('sendInviteMessages', async (global, actions, payload): Promise
   }
   const userFullNames: string[] = [];
   await Promise.all(userIds.map((userId) => {
-    const chat = selectChat(global, userId);
+    const chat = selectChat(global, userId) || selectChatByPeerUserId(global, userId);
     if (!chat) {
       return Promise.resolve(undefined);
     }

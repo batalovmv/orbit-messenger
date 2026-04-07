@@ -13,6 +13,7 @@ import {
 import { getUserFullName } from '../../global/helpers';
 import {
   selectChat,
+  selectChatByPeerUserId,
   selectChatLastMessageId,
   selectCurrentMessageList,
   selectUser,
@@ -126,7 +127,7 @@ const ContactGreeting: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global, { userId }): Complete<StateProps> => {
     const { stickers } = global.stickers.greeting;
-    const chat = selectChat(global, userId);
+    const chat = selectChat(global, userId) || selectChatByPeerUserId(global, userId);
     if (!chat) {
       return {} as Complete<StateProps>;
     }

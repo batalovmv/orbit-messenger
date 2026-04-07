@@ -911,7 +911,7 @@ export default memo(withGlobal<OwnProps>(
     const photoChangeDate = userFullInfo?.settings?.photoChangeDate;
 
     const topic = selectTopic(global, chatId, threadId);
-    const chatFullInfo = !isUserId(chatId) ? selectChatFullInfo(global, chatId) : undefined;
+    const chatFullInfo = selectChatFullInfo(global, chatId);
     const isEmptyThread = !selectThreadInfo(global, chatId, threadId)?.messagesCount;
 
     const isAccountFrozen = selectIsCurrentUserFrozen(global);

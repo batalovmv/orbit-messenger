@@ -2832,7 +2832,7 @@ addActionHandler('loadBotRecommendations', async (global, actions, payload): Pro
   if (selectIsCurrentUserFrozen(global)) return;
 
   const { userId } = payload;
-  const user = selectChat(global, userId);
+  const user = selectUser(global, userId);
 
   if (!user) {
     return;
