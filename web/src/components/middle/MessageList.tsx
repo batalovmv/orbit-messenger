@@ -907,13 +907,18 @@ export default memo(withGlobal<OwnProps>(
       && !messageIds && readState && !readState.unreadCount && !focusingId && lastMessage && !lastMessage.groupedId
     );
 
-    const chatBot = selectBot(global, chatId);
-    const isNonContact = Boolean(userFullInfo?.settings?.canAddContact);
+    const chatBot = selectBot(global, peerUserId || chatId);
+    // Saturn: userFullInfo is now correctly resolved via peerUserId, but isNonContact
+    // must NOT trigger Content.AccountInfo for regular DM chats — only for TG-style
+    // where chatId === userId and fullInfo was always available.
+    const isNonContact = !peerUserId && Boolean(userFullInfo?.settings?.canAddContact);
     const nameChangeDate = userFullInfo?.settings?.nameChangeDate;
     const photoChangeDate = userFullInfo?.settings?.photoChangeDate;
 
     const topic = selectTopic(global, chatId, threadId);
-    const chatFullInfo = selectChatFullInfo(global, chatId);
+    // Guard: chatFullInfo only for groups/channels — DM chats don't have it and loading
+    // it causes channelJoinInfo instability in the messageGroups useMemo.
+    const chatFullInfo = chat.type !== 'chatTypePrivate' ? selectChatFullInfo(global, chatId) : undefined;
     const isEmptyThread = !selectThreadInfo(global, chatId, threadId)?.messagesCount;
 
     const isAccountFrozen = selectIsCurrentUserFrozen(global);

@@ -2070,15 +2070,18 @@ addActionHandler('addChatMembers', async (global, actions, payload): Promise<voi
   }
 
   actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Loading, tabId });
-  const missingUsers = await callApi('addChatMembers', { chatId: chat.id, userIds: users.map((u) => u.id) });
-  if (missingUsers) {
+  try {
+    const missingUsers = await callApi('addChatMembers', { chatId: chat.id, userIds: users.map((u) => u.id) });
+    if (missingUsers) {
+      global = getGlobal();
+      global = updateMissingInvitedUsers(global, chatId, missingUsers, tabId);
+      setGlobal(global);
+    }
+  } finally {
+    actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Closed, tabId });
     global = getGlobal();
-    global = updateMissingInvitedUsers(global, chatId, missingUsers, tabId);
-    setGlobal(global);
+    loadFullChat(global, actions, chat);
   }
-  actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Closed, tabId });
-  global = getGlobal();
-  loadFullChat(global, actions, chat);
 });
 
 addActionHandler('deleteChatMember', async (global, actions, payload): Promise<void> => {
