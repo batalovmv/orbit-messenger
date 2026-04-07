@@ -8,7 +8,6 @@ import { ManagementScreens } from '../../../types';
 import { selectCurrentManagementType } from '../../../global/selectors';
 
 import ManageBot from './ManageBot';
-import ManageChannel from './ManageChannel';
 import ManageChatAdministrators from './ManageChatAdministrators';
 import ManageChatPrivacyType from './ManageChatPrivacyType';
 import ManageChatRemovedUsers from './ManageChatRemovedUsers';
@@ -95,25 +94,8 @@ const Management: FC<OwnProps & StateProps> = ({
               ].includes(currentScreen)}
             />
           );
-        case 'channel':
-          return (
-            <ManageChannel
-              key={chatId}
-              chatId={chatId}
-              onScreenSelect={onScreenSelect}
-              onClose={onClose}
-              isActive={isActive || [
-                ManagementScreens.ChannelSubscribers,
-                ManagementScreens.ChatAdministrators,
-                ManagementScreens.ChannelRemovedUsers,
-                ManagementScreens.Discussion,
-                ManagementScreens.ChatPrivacyType,
-                ManagementScreens.ChatAdminRights,
-                ManagementScreens.ChatNewAdminRights,
-                ManagementScreens.GroupRecentActions,
-              ].includes(currentScreen)}
-            />
-          );
+        default:
+          return undefined;
       }
 
       break;

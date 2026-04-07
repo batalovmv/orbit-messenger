@@ -1524,7 +1524,7 @@ export function deleteMessages<T extends GlobalState>(
       }
 
       if (message.content.action?.type === 'chatEditPhoto' && message.content.action.photo) {
-        global = deletePeerPhoto(global, chatId, message.content.action.photo.id, true);
+        global = deletePeerPhoto(global, chatId, message.content.action.photo.id);
       }
 
       const threadId = selectThreadIdFromMessage(global, message);
@@ -1605,7 +1605,7 @@ export function deleteMessages<T extends GlobalState>(
       }
 
       if (message?.content.action?.type === 'chatEditPhoto' && message.content.action.photo) {
-        global = deletePeerPhoto(global, commonBoxChatId, message.content.action.photo.id, true);
+        global = deletePeerPhoto(global, commonBoxChatId, message.content.action.photo.id);
       }
 
       const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);

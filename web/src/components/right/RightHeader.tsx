@@ -11,7 +11,7 @@ import { ManagementScreens, ProfileState, SettingsScreens } from '../../types';
 
 import { ANIMATION_END_DELAY, SAVED_FOLDER_ID } from '../../config';
 import {
-  getCanAddContact, getCanManageTopic, isChatChannel, isUserBot,
+  getCanAddContact, getCanManageTopic, isUserBot,
 } from '../../global/helpers';
 import {
   selectCanManage,
@@ -75,7 +75,6 @@ type StateProps = {
   canAddContact?: boolean;
   canManage?: boolean;
   canViewStatistics?: boolean;
-  isChannel?: boolean;
   userId?: string;
   isSelf?: boolean;
   stickerSearchQuery?: string;
@@ -158,7 +157,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   userId,
   isSelf,
   canManage,
-  isChannel,
   stickerSearchQuery,
   gifSearchQuery,
   isEditingInvite,
@@ -353,10 +351,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       return oldLang('AccDescrTopic');
     }
 
-    if (isChannel) {
-      return oldLang('ChannelInfo');
-    }
-
     if (userId) {
       return oldLang(isBot ? 'lng_info_bot_title' : 'lng_info_user_title');
     }
@@ -388,11 +382,11 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       case HeaderContent.PollResults:
         return <h3 className="title">{oldLang('PollResults')}</h3>;
       case HeaderContent.AddingMembers:
-        return <h3 className="title">{oldLang(isChannel ? 'ChannelAddSubscribers' : 'GroupAddMembers')}</h3>;
+        return <h3 className="title">{oldLang('GroupAddMembers')}</h3>;
       case HeaderContent.ManageInitial:
         return <h3 className="title">{oldLang('Edit')}</h3>;
       case HeaderContent.ManageChatPrivacyType:
-        return <h3 className="title">{oldLang(isChannel ? 'ChannelTypeHeader' : 'GroupTypeHeader')}</h3>;
+        return <h3 className="title">{oldLang('GroupTypeHeader')}</h3>;
       case HeaderContent.ManageDiscussion:
         return <h3 className="title">{oldLang('Discussion')}</h3>;
       case HeaderContent.ManageChatAdministrators:
@@ -457,7 +451,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
           </>
         );
       case HeaderContent.ManageJoinRequests:
-        return <h3 className="title">{isChannel ? oldLang('SubscribeRequests') : oldLang('MemberRequests')}</h3>;
+        return <h3 className="title">{oldLang('MemberRequests')}</h3>;
       case HeaderContent.ManageGroupAddAdmins:
         return <h3 className="title">{oldLang('Channel.Management.AddModerator')}</h3>;
       case HeaderContent.StickerSearch:
@@ -479,7 +473,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
           />
         );
       case HeaderContent.Statistics:
-        return <h3 className="title">{oldLang(isChannel ? 'ChannelStats.Title' : 'GroupStats.Title')}</h3>;
+        return <h3 className="title">{oldLang('GroupStats.Title')}</h3>;
       case HeaderContent.MessageStatistics:
         return <h3 className="title">{oldLang('Stats.MessageTitle')}</h3>;
       case HeaderContent.StoryStatistics:
@@ -735,7 +729,6 @@ export default withGlobal<OwnProps>(
       ? (chat?.peerUserId || (isUserId(chatId) ? chatId : undefined))
       : undefined;
     const user = resolvedUserId ? selectUser(global, resolvedUserId) : undefined;
-    const isChannel = chat && isChatChannel(chat);
     const isInsideTopic = chat?.isForum && Boolean(threadId && threadId !== MAIN_THREAD_ID);
     const topic = isInsideTopic ? selectTopic(global, chatId!, threadId!) : undefined;
     const canEditTopic = isInsideTopic && topic && getCanManageTopic(chat, topic);
@@ -762,7 +755,6 @@ export default withGlobal<OwnProps>(
       canManage,
       canAddContact,
       canViewStatistics,
-      isChannel,
       isBot,
       isInsideTopic,
       canEditTopic,

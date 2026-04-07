@@ -22,7 +22,6 @@ import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
 
 export type OwnProps = {
-  isChannel?: boolean;
   isActive: boolean;
   memberIds: string[];
   onReset: (forceReturnToChatList?: boolean) => void;
@@ -37,7 +36,6 @@ type StateProps = {
 const MAX_MEMBERS_FOR_GENERATE_CHAT_NAME = 4;
 
 const NewChatStep2: FC<OwnProps & StateProps> = ({
-  isChannel,
   isActive,
   memberIds,
   maxGroupSize,
@@ -47,7 +45,6 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
 }) => {
   const {
     createGroupChat,
-    createChannel,
   } = getActions();
 
   const lang = useOldLang();
@@ -58,19 +55,17 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
   });
 
   const [title, setTitle] = useState('');
-  const [about, setAbout] = useState('');
   const [photo, setPhoto] = useState<File | undefined>();
   const [error, setError] = useState<string | undefined>();
   const hasManualTitle = useRef(false);
 
   const chatTitleEmptyError = 'Chat title can\'t be empty';
-  const channelTitleEmptyError = 'Channel title can\'t be empty';
   const chatTooManyUsersError = 'Sorry, creating supergroups is not yet supported';
 
   const isLoading = creationProgress === ChatCreationProgress.InProgress;
 
   useEffect(() => {
-    if (isChannel || hasManualTitle.current) {
+    if (hasManualTitle.current) {
       return;
     }
     if (!memberIds.length || memberIds.length > MAX_MEMBERS_FOR_GENERATE_CHAT_NAME) {
@@ -89,7 +84,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
       + lastDelimiter
       + memberFirstNames[memberFirstNames.length - 1];
     setTitle(generatedChatName);
-  }, [isChannel, memberIds, lang]);
+  }, [memberIds, lang]);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { value } = e.currentTarget;
@@ -101,10 +96,6 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
     if (newValue !== value) {
       e.currentTarget.value = newValue;
     }
-  }, []);
-
-  const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setAbout(e.currentTarget.value);
   }, []);
 
   const handleCreateGroup = useCallback(() => {
@@ -125,21 +116,6 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
     });
   }, [title, memberIds, maxGroupSize, createGroupChat, photo]);
 
-  const handleCreateChannel = useCallback(() => {
-    if (!title.length) {
-      setError(channelTitleEmptyError);
-      return;
-    }
-
-    createChannel({
-      title,
-      about,
-      photo,
-      memberIds,
-      isChannel: true,
-    });
-  }, [title, createChannel, about, photo, memberIds, channelTitleEmptyError]);
-
   useEffect(() => {
     if (creationProgress === ChatCreationProgress.Complete) {
       onReset(true);
@@ -147,7 +123,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
   }, [creationProgress, onReset]);
 
   const renderedError = (creationError && lang(creationError)) || (
-    error !== chatTitleEmptyError && error !== channelTitleEmptyError
+    error !== chatTitleEmptyError
       ? error
       : undefined
   );
@@ -163,7 +139,7 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
           ariaLabel="Return to member selection"
           iconName="arrow-left"
         />
-        <h3>{lang(isChannel ? 'NewChannel' : 'NewGroup')}</h3>
+        <h3>{lang('NewGroup')}</h3>
       </div>
       <div className="NewChat-inner step-2">
         <AvatarEditable
@@ -173,19 +149,9 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
         <InputText
           value={title}
           onChange={handleTitleChange}
-          label={lang(isChannel ? 'EnterChannelName' : 'GroupName')}
-          error={error === chatTitleEmptyError || error === channelTitleEmptyError ? error : undefined}
+          label={lang('GroupName')}
+          error={error === chatTitleEmptyError ? error : undefined}
         />
-        {isChannel && (
-          <>
-            <InputText
-              value={about}
-              onChange={handleDescriptionChange}
-              label={lang('DescriptionOptionalPlaceholder')}
-            />
-            <p className="note">{lang('DescriptionInfo')}</p>
-          </>
-        )}
 
         {renderedError && (
           <p className="error">{renderedError}</p>
@@ -208,9 +174,9 @@ const NewChatStep2: FC<OwnProps & StateProps> = ({
 
       <FloatingActionButton
         isShown={title.length !== 0}
-        onClick={isChannel ? handleCreateChannel : handleCreateGroup}
+        onClick={handleCreateGroup}
         disabled={isLoading}
-        ariaLabel={isChannel ? lang('ChannelIntro.CreateChannel') : 'Create Group'}
+        ariaLabel="Create Group"
         iconName="arrow-right"
         isLoading={isLoading}
       />

@@ -54,7 +54,6 @@ const ChatReportPane: FC<OwnProps & StateProps> = ({
     blockUser,
     reportSpam,
     deleteChat,
-    leaveChannel,
     deleteChatUser,
     deleteHistory,
     toggleChatArchived,
@@ -101,12 +100,8 @@ const ChatReportPane: FC<OwnProps & StateProps> = ({
   const handleChatReportSpam = useLastCallback(() => {
     closeBlockUserModal();
     reportSpam({ chatId });
-    if (isBasicGroup) {
-      deleteChatUser({ chatId, userId: currentUserId! });
-      deleteHistory({ chatId, shouldDeleteForAll: false });
-    } else {
-      leaveChannel({ chatId });
-    }
+    deleteChatUser({ chatId, userId: currentUserId! });
+    deleteHistory({ chatId, shouldDeleteForAll: false });
   });
 
   const hasAnyButton = canAddContact || canBlockContact || canReportSpam;

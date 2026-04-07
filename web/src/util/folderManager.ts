@@ -668,8 +668,6 @@ function isChatInFolder(
         return true;
       }
     }
-  } else if (type === 'chatTypeChannel') {
-    return Boolean(folderSummary.channels);
   } else if (type === 'chatTypeBasicGroup' || type === 'chatTypeSuperGroup') {
     return Boolean(folderSummary.groups);
   }

@@ -6,7 +6,7 @@ import type { ApiChat, ApiPeer } from '../../api/types';
 import type { MediaViewerItem } from './helpers/getViewableMedia';
 
 import {
-  isChatChannel, isChatGroup,
+  isChatGroup,
 } from '../../global/helpers';
 import { getPeerTitle } from '../../global/helpers/peers';
 import {
@@ -86,13 +86,11 @@ const SenderInfo: FC<OwnProps & StateProps> = ({
     const parts: string[] = [];
     if (avatar) {
       const chat = !isUserId(avatarOwner!.id) ? avatarOwner as ApiChat : undefined;
-      const isChannel = chat && isChatChannel(chat);
       const isGroup = chat && isChatGroup(chat);
       parts.push(lang(
         isPersonalAvatar ? 'lng_mediaview_profile_photo_by_you'
           : isFallbackAvatar ? 'lng_mediaview_profile_public_photo'
-            : isChannel ? 'lng_mediaview_channel_photo'
-              : isGroup ? 'lng_mediaview_group_photo' : 'lng_mediaview_profile_photo',
+            : isGroup ? 'lng_mediaview_group_photo' : 'lng_mediaview_profile_photo',
       ));
     }
 

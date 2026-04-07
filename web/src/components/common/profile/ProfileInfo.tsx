@@ -18,7 +18,7 @@ import { MediaViewerOrigin } from '../../../types/index';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config.ts';
 import {
-  getUserStatus, isAnonymousForwardsChat, isChatChannel, isSystemBot, isUserOnline,
+  getUserStatus, isAnonymousForwardsChat, isSystemBot, isUserOnline,
 } from '../../../global/helpers/index';
 import { getActions, withGlobal } from '../../../global/index';
 import {
@@ -445,11 +445,7 @@ const ProfileInfo = ({
         dir="auto"
         style={createVtnStyle('status', true)}
       >
-        {
-          isChatChannel(chat!)
-            ? lang('Subscribers', { count: chat!.membersCount ?? 0 }, { pluralValue: chat!.membersCount ?? 0 })
-            : lang('NMembers', { count: chat!.membersCount ?? 0 }, { pluralValue: chat!.membersCount ?? 0 })
-        }
+        {lang('NMembers', { count: chat!.membersCount ?? 0 }, { pluralValue: chat!.membersCount ?? 0 })}
       </span>
     );
   }

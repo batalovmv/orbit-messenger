@@ -19,7 +19,6 @@ import {
   getMainUsername,
   isAnonymousForwardsChat,
   isAnonymousOwnMessage,
-  isChatChannel,
   isSystemBot,
 } from '../../../global/helpers';
 import { isApiPeerUser } from '../../../global/helpers/peers';
@@ -60,7 +59,6 @@ type StateProps = {
   isChatWithSelf?: boolean;
   isRepliesChat?: boolean;
   isAnonymousForwards?: boolean;
-  isChannel?: boolean;
 };
 
 const SenderGroupContainer: FC<OwnProps & StateProps> = ({
@@ -75,7 +73,6 @@ const SenderGroupContainer: FC<OwnProps & StateProps> = ({
   isChatWithSelf,
   isRepliesChat,
   isAnonymousForwards,
-  isChannel,
   canPost,
 }) => {
   const { openChat, updateInsertingPeerIdMention, openMiddleSearch } = getActions();
@@ -154,7 +151,7 @@ const SenderGroupContainer: FC<OwnProps & StateProps> = ({
   const getLayout = useLastCallback(() => ({ withPortal: true }));
 
   const canMention = canPost && avatarPeer && (isAvatarPeerUser || Boolean(getMainUsername(avatarPeer)));
-  const canSearch = !isChannel;
+  const canSearch = true;
   const shouldRenderContextMenu = Boolean(contextMenuAnchor) && (isAvatarPeerUser || canMention || canSearch);
 
   function renderContextMenu() {
@@ -259,7 +256,6 @@ export default memo(withGlobal<OwnProps>(
       isChatWithSelf,
       isRepliesChat: isSystemBotChat,
       isAnonymousForwards,
-      isChannel: chat && isChatChannel(chat),
     };
   },
 )(SenderGroupContainer));

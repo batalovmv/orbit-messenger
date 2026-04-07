@@ -269,7 +269,7 @@ function buildApiMessagePublicForward(message: GramJs.TypeMessage, chats: GramJs
     title: (channel as GramJs.Channel).title,
     chat: {
       id: peerId,
-      type: 'chatTypeChannel',
+      type: 'chatTypeSuperGroup',
       title: (channel as GramJs.Channel).title,
       usernames: buildApiUsernames(channel as GramJs.Channel),
       avatarPhotoId: channelProfilePhoto && buildAvatarPhotoId(channelProfilePhoto),

@@ -58,121 +58,6 @@ func groupChatStore(chatID uuid.UUID) *mockChatStore {
 // ---------------------------------------------------------------------------
 // Channel anonymous posting
 // ---------------------------------------------------------------------------
-
-func TestSendMessage_ChannelNoSignatures_AnonymousSender(t *testing.T) {
-	chatID := uuid.New()
-	senderID := uuid.New()
-	rec := &RecordingPublisher{}
-
-	cs := &mockChatStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1, IsSignatures: false}, nil
-		},
-		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
-		},
-		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return []string{senderID.String()}, nil
-		},
-	}
-	ms := &mockMessageStore{
-		createFn: func(_ context.Context, msg *model.Message) error {
-			msg.ID = uuid.New()
-			msg.CreatedAt = time.Now()
-			return nil
-		},
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
-			content := "Breaking news"
-			return &model.Message{
-				ID:         uuid.New(),
-				ChatID:     chatID,
-				SenderID:   &senderID,
-				Content:    &content,
-				SenderName: "Admin User",
-			}, nil
-		},
-	}
-
-	svc := newTestMessageService(ms, cs, rec, nil)
-	_, err := svc.SendMessage(context.Background(), chatID, senderID, "Breaking news", nil, nil, "text")
-	if err != nil {
-		t.Fatalf("SendMessage: %v", err)
-	}
-
-	events := rec.FindByEvent("new_message")
-	if len(events) != 1 {
-		t.Fatalf("expected 1 new_message event, got %d", len(events))
-	}
-
-	// The data should be a *model.Message with nil SenderID (anonymous)
-	msg, ok := events[0].Data.(*model.Message)
-	if !ok {
-		t.Fatalf("event data should be *model.Message, got %T", events[0].Data)
-	}
-	if msg.SenderID != nil {
-		t.Error("channel without signatures should have nil SenderID in NATS event")
-	}
-	if msg.SenderName != "" {
-		t.Error("channel without signatures should have empty SenderName in NATS event")
-	}
-}
-
-func TestSendMessage_ChannelWithSignatures_RealSender(t *testing.T) {
-	chatID := uuid.New()
-	senderID := uuid.New()
-	rec := &RecordingPublisher{}
-
-	cs := &mockChatStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1, IsSignatures: true}, nil
-		},
-		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
-		},
-		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return []string{senderID.String()}, nil
-		},
-	}
-	ms := &mockMessageStore{
-		createFn: func(_ context.Context, msg *model.Message) error {
-			msg.ID = uuid.New()
-			msg.CreatedAt = time.Now()
-			return nil
-		},
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
-			content := "Signed post"
-			return &model.Message{
-				ID:         uuid.New(),
-				ChatID:     chatID,
-				SenderID:   &senderID,
-				Content:    &content,
-				SenderName: "Admin",
-			}, nil
-		},
-	}
-
-	svc := newTestMessageService(ms, cs, rec, nil)
-	_, err := svc.SendMessage(context.Background(), chatID, senderID, "Signed post", nil, nil, "text")
-	if err != nil {
-		t.Fatalf("SendMessage: %v", err)
-	}
-
-	events := rec.FindByEvent("new_message")
-	if len(events) != 1 {
-		t.Fatalf("expected 1 new_message, got %d", len(events))
-	}
-	msg, ok := events[0].Data.(*model.Message)
-	if !ok {
-		t.Fatalf("event data should be *model.Message, got %T", events[0].Data)
-	}
-	if msg.SenderID == nil {
-		t.Error("channel with signatures should have real SenderID in NATS event")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // @Mention events
 // ---------------------------------------------------------------------------
 
@@ -342,31 +227,6 @@ func TestSendMessage_SlowMode_AdminBypass(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Channel permission: member cannot send
-// ---------------------------------------------------------------------------
-
-func TestSendMessage_ChannelMember_Forbidden(t *testing.T) {
-	chatID := uuid.New()
-	memberID := uuid.New()
-	rec := &RecordingPublisher{}
-
-	cs := &mockChatStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1}, nil
-		},
-		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "member", Permissions: -1}, nil
-		},
-	}
-	ms := &mockMessageStore{}
-
-	svc := newTestMessageService(ms, cs, rec, nil)
-	_, err := svc.SendMessage(context.Background(), chatID, memberID, "test", nil, nil, "text")
-	msgAssertAppError(t, err, 403)
-}
-
-// ---------------------------------------------------------------------------
 // Member with restricted permissions
 // ---------------------------------------------------------------------------
 
@@ -390,42 +250,6 @@ func TestSendMessage_MemberWithoutSendPerm_Forbidden(t *testing.T) {
 	svc := newTestMessageService(ms, cs, rec, nil)
 	_, err := svc.SendMessage(context.Background(), chatID, memberID, "test", nil, nil, "text")
 	msgAssertAppError(t, err, 403)
-}
-
-func TestSendMessage_OwnerCanPostInChannel(t *testing.T) {
-	chatID := uuid.New()
-	ownerID := uuid.New()
-	rec := &RecordingPublisher{}
-
-	cs := &mockChatStore{
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Chat, error) {
-			name := "News"
-			return &model.Chat{ID: chatID, Type: "channel", Name: &name, DefaultPermissions: -1}, nil
-		},
-		getMemberFn: func(_ context.Context, _, _ uuid.UUID) (*model.ChatMember, error) {
-			return &model.ChatMember{Role: "owner", Permissions: -1}, nil
-		},
-		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return []string{ownerID.String()}, nil
-		},
-	}
-	ms := &mockMessageStore{
-		createFn: func(_ context.Context, msg *model.Message) error {
-			msg.ID = uuid.New()
-			msg.CreatedAt = time.Now()
-			return nil
-		},
-		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
-			content := "owner post"
-			return &model.Message{ID: uuid.New(), ChatID: chatID, SenderID: &ownerID, Content: &content}, nil
-		},
-	}
-
-	svc := newTestMessageService(ms, cs, rec, nil)
-	_, err := svc.SendMessage(context.Background(), chatID, ownerID, "owner post", nil, nil, "text")
-	if err != nil {
-		t.Fatalf("owner should always be able to post in channel: %v", err)
-	}
 }
 
 func TestSendMessage_DirectChatMember_AllowedWithDirectDefaults(t *testing.T) {

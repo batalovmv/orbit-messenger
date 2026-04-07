@@ -12,7 +12,7 @@ import {
 } from '../../../config';
 import {
   getMainUsername,
-  getMessageInvoice, getMessageTextWithFallback, isChatChannel,
+  getMessageInvoice, getMessageTextWithFallback,
 } from '../../../global/helpers';
 import { getMessageContent } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
@@ -102,7 +102,6 @@ const ActionMessageText = ({
     const isServiceNotificationsChat = chatId === SERVICE_NOTIFICATIONS_USER_ID;
     const isSavedMessages = chatId === currentUserId;
 
-    const isChannel = chat && isChatChannel(chat);
     const senderTitle = sender && getPeerTitle(lang, sender);
     const chatTitle = chat && getPeerTitle(lang, chat);
 
@@ -191,17 +190,14 @@ const ActionMessageText = ({
 
       case 'chatEditTitle': {
         const { title } = action;
-        if (isChannel) return lang('ActionChangedTitleChannel', { title });
         return translateWithYou(lang, 'ActionChangedTitle', isOutgoing, { title, from: senderLink });
       }
 
       case 'chatDeletePhoto':
-        return isChannel ? lang('ActionRemovedPhotoChannel')
-          : translateWithYou(lang, 'ActionRemovedPhoto', isOutgoing, { from: senderLink });
+        return translateWithYou(lang, 'ActionRemovedPhoto', isOutgoing, { from: senderLink });
 
       case 'chatEditPhoto':
-        return isChannel ? lang('ActionChangedPhotoChannel')
-          : translateWithYou(lang, 'ActionChangedPhoto', isOutgoing, { from: senderLink });
+        return translateWithYou(lang, 'ActionChangedPhoto', isOutgoing, { from: senderLink });
 
       case 'chatCreate': {
         const { title } = action;
@@ -210,8 +206,7 @@ const ActionMessageText = ({
 
       case 'channelCreate': {
         const { title } = action;
-        return isChannel ? lang('ActionCreatedChannel')
-          : translateWithYou(lang, 'ActionCreatedChat', isOutgoing, { title, from: senderLink });
+        return translateWithYou(lang, 'ActionCreatedChat', isOutgoing, { title, from: senderLink });
       }
 
       case 'chatMigrateTo': {
@@ -405,14 +400,14 @@ const ActionMessageText = ({
 
         if (stars) {
           return lang(
-            isChannel ? 'ActionGiveawayStarsStarted' : 'ActionGiveawayStarsStartedGroup',
+            'ActionGiveawayStarsStartedGroup',
             { from: senderLink, amount: renderStrong(formatStarsAsText(lang, stars)) },
             { withNodes: true },
           );
         }
 
         return lang(
-          isChannel ? 'ActionGiveawayStarted' : 'ActionGiveawayStartedGroup',
+          'ActionGiveawayStartedGroup',
           { from: senderLink },
           { withNodes: true },
         );
@@ -462,15 +457,11 @@ const ActionMessageText = ({
         const { duration } = action;
         const durationText = duration ? formatShortDuration(lang, duration) : undefined;
         if (durationText) {
-          if (isChannel) {
-            return lang('ActionGroupCallFinishedChannel', { duration: durationText });
-          }
           return lang(
             'ActionGroupCallFinishedGroup', { from: senderLink, duration: durationText }, { withNodes: true },
           );
         }
 
-        if (isChannel) return lang('ActionGroupCallStartedChannel');
         return lang('ActionGroupCallStartedGroup', { from: senderLink }, { withNodes: true });
       }
 
@@ -478,7 +469,6 @@ const ActionMessageText = ({
         const { scheduleDate } = action;
         const formattedDate = formatDateTimeToString(scheduleDate * 1000, lang.code, true);
 
-        if (isChannel) return lang('ActionGroupCallScheduledChannel', { date: formattedDate });
         return lang('ActionGroupCallScheduledGroup', { from: senderLink, date: formattedDate }, { withNodes: true });
       }
 
@@ -785,15 +775,8 @@ const ActionMessageText = ({
         return action.message;
 
       case 'paidMessagesPrice': {
-        const { stars, isAllowedInChannel } = action;
+        const { stars } = action;
         if (stars === 0) {
-          if (isChannel) {
-            return lang(
-              isAllowedInChannel ? 'ActionMessageChannelFree' : 'ActionMessageChannelDisabled',
-              { peer: chatLink },
-              { withNodes: true },
-            );
-          }
           return translateWithYou(lang, 'ActionPaidMessagePriceFree', isOutgoing, { peer: senderLink });
         }
         return translateWithYou(lang, 'ActionPaidMessagePrice', isOutgoing, {

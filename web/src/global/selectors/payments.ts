@@ -3,9 +3,6 @@ import type { GlobalState, TabArgs } from '../types';
 import { DEFAULT_GIFT_PROFILE_FILTER_OPTIONS } from '../../config';
 import { areRecordsShallowEqual } from '../../util/areShallowEqual';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
-import {
-  getHasAdminRight, isChatAdmin, isChatChannel,
-} from '../helpers';
 import { selectChat } from './chats';
 import { selectTabState } from './tabs';
 import { selectUser } from './users';
@@ -71,17 +68,15 @@ export function selectSmartGlocalCredentials<T extends GlobalState>(
 export function selectCanUseGiftProfileAdminFilter<T extends GlobalState>(
   global: T, peerId: string,
 ) {
-  const chat = selectChat(global, peerId);
   const isCurrentUser = global.currentUserId === peerId;
-  return isCurrentUser || (chat && isChatChannel(chat) && isChatAdmin(chat) && getHasAdminRight(chat, 'postMessages'));
+  return isCurrentUser;
 }
 
 export function selectCanUseGiftProfileFilter<T extends GlobalState>(
   global: T, peerId: string,
 ) {
-  const chat = selectChat(global, peerId);
   const user = selectUser(global, peerId);
-  return Boolean(user) || (chat && isChatChannel(chat));
+  return Boolean(user);
 }
 
 export function selectGiftProfileFilter<T extends GlobalState>(

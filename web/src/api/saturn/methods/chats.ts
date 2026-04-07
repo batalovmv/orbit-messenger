@@ -253,15 +253,6 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
   };
 }
 
-export function fetchChannelRecommendations({ chat }: { chat?: ApiChat }) {
-  void chat;
-
-  return Promise.resolve({
-    similarChannels: [] as ApiChat[],
-    count: 0,
-  });
-}
-
 export async function createDirectChat({ userId }: { userId: string }) {
   const chat = await client.request<SaturnChat>(
     'POST', '/chats/direct', { user_id: userId },
@@ -355,27 +346,6 @@ function resolveChatId({ chatId, chat }: { chatId?: string; chat?: Pick<ApiChat,
   }
 
   return resolvedChatId;
-}
-
-export async function createChannel({
-  title,
-  about,
-  memberIds,
-}: {
-  title: string;
-  about?: string;
-  memberIds?: string[];
-}) {
-  const data = await client.request<SaturnChat>('POST', '/chats', {
-    type: 'channel',
-    name: title,
-    description: about || '',
-    member_ids: memberIds || [],
-  });
-  if (!data) return undefined;
-  const chat = buildApiChat(data);
-  sendApiUpdate({ '@type': 'updateChat', id: chat.id, chat });
-  return { chat };
 }
 
 export async function editChatTitle({ chatId, title }: { chatId: string; title: string }) {

@@ -10,7 +10,7 @@ import type {
   ApiAvailableReaction, ApiChat, ApiChatReactions, ApiReaction,
 } from '../../../api/types';
 
-import { isChatChannel, isSameReaction } from '../../../global/helpers';
+import { isSameReaction } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -34,7 +34,6 @@ type StateProps = {
   enabledReactions?: ApiChatReactions;
   maxUniqueReactions: number;
   reactionsLimit?: number;
-  isChannel?: boolean;
 };
 
 const ManageReactions: FC<OwnProps & StateProps> = ({
@@ -45,7 +44,6 @@ const ManageReactions: FC<OwnProps & StateProps> = ({
   onClose,
   maxUniqueReactions,
   reactionsLimit,
-  isChannel,
 }) => {
   const { setChatEnabledReactions } = getActions();
 
@@ -182,8 +180,7 @@ const ManageReactions: FC<OwnProps & StateProps> = ({
     return lang('PeerInfo.AllowedReactions.MaxCountValue', value);
   }, [lang]);
 
-  const shouldShowReactionsLimit = isChannel
-    && (localEnabledReactions?.type === 'all' || localEnabledReactions?.type === 'some');
+  const shouldShowReactionsLimit = localEnabledReactions?.type === 'all' || localEnabledReactions?.type === 'some';
 
   return (
     <div className="Management">
@@ -266,7 +263,6 @@ export default memo(withGlobal<OwnProps>(
 
     const chatFullInfo = selectChatFullInfo(global, chatId);
     const reactionsLimit = chatFullInfo?.reactionsLimit || maxUniqueReactions;
-    const isChannel = isChatChannel(chat);
 
     return {
       enabledReactions: chatFullInfo?.enabledReactions,
@@ -274,7 +270,6 @@ export default memo(withGlobal<OwnProps>(
       chat,
       maxUniqueReactions,
       reactionsLimit,
-      isChannel,
     };
   },
   (global, { chatId }) => {

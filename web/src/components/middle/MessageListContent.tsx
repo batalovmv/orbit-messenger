@@ -56,7 +56,6 @@ interface OwnProps {
   isViewportNewest: boolean;
   isUnread: boolean;
   withUsers: boolean;
-  isChannelChat: boolean | undefined;
   isChatMonoforum?: boolean;
   canManageBotForumTopics?: boolean;
   isEmptyThread?: boolean;
@@ -96,7 +95,6 @@ const MessageListContent = ({
   isComments,
   isEmptyThread,
   withUsers,
-  isChannelChat,
   isChatMonoforum,
   canManageBotForumTopics,
   noAvatars,
@@ -351,7 +349,7 @@ const MessageListContent = ({
         // Service notifications saved in cache in previous versions may share the same `previousLocalId`
         const key = isServiceNotificationMessage(message) ? `${message.date}_${originalId}` : originalId;
 
-        const noComments = hasLinkedChat === false || !isChannelChat || Boolean(isChatMonoforum);
+        const noComments = hasLinkedChat === false || Boolean(isChatMonoforum);
 
         return compact([
           message.id === memoUnreadDividerBeforeIdRef.current && unreadDivider,

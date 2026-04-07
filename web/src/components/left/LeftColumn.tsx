@@ -70,8 +70,6 @@ enum ContentType {
   Archived,
 
   NewGroup,
-
-  NewChannel,
 }
 
 const RENDER_COUNT = Object.keys(ContentType).length / 2;
@@ -126,10 +124,6 @@ function LeftColumn({
     case LeftColumnContent.Settings:
       contentType = ContentType.Settings;
       break;
-    case LeftColumnContent.NewChannelStep1:
-    case LeftColumnContent.NewChannelStep2:
-      contentType = ContentType.NewChannel;
-      break;
     case LeftColumnContent.NewGroupStep1:
     case LeftColumnContent.NewGroupStep2:
       contentType = ContentType.NewGroup;
@@ -159,11 +153,6 @@ function LeftColumn({
 
     if (contentKey === LeftColumnContent.NewGroupStep2) {
       openLeftColumnContent({ contentKey: LeftColumnContent.NewGroupStep1 });
-      return;
-    }
-
-    if (contentKey === LeftColumnContent.NewChannelStep2) {
-      openLeftColumnContent({ contentKey: LeftColumnContent.NewChannelStep1 });
       return;
     }
 
@@ -511,17 +500,6 @@ function LeftColumn({
             foldersDispatch={foldersDispatch}
             animationLevel={animationLevel}
             shouldSkipTransition={shouldSkipHistoryAnimations}
-            onReset={handleReset}
-          />
-        );
-      case ContentType.NewChannel:
-        return (
-          <NewChat
-            key={lastResetTime}
-            isActive={isActive}
-            isChannel
-            content={contentKey}
-            animationLevel={animationLevel}
             onReset={handleReset}
           />
         );

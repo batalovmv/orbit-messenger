@@ -8,7 +8,7 @@ import type {
 } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
-import { getUserFullName, isChatBasicGroup, isChatChannel, isUserBot } from '../../../global/helpers';
+import { getUserFullName, isChatBasicGroup, isUserBot } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 
 import useFlag from '../../../hooks/useFlag';
@@ -61,7 +61,7 @@ const ManageGroupAdminRights = ({
   onScreenSelect,
 }: OwnProps & StateProps) => {
   const {
-    updateChatAdmin, transferChannelOwnership, showNotification,
+    updateChatAdmin, showNotification,
     openTwoFaCheckModal, verifyTransferOwnership,
   } = getActions();
 
@@ -74,7 +74,6 @@ const ManageGroupAdminRights = ({
   const [customTitle, setCustomTitle] = useState('');
   const lang = useLang();
 
-  const isChannel = isChatChannel(chat);
   const isForum = chat.isForum;
   const hasDirectMessages = Boolean(chat.linkedMonoforumId);
 
@@ -221,26 +220,7 @@ const ManageGroupAdminRights = ({
     openPasswordModal();
   });
 
-  const handleTransferOwnership = useLastCallback((password: string) => {
-    if (!selectedUserId) return;
-
-    const user = usersById[selectedUserId];
-    const userName = user ? getUserFullName(user) : '';
-
-    transferChannelOwnership({
-      chatId: chat.id,
-      userId: selectedUserId,
-      password,
-      onSuccess: () => {
-        showNotification({
-          message: lang(
-            isChannel ? 'EditAdminTransferChannelOwnershipSuccess' : 'EditAdminTransferGroupOwnershipSuccess',
-            { user: userName },
-          ),
-        });
-      },
-    });
-
+  const handleTransferOwnership = useLastCallback((_password: string) => {
     closePasswordModal();
   });
 
@@ -271,41 +251,17 @@ const ManageGroupAdminRights = ({
             <Checkbox
               name="changeInfo"
               checked={Boolean(permissions.changeInfo)}
-              label={lang(isChannel ? 'EditAdminChangeChannelInfo' : 'EditAdminChangeGroupInfo')}
+              label={lang('EditAdminChangeGroupInfo')}
               blocking
               disabled={getControlIsDisabled('changeInfo')}
               onChange={handlePermissionChange}
             />
           </div>
-          {isChannel && (
-            <div className="ListItem">
-              <Checkbox
-                name="postMessages"
-                checked={Boolean(permissions.postMessages)}
-                label={lang('EditAdminPostMessages')}
-                blocking
-                disabled={getControlIsDisabled('postMessages')}
-                onChange={handlePermissionChange}
-              />
-            </div>
-          )}
-          {isChannel && (
-            <div className="ListItem">
-              <Checkbox
-                name="editMessages"
-                checked={Boolean(permissions.editMessages)}
-                label={lang('EditAdminEditMessages')}
-                blocking
-                disabled={getControlIsDisabled('editMessages')}
-                onChange={handlePermissionChange}
-              />
-            </div>
-          )}
           <div className="ListItem">
             <Checkbox
               name="deleteMessages"
               checked={Boolean(permissions.deleteMessages)}
-              label={lang(isChannel ? 'EditAdminDeleteMessages' : 'EditAdminGroupDeleteMessages')}
+              label={lang('EditAdminGroupDeleteMessages')}
               blocking
               disabled={getControlIsDisabled('deleteMessages')}
               onChange={handlePermissionChange}
@@ -373,18 +329,16 @@ const ManageGroupAdminRights = ({
               onChange={handlePermissionChange}
             />
           </div>
-          {!isChannel && (
-            <div className="ListItem">
-              <Checkbox
-                name="pinMessages"
-                checked={Boolean(permissions.pinMessages)}
-                label={lang('EditAdminPinMessages')}
-                blocking
-                disabled={getControlIsDisabled('pinMessages')}
-                onChange={handlePermissionChange}
-              />
-            </div>
-          )}
+          <div className="ListItem">
+            <Checkbox
+              name="pinMessages"
+              checked={Boolean(permissions.pinMessages)}
+              label={lang('EditAdminPinMessages')}
+              blocking
+              disabled={getControlIsDisabled('pinMessages')}
+              onChange={handlePermissionChange}
+            />
+          </div>
           <div className="ListItem">
             <Checkbox
               name="addAdmins"
@@ -417,18 +371,16 @@ const ManageGroupAdminRights = ({
               />
             </div>
           )}
-          {!isChannel && (
-            <div className="ListItem">
-              <Checkbox
-                name="anonymous"
-                checked={Boolean(permissions.anonymous)}
-                label={lang('EditAdminSendAnonymously')}
-                blocking
-                disabled={getControlIsDisabled('anonymous')}
-                onChange={handlePermissionChange}
-              />
-            </div>
-          )}
+          <div className="ListItem">
+            <Checkbox
+              name="anonymous"
+              checked={Boolean(permissions.anonymous)}
+              label={lang('EditAdminSendAnonymously')}
+              blocking
+              disabled={getControlIsDisabled('anonymous')}
+              onChange={handlePermissionChange}
+            />
+          </div>
 
           {isFormFullyDisabled && (
             <p className="section-info mb-4" dir="auto">
@@ -436,21 +388,19 @@ const ManageGroupAdminRights = ({
             </p>
           )}
 
-          {!isChannel && (
-            <InputText
-              id="admin-title"
-              label={lang('EditAdminRank')}
-              className="input-admin-title"
-              onChange={handleCustomTitleChange}
-              value={customTitle}
-              disabled={isFormFullyDisabled}
-              maxLength={CUSTOM_TITLE_MAX_LENGTH}
-            />
-          )}
+          <InputText
+            id="admin-title"
+            label={lang('EditAdminRank')}
+            className="input-admin-title"
+            onChange={handleCustomTitleChange}
+            value={customTitle}
+            disabled={isFormFullyDisabled}
+            maxLength={CUSTOM_TITLE_MAX_LENGTH}
+          />
 
           {canTransferOwnership && currentUserId !== selectedUserId && !isFormFullyDisabled && !isNewAdmin && (
             <ListItem icon="key" ripple onClick={handleStartTransfer}>
-              {lang(isChannel ? 'EditAdminTransferChannelOwnership' : 'EditAdminTransferGroupOwnership')}
+              {lang('EditAdminTransferGroupOwnership')}
             </ListItem>
           )}
           {currentUserId !== selectedUserId && !isFormFullyDisabled && !isNewAdmin && (
@@ -483,7 +433,7 @@ const ManageGroupAdminRights = ({
       <ConfirmDialog
         isOpen={isTransferDialogOpen}
         onClose={closeTransferDialog}
-        title={lang(isChannel ? 'EditAdminTransferChannelOwnership' : 'EditAdminTransferGroupOwnership')}
+        title={lang('EditAdminTransferGroupOwnership')}
         textParts={lang('EditAdminTransferOwnershipText', {
           chat: chat.title,
           user: selectedUserId ? getUserFullName(usersById[selectedUserId]) : '',
@@ -493,7 +443,7 @@ const ManageGroupAdminRights = ({
       />
       <PasswordConfirmModal
         isOpen={isPasswordModalOpen}
-        title={lang(isChannel ? 'EditAdminTransferChannelOwnership' : 'EditAdminTransferGroupOwnership')}
+        title={lang('EditAdminTransferGroupOwnership')}
         confirmLabel={lang('EditAdminTransferChangeOwner')}
         onClose={closePasswordModal}
         onSubmit={handleTransferOwnership}

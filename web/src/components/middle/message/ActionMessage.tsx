@@ -51,15 +51,12 @@ import useFluidBackgroundFilter from './hooks/useFluidBackgroundFilter';
 import useFocusMessageListElement from './hooks/useFocusMessageListElement';
 
 import ActionMessageText from './ActionMessageText';
-import ChannelPhoto from './actions/ChannelPhoto';
 import SuggestedPhoto from './actions/SuggestedPhoto';
 import SuggestedPostApproval from './actions/SuggestedPostApproval';
 import SuggestedPostBalanceTooLow from './actions/SuggestedPostBalanceTooLow';
 import SuggestedPostRejected from './actions/SuggestedPostRejected';
 import ContextMenuContainer from './ContextMenuContainer';
 import Reactions from './reactions/Reactions';
-import SimilarChannels from './SimilarChannels';
-
 import styles from './ActionMessage.module.scss';
 
 type OwnProps = {
@@ -137,7 +134,6 @@ const ActionMessage = ({
     getReceipt,
     checkGiftCode,
     openPremiumModal,
-    toggleChannelRecommendations,
     animateUnreadReaction,
     markMentionsRead,
     focusMessage,
@@ -288,7 +284,6 @@ const ActionMessage = ({
       }
 
       case 'channelJoined': {
-        toggleChannelRecommendations({ chatId });
         break;
       }
 
@@ -320,30 +315,12 @@ const ActionMessage = ({
 
   const fullContent = useMemo(() => {
     switch (action.type) {
-      case 'chatEditPhoto': {
-        if (!action.photo) return undefined;
-        return (
-          <ChannelPhoto
-            action={action}
-            observeIntersection={observeIntersectionForLoading}
-            onClick={handleClick}
-          />
-        );
-      }
-
       case 'suggestProfilePhoto':
         return (
           <SuggestedPhoto
             message={message}
             action={action}
             observeIntersection={observeIntersectionForLoading}
-          />
-        );
-
-      case 'channelJoined':
-        return (
-          <SimilarChannels
-            chatId={message.chatId}
           />
         );
 

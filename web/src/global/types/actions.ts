@@ -393,14 +393,6 @@ export interface ActionPayloads {
     orderedIds: string[];
     targetIndexDelta: number;
   } & WithTabId;
-  joinChannel: {
-    chatId: string;
-  } & WithTabId;
-  leaveChannel: {
-    chatId: string;
-    shouldSkipOwnershipCheck?: boolean;
-  } & WithTabId;
-  deleteChannel: { chatId: string } & WithTabId;
   toggleChatPinned: {
     id: string;
     folderId: number;
@@ -728,15 +720,6 @@ export interface ActionPayloads {
   deleteChat: { chatId: string } & WithTabId;
 
   // chat creation
-  createChannel: {
-    title: string;
-    about?: string;
-    photo?: File;
-    memberIds?: string[];
-    discussionChannelId?: string;
-  } & (
-    { isChannel: true } | { isSuperGroup: true }
-  ) & WithTabId;
   createGroupChat: {
     title: string;
     memberIds: string[];
@@ -1016,10 +999,6 @@ export interface ActionPayloads {
 
   // Initial
   signOut: { forceInitApi?: boolean } | undefined;
-  requestChannelDifference: {
-    chatId: string;
-  };
-
   // Misc
   setInstallPrompt: { canInstall: boolean } & WithTabId;
   openLimitReachedModal: { limit: ApiLimitTypeWithModal } & WithTabId;
@@ -1073,14 +1052,8 @@ export interface ActionPayloads {
   fetchChat: {
     chatId: string;
   };
-  loadChannelRecommendations: {
-    chatId?: string;
-  };
   loadBotRecommendations: {
     userId: string;
-  };
-  toggleChannelRecommendations: {
-    chatId: string;
   };
   updateChatMutedState: {
     chatId: string;
@@ -1119,13 +1092,6 @@ export interface ActionPayloads {
     areProfilesEnabled: boolean;
   };
   loadGroupsForDiscussion: undefined;
-  linkDiscussionGroup: {
-    channelId: string;
-    chatId: string;
-  } & WithTabId;
-  unlinkDiscussionGroup: {
-    channelId: string;
-  };
 
   openSavedDialog: {
     chatId: string;
@@ -2311,12 +2277,6 @@ export interface ActionPayloads {
     onPasswordTooFresh?: VoidFunction;
     onSessionTooFresh?: VoidFunction;
   };
-  transferChannelOwnership: {
-    chatId: string;
-    userId: string;
-    password: string;
-    onSuccess?: VoidFunction;
-  } & WithTabId;
   openQuickChatPicker: WithTabId | undefined;
   closeQuickChatPicker: WithTabId | undefined;
 

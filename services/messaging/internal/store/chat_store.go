@@ -69,7 +69,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 	query := `
 		SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
 		       c.is_encrypted, c.max_members, c.default_permissions, c.slow_mode_seconds,
-		       c.is_signatures, c.created_at, c.updated_at,
+		       c.created_at, c.updated_at,
 		       m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		       m.grouped_id, m.is_one_time, m.sequence_number, m.created_at, m.edited_at,
@@ -132,7 +132,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
 			&item.Chat.AvatarURL, &item.Chat.CreatedBy, &item.Chat.IsEncrypted,
 			&item.Chat.MaxMembers, &item.Chat.DefaultPermissions, &item.Chat.SlowModeSeconds,
-			&item.Chat.IsSignatures, &item.Chat.CreatedAt, &item.Chat.UpdatedAt,
+			&item.Chat.CreatedAt, &item.Chat.UpdatedAt,
 			&msgID, &msgChatID, &msgSenderID, &msgType, &msgContent, &msgReplyToID,
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
 			&msgGroupedID, &msgIsOneTime, &msgSeq, &msgCreatedAt, &msgEditedAt,
@@ -222,11 +222,11 @@ func (s *chatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat,
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
 		        is_encrypted, max_members, default_permissions, slow_mode_seconds,
-		        is_signatures, created_at, updated_at
+		        created_at, updated_at
 		 FROM chats WHERE id = $1`, chatID,
 	).Scan(&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 		&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
-		&c.IsSignatures, &c.CreatedAt, &c.UpdatedAt)
+		&c.CreatedAt, &c.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -238,10 +238,10 @@ func (s *chatStore) Create(ctx context.Context, chat *model.Chat) error {
 		`INSERT INTO chats (type, name, description, created_by, default_permissions)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, is_encrypted, max_members, default_permissions, slow_mode_seconds,
-		           is_signatures, created_at, updated_at`,
+		           created_at, updated_at`,
 		chat.Type, chat.Name, chat.Description, chat.CreatedBy, chat.DefaultPermissions,
 	).Scan(&chat.ID, &chat.IsEncrypted, &chat.MaxMembers, &chat.DefaultPermissions,
-		&chat.SlowModeSeconds, &chat.IsSignatures, &chat.CreatedAt, &chat.UpdatedAt)
+		&chat.SlowModeSeconds, &chat.CreatedAt, &chat.UpdatedAt)
 }
 
 func (s *chatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error) {
@@ -673,7 +673,7 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
 		        is_encrypted, max_members, default_permissions, slow_mode_seconds,
-		        is_signatures, created_at, updated_at
+		        created_at, updated_at
 		 FROM chats
 		 ORDER BY created_at
 		 LIMIT $1`, limit,
@@ -689,7 +689,7 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 			&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
-			&c.IsSignatures, &c.CreatedAt, &c.UpdatedAt,
+			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -705,11 +705,11 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 	rows, err := s.pool.Query(ctx,
 		`SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
 		        c.is_encrypted, c.max_members, c.default_permissions, c.slow_mode_seconds,
-		        c.is_signatures, c.created_at, c.updated_at
+		        c.created_at, c.updated_at
 		 FROM chats c
 		 JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = $1
 		 JOIN chat_members cm2 ON cm2.chat_id = c.id AND cm2.user_id = $2
-		 WHERE c.type IN ('group', 'channel')
+		 WHERE c.type = 'group'
 		   AND cm1.role != 'banned' AND cm2.role != 'banned'
 		 ORDER BY c.name
 		 LIMIT $3`, userA, userB, limit,
@@ -725,7 +725,7 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 			&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
-			&c.IsSignatures, &c.CreatedAt, &c.UpdatedAt,
+			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -761,11 +761,11 @@ func (s *chatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) 
 		 VALUES ('direct', $1, $2)
 		 RETURNING id, type, name, description, avatar_url, created_by,
 		           is_encrypted, max_members, default_permissions, slow_mode_seconds,
-		           is_signatures, created_at, updated_at`,
+		           created_at, updated_at`,
 		name, userID,
 	).Scan(&chat.ID, &chat.Type, &chat.Name, &chat.Description, &chat.AvatarURL, &chat.CreatedBy,
 		&chat.IsEncrypted, &chat.MaxMembers, &chat.DefaultPermissions, &chat.SlowModeSeconds,
-		&chat.IsSignatures, &chat.CreatedAt, &chat.UpdatedAt)
+		&chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create saved chat: %w", err)
 	}

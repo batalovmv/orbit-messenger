@@ -43,7 +43,6 @@ type Chat struct {
 	MaxMembers         int        `json:"max_members"`
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`
-	IsSignatures       bool       `json:"is_signatures"`
 	IsPinned           bool       `json:"is_pinned"`
 	IsMuted            bool       `json:"is_muted"`
 	IsArchived         bool       `json:"is_archived"`
@@ -193,21 +192,17 @@ type UserSettings struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	// Global notification defaults per chat type
-	NotifyUsersMuted      bool `json:"notify_users_muted"`
-	NotifyGroupsMuted     bool `json:"notify_groups_muted"`
-	NotifyChannelsMuted   bool `json:"notify_channels_muted"`
-	NotifyUsersPreview    bool `json:"notify_users_preview"`
-	NotifyGroupsPreview   bool `json:"notify_groups_preview"`
-	NotifyChannelsPreview bool `json:"notify_channels_preview"`
+	NotifyUsersMuted    bool `json:"notify_users_muted"`
+	NotifyGroupsMuted   bool `json:"notify_groups_muted"`
+	NotifyUsersPreview  bool `json:"notify_users_preview"`
+	NotifyGroupsPreview bool `json:"notify_groups_preview"`
 }
 
 type GlobalNotifySettings struct {
-	UsersMuted      bool `json:"users_muted"`
-	GroupsMuted     bool `json:"groups_muted"`
-	ChannelsMuted   bool `json:"channels_muted"`
-	UsersPreview    bool `json:"users_preview"`
-	GroupsPreview   bool `json:"groups_preview"`
-	ChannelsPreview bool `json:"channels_preview"`
+	UsersMuted    bool `json:"users_muted"`
+	GroupsMuted   bool `json:"groups_muted"`
+	UsersPreview  bool `json:"users_preview"`
+	GroupsPreview bool `json:"groups_preview"`
 }
 
 type SearchHistoryEntry struct {

@@ -47,9 +47,6 @@ export function isChatSuperGroup(chat: ApiChat) {
   return chat.type === 'chatTypeSuperGroup';
 }
 
-export function isChatChannel(chat: ApiChat) {
-  return chat.type === 'chatTypeChannel';
-}
 
 export function isChatMonoforum(chat: ApiChat) {
   return chat.isMonoforum;
@@ -78,8 +75,6 @@ export function getChatTypeLangKey(chat: ApiChat): RegularLangKey {
     case 'chatTypeBasicGroup':
     case 'chatTypeSuperGroup':
       return 'ChatTypeGroup';
-    case 'chatTypeChannel':
-      return 'ChatTypeChannel';
     default:
       return 'ChatTypeFallback';
   }
@@ -166,10 +161,6 @@ export function getCanPostInChat(
 
   if (isUserId(chat.id)) {
     return true;
-  }
-
-  if (isChatChannel(chat)) {
-    return getHasAdminRight(chat, 'postMessages');
   }
 
   return isChatAdmin(chat) || !isUserRightBanned(chat, 'sendMessages', chatFullInfo);
@@ -298,16 +289,16 @@ export function isChatArchived(chat: ApiChat) {
 }
 
 export function getCanDeleteChat(chat: ApiChat) {
-  return isChatBasicGroup(chat) || ((isChatSuperGroup(chat) || isChatChannel(chat)) && chat.isCreator);
+  return isChatBasicGroup(chat) || (isChatSuperGroup(chat) && chat.isCreator);
 }
 
 export function getFolderDescriptionText(lang: LangFn, folder: ApiChatFolder, chatsCount?: number) {
   const {
     excludedChatIds, includedChatIds,
-    bots, groups, contacts, nonContacts, channels,
+    bots, groups, contacts, nonContacts,
   } = folder;
 
-  const filters = [bots, groups, contacts, nonContacts, channels];
+  const filters = [bots, groups, contacts, nonContacts];
 
   // If folder has multiple additive filters or uses include/exclude lists,
   // we display folder chats count
@@ -325,8 +316,6 @@ export function getFolderDescriptionText(lang: LangFn, folder: ApiChatFolder, ch
     return lang('FilterBots');
   } else if (groups) {
     return lang('FilterGroups');
-  } else if (channels) {
-    return lang('FilterChannels');
   } else if (contacts) {
     return lang('FilterContacts');
   } else if (nonContacts) {
@@ -402,22 +391,19 @@ export function getIsSavedDialog(chatId: string, threadId: ThreadId | undefined,
 
 export function getGroupStatus(lang: LangFn, chat: ApiChat) {
   const chatTypeKey = getChatTypeLangKey(chat);
-  const isChannel = isChatChannel(chat);
   const { membersCount } = chat;
 
   const global = getGlobal();
   const isRestricted = selectIsChatRestricted(global, chat.id);
   if (isRestricted) {
-    return isChannel ? lang('ChannelInaccessible') : lang('GroupInaccessible');
+    return lang('GroupInaccessible');
   }
 
   if (!membersCount) {
     return lang(chatTypeKey);
   }
 
-  return isChannel
-    ? lang('Subscribers', { count: membersCount }, { pluralValue: membersCount })
-    : lang('NMembers', { count: membersCount }, { pluralValue: membersCount });
+  return lang('NMembers', { count: membersCount }, { pluralValue: membersCount });
 }
 
 export function getCustomPeerFromInvite(invite: ApiChatInviteInfo): CustomPeer {

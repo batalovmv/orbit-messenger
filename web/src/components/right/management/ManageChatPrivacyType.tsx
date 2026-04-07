@@ -9,7 +9,7 @@ import type { ApiChat } from '../../../api/types';
 import { ManagementProgress } from '../../../types';
 
 import { PURCHASE_USERNAME, TME_LINK_PREFIX, USERNAME_PURCHASE_ERROR } from '../../../config';
-import { isChatChannel, isChatPublic } from '../../../global/helpers';
+import { isChatPublic } from '../../../global/helpers';
 import {
   selectChat, selectChatFullInfo,
   selectManagement, selectTabState,
@@ -41,7 +41,6 @@ type OwnProps = {
 
 type StateProps = {
   chat: ApiChat;
-  isChannel: boolean;
   progress?: ManagementProgress;
   isUsernameAvailable?: boolean;
   checkedUsername?: string;
@@ -54,7 +53,6 @@ type StateProps = {
 const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
   chat,
   isActive,
-  isChannel,
   progress,
   isUsernameAvailable,
   checkedUsername,
@@ -161,8 +159,8 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
   }, [closeRevokeConfirmDialog, updatePrivateLink]);
 
   const lang = useOldLang();
-  const langPrefix1 = isChannel ? 'Channel' : 'Mega';
-  const langPrefix2 = isChannel ? 'Channel' : 'Group';
+  const langPrefix1 = 'Mega';
+  const langPrefix2 = 'Group';
 
   const options = [
     { value: 'private', label: lang(`${langPrefix1}Private`), subLabel: lang(`${langPrefix1}PrivateInfo`) },
@@ -259,7 +257,7 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
         )}
         <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
           <h3 className="section-heading">
-            {lang(isChannel ? 'ChannelVisibility.Forwarding.ChannelTitle' : 'ChannelVisibility.Forwarding.GroupTitle')}
+            {lang('ChannelVisibility.Forwarding.GroupTitle')}
           </h3>
           <RadioGroup
             selected={isProtected ? 'protected' : 'allowed'}
@@ -268,9 +266,7 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
             onChange={handleForwardingOptionChange}
           />
           <p className="section-info section-info_push">
-            {isChannel
-              ? lang('ChannelVisibility.Forwarding.ChannelInfo')
-              : lang('ChannelVisibility.Forwarding.GroupInfo')}
+            {lang('ChannelVisibility.Forwarding.GroupInfo')}
           </p>
         </div>
       </div>
@@ -300,7 +296,6 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       chat,
-      isChannel: isChatChannel(chat),
       progress: selectTabState(global).management.progress,
       error,
       isUsernameAvailable,

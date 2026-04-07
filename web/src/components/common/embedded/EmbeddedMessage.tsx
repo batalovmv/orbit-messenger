@@ -13,7 +13,6 @@ import { TON_CURRENCY_CODE } from '../../../config';
 import {
   getMessageIsSpoiler,
   getMessageRoundVideo,
-  isChatChannel,
   isChatGroup,
   isMessageTranslatable,
 } from '../../../global/helpers';
@@ -251,10 +250,6 @@ const EmbeddedMessage = ({
 
     let icon: IconName | undefined;
     if (senderChat) {
-      if (isChatChannel(senderChat)) {
-        icon = 'channel-filled';
-      }
-
       if (isChatGroup(senderChat)) {
         icon = 'group-filled';
       }

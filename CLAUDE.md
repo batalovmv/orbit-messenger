@@ -20,7 +20,7 @@
 |------|--------|-------------|
 | Phase 0: Костяк | Done | Структура монорепо, docker-compose, миграции, CI |
 | Phase 1: Core Messaging | Done | auth + gateway + messaging + WebSocket + базовый фронтенд |
-| Phase 2: Groups & Channels | Done | Группы, каналы, роли, permissions, invite links |
+| Phase 2: Groups | Done | Группы, роли, permissions, invite links |
 | Phase 3: Media & Files | Done | Media service, R2 pipeline, Saturn upload/download wiring, MediaViewer/shared media foundation |
 | Phase 4: Search, Notifications & Settings | Done | Meilisearch, push/VAPID, privacy/settings, in-app banners, in-chat search wiring |
 | Phase 5: Rich Messaging | **In Progress** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring; идёт стабилизация фронтенда |
@@ -367,7 +367,7 @@ publisher.Publish(subject, eventName, data, memberIDs, senderID...)
 
 - User status: `online / offline / away / dnd`
 - User role: `admin / member`
-- Chat type: `direct / group / channel`
+- Chat type: `direct / group`
 - Chat member role: `owner / admin / member / readonly / banned`
 - Message type: `text / photo / video / file / voice / video_note / sticker / gif / system`
 - Media type: `photo / video / file / voice / videonote / gif`
@@ -548,7 +548,7 @@ chunked_upload:{uploadId}      TTL = 1 hour
 |--------|-----------|--------|
 | `fetch` | GET/чтение | `fetchChats`, `fetchMessages`, `fetchMembers` |
 | `send` | отправка сообщения/контента | `sendMessage`, `sendMediaMessage` |
-| `create` | создание entity | `createGroupChat`, `createChannel` |
+| `create` | создание entity | `createGroupChat` |
 | `edit` | изменение контента | `editMessage`, `editChatTitle` |
 | `update` | изменение свойств | `updateChatMember`, `updatePrivacySettings` |
 | `delete` | удаление | `deleteMessages`, `deleteChat` |

@@ -6,7 +6,7 @@ import type { GlobalState } from '../global/types';
 import { type ApiChat, type ApiUser, MAIN_THREAD_ID } from '../api/types';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../config';
-import { getCanDeleteChat, isChatArchived, isChatChannel, isChatGroup } from '../global/helpers';
+import { getCanDeleteChat, isChatArchived, isChatGroup } from '../global/helpers';
 import { selectThreadReadState } from '../global/selectors/threads';
 import { IS_TAURI } from '../util/browser/globalEnvironment';
 import { IS_OPEN_IN_NEW_TAB_SUPPORTED } from '../util/browser/windowEnvironment';
@@ -90,10 +90,6 @@ const useChatContextActions = ({
 
     if (getCanDeleteChat(chat)) {
       return lang('DeleteChat');
-    }
-
-    if (isChatChannel(chat)) {
-      return lang('ChannelLeave');
     }
 
     return lang('GroupLeaveGroup');
@@ -200,7 +196,7 @@ const useChatContextActions = ({
       ? { title: lang('Unarchive'), icon: 'unarchive', handler: () => toggleChatArchived({ id: chat.id }) }
       : { title: lang('Archive'), icon: 'archive', handler: () => toggleChatArchived({ id: chat.id }) };
 
-    const canReport = handleReport && !user && (isChatChannel(chat) || isChatGroup(chat));
+    const canReport = handleReport && !user && isChatGroup(chat);
     const actionReport = canReport
       ? { title: lang('ReportPeerReport'), icon: 'flag', handler: handleReport } satisfies MenuItemContextAction
       : undefined;

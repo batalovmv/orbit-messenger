@@ -63,7 +63,6 @@ import {
   getReactionKey,
   getStoryKey,
   isChatAdmin,
-  isChatChannel,
   isChatPublic,
   isChatSuperGroup,
   isSameReaction,
@@ -238,7 +237,6 @@ type StateProps = {
   currentMessageList?: MessageList;
   isChatWithBot?: boolean;
   isChatWithSelf?: boolean;
-  isChannel?: boolean;
   isForCurrentMessageList: boolean;
   isRightColumnShown?: boolean;
   isSelectModeActive?: boolean;
@@ -362,7 +360,6 @@ const Composer = ({
   canSendVoiceByPrivacy,
   isChatWithBot,
   isChatWithSelf,
-  isChannel,
   fileSizeLimit,
   isRightColumnShown,
   isSelectModeActive,
@@ -539,13 +536,12 @@ const Composer = ({
   }, [isReady, chatId, threadId, isInStoryViewer, isAppConfigLoaded, isMonoforum]);
 
   useEffect(() => {
-    const isChannelWithProfiles = isChannel && chat?.areProfilesShown;
     const isChatWithSendAs = chat && isChatSuperGroup(chat)
       && Boolean(isChatPublic(chat) || chat.isLinkedInDiscussion || chat.hasGeo);
-    if (!sendAsPeerIds && isReady && (isChatWithSendAs || isChannelWithProfiles)) {
+    if (!sendAsPeerIds && isReady && isChatWithSendAs) {
       loadSendAs({ chatId });
     }
-  }, [chat, chatId, isChannel, isReady, loadSendAs, sendAsPeerIds]);
+  }, [chat, chatId, isReady, loadSendAs, sendAsPeerIds]);
 
   const shouldAnimateSendAsButtonRef = useRef(false);
   useSyncEffect(([prevChatId, prevSendAsPeerIds]) => {
@@ -1817,9 +1813,6 @@ const Composer = ({
           ? lang('ComposerPlaceholderTopic', { topic: replyToTopic.title })
           : lang('ComposerPlaceholderTopicGeneral');
       }
-      if (isChannel) {
-        return lang(isSilentPosting ? 'ComposerPlaceholderBroadcastSilent' : 'ComposerPlaceholderBroadcast');
-      }
       return lang('ComposerPlaceholder');
     }
 
@@ -1827,7 +1820,7 @@ const Composer = ({
 
     return lang('ComposerPlaceholderNoText');
   }, [
-    activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isChannel, isComposerBlocked,
+    activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isComposerBlocked,
     isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth, paidMessagesStars,
     hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil, user?.canManageBotForumTopics,
   ]);
@@ -2085,7 +2078,7 @@ const Composer = ({
       <PollModal
         isOpen={pollModal.isOpen}
         isQuiz={pollModal.isQuiz}
-        shouldBeAnonymous={isChannel}
+        shouldBeAnonymous={false}
         maxOptionsCount={pollMaxAnswers}
         onClear={closePollModal}
         onSend={handlePollSend}
@@ -2301,21 +2294,6 @@ const Composer = ({
               >
                 {!hasText && (
                   <>
-                    {isChannel && (
-                      <Transition className="composer-action-button" name="reveal" activeKey={Number(isSilentPosting)}>
-                        <Button
-                          round
-                          faded
-                          className="composer-action-button"
-                          color="translucent"
-                          onClick={handleToggleSilentPosting}
-                          ariaLabel={lang(
-                            isSilentPosting ? 'AriaComposerSilentPostingDisable' : 'AriaComposerSilentPostingEnable',
-                          )}
-                          iconName={isSilentPosting ? 'mute' : 'unmute'}
-                        />
-                      </Transition>
-                    )}
                     {withScheduledButton && (
                       <Button
                         round
@@ -2676,7 +2654,6 @@ export default memo(withGlobal<OwnProps>(
       isChatWithSelf,
       isForCurrentMessageList,
       canScheduleUntilOnline: selectCanScheduleUntilOnline(global, chatId),
-      isChannel: chat ? isChatChannel(chat) : undefined,
       isRightColumnShown: selectIsRightColumnShown(global, isMobile),
       isSelectModeActive: selectIsInSelectMode(global),
       withScheduledButton: (

@@ -70,7 +70,6 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
     void subscribe();
   }, [areNotificationsSupported, hasWebNotifications, isActive]);
 
-  const areChannelsMuted = Boolean(notifyDefaults?.channels?.mutedUntil);
   const areGroupsMuted = Boolean(notifyDefaults?.groups?.mutedUntil);
   const areUsersMuted = Boolean(notifyDefaults?.users?.mutedUntil);
 
@@ -117,14 +116,6 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
 
   const handleGroupsPreviewChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     handleSettingsChange(e, 'groups', 'showPreviews');
-  }, [handleSettingsChange]);
-
-  const handleChannelsNotificationsChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    handleSettingsChange(e, 'channels', 'mute');
-  }, [handleSettingsChange]);
-
-  const handleChannelsPreviewChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    handleSettingsChange(e, 'channels', 'showPreviews');
   }, [handleSettingsChange]);
 
   const handleContactNotificationChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
@@ -217,25 +208,6 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
             ? 'UserInfoNotificationsEnabled' : 'UserInfoNotificationsDisabled')}
           checked={Boolean(notifyDefaults?.groups?.shouldShowPreviews)}
           onChange={handleGroupsPreviewChange}
-        />
-      </div>
-
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{lang('FilterChannels')}</h4>
-
-        <Checkbox
-          label={lang('NotificationsForChannels')}
-          subLabel={lang(!areChannelsMuted ? 'UserInfoNotificationsEnabled' : 'UserInfoNotificationsDisabled')}
-          checked={!areChannelsMuted}
-          onChange={handleChannelsNotificationsChange}
-        />
-        <Checkbox
-          label={lang('MessagePreview')}
-          disabled={areChannelsMuted}
-          subLabel={lang(notifyDefaults?.channels?.shouldShowPreviews
-            ? 'UserInfoNotificationsEnabled' : 'UserInfoNotificationsDisabled')}
-          checked={Boolean(notifyDefaults?.channels?.shouldShowPreviews)}
-          onChange={handleChannelsPreviewChange}
         />
       </div>
 

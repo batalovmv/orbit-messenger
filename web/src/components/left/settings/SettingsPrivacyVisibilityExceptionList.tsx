@@ -11,7 +11,7 @@ import { SettingsScreens } from '../../../types';
 
 import { ALL_FOLDER_ID, ARCHIVED_FOLDER_ID, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import {
-  isChatChannel, isDeletedUser,
+  isDeletedUser,
 } from '../../../global/helpers';
 import { filterPeersByQuery } from '../../../global/helpers/peers';
 import { unique } from '../../../util/iteratees';
@@ -119,14 +119,12 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
 
     const chatIds = unique([...folderAllOrderedIds || [], ...folderArchivedOrderedIds || []])
       .filter((chatId) => {
-        const chat = chatsById[chatId];
         const user = usersById[chatId];
         const isDeleted = user && isDeletedUser(user);
-        const isChannel = chat && isChatChannel(chat);
         return (!usersOnly || user)
           && chatId !== currentUserId
           && chatId !== SERVICE_NOTIFICATIONS_USER_ID
-          && !isChannel && !isDeleted;
+          && !isDeleted;
       });
 
     const filteredChats = filterPeersByQuery({ ids: chatIds, query: searchQuery });

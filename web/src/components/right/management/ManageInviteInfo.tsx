@@ -4,7 +4,6 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChatInviteImporter, ApiExportedInvite } from '../../../api/types';
 
-import { isChatChannel } from '../../../global/helpers';
 import { selectChat, selectTabState } from '../../../global/selectors';
 import { formatFullDate, formatMediaDateTime, formatTime } from '../../../util/dates/dateFormat';
 import { getServerTime } from '../../../util/serverTime';
@@ -27,7 +26,6 @@ type StateProps = {
   invite?: ApiExportedInvite;
   importers?: ApiChatInviteImporter[];
   requesters?: ApiChatInviteImporter[];
-  isChannel?: boolean;
 };
 
 const BULLET = '\u2022';
@@ -37,7 +35,6 @@ const ManageInviteInfo: FC<OwnProps & StateProps> = ({
   invite,
   importers,
   requesters,
-  isChannel,
   isActive,
   onClose,
 }) => {
@@ -104,7 +101,7 @@ const ManageInviteInfo: FC<OwnProps & StateProps> = ({
     if (!requesters?.length) return undefined;
     return (
       <div className="section">
-        <p className="section-heading">{isChannel ? lang('SubscribeRequests') : lang('MemberRequests')}</p>
+        <p className="section-heading">{lang('MemberRequests')}</p>
         <p className="section-help">
           {requesters.map((requester) => (
             <ListItem
@@ -172,13 +169,10 @@ export default memo(withGlobal<OwnProps>(
     const { inviteInfo } = selectTabState(global).management.byChatId[chatId] || {};
     const { invite, importers, requesters } = inviteInfo || {};
     const chat = selectChat(global, chatId);
-    const isChannel = chat && isChatChannel(chat);
-
     return {
       invite,
       importers,
       requesters,
-      isChannel,
     };
   },
 )(ManageInviteInfo));

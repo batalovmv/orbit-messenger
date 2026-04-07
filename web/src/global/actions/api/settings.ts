@@ -360,12 +360,12 @@ addActionHandler('loadNotificationSettings', async (global): Promise<void> => {
   });
 
   if (notifyDefaults) {
-    const peerTypes = ['users', 'groups', 'channels'] as const;
+    const peerTypes = ['users', 'groups'] as const;
     for (const peerType of peerTypes) {
       const peerSettings = notifyDefaults[peerType];
       if (peerSettings) {
         global = updateNotifyDefaults(global, peerType, {
-          mutedUntil: peerSettings.mutedUntil ?? (peerSettings.isMuted ? MUTE_INDEFINITE_TIMESTAMP : UNMUTE_TIMESTAMP),
+          mutedUntil: peerSettings.mutedUntil ?? UNMUTE_TIMESTAMP,
           shouldShowPreviews: peerSettings.shouldShowPreviews,
         });
       }

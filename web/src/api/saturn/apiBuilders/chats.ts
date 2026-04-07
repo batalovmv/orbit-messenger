@@ -59,16 +59,13 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
   const apiChat: ApiChat = {
     id: chat.id,
     folderId: chat.is_archived ? ARCHIVED_FOLDER_ID : undefined,
-    type: chat.type === 'direct' ? 'chatTypePrivate'
-      : chat.type === 'channel' ? 'chatTypeChannel'
-        : 'chatTypeSuperGroup',
+    type: chat.type === 'direct' ? 'chatTypePrivate' : 'chatTypeSuperGroup',
     title,
     creationDate: Math.floor(new Date(chat.created_at).getTime() / 1000),
     isMin: false,
     avatarPhotoId: getAvatarPhotoId(chat.id, chat.avatar_url),
     isPinned: typeof chat.is_pinned === 'boolean' ? chat.is_pinned : undefined,
     isMuted: typeof chat.is_muted === 'boolean' ? chat.is_muted : undefined,
-    areSignaturesShown: chat.type === 'channel' ? (chat as SaturnChat).is_signatures : undefined,
     defaultBannedRights: chat.type !== 'direct'
       ? decodeBannedRights((chat as SaturnChat).default_permissions ?? 255)
       : undefined,

@@ -25,7 +25,6 @@ import {
   getMediaFormat,
   getMediaHash,
   getMessageStatefulContent,
-  isChatChannel,
 } from '../../helpers';
 import { getMessageSummaryText } from '../../helpers/messageSummary';
 import { addTabStateResetterAction } from '../../helpers/meta';
@@ -1030,7 +1029,7 @@ function copyTextForMessages(global: GlobalState, chatId: string, messageIds: nu
   const resultText: string[] = [];
 
   messages.forEach((message) => {
-    const sender = isChatChannel(chat) ? chat : selectSender(global, message);
+    const sender = selectSender(global, message);
     const senderTitle = `> ${sender ? getPeerTitle(lang, sender) : message.forwardInfo?.hiddenUserName || ''}:`;
     const statefulContent = getMessageStatefulContent(global, message);
 

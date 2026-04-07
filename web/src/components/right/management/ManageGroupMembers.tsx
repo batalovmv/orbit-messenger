@@ -10,7 +10,7 @@ import { ManagementScreens, NewChatMembersProgress } from '../../../types';
 
 import {
   getHasAdminRight, isChatBasicGroup,
-  isChatChannel, isUserBot, isUserRightBanned, sortUserIds,
+  isUserBot, isUserRightBanned, sortUserIds,
 } from '../../../global/helpers';
 import { filterPeersByQuery } from '../../../global/helpers/peers';
 import { selectChat, selectChatFullInfo, selectTabState } from '../../../global/selectors';
@@ -48,7 +48,6 @@ type StateProps = {
   members?: ApiChatMember[];
   canAddMembers?: boolean;
   adminMembersById?: Record<string, ApiChatMember>;
-  isChannel?: boolean;
   localContactIds?: string[];
   searchQuery?: string;
   isSearching?: boolean;
@@ -67,7 +66,6 @@ const ManageGroupMembers: FC<OwnProps & StateProps> = ({
   canAddMembers,
   adminMembersById,
   userStatusesById,
-  isChannel,
   isActive,
   globalUserIds,
   localContactIds,
@@ -133,12 +131,12 @@ const ManageGroupMembers: FC<OwnProps & StateProps> = ({
           return true;
         }
 
-        return (isChannel || user.canBeInvitedToGroup || !isUserBot(user))
+        return (user.canBeInvitedToGroup || !isUserBot(user))
           && (!noAdmins || !adminIds.includes(contactId));
       }),
       true,
     );
-  }, [memberIds, localContactIds, searchQuery, localUserIds, globalUserIds, isChannel, noAdmins, adminIds]);
+  }, [memberIds, localContactIds, searchQuery, localUserIds, globalUserIds, noAdmins, adminIds]);
 
   const [viewportIds, getMore] = useInfiniteScroll(undefined, displayedIds, Boolean(searchQuery));
 
@@ -207,7 +205,7 @@ const ManageGroupMembers: FC<OwnProps & StateProps> = ({
     <div className="Management">
       {noAdmins && renderSearchField()}
       <div className="panel-content custom-scroll">
-        {canHideParticipants && !isChannel && (
+        {canHideParticipants && (
           <div className="section">
             <ListItem icon="group" ripple onClick={handleToggleParticipantsHidden}>
               <span>{lang('ChannelHideMembers')}</span>
@@ -245,7 +243,7 @@ const ManageGroupMembers: FC<OwnProps & StateProps> = ({
             <NothingFound
               teactOrderKey={0}
               key="nothing-found"
-              text={isChannel ? 'No subscribers found' : 'No members found'}
+              text="No members found"
             />
           ) : (
             <Loading />
@@ -276,7 +274,6 @@ export default memo(withGlobal<OwnProps>(
     const chat = selectChat(global, chatId);
     const { statusesById: userStatusesById } = global.users;
     const { members, adminMembersById, areParticipantsHidden } = selectChatFullInfo(global, chatId) || {};
-    const isChannel = chat && isChatChannel(chat);
     const { userIds: localContactIds } = global.contactList || {};
     const hiddenMembersMinCount = global.appConfig.hiddenMembersMinCount;
 
@@ -286,7 +283,7 @@ export default memo(withGlobal<OwnProps>(
       && hiddenMembersMinCount !== undefined && chat.membersCount >= hiddenMembersMinCount;
 
     const canAddMembers = chat && ((getHasAdminRight(chat, 'inviteUsers')
-      || (!isChannel && !isUserRightBanned(chat, 'inviteUsers')))
+      || !isUserRightBanned(chat, 'inviteUsers'))
     || chat.isCreator
     );
 
@@ -303,7 +300,6 @@ export default memo(withGlobal<OwnProps>(
       canAddMembers,
       adminMembersById,
       userStatusesById,
-      isChannel,
       localContactIds,
       searchQuery,
       isSearching: fetchingStatus,

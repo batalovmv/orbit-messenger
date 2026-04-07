@@ -480,17 +480,11 @@ func (h *SettingsHandler) UpdateGlobalNotifySettings(c *fiber.Ctx) error {
 			if _, ok := raw["groups_muted"]; ok {
 				merged.GroupsMuted = req.GroupsMuted
 			}
-			if _, ok := raw["channels_muted"]; ok {
-				merged.ChannelsMuted = req.ChannelsMuted
-			}
 			if _, ok := raw["users_preview"]; ok {
 				merged.UsersPreview = req.UsersPreview
 			}
 			if _, ok := raw["groups_preview"]; ok {
 				merged.GroupsPreview = req.GroupsPreview
-			}
-			if _, ok := raw["channels_preview"]; ok {
-				merged.ChannelsPreview = req.ChannelsPreview
 			}
 			req = merged
 		}

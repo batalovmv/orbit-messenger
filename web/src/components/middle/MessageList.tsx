@@ -18,7 +18,6 @@ import {
   getIsSavedDialog,
   getMessageHtmlId,
   isAnonymousForwardsChat,
-  isChatChannel,
   isChatGroup,
   isChatMonoforum,
   isSystemBot,
@@ -109,14 +108,12 @@ type OwnProps = {
 
 type StateProps = {
   isChatLoaded?: boolean;
-  isChannelChat?: boolean;
   isGroupChat?: boolean;
   isChatMonoforum?: boolean;
   isChatWithSelf?: boolean;
   isSystemBotChat?: boolean;
   isAnonymousForwards?: boolean;
   isCreator?: boolean;
-  isChannelWithAvatars?: boolean;
   isBot?: boolean;
   isNonContact?: boolean;
   nameChangeDate?: number;
@@ -190,9 +187,7 @@ const MessageList = ({
   type,
   isChatLoaded,
   isForum,
-  isChannelChat,
   isGroupChat,
-  isChannelWithAvatars,
   canPost,
   isSynced,
   isActive,
@@ -274,8 +269,8 @@ const MessageList = ({
   const areMessagesLoaded = Boolean(messageIds);
 
   const isPrivate = isUserId(chatId);
-  const withUsers = Boolean((!isPrivate && !isChannelChat)
-    || isChatWithSelf || isSystemBotChat || isAnonymousForwards || isChannelWithAvatars);
+  const withUsers = Boolean(!isPrivate
+    || isChatWithSelf || isSystemBotChat || isAnonymousForwards);
 
   useSyncEffect(() => {
     // We only need it first time when message list appears
@@ -389,7 +384,7 @@ const MessageList = ({
 
   useInterval(() => {
     if (!messageIds || !messagesById || type === 'scheduled' || isAccountFrozen || !isActive) return;
-    if (!isChannelChat && !isGroupChat) return;
+    if (!isGroupChat) return;
 
     const ids = messageIds.filter((id) => {
       const message = messagesById[id];
@@ -735,7 +730,7 @@ const MessageList = ({
     }
   }, [isSelectModeActive]);
 
-  const noAvatars = Boolean(!withUsers || (isChannelChat && !isChannelWithAvatars));
+  const noAvatars = !withUsers;
   const shouldRenderGreeting = isUserId(chatId) && !isChatWithSelf && !isBot && !isAnonymousForwards
     && type === 'thread'
     && (
@@ -797,7 +792,7 @@ const MessageList = ({
     return activeKey === Content.Restricted ? (
       <div className="empty">
         <span>
-          {restrictionReasons?.[0]?.text || `This is a private ${isChannelChat ? 'channel' : 'chat'}`}
+          {restrictionReasons?.[0]?.text || 'This is a private chat'}
         </span>
       </div>
     ) : activeKey === Content.StarsRequired ? (
@@ -820,7 +815,6 @@ const MessageList = ({
       <MessageListContent
         chatId={chatId}
         isComments={isComments}
-        isChannelChat={isChannelChat}
         isChatMonoforum={isChatMonoforum}
         isSavedDialog={isSavedDialog}
         messageIds={messageIds || [lastMessage!.id]}
@@ -944,10 +938,8 @@ export default memo(withGlobal<OwnProps>(
       isChatLoaded: true,
       isRestricted,
       restrictionReasons,
-      isChannelChat: isChatChannel(chat),
       isChatMonoforum: isChatMonoforum(chat),
       isGroupChat: isChatGroup(chat),
-      isChannelWithAvatars: chat.areProfilesShown,
       isCreator: chat.isCreator,
       isChatWithSelf: selectIsChatWithSelf(global, chatId),
       isSystemBotChat: isSystemBot(chatId),

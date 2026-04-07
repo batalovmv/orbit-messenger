@@ -46,8 +46,8 @@ const LeaveGroupModal = ({
   chatFullInfo,
 }: OwnProps & StateProps) => {
   const {
-    closeLeaveGroupModal, leaveChannel, loadMoreMembers, loadFullChat,
-    transferChannelOwnership, verifyTransferOwnership, openTwoFaCheckModal,
+    closeLeaveGroupModal, deleteChatUser, loadMoreMembers, loadFullChat,
+    verifyTransferOwnership, openTwoFaCheckModal,
   } = getActions();
   const lang = useLang();
 
@@ -167,20 +167,11 @@ const LeaveGroupModal = ({
     }
   });
 
-  const handleLeaveAndTransfer = useLastCallback((password: string) => {
+  const handleLeaveAndTransfer = useLastCallback((_password: string) => {
     const chatId = modal?.chatId;
     if (!chatId) return;
 
-    if (isOwnerChanged && newOwnerId) {
-      transferChannelOwnership({
-        chatId,
-        userId: newOwnerId,
-        password,
-        onSuccess: () => leaveChannel({ chatId, shouldSkipOwnershipCheck: true }),
-      });
-    } else {
-      leaveChannel({ chatId, shouldSkipOwnershipCheck: true });
-    }
+    deleteChatUser({ chatId, userId: currentUserId! });
     closeLeaveGroupModal();
   });
 

@@ -5,7 +5,6 @@ import type { GlobalState } from '../types';
 
 import { isUserId } from '../../util/entities/ids';
 import { omit, uniqueByField } from '../../util/iteratees';
-import { isChatChannel } from '../helpers';
 import {
   selectChatFullInfo,
   selectPeer,
@@ -145,19 +144,16 @@ export function deletePeerPhoto<T extends GlobalState>(
   global: T,
   peerId: string,
   photoId: string,
-  isFromActionMessage?: boolean,
 ) {
   const peer = selectPeer(global, peerId);
   const profilePhotos = selectPeerPhotos(global, peerId);
   if (!peer || !profilePhotos) {
     return global;
   }
-  const isChannel = 'title' in peer && isChatChannel(peer);
-
   const userFullInfo = selectUserFullInfo(global, peerId);
   const chatFullInfo = selectChatFullInfo(global, peerId);
 
-  const isAvatar = peer.avatarPhotoId === photoId && (!isChannel || isFromActionMessage);
+  const isAvatar = peer.avatarPhotoId === photoId;
   const nextAvatarPhoto = isAvatar ? profilePhotos.photos[1] : undefined;
 
   if (userFullInfo) {
@@ -179,9 +175,7 @@ export function deletePeerPhoto<T extends GlobalState>(
   }
 
   const avatarPhotoId = isAvatar ? nextAvatarPhoto?.id : peer.avatarPhotoId;
-  const shouldKeepInPhotos = isAvatar && 'title' in peer && isChatChannel(peer);
-  const photos = shouldKeepInPhotos
-    ? profilePhotos.photos.filter((photo) => photo.id !== photoId) : profilePhotos.photos.slice();
+  const photos = profilePhotos.photos.slice();
 
   global = updatePeer(global, peerId, {
     avatarPhotoId,

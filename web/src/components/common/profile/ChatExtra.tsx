@@ -22,7 +22,6 @@ import {
   getChatLink,
   getHasAdminRight,
   isChatAdmin,
-  isChatChannel,
   isUserRightBanned,
 } from '../../../global/helpers';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
@@ -199,7 +198,7 @@ const ChatExtra = ({
   }, [businessLocation, locationBlobUrl]);
 
   const isTopicInfo = Boolean(topicId && topicId !== MAIN_THREAD_ID);
-  const shouldRenderAllLinks = (chat && isChatChannel(chat)) || user?.isPremium;
+  const shouldRenderAllLinks = user?.isPremium;
 
   const activeUsernames = useMemo(() => {
     const result = usernames?.filter((u) => u.isActive);
@@ -658,9 +657,9 @@ export default memo(withGlobal<OwnProps>(
     const chatInviteLink = chatFullInfo?.inviteLink;
     const description = userFullInfo?.bio || chatFullInfo?.about;
 
-    const canViewSubscribers = chat && isChatChannel(chat) && isChatAdmin(chat);
+    const canViewSubscribers = false;
     const canInviteUsers = chat && !user && (
-      (!isChatChannel(chat) && !isUserRightBanned(chat, 'inviteUsers'))
+      !isUserRightBanned(chat, 'inviteUsers')
       || getHasAdminRight(chat, 'inviteUsers')
     );
 

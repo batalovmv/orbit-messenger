@@ -5,7 +5,7 @@ import { getActions, getGlobal, withGlobal } from '../../../global';
 import type { ApiChat, ApiChatMember } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
-import { getHasAdminRight, getUserFullName, isChatChannel } from '../../../global/helpers';
+import { getHasAdminRight, getUserFullName } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 import { partition } from '../../../util/iteratees';
 
@@ -29,14 +29,12 @@ type OwnProps = {
 type StateProps = {
   chat?: ApiChat;
   currentUserId?: string;
-  isChannel?: boolean;
   adminMembersById?: Record<string, ApiChatMember>;
 };
 
 const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
   isActive,
   chat,
-  isChannel,
   currentUserId,
   adminMembersById,
   onScreenSelect,
@@ -55,7 +53,7 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
   const areProfilesEnabled = Boolean(chat?.areProfilesShown);
 
   const canAddNewAdmins = Boolean(chat?.isCreator || (chat && getHasAdminRight(chat, 'addAdmins')));
-  const canToggleSignatures = isChannel && getHasAdminRight(chat!, 'postMessages');
+  const canToggleSignatures = false;
 
   const adminMembers = useMemo(() => {
     if (!adminMembersById) {
@@ -118,15 +116,13 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
             disabled
           >
             <span className="title">{lang('EventLog')}</span>
-            <span className="subtitle">{lang(isChannel ? 'EventLogInfoDetailChannel' : 'EventLogInfoDetail')}</span>
+            <span className="subtitle">{lang('EventLogInfoDetail')}</span>
           </ListItem>
         </div>
 
         <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
           <p className="section-help" dir="auto">
-            {lang(isChannel
-              ? 'Channel.Management.AddModeratorHelp'
-              : 'Group.Management.AddModeratorHelp')}
+            {lang('Group.Management.AddModeratorHelp')}
           </p>
 
           {adminMembers.map((member) => (
@@ -188,7 +184,6 @@ export default memo(withGlobal<OwnProps>(
     return {
       chat,
       currentUserId: global.currentUserId,
-      isChannel: chat && isChatChannel(chat),
       adminMembersById: selectChatFullInfo(global, chatId)?.adminMembersById,
     };
   },

@@ -134,10 +134,6 @@ const LeftMain: FC<OwnProps> = ({
     }
   });
 
-  const handleSelectNewChannel = useLastCallback(() => {
-    openLeftColumnContent({ contentKey: LeftColumnContent.NewChannelStep1 });
-  });
-
   const handleSelectNewGroup = useLastCallback(() => {
     openLeftColumnContent({ contentKey: LeftColumnContent.NewGroupStep1 });
   });
@@ -255,7 +251,6 @@ const LeftMain: FC<OwnProps> = ({
       <NewChatButton
         isShown={isNewChatButtonShown}
         onNewPrivateChat={handleSelectContacts}
-        onNewChannel={handleSelectNewChannel}
         onNewGroup={handleSelectNewGroup}
         isAccountFrozen={isAccountFrozen}
       />

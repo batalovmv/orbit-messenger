@@ -63,10 +63,6 @@ export function getPeerTypeKey(peer: ApiPeer) {
       return 'ChatList.PeerTypeGroup';
     }
 
-    if (peer.type === 'chatTypeChannel') {
-      return 'ChatList.PeerTypeChannel';
-    }
-
     if (peer.type === 'chatTypePrivate') {
       return 'ChatList.PeerTypeNonContact';
     }

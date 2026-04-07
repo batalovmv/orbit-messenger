@@ -189,7 +189,7 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 	return chat, nil
 }
 
-// CreateChat creates a group or channel. memberIDs are added after creation (owner is always added).
+// CreateChat creates a group chat. memberIDs are added after creation (owner is always added).
 func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType, name, description string, memberIDs []uuid.UUID) (*model.Chat, error) {
 	if name == "" {
 		return nil, apperror.BadRequest("Chat name is required")
@@ -200,20 +200,16 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 	if len(description) > 2048 {
 		return nil, apperror.BadRequest("Description too long (max 2048 characters)")
 	}
-	if chatType != "group" && chatType != "channel" {
+	if chatType != "group" {
 		return nil, apperror.BadRequest("Invalid chat type")
 	}
 
 	chat := &model.Chat{
-		Type:        chatType,
-		Name:        &name,
-		Description: &description,
-		CreatedBy:   &userID,
-	}
-	if chatType == "channel" {
-		chat.DefaultPermissions = permissions.DefaultChannelPermissions
-	} else {
-		chat.DefaultPermissions = permissions.DefaultGroupPermissions
+		Type:               chatType,
+		Name:               &name,
+		Description:        &description,
+		CreatedBy:          &userID,
+		DefaultPermissions: permissions.DefaultGroupPermissions,
 	}
 
 	if err := s.chats.Create(ctx, chat); err != nil {

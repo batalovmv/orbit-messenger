@@ -6,7 +6,7 @@ import { ARCHIVED_FOLDER_ID, MAX_ACTIVE_PINNED_CHATS, SERVICE_NOTIFICATIONS_USER
 import { buildCollectionByKey, omit } from '../../../util/iteratees';
 import { isLocalMessageId } from '../../../util/keys/messageKey';
 import { closeMessageNotifications, notifyAboutMessage } from '../../../util/notifications';
-import { checkIfHasUnreadReactions, isChatChannel } from '../../helpers';
+import { checkIfHasUnreadReactions } from '../../helpers';
 import {
   addActionHandler, getGlobal, setGlobal,
 } from '../../index';
@@ -162,14 +162,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateChatLeave': {
       global = leaveChat(global, update.id);
-      const chat = selectChat(global, update.id);
-      if (chat && isChatChannel(chat)) {
-        const chatMessages = selectChatMessages(global, update.id);
-        if (chatMessages) {
-          const localMessageIds = Object.keys(chatMessages).map(Number).filter(isLocalMessageId);
-          global = deleteChatMessages(global, chat.id, localMessageIds);
-        }
-      }
 
       return global;
     }

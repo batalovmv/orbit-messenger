@@ -55,7 +55,6 @@ import {
   hasMessageTtl,
   isActionMessage,
   isChatBasicGroup,
-  isChatChannel,
   isChatGroup,
   isChatSuperGroup,
   isCommonBoxChat,
@@ -357,7 +356,6 @@ export function selectSender<T extends GlobalState>(global: T, message: ApiMessa
     return message.isOutgoing ? currentUser : chat;
   }
 
-  if (chat && isChatChannel(chat) && !chat.areProfilesShown) return chat;
 
   return selectPeer(global, senderId);
 }
@@ -544,7 +542,6 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const isChatWithSelf = selectIsChatWithSelf(global, message.chatId);
   const isBasicGroup = isChatBasicGroup(chat);
   const isSuperGroup = isChatSuperGroup(chat);
-  const isChannel = isChatChannel(chat);
   const isBotChat = Boolean(selectBot(global, chat.id));
   const isLocal = isMessageLocal(message);
   const isFailed = isMessageFailed(message);
@@ -561,10 +558,6 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   // https://github.com/telegramdesktop/tdesktop/blob/6627de646022af1394134974477109cd1439e1bb/Telegram/SourceFiles/data/data_peer_values.cpp#L367C2-L372C3
   const canPinMessage = (() => {
     if (isPrivate || chat.isCreator) return true;
-
-    if (isChannel) {
-      return getHasAdminRight(chat, 'editMessages');
-    }
 
     const hasPinMessageRight = getHasAdminRight(chat, 'pinMessages');
     const isPinMessageRightBanned = isUserRightBanned(chat, 'pinMessages', chatFullInfo);
@@ -587,7 +580,6 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
     if (isPrivate) return isChatWithSelf;
     if (isBasicGroup) return false;
     if (isSuperGroup) return canPinMessage;
-    if (isChannel) return chat.isCreator || getHasAdminRight(chat, 'editMessages');
     return false;
   })();
 
@@ -609,7 +601,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
 
   const canReply = selectCanReplyToMessage(global, message, threadId);
   const canReplyGlobally = canReply || (!isSavedDialog && !isLocal && !isServiceNotification
-    && (isSuperGroup || isBasicGroup || isChatChannel(chat)));
+    && (isSuperGroup || isBasicGroup));
 
   let canPin = !isLocal && !isServiceNotification && !isAction && canPinMessage && !isSavedDialog;
   let canUnpin = false;
@@ -641,7 +633,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
     ))
   );
 
-  const hasMessageEditRight = isOwn || (isChannel && (chat.isCreator || getHasAdminRight(chat, 'editMessages')));
+  const hasMessageEditRight = isOwn;
 
   const canEdit = !isLocal && !isAction && isMessageEditable && hasMessageEditRight;
 
@@ -652,7 +644,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const canFaveSticker = !isAction && hasSticker && !hasFavoriteSticker;
   const canUnfaveSticker = !isAction && hasFavoriteSticker;
   const canCopy = !isAction;
-  const canCopyLink = !isLocal && !isAction && (isChannel || isSuperGroup) && !isMonoforum;
+  const canCopyLink = !isLocal && !isAction && isSuperGroup && !isMonoforum;
   const canSelect = !isLocal && !isAction;
 
   const canDownload = selectMessageDownloadableMedia(global, message) && !hasTtl;
@@ -1136,7 +1128,7 @@ function canAutoLoadMedia<T extends GlobalState>({
     (isMediaFromContact && canAutoLoadMediaFromContacts)
     || (!isMediaFromContact && canAutoLoadMediaInPrivateChats && isUserId(chat.id))
     || (canAutoLoadMediaInGroups && isChatGroup(chat))
-    || (canAutoLoadMediaInChannels && isChatChannel(chat)),
+    || false,
   );
 }
 

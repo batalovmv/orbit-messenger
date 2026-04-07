@@ -8,7 +8,7 @@ import type {
 } from '../../../api/types';
 import type { MessageListType, ThemeKey, ThreadId } from '../../../types/index';
 
-import { canEditMediaInEditor, isChatChannel, stripCustomEmoji } from '../../../global/helpers';
+import { canEditMediaInEditor, stripCustomEmoji } from '../../../global/helpers';
 import {
   selectCanAnimateInterface,
   selectChat,
@@ -63,7 +63,6 @@ type StateProps = {
   isInChangingRecipientMode?: boolean;
   shouldPreventComposerAnimation?: boolean;
   senderChat?: ApiChat;
-  isSenderChannel?: boolean;
   currentUserId?: string;
   forwardMessageIds?: number[];
   fromChatId?: string;
@@ -177,7 +176,6 @@ const ComposerEmbeddedMessage = (props: OwnProps & StateProps) => {
     suggestedPostInfo: frozenSuggestedPostInfo,
     replyInfo: frozenReplyInfo,
     editingId: frozenEditingId,
-    isSenderChannel,
   } = useFrozenProps(props, isClosing);
 
   const isForwardingRendering = Boolean(frozenForwardedMessagesCount);
@@ -324,8 +322,7 @@ const ComposerEmbeddedMessage = (props: OwnProps & StateProps) => {
     return undefined;
   }
 
-  const canReplyInSenderChat = sender && !isSenderChannel
-    && chatId !== sender.id && sender.id !== currentUserId;
+  const canReplyInSenderChat = sender && chatId !== sender.id && sender.id !== currentUserId;
 
   return (
     <div className={className} ref={ref} onContextMenu={handleContextMenu}>
@@ -543,8 +540,6 @@ export default memo(withGlobal<OwnProps>(
     }
 
     const chat = sender && selectChat(global, sender.id);
-    const isSenderChannel = chat && isChatChannel(chat);
-
     const forwardsHaveCaptions = forwardedMessages?.some((forward) => (
       forward?.content?.text && Object.keys(forward.content).length > 1
     ));
@@ -574,7 +569,6 @@ export default memo(withGlobal<OwnProps>(
       shouldPreventComposerAnimation,
       senderChat,
       currentUserId: global.currentUserId,
-      isSenderChannel,
       forwardMessageIds,
       fromChatId,
       isMediaNsfw,

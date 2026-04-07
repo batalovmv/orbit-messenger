@@ -308,7 +308,7 @@ export function getApiChatTypeFromPeerEntity(peerEntity: GramJs.TypeChat | GramJ
   ) {
     return 'chatTypeBasicGroup';
   } else {
-    return peerEntity.megagroup ? 'chatTypeSuperGroup' : 'chatTypeChannel';
+    return 'chatTypeSuperGroup';
   }
 }
 
@@ -452,7 +452,6 @@ export function buildApiChatFolder(filter: GramJs.DialogFilter | GramJs.DialogFi
       'id', 'emoticon', 'contacts', 'nonContacts', 'groups', 'bots',
       'excludeMuted', 'excludeRead', 'excludeArchived',
     ]),
-    channels: filter.broadcasts,
     pinnedChatIds: filter.pinnedPeers.map(getApiChatIdFromMtpPeer).filter(Boolean),
     includedChatIds: filter.includePeers.map(getApiChatIdFromMtpPeer).filter(Boolean),
     excludedChatIds: filter.excludePeers.map(getApiChatIdFromMtpPeer).filter(Boolean),

@@ -18,7 +18,6 @@ import './NewChatButton.scss';
 type OwnProps = {
   isShown: boolean;
   onNewPrivateChat: () => void;
-  onNewChannel: () => void;
   onNewGroup: () => void;
   isAccountFrozen?: boolean;
 };
@@ -26,7 +25,6 @@ type OwnProps = {
 const NewChatButton: FC<OwnProps> = ({
   isShown,
   onNewPrivateChat,
-  onNewChannel,
   onNewGroup,
   isAccountFrozen,
 }) => {
@@ -63,11 +61,10 @@ const NewChatButton: FC<OwnProps> = ({
 
   const menuItems = useMemo(() => (
     <>
-      <MenuItem icon="channel" onClick={onNewChannel}>{lang('NewChannel')}</MenuItem>
       <MenuItem icon="group" onClick={onNewGroup}>{lang('NewGroup')}</MenuItem>
       <MenuItem icon="user" onClick={onNewPrivateChat}>{lang('NewMessageTitle')}</MenuItem>
     </>
-  ), [lang, onNewChannel, onNewGroup, onNewPrivateChat]);
+  ), [lang, onNewGroup, onNewPrivateChat]);
 
   return (
     <div className={fabClassName} dir={lang.isRtl ? 'rtl' : undefined}>

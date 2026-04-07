@@ -8,7 +8,6 @@ import type {
 import { isUserId } from '../../util/entities/ids';
 import { omitUndefined } from '../../util/iteratees';
 import { getServerTime } from '../../util/serverTime';
-import { isChatChannel } from './chats';
 
 export function getIsChatMuted(
   chat: ApiChat,
@@ -61,6 +60,5 @@ export function getNotificationPeerType(peer: ApiPeer): ApiNotifyPeerType {
     return 'users';
   }
 
-  const chat = peer as ApiChat;
-  return isChatChannel(chat) ? 'channels' : 'groups';
+  return 'groups';
 }

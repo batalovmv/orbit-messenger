@@ -8,7 +8,7 @@ import type { ApiChat } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
 import { STICKER_SIZE_DISCUSSION_GROUPS } from '../../../config';
-import { isChatChannel, isChatPublic } from '../../../global/helpers';
+import { isChatPublic } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
 import renderText from '../../common/helpers/renderText';
@@ -38,7 +38,6 @@ type StateProps = {
   chatsByIds: Record<string, ApiChat>;
   linkedChat?: ApiChat;
   forDiscussionIds?: string[];
-  isChannel?: boolean;
 };
 
 const ManageDiscussion: FC<OwnProps & StateProps> = ({
@@ -49,13 +48,10 @@ const ManageDiscussion: FC<OwnProps & StateProps> = ({
   chatsByIds,
   linkedChat,
   forDiscussionIds,
-  isChannel,
   onScreenSelect,
 }) => {
   const {
     loadGroupsForDiscussion,
-    linkDiscussionGroup,
-    unlinkDiscussionGroup,
     toggleJoinRequest,
     toggleJoinToSend,
   } = getActions();
@@ -86,16 +82,12 @@ const ManageDiscussion: FC<OwnProps & StateProps> = ({
 
   const handleUnlinkGroupSessions = useCallback(() => {
     closeConfirmUnlinkGroupDialog();
-    unlinkDiscussionGroup({ channelId: isChannel ? chatId : linkedChatId! });
-    if (!isChannel) {
-      onScreenSelect(ManagementScreens.Initial);
-    }
-  }, [closeConfirmUnlinkGroupDialog, unlinkDiscussionGroup, isChannel, chatId, linkedChatId, onScreenSelect]);
+    onScreenSelect(ManagementScreens.Initial);
+  }, [closeConfirmUnlinkGroupDialog, onScreenSelect]);
 
   const handleLinkGroupSessions = useCallback(() => {
     closeConfirmLinkGroupDialog();
-    linkDiscussionGroup({ channelId: chatId, chatId: linkedGroupId! });
-  }, [closeConfirmLinkGroupDialog, linkDiscussionGroup, chatId, linkedGroupId]);
+  }, [closeConfirmLinkGroupDialog]);
 
   const handleJoinToSendCheck = useCallback((checked: boolean) => {
     setIsJoinToSend(checked);
@@ -123,7 +115,7 @@ const ManageDiscussion: FC<OwnProps & StateProps> = ({
           peer={linkedChat}
         />
         <div className="modal-title">
-          {lang(isChannel ? 'DiscussionUnlinkGroup' : 'DiscussionUnlinkChannel')}
+          {lang('DiscussionUnlinkChannel')}
         </div>
       </div>
     );
@@ -183,17 +175,17 @@ const ManageDiscussion: FC<OwnProps & StateProps> = ({
           destructive
           onClick={openConfirmUnlinkGroupDialog}
         >
-          {lang(isChannel ? 'DiscussionUnlinkGroup' : 'DiscussionUnlinkChannel')}
+          {lang('DiscussionUnlinkChannel')}
         </ListItem>
         <ConfirmDialog
           isOpen={isConfirmUnlinkGroupDialogOpen}
           onClose={closeConfirmUnlinkGroupDialog}
           header={renderUnlinkGroupHeader()}
           textParts={renderText(
-            lang(isChannel ? 'DiscussionUnlinkChannelAlert' : 'DiscussionUnlinkGroupAlert', linkedChat?.title),
+            lang('DiscussionUnlinkGroupAlert', linkedChat?.title),
             ['br', 'simple_markdown'],
           )}
-          confirmLabel={lang(isChannel ? 'DiscussionUnlinkGroup' : 'DiscussionUnlinkChannel')}
+          confirmLabel={lang('DiscussionUnlinkChannel')}
           confirmHandler={handleUnlinkGroupSessions}
           confirmIsDestructive
         />
@@ -305,7 +297,6 @@ export default memo(withGlobal<OwnProps>(
       chatsByIds,
       forDiscussionIds,
       linkedChat,
-      isChannel: chat && isChatChannel(chat),
     };
   },
 )(ManageDiscussion));

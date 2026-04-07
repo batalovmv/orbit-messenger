@@ -64,7 +64,6 @@ import {
   getIsSavedDialog,
   getUserFullName,
   groupMessageIdsByThreadId,
-  isChatChannel,
   isChatSuperGroup,
   isDeletedUser,
   isMessageLocal,
@@ -1030,7 +1029,7 @@ addActionHandler('deleteMessages', (global, actions, payload): ActionReturnType 
 
   // Only local messages
   if (!messageIdsToDelete.length && messageIds.length) {
-    deleteMessages(global, isChatChannel(chat) || isChatSuperGroup(chat) ? chatId : undefined, messageIds, actions);
+    deleteMessages(global, isChatSuperGroup(chat) ? chatId : undefined, messageIds, actions);
     return;
   }
 
@@ -2785,7 +2784,7 @@ addActionHandler('copyMessageLink', async (global, actions, payload): Promise<vo
     tabId,
   });
 
-  if (!isChatChannel(chat) && !isChatSuperGroup(chat)) {
+  if (!isChatSuperGroup(chat)) {
     showErrorOccurredNotification();
     return;
   }

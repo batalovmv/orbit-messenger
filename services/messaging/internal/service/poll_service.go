@@ -119,7 +119,7 @@ func (s *PollService) CreatePoll(
 		return nil, nil, apperror.Forbidden("Not a member of this chat")
 	}
 	defaultPerms := chat.DefaultPermissions
-	if defaultPerms == 0 && chat.Type != "channel" && member.Permissions == permissions.PermissionsUnset {
+	if defaultPerms == 0 && member.Permissions == permissions.PermissionsUnset {
 		defaultPerms = permissions.DefaultGroupPermissions
 	}
 	if !permissions.CanPerform(member.Role, chat.Type, member.Permissions, defaultPerms, permissions.CanSendMessages) {

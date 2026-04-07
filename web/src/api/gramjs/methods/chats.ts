@@ -718,14 +718,7 @@ async function getFullChannelInfo(
     canLoadParticipants && await fetchMembers({ chat, memberFilter: 'admin' })
   ) || {};
   const botCommands = botInfo ? buildApiChatBotCommands(botInfo) : undefined;
-  const memberInfoRequest = !chat.isNotJoined && chat.type === 'chatTypeChannel'
-    ? await fetchMember({ chat }) : undefined;
-  const memberInfo = memberInfoRequest?.member;
-  const joinInfo = memberInfo?.joinedDate ? {
-    joinedDate: memberInfo.joinedDate,
-    inviterId: memberInfo.inviterId,
-    isViaRequest: memberInfo.isViaRequest,
-  } : undefined;
+  const joinInfo = undefined;
 
   const chats = result.chats.map((c) => buildApiChatFromPreview(c)).filter(Boolean);
 
@@ -1650,7 +1643,7 @@ export async function checkChatInvite(hash: string) {
 
 export async function addChatMembers(chat: ApiChat, users: ApiUser[]) {
   try {
-    if (chat.type === 'chatTypeChannel' || chat.type === 'chatTypeSuperGroup') {
+    if (chat.type === 'chatTypeSuperGroup') {
       const invitedUsers = await invokeRequest(new GramJs.channels.InviteToChannel({
         channel: buildInputChannel(chat.id, chat.accessHash),
         users: users.map((user) => buildInputUser(user.id, user.accessHash)),

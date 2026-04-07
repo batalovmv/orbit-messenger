@@ -13,7 +13,6 @@ import type { IRadioOption } from '../ui/CheckboxGroup';
 import {
   getHasAdminRight,
   getUserFirstOrLastName, isChatBasicGroup,
-  isChatChannel,
   isChatSuperGroup,
   isSystemBot,
 } from '../../global/helpers';
@@ -57,7 +56,6 @@ export type OwnProps = {
 
 type StateProps = {
   chat?: ApiChat;
-  isChannel?: boolean;
   isSuperGroup?: boolean;
   messageIds?: number[];
   canDeleteForAll?: boolean;
@@ -77,7 +75,6 @@ type StateProps = {
 const DeleteMessageModal: FC<OwnProps & StateProps> = ({
   isOpen,
   chat,
-  isChannel,
   isSuperGroup,
   isSchedule,
   currentUserId,
@@ -121,7 +118,7 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
   const [shouldDeleteForAll, setShouldDeleteForAll] = useState(true);
 
   const peerList = useMemo(() => {
-    if (isChannel || !messageIds || !chat) {
+    if (!messageIds || !chat) {
       return MEMO_EMPTY_ARRAY;
     }
     const global = getGlobal();
@@ -132,7 +129,7 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
         && peer?.id !== linkedChatId
         && peer?.id !== chat?.linkedMonoforumId
       )) : MEMO_EMPTY_ARRAY;
-  }, [chat, isChannel, linkedChatId, messageIds]);
+  }, [chat, linkedChatId, messageIds]);
 
   const buildNestedOptionListWithAvatars = useLastCallback(() => {
     return peerList.map((member) => {
@@ -492,7 +489,6 @@ export default memo(withGlobal<OwnProps>(
     const chat = chatId ? selectChat(global, chatId) : undefined;
     const chatFullInfo = chat && selectChatFullInfo(global, chat.id);
     const linkedChatId = chatFullInfo?.linkedChatId;
-    const isChannel = Boolean(chat) && isChatChannel(chat);
     const isSuperGroup = Boolean(chat) && isChatSuperGroup(chat);
     const isSchedule = deleteMessageModal?.isSchedule;
     const onConfirm = deleteMessageModal?.onConfirm;
@@ -505,11 +501,10 @@ export default memo(withGlobal<OwnProps>(
     const isCreator = chat?.isCreator;
     const isChatWithBot = chatId ? selectIsChatWithBot(global, chatId) : undefined;
     const willDeleteForCurrentUserOnly = (chat && isChatBasicGroup(chat) && !canDeleteForAll) || isChatWithBot;
-    const willDeleteForAll = chat && (isChatSuperGroup(chat) || isChannel);
+    const willDeleteForAll = chat && isChatSuperGroup(chat);
 
     return {
       chat,
-      isChannel,
       isSuperGroup,
       messageIds,
       currentUserId: global.currentUserId,

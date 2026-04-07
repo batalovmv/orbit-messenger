@@ -12,7 +12,6 @@ import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
   getHasAdminRight,
-  isChatChannel,
   isChatPublic,
   isChatSuperGroup,
   isHistoryClearMessage,
@@ -59,7 +58,7 @@ export function selectSupportChat<T extends GlobalState>(global: T) {
 
 export function selectChatOnlineCount<T extends GlobalState>(global: T, chat: ApiChat) {
   const fullInfo = selectChatFullInfo(global, chat.id);
-  if (isUserId(chat.id) || isChatChannel(chat) || !fullInfo) {
+  if (isUserId(chat.id) || !fullInfo) {
     return undefined;
   }
 
@@ -97,10 +96,6 @@ export function selectChatType<T extends GlobalState>(global: T, chatId: string)
 
   const chat = selectChat(global, chatId);
   if (!chat) return undefined;
-
-  if (isChatChannel(chat)) {
-    return 'channels';
-  }
 
   return 'chats';
 }
@@ -246,7 +241,7 @@ export function selectCanInviteToChat<T extends GlobalState>(global: T, chatId: 
   if (!chat) return false;
 
   // https://github.com/TelegramMessenger/Telegram-iOS/blob/5126be83b3b9578fb014eb52ca553da9e7a8b83a/submodules/TelegramCore/Sources/TelegramEngine/Peers/Communities.swift#L6
-  return !chat.migratedTo && Boolean(!isUserId(chatId) && ((isChatChannel(chat) || isChatSuperGroup(chat)) ? (
+  return !chat.migratedTo && Boolean(!isUserId(chatId) && (isChatSuperGroup(chat) ? (
     chat.isCreator || getHasAdminRight(chat, 'inviteUsers')
     || (isChatPublic(chat) && !chat.isJoinRequest)
   ) : (chat.isCreator || getHasAdminRight(chat, 'inviteUsers'))));
@@ -257,11 +252,11 @@ export function selectCanShareFolder<T extends GlobalState>(global: T, folderId:
   if (!folder) return false;
 
   const {
-    bots, groups, channels, contacts, nonContacts, includedChatIds, pinnedChatIds,
+    bots, groups, contacts, nonContacts, includedChatIds, pinnedChatIds,
     excludeArchived, excludeMuted, excludeRead, excludedChatIds,
   } = folder;
 
-  return !bots && !groups && !channels && !contacts && !nonContacts
+  return !bots && !groups && !contacts && !nonContacts
     && !excludeArchived && !excludeMuted && !excludeRead && !excludedChatIds?.length
     && (pinnedChatIds?.length || includedChatIds.length)
     && folder.includedChatIds.concat(folder.pinnedChatIds || []).some((chatId) => {
@@ -311,11 +306,12 @@ export function selectRequestedChatTranslationLanguage<T extends GlobalState>(
   return requestedTranslations.byChatId[chatId]?.toLanguage;
 }
 
+// Channels not supported — always returns undefined
 export function selectSimilarChannelIds<T extends GlobalState>(
-  global: T,
-  chatId: string,
+  _global: T,
+  _chatId: string,
 ) {
-  return global.chats.similarChannelsById[chatId];
+  return undefined;
 }
 
 export function selectSimilarBotsIds<T extends GlobalState>(

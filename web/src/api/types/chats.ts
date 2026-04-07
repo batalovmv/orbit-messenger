@@ -23,8 +23,7 @@ import type {
 
 type ApiChatType = (
   'chatTypePrivate' | 'chatTypeSecret' |
-  'chatTypeBasicGroup' | 'chatTypeSuperGroup' |
-  'chatTypeChannel'
+  'chatTypeBasicGroup' | 'chatTypeSuperGroup'
 );
 
 export type ApiPeer = ApiChat | ApiUser;
@@ -233,7 +232,6 @@ export interface ApiChatFolder {
   contacts?: true;
   nonContacts?: true;
   groups?: true;
-  channels?: true;
   bots?: true;
   color?: number;
   excludeMuted?: true;

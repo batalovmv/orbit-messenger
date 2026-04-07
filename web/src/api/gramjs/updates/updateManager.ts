@@ -394,7 +394,7 @@ export function reset() {
 export function processAffectedHistory(
   chat: ApiChat, affected: GramJs.messages.AffectedMessages | GramJs.messages.AffectedHistory,
 ) {
-  const isChannel = chat.type === 'chatTypeChannel' || chat.type === 'chatTypeSuperGroup';
+  const isChannel = chat.type === 'chatTypeSuperGroup';
   const channeId = isChannel ? buildMtpPeerId(chat.id, 'channel') : undefined;
   const update = buildLocalUpdatePts(affected.pts, affected.ptsCount, channeId);
 

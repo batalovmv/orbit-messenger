@@ -8,7 +8,7 @@ import type { ApiChat, ApiExportedInvite } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
 import { STICKER_SIZE_INVITES, TME_LINK_PREFIX } from '../../../config';
-import { getMainUsername, isChatChannel } from '../../../global/helpers';
+import { getMainUsername } from '../../../global/helpers';
 import { selectChat, selectTabState } from '../../../global/selectors';
 import { copyTextToClipboard } from '../../../util/clipboard';
 import { formatCountdown, MILLISECONDS_IN_DAY } from '../../../util/dates/dateFormat';
@@ -38,7 +38,6 @@ type OwnProps = {
 
 type StateProps = {
   chat?: ApiChat;
-  isChannel?: boolean;
   exportedInvites?: ApiExportedInvite[];
   revokedExportedInvites?: ApiExportedInvite[];
 };
@@ -59,7 +58,6 @@ const ManageInvites: FC<OwnProps & StateProps> = ({
   exportedInvites,
   revokedExportedInvites,
   isActive,
-  isChannel,
   onClose,
   onScreenSelect,
 }) => {
@@ -280,7 +278,7 @@ const ManageInvites: FC<OwnProps & StateProps> = ({
             size={STICKER_SIZE_INVITES}
             className="section-icon"
           />
-          <p className="section-help">{isChannel ? oldLang('PrimaryLinkHelpChannel') : oldLang('PrimaryLinkHelp')}</p>
+          <p className="section-help">{oldLang('PrimaryLinkHelp')}</p>
         </div>
         {primaryInviteLink && (
           <div className="section">
@@ -381,13 +379,11 @@ export default memo(withGlobal<OwnProps>(
   (global, { chatId }): Complete<StateProps> => {
     const { invites, revokedInvites } = selectTabState(global).management.byChatId[chatId] || {};
     const chat = selectChat(global, chatId);
-    const isChannel = chat && isChatChannel(chat);
 
     return {
       exportedInvites: invites,
       revokedExportedInvites: revokedInvites,
       chat,
-      isChannel,
     };
   },
 )(ManageInvites));

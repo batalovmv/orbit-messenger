@@ -17,10 +17,9 @@ const (
 
 // Role defaults.
 const (
-	DefaultGroupPermissions   = CanSendMessages | CanSendMedia | CanAddMembers | CanPinMessages // groups: no CanChangeInfo, CanDeleteMessages, CanBanUsers, CanInviteViaLink by default
-	DefaultDirectPermissions  = CanSendMessages | CanSendMedia | CanPinMessages                 // direct chats: participants can send text/media and manage pins, but cannot add others
-	DefaultChannelPermissions = int64(0)                                                        // channels: only admin/owner can post
-	DefaultAdminPermissions   = AllPermissions                                                  // new admins get all capabilities
+	DefaultGroupPermissions  = CanSendMessages | CanSendMedia | CanAddMembers | CanPinMessages // groups: no CanChangeInfo, CanDeleteMessages, CanBanUsers, CanInviteViaLink by default
+	DefaultDirectPermissions = CanSendMessages | CanSendMedia | CanPinMessages                 // direct chats: participants can send text/media and manage pins, but cannot add others
+	DefaultAdminPermissions  = AllPermissions                                                  // new admins get all capabilities
 )
 
 // Has returns true if bit is set in mask.
@@ -40,7 +39,6 @@ const PermissionsUnset int64 = -1
 //   - Owner: all permissions
 //   - Admin: their personal permissions (or default admin if unset / -1)
 //   - Member: per-user override if set (not -1), else chat default_permissions
-//   - Channel members: 0 (only admin/owner can act)
 //   - Banned/readonly: 0
 //
 // The sentinel PermissionsUnset (-1) distinguishes "not customized" from "explicitly 0".
@@ -56,9 +54,6 @@ func EffectivePermissions(role, chatType string, memberPerms, defaultPerms int64
 	case "banned", "readonly":
 		return 0
 	default: // "member"
-		if chatType == "channel" {
-			return 0
-		}
 		if memberPerms != PermissionsUnset {
 			return memberPerms
 		}

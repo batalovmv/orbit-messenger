@@ -7,7 +7,6 @@ import {
   getChatTitle,
   getUserFirstOrLastName,
   isChatBasicGroup,
-  isChatChannel,
   isChatSuperGroup,
   isUserBot,
 } from '../../global/helpers';
@@ -34,7 +33,6 @@ export type OwnProps = {
 };
 
 type StateProps = {
-  isChannel: boolean;
   isChatWithSelf?: boolean;
   isBot?: boolean;
   isPrivateChat: boolean;
@@ -49,7 +47,6 @@ const DeleteChatModal = ({
   isOpen,
   chat,
   isSavedDialog,
-  isChannel,
   isPrivateChat,
   isChatWithSelf,
   isBot,
@@ -62,10 +59,8 @@ const DeleteChatModal = ({
   onCloseAnimationEnd,
 }: OwnProps & StateProps) => {
   const {
-    leaveChannel,
     deleteHistory,
     deleteSavedHistory,
-    deleteChannel,
     deleteChatUser,
     blockUser,
     deleteChat,
@@ -101,17 +96,17 @@ const DeleteChatModal = ({
         deleteHistory({ chatId: chat.id, shouldDeleteForAll: false });
         deleteChatUser({ chatId: chat.id, userId: currentUserId! });
       }
-    } else if ((isChannel || isSuperGroup) && !chat.isCreator) {
-      leaveChannel({ chatId: chat.id });
-    } else if ((isChannel || isSuperGroup) && chat.isCreator) {
-      deleteChannel({ chatId: chat.id });
+    } else if (isSuperGroup && !chat.isCreator) {
+      deleteChatUser({ chatId: chat.id, userId: currentUserId! });
+    } else if (isSuperGroup && chat.isCreator) {
+      deleteChat({ chatId: chat.id });
     }
     onClose();
   });
 
   const handleLeaveChat = useLastCallback(() => {
-    if (isChannel || isSuperGroup) {
-      leaveChannel({ chatId: chat.id });
+    if (isSuperGroup) {
+      deleteChatUser({ chatId: chat.id, userId: currentUserId! });
       onClose();
     } else if (isBasicGroup && chat.isCreator) {
       deleteHistory({ chatId: chat.id, shouldDeleteForAll: false });
@@ -139,14 +134,6 @@ const DeleteChatModal = ({
       return isChatWithSelf ? 'ClearHistoryMyNotesTitle' : 'ClearHistoryTitleSingle2';
     }
 
-    if (isChannel && !chat.isCreator) {
-      return 'LeaveChannel';
-    }
-
-    if (isChannel && chat.isCreator) {
-      return 'ChannelDelete';
-    }
-
     if (isBasicGroup || isSuperGroup) {
       return 'Group.LeaveGroup';
     }
@@ -165,15 +152,7 @@ const DeleteChatModal = ({
         </p>
       );
     }
-    if (isChannel && chat.isCreator) {
-      return (
-        <p>
-          {renderText(oldLang('ChatList.DeleteAndLeaveGroupConfirmation', chatTitle), ['simple_markdown', 'emoji'])}
-        </p>
-      );
-    }
-
-    if ((isChannel && !chat.isCreator) || isBasicGroup || isSuperGroup) {
+    if (isBasicGroup || isSuperGroup) {
       return <p>{renderText(oldLang('ChannelLeaveAlertWithName', chatTitle), ['simple_markdown', 'emoji'])}</p>;
     }
 
@@ -183,13 +162,6 @@ const DeleteChatModal = ({
   function renderActionText() {
     if (isSavedDialog) {
       return 'Delete';
-    }
-
-    if (isChannel && !chat.isCreator) {
-      return 'LeaveChannel';
-    }
-    if (isChannel && chat.isCreator) {
-      return 'Chat.Input.Delete';
     }
 
     if (isBasicGroup || isSuperGroup) {
@@ -251,7 +223,6 @@ export default memo(withGlobal<OwnProps>(
       isPrivateChat,
       isChatWithSelf,
       isBot,
-      isChannel: isChatChannel(chat),
       isBasicGroup: isChatBasicGroup(chat),
       isSuperGroup: isChatSuperGroup(chat),
       currentUserId: global.currentUserId,

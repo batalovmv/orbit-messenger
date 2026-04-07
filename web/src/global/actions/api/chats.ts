@@ -23,7 +23,6 @@ import {
   ARCHIVED_FOLDER_ID,
   CHAT_LIST_LOAD_SLICE,
   DEBUG,
-  GLOBAL_SUGGESTED_CHANNELS_ID,
   RE_TG_LINK,
   SAVED_FOLDER_ID,
   SERVICE_NOTIFICATIONS_USER_ID,
@@ -51,7 +50,6 @@ import {
   getIsSavedDialog,
   isChatArchived,
   isChatBasicGroup,
-  isChatChannel,
   isChatMonoforum,
   isChatSuperGroup,
   isUserBot,
@@ -79,9 +77,7 @@ import {
   replaceChatListLoadingParameters,
   replaceMessages,
   replaceNotifyExceptions,
-  replaceSimilarChannels,
   replaceUserStatuses,
-  toggleSimilarChannels,
   updateChat,
   updateChatFullInfo,
   updateChatLastMessageId,
@@ -126,7 +122,6 @@ import {
   selectLastServiceNotification,
   selectPeer,
   selectPeerFullInfo,
-  selectSimilarChannelIds,
   selectStickerSet,
   selectSupportChat,
   selectTabState,
@@ -778,97 +773,6 @@ addActionHandler('updateTopicMutedState', (global, actions, payload): ActionRetu
   });
 });
 
-addActionHandler('createChannel', async (global, actions, payload): Promise<void> => {
-  const {
-    title, about, photo, memberIds, discussionChannelId, tabId = getCurrentTabId(),
-  } = payload;
-
-  global = updateTabState(global, {
-    chatCreation: {
-      progress: ChatCreationProgress.InProgress,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  let createdChannel: ApiChat | undefined;
-  try {
-    const result = await callApi('createChannel', {
-      title,
-      about,
-      memberIds,
-    });
-    createdChannel = result?.chat;
-  } catch (error) {
-    global = getGlobal();
-
-    global = updateTabState(global, {
-      chatCreation: {
-        progress: ChatCreationProgress.Error,
-      },
-    }, tabId);
-
-    setGlobal(global);
-
-    if ((error as ApiError).message === 'CHANNELS_TOO_MUCH') {
-      actions.openLimitReachedModal({ limit: 'channels', tabId });
-    } else {
-      actions.showDialog({ data: { ...(error as ApiError), hasErrorKey: true }, tabId });
-    }
-  }
-
-  if (!createdChannel) {
-    return;
-  }
-
-  const { id: channelId } = createdChannel;
-
-  global = getGlobal();
-  global = updateChat(global, channelId, createdChannel);
-  global = updateTabState(global, {
-    chatCreation: {
-      ...selectTabState(global, tabId).chatCreation,
-      progress: createdChannel ? ChatCreationProgress.Complete : ChatCreationProgress.Error,
-    },
-  }, tabId);
-  setGlobal(global);
-  if (discussionChannelId && channelId) {
-    actions.linkDiscussionGroup({
-      channelId: discussionChannelId,
-      chatId: channelId,
-      tabId,
-    });
-  }
-  actions.openChat({ id: channelId, shouldReplaceHistory: true, tabId });
-
-  if (channelId && photo) {
-    await callApi('editChatPhoto', { chatId: channelId, photo });
-  }
-});
-
-addActionHandler('joinChannel', async (global, actions, payload): Promise<void> => {
-  const { chatId, tabId = getCurrentTabId() } = payload;
-  const chat = selectChat(global, chatId);
-  if (!chat) {
-    return;
-  }
-
-  const { id: channelId, accessHash } = chat;
-
-  if (!(channelId && accessHash)) {
-    return;
-  }
-
-  try {
-    await callApi('joinChannel', { channelId, accessHash });
-  } catch (error) {
-    if ((error as ApiError).message === 'CHANNELS_TOO_MUCH') {
-      actions.openLimitReachedModal({ limit: 'channels', tabId });
-    } else {
-      actions.showDialog({ data: { ...(error as ApiError), hasErrorKey: true }, tabId });
-    }
-  }
-});
-
 addActionHandler('deleteChatUser', (global, actions, payload): ActionReturnType => {
   const {
     chatId, userId, shouldRevokeHistory, tabId = getCurrentTabId(),
@@ -904,44 +808,6 @@ addActionHandler('deleteChat', (global, actions, payload): ActionReturnType => {
   }
 
   void callApi('deleteChat', { chatId: chat.id });
-});
-
-addActionHandler('leaveChannel', async (global, actions, payload): Promise<void> => {
-  const { chatId, shouldSkipOwnershipCheck, tabId = getCurrentTabId() } = payload;
-  const chat = selectChat(global, chatId);
-  if (!chat) {
-    return;
-  }
-
-  if (!shouldSkipOwnershipCheck && chat.isCreator && chat.accessHash) {
-    const futureCreator = await callApi('fetchFutureCreatorAfterLeave', { chat });
-    if (futureCreator) {
-      global = getGlobal();
-      const hasPassword = global.settings.byKey.hasPassword;
-      if (!hasPassword) {
-        actions.openTwoFaCheckModal({ tabId });
-        return;
-      }
-
-      actions.openLeaveGroupModal({ chatId, nextOwnerId: futureCreator.id, tabId });
-      return;
-    }
-  }
-
-  global = getGlobal();
-  global = leaveChat(global, chatId);
-  setGlobal(global);
-
-  if (selectCurrentMessageList(global, tabId)?.chatId === chatId) {
-    actions.openChat({ id: undefined, tabId });
-  }
-
-  await callApi('leaveChannel', { chat });
-  global = getGlobal();
-  const chatMessages = selectChatMessages(global, chatId);
-  const localMessageIds = Object.keys(chatMessages).map(Number).filter(isLocalMessageId);
-  global = deleteChatMessages(global, chatId, localMessageIds);
-  setGlobal(global);
 });
 
 addActionHandler('verifyTransferOwnership', async (global, actions, payload): Promise<void> => {
@@ -981,50 +847,6 @@ addActionHandler('verifyTransferOwnership', async (global, actions, payload): Pr
       break;
     default:
       break;
-  }
-});
-
-addActionHandler('transferChannelOwnership', async (global, actions, payload): Promise<void> => {
-  const {
-    chatId, userId, password, onSuccess,
-  } = payload;
-
-  const chat = selectChat(global, chatId);
-  const user = selectUser(global, userId);
-  if (!chat?.accessHash || !user?.accessHash) {
-    return;
-  }
-
-  const result = await callApi('editChannelCreator', {
-    chat,
-    user,
-    password,
-  });
-
-  if (result !== true) {
-    return;
-  }
-
-  onSuccess?.();
-});
-
-addActionHandler('deleteChannel', (global, actions, payload): ActionReturnType => {
-  const { chatId, tabId = getCurrentTabId() } = payload;
-  const chat = selectChat(global, chatId);
-  if (!chat) {
-    return;
-  }
-
-  global = leaveChat(global, chatId);
-  setGlobal(global);
-
-  if (selectCurrentMessageList(global, tabId)?.chatId === chatId) {
-    actions.openChat({ id: undefined, tabId });
-  }
-
-  const { id: channelId, accessHash } = chat;
-  if (channelId && accessHash) {
-    void callApi('deleteChannel', { channelId, accessHash });
   }
 });
 
@@ -1733,7 +1555,7 @@ addActionHandler('processBoostParameters', async (global, actions, payload): Pro
     }
   }
 
-  if (!isChatChannel(chat) && !isChatSuperGroup(chat)) {
+  if (!isChatSuperGroup(chat)) {
     actions.openChat({ id: chat.id, tabId });
     return;
   }
@@ -2180,61 +2002,6 @@ addActionHandler('loadGroupsForDiscussion', async (global): Promise<void> => {
   setGlobal(global);
 });
 
-addActionHandler('linkDiscussionGroup', async (global, actions, payload): Promise<void> => {
-  if (selectIsCurrentUserFrozen(global)) return;
-  const { channelId, chatId, tabId = getCurrentTabId() } = payload || {};
-
-  const channel = selectChat(global, channelId);
-  if (!channel) {
-    return;
-  }
-
-  const chat = await ensureIsSuperGroup(global, actions, chatId, tabId);
-
-  if (!chat) return;
-
-  let fullInfo = selectChatFullInfo(global, chat.id);
-  if (!fullInfo) {
-    const fullChat = await callApi('fetchFullChat', chat);
-    if (!fullChat) {
-      return;
-    }
-
-    fullInfo = fullChat.fullInfo;
-  }
-
-  if (fullInfo!.isPreHistoryHidden) {
-    global = getGlobal();
-    global = updateChatFullInfo(global, chat.id, { isPreHistoryHidden: false });
-    setGlobal(global);
-
-    await callApi('togglePreHistoryHidden', { chat, isEnabled: false });
-  }
-
-  void callApi('setDiscussionGroup', { channel, chat });
-});
-
-addActionHandler('unlinkDiscussionGroup', async (global, actions, payload): Promise<void> => {
-  const { channelId } = payload;
-
-  const channel = selectChat(global, channelId);
-  if (!channel) {
-    return;
-  }
-
-  const fullInfo = selectChatFullInfo(global, channelId);
-  let chat: ApiChat | undefined;
-  if (fullInfo?.linkedChatId) {
-    chat = selectChat(global, fullInfo.linkedChatId);
-  }
-
-  await callApi('setDiscussionGroup', { channel });
-  if (chat) {
-    global = getGlobal();
-    loadFullChat(global, actions, chat);
-  }
-});
-
 addActionHandler('setActiveChatFolder', (global, actions, payload): ActionReturnType => {
   const { activeChatFolder, tabId = getCurrentTabId() } = payload;
   const maxFolders = selectCurrentLimit(global, 'dialogFilters');
@@ -2319,7 +2086,7 @@ addActionHandler('deleteChatMember', async (global, actions, payload): Promise<v
     return;
   }
 
-  if (isChatSuperGroup(chat) || isChatChannel(chat)) {
+  if (isChatSuperGroup(chat)) {
     actions.updateChatMemberBannedRights({
       chatId,
       userId,
@@ -2405,7 +2172,7 @@ addActionHandler('toggleJoinToSend', async (global, actions, payload): Promise<v
   const { chatId, isEnabled } = payload;
   const chat = selectChat(global, chatId);
   if (!chat) return;
-  if (!isChatSuperGroup(chat) && !isChatChannel(chat)) return;
+  if (!isChatSuperGroup(chat)) return;
 
   await callApi('toggleJoinToSend', chat, isEnabled);
 });
@@ -2414,7 +2181,7 @@ addActionHandler('toggleJoinRequest', async (global, actions, payload): Promise<
   const { chatId, isEnabled } = payload;
   const chat = selectChat(global, chatId);
   if (!chat) return;
-  if (!isChatSuperGroup(chat) && !isChatChannel(chat)) return;
+  if (!isChatSuperGroup(chat)) return;
 
   await callApi('toggleJoinRequest', chat, isEnabled);
 });
@@ -3057,38 +2824,6 @@ addActionHandler('setViewForumAsMessages', (global, actions, payload): ActionRet
   void callApi('setViewForumAsMessages', { chat, isEnabled });
 });
 
-addActionHandler('loadChannelRecommendations', async (global, actions, payload): Promise<void> => {
-  if (selectIsCurrentUserFrozen(global)) return;
-
-  const { chatId } = payload;
-  const chat = chatId ? selectChat(global, chatId) : undefined;
-
-  if (chatId && !chat) {
-    return;
-  }
-
-  if (!chatId) {
-    const similarChannelIds = selectSimilarChannelIds(global, GLOBAL_SUGGESTED_CHANNELS_ID);
-    if (similarChannelIds) return; // Already cached
-  }
-
-  const result = await callApi('fetchChannelRecommendations', {
-    chat,
-  });
-
-  if (!result) {
-    return;
-  }
-
-  const { similarChannels, count } = result;
-
-  const chatsById = buildCollectionByKey(similarChannels, 'id');
-
-  global = getGlobal();
-  global = replaceSimilarChannels(global, chatId || GLOBAL_SUGGESTED_CHANNELS_ID, Object.keys(chatsById), count);
-  setGlobal(global);
-});
-
 addActionHandler('loadBotRecommendations', async (global, actions, payload): Promise<void> => {
   if (selectIsCurrentUserFrozen(global)) return;
 
@@ -3114,18 +2849,6 @@ addActionHandler('loadBotRecommendations', async (global, actions, payload): Pro
   global = getGlobal();
   global = addUsers(global, users as Record<string, ApiUser>);
   global = addSimilarBots(global, userId, Object.keys(users), count);
-  setGlobal(global);
-});
-
-addActionHandler('toggleChannelRecommendations', (global, actions, payload): ActionReturnType => {
-  const { chatId } = payload;
-  const chat = selectChat(global, chatId);
-
-  if (!chat) {
-    return;
-  }
-
-  global = toggleSimilarChannels(global, chatId);
   setGlobal(global);
 });
 

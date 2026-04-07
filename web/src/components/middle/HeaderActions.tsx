@@ -13,7 +13,7 @@ import { requestMeasure, requestNextMutation } from '../../lib/fasterdom/fasterd
 import {
   getIsSavedDialog,
   isAnonymousForwardsChat,
-  isChatBasicGroup, isChatChannel, isChatSuperGroup,
+  isChatBasicGroup, isChatSuperGroup,
 } from '../../global/helpers';
 import {
   selectBot,
@@ -62,7 +62,6 @@ interface OwnProps {
 
 interface StateProps {
   noMenu?: boolean;
-  isChannel?: boolean;
   isRightColumnShown?: boolean;
   canStartBot?: boolean;
   canRestartBot?: boolean;
@@ -94,7 +93,6 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   threadId,
   noMenu,
   isMobile,
-  isChannel,
   canStartBot,
   canRestartBot,
   canUnblock,
@@ -124,7 +122,6 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   onTopicSearch,
 }) => {
   const {
-    joinChannel,
     sendBotCommand,
     openMiddleSearch,
     restartBot,
@@ -163,11 +160,9 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   });
 
   const handleSubscribeClick = useLastCallback(() => {
-    joinChannel({ chatId });
     if (shouldSendJoinRequest) {
       showNotification({
-        message: isChannel ? oldLang('RequestToJoinChannelSentDescription')
-          : oldLang('RequestToJoinGroupSentDescription'),
+        message: oldLang('RequestToJoinGroupSentDescription'),
       });
     }
   });
@@ -350,7 +345,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
               fluid
               onClick={handleSubscribeClick}
             >
-              {oldLang(isChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
+              {oldLang('ProfileJoinGroup')}
             </Button>
           )}
           {canExpandActions && shouldSendJoinRequest && (
@@ -425,7 +420,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           size="smaller"
           iconName="user"
           onClick={handleJoinRequestsClick}
-          ariaLabel={isChannel ? oldLang('SubscribeRequests') : oldLang('MemberRequests')}
+          ariaLabel={oldLang('MemberRequests')}
         >
           <div className="badge">{pendingJoinRequests}</div>
         </Button>
@@ -449,7 +444,6 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           isOpen={isMenuOpen}
           anchor={menuAnchor}
           withExtraActions={isMobile || !canExpandActions}
-          isChannel={isChannel}
           canStartBot={canStartBot}
           canSubscribe={canSubscribe}
           canSearch={canSearch}
@@ -479,7 +473,6 @@ export default memo(withGlobal<OwnProps>(
     chatId, threadId, messageListType, isMobile,
   }): Complete<StateProps> => {
     const chat = selectChat(global, chatId);
-    const isChannel = Boolean(chat && isChatChannel(chat));
     const isSuperGroup = Boolean(chat && isChatSuperGroup(chat));
     const language = selectLanguageCode(global);
     const translationLanguage = selectTranslationLanguage(global);
@@ -512,7 +505,7 @@ export default memo(withGlobal<OwnProps>(
     const canStartBot = !canRestartBot && Boolean(selectIsChatBotNotStarted(global, chatId));
     const canUnblock = isUserBlocked && !bot;
     const canSubscribe = Boolean(
-      (isMainThread || chat.isForum) && (isChannel || isSuperGroup) && chat.isNotJoined && !chat.isMonoforum,
+      (isMainThread || chat.isForum) && isSuperGroup && chat.isNotJoined && !chat.isMonoforum,
     );
     const canSearch = isMainThread || isDiscussionThread;
     const canCall = IS_CALLS_ENABLED && ARE_CALLS_SUPPORTED && isUserId(chat.id) && !isChatWithSelf && !bot
@@ -533,11 +526,10 @@ export default memo(withGlobal<OwnProps>(
     const canTranslate = selectCanTranslateChat(global, chatId) && !fullInfo?.isTranslationDisabled;
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
 
-    const channelMonoforumId = isChatChannel(chat) ? chat.linkedMonoforumId : undefined;
+    const channelMonoforumId = undefined;
 
     return {
       noMenu: false,
-      isChannel,
       isRightColumnShown,
       canStartBot,
       canRestartBot,

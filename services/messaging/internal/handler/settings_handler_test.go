@@ -98,7 +98,7 @@ func (s *noopUserSettingsStore) Upsert(context.Context, *model.UserSettings) err
 }
 
 func (s *noopUserSettingsStore) GetGlobalNotifySettings(context.Context, uuid.UUID) (*model.GlobalNotifySettings, error) {
-	return &model.GlobalNotifySettings{UsersPreview: true, GroupsPreview: true, ChannelsPreview: true}, nil
+	return &model.GlobalNotifySettings{UsersPreview: true, GroupsPreview: true}, nil
 }
 
 func (s *noopUserSettingsStore) UpdateGlobalNotifySettings(context.Context, uuid.UUID, *model.GlobalNotifySettings) error {

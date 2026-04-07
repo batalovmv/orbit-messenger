@@ -4,7 +4,7 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChat, ApiChatMember, ApiUser } from '../../../api/types';
 
-import { getHasAdminRight, getUserFullName, isChatChannel } from '../../../global/helpers';
+import { getHasAdminRight, getUserFullName } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 
@@ -28,7 +28,6 @@ type StateProps = {
   usersById: Record<string, ApiUser>;
   removedMembers: ApiChatMember[];
   canDeleteMembers?: boolean;
-  isChannel?: boolean;
 };
 
 const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
@@ -36,7 +35,6 @@ const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
   usersById,
   canDeleteMembers,
   removedMembers,
-  isChannel,
   onClose,
   isActive,
 }) => {
@@ -84,7 +82,7 @@ const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
     <div className="Management">
       <div className="panel-content custom-scroll">
         <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
-          <p className="section-help">{lang(isChannel ? 'NoBlockedChannel2' : 'NoBlockedGroup2')}</p>
+          <p className="section-help">{lang('NoBlockedGroup2')}</p>
 
           {removedMembers.map((member) => (
             <ListItem
@@ -132,7 +130,6 @@ export default memo(withGlobal<OwnProps>(
       usersById,
       canDeleteMembers,
       removedMembers: selectChatFullInfo(global, chatId)?.kickedMembers || MEMO_EMPTY_ARRAY,
-      isChannel: chat && isChatChannel(chat),
     };
   },
 )(ManageChatRemovedUsers));

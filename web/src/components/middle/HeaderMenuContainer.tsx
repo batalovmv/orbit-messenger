@@ -19,7 +19,6 @@ import {
   getHasAdminRight,
   getIsSavedDialog,
   isChatAdmin,
-  isChatChannel,
   isChatGroup,
   isSystemBot,
   isUserRightBanned,
@@ -81,7 +80,6 @@ export type OwnProps = {
   isOpen: boolean;
   withExtraActions: boolean;
   anchor: IAnchorPosition;
-  isChannel?: boolean;
   canStartBot?: boolean;
   canSubscribe?: boolean;
   canSearch?: boolean;
@@ -140,7 +138,6 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   isOpen,
   withExtraActions,
   anchor,
-  isChannel,
   botCommands,
   botPrivacyPolicyUrl,
   withForumActions,
@@ -534,12 +531,8 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
       return oldLang('GroupInfo.DeleteAndExit');
     }
 
-    if (isChannel) {
-      return oldLang('LeaveChannel');
-    }
-
     return oldLang('Group.LeaveGroup');
-  }, [canDeleteChat, chat, isChannel, isPrivate, savedDialog, oldLang]);
+  }, [canDeleteChat, chat, isPrivate, savedDialog, oldLang]);
 
   return (
     <Portal>
@@ -615,7 +608,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               icon="user"
               onClick={onJoinRequestsClick}
             >
-              {isChannel ? oldLang('SubscribeRequests') : oldLang('MemberRequests')}
+              {oldLang('MemberRequests')}
               <div className="right-badge">{pendingJoinRequests}</div>
             </MenuItem>
           )}
@@ -637,10 +630,10 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
           )}
           {withExtraActions && canSubscribe && (
             <MenuItem
-              icon={isChannel ? 'channel' : 'group'}
+              icon="group"
               onClick={handleSubscribe}
             >
-              {oldLang(isChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
+              {oldLang('ProfileJoinGroup')}
             </MenuItem>
           )}
           {canAddContact && (
@@ -695,10 +688,10 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
           )}
           {hasLinkedChat && (
             <MenuItem
-              icon={isChannel ? 'comments' : 'channel'}
+              icon="channel"
               onClick={handleLinkedChatClick}
             >
-              {oldLang(isChannel ? 'ViewDiscussion' : 'lng_profile_view_channel')}
+              {oldLang('lng_profile_view_channel')}
             </MenuItem>
           )}
           {!withForumActions && (
@@ -805,7 +798,7 @@ export default memo(withGlobal<OwnProps>(
     const isMainThread = threadId === MAIN_THREAD_ID;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global) || {};
-    const canReportChat = isMainThread && !user && (isChatChannel(chat) || isChatGroup(chat)) && !isChatAdmin(chat);
+    const canReportChat = isMainThread && !user && isChatGroup(chat) && !isChatAdmin(chat);
 
     const chatBot = !isSystemBot(chatId) ? selectBot(global, chatId) : undefined;
     const userFullInfo = isPrivate ? selectUserFullInfo(global, chatId) : undefined;

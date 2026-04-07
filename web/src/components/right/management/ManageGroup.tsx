@@ -59,6 +59,7 @@ type StateProps = {
   exportedInvites?: ApiExportedInvite[];
   isChannelsPremiumLimitReached: boolean;
   availableReactions?: ApiAvailableReaction[];
+  currentUserId?: string;
 };
 
 const GROUP_TITLE_EMPTY = 'Group title can\'t be empty';
@@ -100,6 +101,7 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
   exportedInvites,
   isChannelsPremiumLimitReached,
   availableReactions,
+  currentUserId,
   onScreenSelect,
   onClose,
 }) => {
@@ -107,8 +109,7 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
     togglePreHistoryHidden,
     updateChat,
     deleteChat,
-    leaveChannel,
-    deleteChannel,
+    deleteChatUser,
     closeManagement,
     openChat,
     loadExportedChatInvites,
@@ -301,9 +302,9 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
     if (isBasicGroup) {
       deleteChat({ chatId: chat.id });
     } else if (!chat.isCreator) {
-      leaveChannel({ chatId: chat.id });
+      deleteChatUser({ chatId: chat.id, userId: currentUserId! });
     } else {
-      deleteChannel({ chatId: chat.id });
+      deleteChat({ chatId: chat.id });
     }
     closeDeleteDialog();
     closeManagement();
@@ -513,6 +514,7 @@ export default memo(withGlobal<OwnProps>(
       exportedInvites: invites,
       isChannelsPremiumLimitReached: limitReachedModal?.limit === 'channels',
       availableReactions: global.reactions.availableReactions,
+      currentUserId: global.currentUserId,
       canEditForum,
     };
   },

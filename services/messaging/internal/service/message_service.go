@@ -206,17 +206,7 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
 
-	// Channel anonymous posting: hide sender for non-signatures channels
-	if chat.Type == "channel" && !chat.IsSignatures {
-		anonMsg := *full
-		anonMsg.SenderID = nil
-		anonMsg.SenderName = ""
-		anonMsg.SenderAvatarURL = nil
-		// Omit senderID from NATS envelope to prevent leaking real author
-		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs)
-	} else {
-		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
-	}
+	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 
 	// Parse @mention entities and notify mentioned users
 	if len(entities) > 0 {
@@ -733,15 +723,7 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
-	if chat.Type == "channel" && !chat.IsSignatures {
-		anonMsg := *full
-		anonMsg.SenderID = nil
-		anonMsg.SenderName = ""
-		anonMsg.SenderAvatarURL = nil
-		s.nats.Publish(subject, "new_message", &anonMsg, memberIDs)
-	} else {
-		s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
-	}
+	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
 
 	return full, nil
 }

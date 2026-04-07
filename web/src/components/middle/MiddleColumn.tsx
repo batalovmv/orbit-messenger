@@ -24,7 +24,6 @@ import {
   getHasAdminRight,
   getIsSavedDialog,
   getMessageSendingRestrictionReason,
-  isChatChannel,
   isChatGroup,
   isChatSuperGroup,
   isUserRightBanned,
@@ -140,7 +139,6 @@ type StateProps = {
   withRightColumnAnimation?: boolean;
   shouldSkipHistoryAnimations?: boolean;
   currentTransitionKey: number;
-  isChannel?: boolean;
   arePeerSettingsLoaded?: boolean;
   canSubscribe?: boolean;
   canStartBot?: boolean;
@@ -207,7 +205,6 @@ function MiddleColumn({
   withRightColumnAnimation,
   shouldSkipHistoryAnimations,
   currentTransitionKey,
-  isChannel,
   arePeerSettingsLoaded,
   canSubscribe,
   canStartBot,
@@ -235,7 +232,6 @@ function MiddleColumn({
     loadUser,
     loadPeerSettings,
     exitMessageSelectMode,
-    joinChannel,
     sendBotCommand,
     restartBot,
     showNotification,
@@ -278,7 +274,6 @@ function MiddleColumn({
   const renderingIsScrollDownShown = usePrevDuringAnimation(
     isScrollDownShown, closeAnimationDuration,
   ) && chatId !== TMP_CHAT_ID;
-  const renderingIsChannel = usePrevDuringAnimation(isChannel, closeAnimationDuration);
   const renderingShouldJoinToSend = usePrevDuringAnimation(shouldJoinToSend, closeAnimationDuration);
   const renderingShouldSendJoinRequest = usePrevDuringAnimation(shouldSendJoinRequest, closeAnimationDuration);
   const renderingHandleIntersectPinnedMessage = usePrevDuringAnimation(
@@ -411,11 +406,9 @@ function MiddleColumn({
   });
 
   const handleSubscribeClick = useLastCallback(() => {
-    joinChannel({ chatId: chatId! });
     if (renderingShouldSendJoinRequest) {
       showNotification({
-        message: isChannel
-          ? oldLang('RequestToJoinChannelSentDescription') : oldLang('RequestToJoinGroupSentDescription'),
+        message: oldLang('RequestToJoinGroupSentDescription'),
       });
     }
   });
@@ -648,7 +641,7 @@ function MiddleColumn({
                       className="composer-button join-subscribe-button"
                       onClick={handleSubscribeClick}
                     >
-                      {oldLang(renderingIsChannel ? 'ProfileJoinChannel' : 'ProfileJoinGroup')}
+                      {oldLang('ProfileJoinGroup')}
                     </Button>
                   </div>
                 )}
@@ -800,9 +793,8 @@ export default memo(withGlobal<OwnProps>(
     const isBotNotStarted = selectIsChatBotNotStarted(global, chatId);
     const isPinnedMessageList = messageListType === 'pinned';
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
-    const isChannel = Boolean(chat && isChatChannel(chat));
     const canSubscribe = Boolean(
-      chat && isMainThread && (isChannel || isChatSuperGroup(chat)) && chat.isNotJoined && !chat.joinRequests
+      chat && isMainThread && isChatSuperGroup(chat) && chat.isNotJoined && !chat.joinRequests
       && !chat.isMonoforum,
     );
     const shouldJoinToSend = Boolean(chat?.isNotJoined && chat.isJoinToSend);
@@ -827,7 +819,7 @@ export default memo(withGlobal<OwnProps>(
 
     const canUnpin = chat && (
       isPrivate || (
-        chat?.isCreator || (!isChannel && !isUserRightBanned(chat, 'pinMessages'))
+        chat?.isCreator || !isUserRightBanned(chat, 'pinMessages')
         || getHasAdminRight(chat, 'pinMessages')
       )
     );
@@ -865,7 +857,6 @@ export default memo(withGlobal<OwnProps>(
       defaultBannedRights: chat?.defaultBannedRights,
       pinnedMessagesCount: pinnedIds ? pinnedIds.length : 0,
       shouldSkipHistoryAnimations,
-      isChannel,
       canSubscribe,
       canStartBot,
       canRestartBot,

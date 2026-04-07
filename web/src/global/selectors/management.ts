@@ -64,7 +64,7 @@ export function selectCurrentManagementType<T extends GlobalState>(
     return 'group';
   }
 
-  return 'channel';
+  return 'group';
 }
 
 export function selectCanManage<T extends GlobalState>(

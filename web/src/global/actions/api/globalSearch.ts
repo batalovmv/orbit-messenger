@@ -17,7 +17,7 @@ import { formatStarsAsText } from '../../../util/localization/format';
 import { throttle } from '../../../util/schedulers';
 import { callApi } from '../../../api/saturn';
 import { saveSearchQuery } from '../../../api/saturn/methods/search';
-import { isChatChannel, isChatGroup } from '../../helpers/chats';
+import { isChatGroup } from '../../helpers/chats';
 import { isApiPeerChat } from '../../helpers/peers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
@@ -392,7 +392,7 @@ function getMessageByPrivateLink(global: GlobalState, link: { channelId: string;
 }
 
 async function getChatGroupOrChannelMessage(global: GlobalState, chat: ApiChat, messageId: number) {
-  if (!isChatGroup(chat) && !isChatChannel(chat)) {
+  if (!isChatGroup(chat)) {
     return undefined;
   }
   const localMessage = selectChatMessage(global, chat.id, messageId);

@@ -10,7 +10,7 @@ import type {
 import { NewChatMembersProgress } from '../../types';
 
 import {
-  isChatChannel, isUserBot,
+  isUserBot,
 } from '../../global/helpers';
 import { filterPeersByQuery } from '../../global/helpers/peers';
 import { selectChat, selectChatFullInfo, selectTabState } from '../../global/selectors';
@@ -34,7 +34,6 @@ export type OwnProps = {
 };
 
 type StateProps = {
-  isChannel?: boolean;
   members?: ApiChatMember[];
   currentUserId?: string;
   localContactIds?: string[];
@@ -46,7 +45,6 @@ type StateProps = {
 };
 
 const AddChatMembers: FC<OwnProps & StateProps> = ({
-  isChannel,
   members,
   onNextStep,
   currentUserId,
@@ -104,11 +102,11 @@ const AddChatMembers: FC<OwnProps & StateProps> = ({
         return (
           !memberIds.includes(userId)
           && userId !== currentUserId
-          && (!user || !isUserBot(user) || (!isChannel && user.canBeInvitedToGroup))
+          && (!user || !isUserBot(user) || user.canBeInvitedToGroup)
         );
       }),
     );
-  }, [localContactIds, searchQuery, localUserIds, globalUserIds, currentUserId, memberIds, isChannel]);
+  }, [localContactIds, searchQuery, localUserIds, globalUserIds, currentUserId, memberIds]);
 
   const handleNextStep = useCallback(() => {
     if (selectedMemberIds.length) {
@@ -156,8 +154,6 @@ export default memo(withGlobal<OwnProps>(
     const { userIds: localContactIds } = global.contactList || {};
     const { newChatMembersProgress } = selectTabState(global);
     const { currentUserId } = global;
-    const isChannel = chat && isChatChannel(chat);
-
     const {
       query: searchQuery,
       fetchingStatus,
@@ -166,7 +162,6 @@ export default memo(withGlobal<OwnProps>(
     } = selectTabState(global).userSearch;
 
     return {
-      isChannel,
       members: selectChatFullInfo(global, chatId)?.members,
       currentUserId,
       localContactIds,

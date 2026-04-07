@@ -46,17 +46,6 @@ func defaultGroupChat(chatID uuid.UUID) *model.Chat {
 	}
 }
 
-func defaultChannelChat(chatID uuid.UUID) *model.Chat {
-	name := "Test Channel"
-	return &model.Chat{
-		ID:                 chatID,
-		Type:               "channel",
-		Name:               &name,
-		DefaultPermissions: 0,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-	}
-}
 
 func assertAppError(t *testing.T, err error, wantStatus int) {
 	t.Helper()
@@ -598,35 +587,6 @@ func TestCreateDirectChat_NATS_ChatCreated(t *testing.T) {
 	}
 	if ev.SenderID != userID.String() {
 		t.Fatalf("expected sender ID %s, got %s", userID, ev.SenderID)
-	}
-}
-
-func TestCreateChat_ChannelDefaultPerms0(t *testing.T) {
-	ownerID := uuid.New()
-	rec := &RecordingPublisher{}
-
-	var createdChat *model.Chat
-	cs := &mockChatStore{
-		createFn: func(_ context.Context, chat *model.Chat) error {
-			chat.ID = uuid.New()
-			chat.CreatedAt = time.Now()
-			chat.UpdatedAt = time.Now()
-			createdChat = chat
-			return nil
-		},
-		addMemberFn: func(_ context.Context, _, _ uuid.UUID, _ string) error { return nil },
-		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
-			return []string{ownerID.String()}, nil
-		},
-	}
-
-	svc := newTestChatService(cs, rec)
-	_, err := svc.CreateChat(context.Background(), ownerID, "channel", "News", "", nil)
-	if err != nil {
-		t.Fatalf("CreateChat channel: %v", err)
-	}
-	if createdChat.DefaultPermissions != 0 {
-		t.Fatalf("channel default_permissions should be 0, got %d", createdChat.DefaultPermissions)
 	}
 }
 

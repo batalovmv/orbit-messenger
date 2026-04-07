@@ -7,8 +7,6 @@ import type { ThreadId } from '../../types';
 import { ALL_FOLDER_ID, API_CHAT_TYPES } from '../../config';
 import {
   getCanPostInChat,
-  getHasAdminRight,
-  isChatChannel,
   isDeletedUser,
 } from '../../global/helpers';
 import { filterPeersByQuery } from '../../global/helpers/peers';
@@ -122,9 +120,6 @@ const RecipientPicker = ({
     const peerIds = allIds.filter((id) => {
       const chat = selectChat(global, id);
       const user = selectUser(global, id);
-      const hasAdminRights = chat && getHasAdminRight(chat, 'postMessages');
-      const isChannel = chat && isChatChannel(chat);
-      if (isForwarding && isChannel && !hasAdminRights) return false;
       if (user && !isDeletedUser(user)) return true;
 
       if (!chat) return false;

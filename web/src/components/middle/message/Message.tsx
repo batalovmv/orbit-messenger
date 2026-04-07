@@ -60,7 +60,6 @@ import {
   hasMessageTtl,
   isAnonymousForwardsChat,
   isAnonymousOwnMessage,
-  isChatChannel,
   isChatGroup,
   isChatPublic,
   isGeoLiveExpired,
@@ -269,7 +268,6 @@ type StateProps = {
   isBotForum?: boolean;
   isRepliesChat?: boolean;
   isAnonymousForwards?: boolean;
-  isChannel?: boolean;
   isGroup?: boolean;
   canReply?: boolean;
   highlight?: string;
@@ -397,7 +395,6 @@ const Message = ({
   isBotForum,
   isRepliesChat,
   isAnonymousForwards,
-  isChannel,
   isGroup,
   canReply,
   highlight,
@@ -588,8 +585,7 @@ const Message = ({
     && !isInDocumentGroupNotLast
     && !isStoryMention
   );
-  const canForward = isChannel && !isScheduled && message.isForwardingAllowed
-    && !isChatProtected;
+  const canForward = false;
   const canFocus = Boolean(isPinnedList
     || (forwardInfo
       && (forwardInfo.isChannelPost || isChatWithSelf || isRepliesChat || isAnonymousForwards)
@@ -831,7 +827,7 @@ const Message = ({
   const phoneCall = action?.type === 'phoneCall' ? action : undefined;
 
   const commentsThreadInfo = repliesThreadInfo?.isCommentsInfo ? repliesThreadInfo : undefined;
-  const isLocalWithCommentButton = hasLinkedChat && isChannel && isLocal;
+  const isLocalWithCommentButton = false;
 
   const isMediaWithCommentButton = (commentsThreadInfo || isLocalWithCommentButton)
     && !isInDocumentGroupNotLast
@@ -1993,7 +1989,6 @@ export default memo(withGlobal<OwnProps>(
     const isChatWithBot = selectIsChatWithBot(global, chatId);
     const isSystemBotChat = isSystemBot(chatId);
     const isAnonymousForwards = isAnonymousForwardsChat(chatId);
-    const isChannel = chat && isChatChannel(chat);
     const isGroup = chat && isChatGroup(chat);
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
     const webPageStory = undefined;
@@ -2142,7 +2137,6 @@ export default memo(withGlobal<OwnProps>(
       isBotForum: chat?.isBotForum,
       isRepliesChat: isSystemBotChat,
       isAnonymousForwards,
-      isChannel,
       isGroup,
       canReply,
       highlight,

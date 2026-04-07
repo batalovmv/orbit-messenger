@@ -482,8 +482,6 @@ export function buildLocalMessage({
 }) {
   const localId = getNextLocalMessageId(lastMessageId);
   const media = attachment && buildUploadingMedia(attachment);
-  const isChannel = chat.type === 'chatTypeChannel';
-
   const resultReplyInfo = replyInfo && buildReplyInfo(replyInfo, chat.isForum);
 
   const localPoll = poll && buildNewPoll(poll, localId);
@@ -514,7 +512,7 @@ export function buildLocalMessage({
       dice: localDice,
     }),
     date: scheduledAt || getServerTime(),
-    isOutgoing: !isChannel,
+    isOutgoing: true,
     senderId: chat.type !== 'chatTypePrivate' ? (sendAs?.id || currentUserId) : undefined,
     replyInfo: resultReplyInfo,
     suggestedPostInfo,
@@ -610,7 +608,7 @@ export function buildLocalForwardedMessage({
     content: updatedContent,
     date: scheduledAt || getServerTime(),
     scheduleRepeatPeriod,
-    isOutgoing: !asIncomingInChatWithSelf && toChat.type !== 'chatTypeChannel',
+    isOutgoing: !asIncomingInChatWithSelf,
     senderId: toChat.type !== 'chatTypePrivate' ? (sendAs?.id || currentUserId) : undefined,
     sendingState: 'messageSendingStatePending',
     groupedId,

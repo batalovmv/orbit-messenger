@@ -54,10 +54,6 @@ export function fetchNearestCountry() {
   return Promise.resolve('US');
 }
 
-export function requestChannelDifference() {
-  return Promise.resolve(undefined);
-}
-
 export function fetchPopularAppBots() {
   return Promise.resolve(undefined);
 }
@@ -323,8 +319,8 @@ export function fetchDefaultReactions() {
 export async function fetchNotifyDefaultSettings() {
   try {
     const result = await request<{
-      users_muted: boolean; groups_muted: boolean; channels_muted: boolean;
-      users_preview: boolean; groups_preview: boolean; channels_preview: boolean;
+      users_muted: boolean; groups_muted: boolean;
+      users_preview: boolean; groups_preview: boolean;
     }>('GET', '/users/me/settings/notifications');
 
     return {
@@ -335,10 +331,6 @@ export async function fetchNotifyDefaultSettings() {
       groups: {
         mutedUntil: result.groups_muted ? 2147483647 : 0,
         shouldShowPreviews: result.groups_preview,
-      },
-      channels: {
-        mutedUntil: result.channels_muted ? 2147483647 : 0,
-        shouldShowPreviews: result.channels_preview,
       },
     };
   } catch {
@@ -449,18 +441,6 @@ export function exportMessageLink({
   messageId: number;
 }) {
   return fetchMessageLink({ chatId: chat.id, messageId });
-}
-
-export async function joinChannel({ channelId }: { channelId: string }) {
-  return request('POST', `/chats/${channelId}/join`);
-}
-
-export async function leaveChannel({ channelId }: { channelId: string }) {
-  return leaveChat({ chatId: channelId });
-}
-
-export async function deleteChannel({ channelId }: { channelId: string }) {
-  return deleteChat({ chatId: channelId });
 }
 
 export async function deleteChatUser({ chat, user }: { chat: ApiChat; user: ApiUser }) {
@@ -1039,8 +1019,7 @@ export {
 } from './users';
 
 export {
-  createDirectChat, createGroupChat, createChannel, fetchChats, fetchFullChat,
-  fetchChannelRecommendations,
+  createDirectChat, createGroupChat, fetchChats, fetchFullChat,
   getChatInviteLink, getChatMembers, editChatTitle, editChatAbout,
   deleteChat, leaveChat, addChatMembers, deleteChatMember,
   updateChatAdmin, updateChatDefaultBannedRights, updateChatMemberBannedRights,

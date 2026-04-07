@@ -14,7 +14,6 @@ import type { ActionReturnType, GlobalState } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { getShippingError, shouldClosePaymentModal } from '../../../util/getReadableErrorText';
-import { unique } from '../../../util/iteratees';
 import { getAccountsInfo, getAccountSlotUrl } from '../../../util/multiaccount';
 import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { clearWebTokenAuth } from '../../../util/routing';
@@ -22,7 +21,6 @@ import { setServerTimeOffset } from '../../../util/serverTime';
 import { updateSessionUserId } from '../../../util/sessions';
 import { forceWebsync } from '../../../util/websync';
 import { callApi } from '../../../api/saturn';
-import { isChatChannel, isChatSuperGroup } from '../../helpers';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';
@@ -259,21 +257,6 @@ function onUpdateConnectionState<T extends GlobalState>(
     connectionState,
   };
   setGlobal(global);
-
-  if (global.isSynced) {
-    const channelStackIds = Object.values(global.byTabId)
-      .flatMap((tab) => tab.messageLists)
-      .map((messageList) => messageList.chatId)
-      .filter((chatId) => {
-        const chat = global.chats.byId[chatId];
-        return chat && (isChatChannel(chat) || isChatSuperGroup(chat));
-      });
-    if (connectionState === 'connectionStateReady' && channelStackIds.length) {
-      unique(channelStackIds).forEach((chatId) => {
-        actions.requestChannelDifference({ chatId });
-      });
-    }
-  }
 
   if (connectionState === 'connectionStateBroken') {
     actions.signOut({ forceInitApi: true });

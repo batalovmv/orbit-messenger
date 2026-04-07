@@ -38,7 +38,7 @@ const NewDiscussionGroup: FC<OwnProps & StateProps> = ({
   creationProgress,
   creationError,
 }) => {
-  const { createChannel } = getActions();
+  const { createGroupChat } = getActions();
   const lang = useLang();
 
   useHistoryBack({
@@ -76,11 +76,10 @@ const NewDiscussionGroup: FC<OwnProps & StateProps> = ({
     }
     if (!chat) return;
 
-    createChannel({
-      discussionChannelId: chat.id,
+    createGroupChat({
       title,
       photo,
-      isSuperGroup: true,
+      memberIds: [],
     });
   });
 

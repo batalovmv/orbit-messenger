@@ -4,7 +4,7 @@ import type { GlobalState, TabArgs } from '../types';
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../config';
 import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
-import { getHasAdminRight, isChatAdmin, isChatChannel, isDeletedUser } from '../helpers';
+import { isChatAdmin, isDeletedUser } from '../helpers';
 import { selectChat, selectChatFullInfo, selectIsMonoforumAdmin } from './chats';
 import { type ProfileCollectionKey } from './payments';
 import { selectTabState } from './tabs';
@@ -86,6 +86,5 @@ export function selectCanUpdateMainTab<T extends GlobalState>(global: T, peerId:
     return true;
   }
 
-  const chat = selectChat(global, peerId);
-  return Boolean(chat && isChatChannel(chat) && getHasAdminRight(chat, 'postMessages'));
+  return false;
 }

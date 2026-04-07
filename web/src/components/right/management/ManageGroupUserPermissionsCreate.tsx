@@ -5,7 +5,7 @@ import { withGlobal } from '../../../global';
 import type { ApiChatMember, ApiUser, ApiUserStatus } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
-import { isChatChannel, sortUserIds } from '../../../global/helpers';
+import { sortUserIds } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo } from '../../../global/selectors';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -26,14 +26,12 @@ type StateProps = {
   usersById: Record<string, ApiUser>;
   userStatusesById: Record<string, ApiUserStatus>;
   members?: ApiChatMember[];
-  isChannel?: boolean;
 };
 
 const ManageGroupUserPermissionsCreate: FC<OwnProps & StateProps> = ({
   usersById,
   userStatusesById,
   members,
-  isChannel,
   onScreenSelect,
   onChatMemberSelect,
   onClose,
@@ -81,7 +79,7 @@ const ManageGroupUserPermissionsCreate: FC<OwnProps & StateProps> = ({
             <NothingFound
               teactOrderKey={0}
               key="nothing-found"
-              text={isChannel ? 'No subscribers found' : 'No members found'}
+              text="No members found"
             />
           )}
         </div>
@@ -95,13 +93,10 @@ export default memo(withGlobal<OwnProps>(
     const chat = selectChat(global, chatId);
     const { byId: usersById, statusesById: userStatusesById } = global.users;
     const members = selectChatFullInfo(global, chatId)?.members;
-    const isChannel = chat && isChatChannel(chat);
-
     return {
       members,
       usersById,
       userStatusesById,
-      isChannel,
     };
   },
 )(ManageGroupUserPermissionsCreate));

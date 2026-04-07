@@ -35,7 +35,6 @@ import {
   getUserFullName,
   hasMessageTtl,
   isActionMessage,
-  isChatChannel,
   isChatGroup,
   isMessageLocal,
   isOwnMessage,
@@ -155,7 +154,6 @@ type StateProps = {
   canPlayAnimatedEmojis?: boolean;
   isReactionPickerOpen?: boolean;
   isInSavedMessages?: boolean;
-  isChannel?: boolean;
   canReplyInChat?: boolean;
   userFullName?: string;
   canGift?: boolean;
@@ -830,8 +828,6 @@ export default memo(withGlobal<OwnProps>(
     );
     const isPinned = messageListType === 'pinned';
     const isScheduled = messageListType === 'scheduled';
-    const isChannel = chat && isChatChannel(chat);
-
     const threadInfo = threadId && selectThreadInfo(global, message.chatId, threadId);
     const isMessageThread = Boolean(threadInfo && !threadInfo?.isCommentsInfo && threadInfo?.fromChannelId);
     const topic = threadId ? selectTopic(global, message.chatId, threadId) : undefined;
@@ -856,7 +852,7 @@ export default memo(withGlobal<OwnProps>(
       && chat.membersCount <= seenByMaxChatMembers
       && message.date > Date.now() / 1000 - seenByExpiresAt);
     const isAction = isActionMessage(message);
-    const canShowReactionsCount = !isLocal && !isChannel && !isScheduled && !isAction && !isPrivate && message.reactions
+    const canShowReactionsCount = !isLocal && !isScheduled && !isAction && !isPrivate && message.reactions
       && !areReactionsEmpty(message.reactions) && message.reactions.canSeeList;
     const isProtected = selectIsMessageProtected(global, message);
     const canCopyNumber = Boolean(message.content.contact);
@@ -936,7 +932,6 @@ export default memo(withGlobal<OwnProps>(
       canPlayAnimatedEmojis: selectCanPlayAnimatedEmojis(global),
       isReactionPickerOpen: selectIsReactionPickerOpen(global),
       isInSavedMessages,
-      isChannel,
       canReplyInChat,
       poll,
       story,

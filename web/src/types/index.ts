@@ -279,15 +279,12 @@ export enum LeftColumnContent {
   Settings,
   Contacts,
   Archived,
-  NewChannelStep1,
-  NewChannelStep2,
   NewGroupStep1,
   NewGroupStep2,
 }
 
 export enum GlobalSearchContent {
   ChatList,
-  ChannelList,
   BotApps,
   PublicPosts,
   Media,
