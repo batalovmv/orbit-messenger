@@ -2070,7 +2070,7 @@ addActionHandler('addChatMembers', async (global, actions, payload): Promise<voi
   }
 
   actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Loading, tabId });
-  const missingUsers = await callApi('addChatMembers', chat, users);
+  const missingUsers = await callApi('addChatMembers', { chatId: chat.id, userIds: users.map((u) => u.id) });
   if (missingUsers) {
     global = getGlobal();
     global = updateMissingInvitedUsers(global, chatId, missingUsers, tabId);
@@ -2121,7 +2121,7 @@ addActionHandler('deleteChatMember', async (global, actions, payload): Promise<v
     return;
   }
 
-  await callApi('deleteChatMember', chat, user);
+  await callApi('deleteChatMember', { chatId: chat.id, userId: user.id });
   global = getGlobal();
   loadFullChat(global, actions, chat);
 });

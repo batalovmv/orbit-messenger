@@ -100,6 +100,7 @@ import {
   selectTheme,
   selectTopicFromMessage,
   selectUser,
+  selectDmPeerUserId,
   selectUserFullInfo,
   selectWebPage,
 } from '../../global/selectors';
@@ -2565,7 +2566,8 @@ export default memo(withGlobal<OwnProps>(
     const isChatWithBot = Boolean(chatBot);
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const isChatWithUser = isUserId(chatId);
-    const userFullInfo = isChatWithUser ? selectUserFullInfo(global, chatId) : undefined;
+    const dmPeerUserId = isChatWithUser ? selectDmPeerUserId(global, chatId) : undefined;
+    const userFullInfo = dmPeerUserId ? selectUserFullInfo(global, dmPeerUserId) : undefined;
     const paidMessagesStars = selectPeerPaidMessagesStars(global, chatId);
 
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;

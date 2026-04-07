@@ -6,7 +6,7 @@ import {
   isChatBasicGroup,
   isChatSuperGroup,
 } from '../../global/helpers';
-import { selectChat, selectIsChatWithSelf, selectUser } from '../../global/selectors';
+import { selectChat, selectDmPeerUserId, selectIsChatWithSelf, selectUser } from '../../global/selectors';
 import { isUserId } from '../../util/entities/ids';
 import renderText from './helpers/renderText';
 
@@ -103,8 +103,9 @@ export default memo(withGlobal<OwnProps>(
     const isGroup = Boolean(chat) && isChatBasicGroup(chat);
     const isSuperGroup = Boolean(chat) && isChatSuperGroup(chat);
     const canPinForAll = (isPrivateChat && !isChatWithSelf) || isSuperGroup || isGroup;
-    const contactName = chatId && isUserId(chatId)
-      ? getUserFirstOrLastName(selectUser(global, chatId))
+    const dmPeerUserId = chatId && isUserId(chatId) ? selectDmPeerUserId(global, chatId) : undefined;
+    const contactName = dmPeerUserId
+      ? getUserFirstOrLastName(selectUser(global, dmPeerUserId))
       : undefined;
 
     return {

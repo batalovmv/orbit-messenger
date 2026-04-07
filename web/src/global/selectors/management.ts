@@ -7,7 +7,7 @@ import {
   isAnonymousForwardsChat,
   isChatAdmin, isChatGroup, isUserBot,
 } from '../helpers';
-import { selectChat, selectIsChatRestricted, selectIsChatWithSelf } from './chats';
+import { selectChat, selectDmPeerUserId, selectIsChatRestricted, selectIsChatWithSelf } from './chats';
 import { selectCurrentMessageList } from './messages';
 import { selectTabState } from './tabs';
 import { selectBot, selectUser } from './users';
@@ -76,7 +76,8 @@ export function selectCanManage<T extends GlobalState>(
   if (!chat || isRestricted || chat.isMonoforum) return false;
 
   const isPrivate = isUserId(chat.id);
-  const user = isPrivate ? selectUser(global, chatId) : undefined;
+  const peerUserId = isPrivate ? selectDmPeerUserId(global, chatId) : undefined;
+  const user = peerUserId ? selectUser(global, peerUserId) : undefined;
   const canAddContact = user && getCanAddContact(user);
 
   const isBot = user && isUserBot(user);

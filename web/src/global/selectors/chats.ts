@@ -50,8 +50,17 @@ export function selectIsChatWithSelf<T extends GlobalState>(global: T, chatId: s
   return Boolean(chat && chat.type === 'chatTypePrivate' && chat.peerUserId === global.currentUserId);
 }
 
+// Saturn: resolve the peer userId for a DM chat. In TG Web A chatId === userId,
+// but in Saturn they are different UUIDs. Use this whenever you need the user
+// behind a DM chat (instead of selectUser(global, chatId) which always fails).
+export function selectDmPeerUserId<T extends GlobalState>(global: T, chatId: string) {
+  const chat = global.chats.byId[chatId];
+  return chat?.peerUserId || (selectUser(global, chatId) ? chatId : undefined);
+}
+
 export function selectIsChatWithBot<T extends GlobalState>(global: T, chatId: string) {
-  const user = selectUser(global, chatId);
+  const userId = selectDmPeerUserId(global, chatId) || chatId;
+  const user = selectUser(global, userId);
   return user && isUserBot(user);
 }
 

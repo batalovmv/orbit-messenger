@@ -23,6 +23,7 @@ import {
   selectCanDeleteSelectedMessages,
   selectChat,
   selectChatFullInfo,
+  selectDmPeerUserId,
   selectIsChatWithBot,
   selectSenderFromMessage,
   selectTabState,
@@ -492,8 +493,9 @@ export default memo(withGlobal<OwnProps>(
     const isSuperGroup = Boolean(chat) && isChatSuperGroup(chat);
     const isSchedule = deleteMessageModal?.isSchedule;
     const onConfirm = deleteMessageModal?.onConfirm;
-    const contactName = chatId && isUserId(chatId)
-      ? getUserFirstOrLastName(selectUser(global, chatId))
+    const dmPeerUserId = chatId && isUserId(chatId) ? selectDmPeerUserId(global, chatId) : undefined;
+    const contactName = dmPeerUserId
+      ? getUserFirstOrLastName(selectUser(global, dmPeerUserId))
       : undefined;
     const chatBot = Boolean(chat && !isSystemBot(chat.id) && selectBot(global, chat.id));
     const adminMembersById = chatFullInfo?.adminMembersById;
