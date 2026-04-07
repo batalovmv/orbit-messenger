@@ -151,6 +151,11 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*m
 }
 
 func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID) (*model.Chat, error) {
+	// Self-DM → redirect to Saved Messages (direct_chat_lookup requires user1 < user2).
+	if userID == otherUserID {
+		return s.GetOrCreateSavedChat(ctx, userID)
+	}
+
 	existing, err := s.chats.GetDirectChat(ctx, userID, otherUserID)
 	if err != nil {
 		return nil, fmt.Errorf("check existing DM: %w", err)
