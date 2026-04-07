@@ -8,7 +8,7 @@ import { ApiMessageEntityTypes } from '../../../../api/types';
 
 import { DRAFT_DEBOUNCE, EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config';
 import {
-  requestMeasure, requestNextMutation,
+  requestMeasure, requestMutation,
 } from '../../../../lib/fasterdom/fasterdom';
 import focusEditableElement from '../../../../util/focusEditableElement';
 import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
@@ -115,11 +115,13 @@ const useDraft = ({
 
     setHtml(getTextWithEntitiesAsHtml(draft.text));
     if (shouldUpdateSuggestedPost) {
-      requestNextMutation(() => {
-        const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
-        if (messageInput) {
-          focusEditableElement(messageInput, true);
-        }
+      requestMutation(() => {
+        requestMeasure(() => {
+          const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
+          if (messageInput) {
+            focusEditableElement(messageInput, true);
+          }
+        });
       });
     }
 

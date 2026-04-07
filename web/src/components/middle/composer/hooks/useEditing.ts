@@ -7,7 +7,7 @@ import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
 import { EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config';
-import { requestMeasure, requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import { hasMessageMedia } from '../../../../global/helpers';
 import focusEditableElement from '../../../../util/focusEditableElement';
 import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
@@ -62,11 +62,13 @@ const useEditing = (
     setHtml(html);
     setShouldForceShowEditing(true);
 
-    requestNextMutation(() => {
-      const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
-      if (messageInput) {
-        focusEditableElement(messageInput, true);
-      }
+    requestMutation(() => {
+      requestMeasure(() => {
+        const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
+        if (messageInput) {
+          focusEditableElement(messageInput, true);
+        }
+      });
     });
   }, [editedMessage, replyingToId, editingDraft, setHtml]);
 
@@ -130,11 +132,13 @@ const useEditing = (
       setHtml(getTextWithEntitiesAsHtml(draft.text));
 
       // Wait one more frame until new HTML is rendered
-      requestNextMutation(() => {
-        const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
-        if (messageInput) {
-          focusEditableElement(messageInput, true);
-        }
+      requestMutation(() => {
+        requestMeasure(() => {
+          const messageInput = document.querySelector<HTMLDivElement>(EDITABLE_INPUT_CSS_SELECTOR);
+          if (messageInput) {
+            focusEditableElement(messageInput, true);
+          }
+        });
       });
     });
   });

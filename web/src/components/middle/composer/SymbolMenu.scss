@@ -48,6 +48,12 @@
     height: calc(var(--symbol-menu-height) - var(--symbol-menu-footer-height));
     max-height: calc(100vh - var(--symbol-menu-footer-height));
 
+    // Prevent blocking mention/inline tooltips when SymbolMenu is closed
+    .bubble:not(.open) & {
+      pointer-events: none;
+      visibility: hidden;
+    }
+
     @media (max-width: 600px) {
       max-height: calc(100vh - var(--symbol-menu-footer-height) - env(safe-area-inset-bottom));
     }
@@ -63,6 +69,12 @@
     height: var(--symbol-menu-footer-height);
     /* stylelint-disable-next-line plugin/whole-pixel */
     box-shadow: 0 -0.5px var(--color-borders-alternate);
+
+    // Prevent blocking mention/inline tooltips when SymbolMenu is closed
+    .bubble:not(.open) & {
+      pointer-events: none;
+      visibility: hidden;
+    }
 
     .Button {
       flex-shrink: 0;

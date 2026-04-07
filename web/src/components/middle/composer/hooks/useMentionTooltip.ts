@@ -6,7 +6,7 @@ import type { ApiChatMember, ApiPeer, ApiUser } from '../../../../api/types';
 import type { Signal } from '../../../../util/signals';
 import { ApiMessageEntityTypes } from '../../../../api/types';
 
-import { requestNextMutation } from '../../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import { getMainUsername } from '../../../../global/helpers';
 import { filterPeersByQuery, getPeerTitle } from '../../../../global/helpers/peers';
 import focusEditableElement from '../../../../util/focusEditableElement';
@@ -132,12 +132,14 @@ export default function useMentionTooltip(
       const caretPosition = getCaretPosition(inputEl);
       setHtml(`${newHtml}${htmlAfterSelection}`);
 
-      requestNextMutation(() => {
-        const newCaretPosition = caretPosition + shiftCaretPosition + 1;
-        focusEditableElement(inputEl, forceFocus);
-        if (newCaretPosition >= 0) {
-          setCaretPosition(inputEl, newCaretPosition);
-        }
+      requestMutation(() => {
+        requestMeasure(() => {
+          const newCaretPosition = caretPosition + shiftCaretPosition + 1;
+          focusEditableElement(inputEl, forceFocus);
+          if (newCaretPosition >= 0) {
+            setCaretPosition(inputEl, newCaretPosition);
+          }
+        });
       });
     }
 
