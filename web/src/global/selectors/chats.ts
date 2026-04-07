@@ -60,21 +60,31 @@ export function selectDmPeerUserId<T extends GlobalState>(global: T, chatId: str
 
 // Saturn: reverse lookup — find DM chat by the peer's userId.
 // In TG Web A selectChat(global, userId) works because chatId === userId for DMs.
-// In Saturn we need to scan chats for one with matching peerUserId.
+// Uses a WeakMap cache keyed by the byId object reference to avoid O(n) scans in withGlobal.
+let peerUserIdCacheRef: Record<string, ApiChat> | undefined;
+let peerUserIdCache: Map<string, string> | undefined;
+
 export function selectChatByPeerUserId<T extends GlobalState>(global: T, userId: string) {
   // Fast path: if userId is itself a chatId (TG-style)
   const direct = global.chats.byId[userId];
   if (direct) return direct;
 
-  // Saturn: scan for DM chat with this peerUserId
   const chatsById = global.chats.byId;
-  for (const chatId of Object.keys(chatsById)) {
-    const chat = chatsById[chatId];
-    if (chat.type === 'chatTypePrivate' && chat.peerUserId === userId) {
-      return chat;
+
+  // Rebuild cache when chats object reference changes
+  if (peerUserIdCacheRef !== chatsById) {
+    peerUserIdCache = new Map();
+    for (const chatId of Object.keys(chatsById)) {
+      const chat = chatsById[chatId];
+      if (chat.type === 'chatTypePrivate' && chat.peerUserId) {
+        peerUserIdCache.set(chat.peerUserId, chatId);
+      }
     }
+    peerUserIdCacheRef = chatsById;
   }
-  return undefined;
+
+  const chatId = peerUserIdCache!.get(userId);
+  return chatId ? chatsById[chatId] : undefined;
 }
 
 export function selectIsChatWithBot<T extends GlobalState>(global: T, chatId: string) {
@@ -115,12 +125,14 @@ export function selectIsTrustedBot<T extends GlobalState>(global: T, botId: stri
 }
 
 export function selectChatType<T extends GlobalState>(global: T, chatId: string): ApiChatType | undefined {
-  const bot = selectBot(global, chatId);
+  const peerUserId = selectDmPeerUserId(global, chatId);
+  const botUserId = peerUserId || chatId;
+  const bot = selectBot(global, botUserId);
   if (bot) {
     return 'bots';
   }
 
-  const user = selectUser(global, chatId);
+  const user = selectUser(global, botUserId);
   if (user) {
     return 'users';
   }
@@ -132,7 +144,8 @@ export function selectChatType<T extends GlobalState>(global: T, chatId: string)
 }
 
 export function selectIsChatBotNotStarted<T extends GlobalState>(global: T, chatId: string) {
-  const bot = selectBot(global, chatId);
+  const botUserId = selectDmPeerUserId(global, chatId) || chatId;
+  const bot = selectBot(global, botUserId);
   if (!bot) {
     return false;
   }

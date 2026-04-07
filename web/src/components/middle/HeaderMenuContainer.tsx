@@ -32,6 +32,7 @@ import {
   selectChat,
   selectChatFullInfo,
   selectCurrentMessageList,
+  selectDmPeerUserId,
   selectIsChatRestricted,
   selectIsChatWithSelf,
   selectIsCurrentUserFrozen,
@@ -793,15 +794,17 @@ export default memo(withGlobal<OwnProps>(
       return {} as Complete<StateProps>;
     }
     const isPrivate = isUserId(chat.id);
-    const user = isPrivate ? selectUser(global, chatId) : undefined;
+    const dmPeerUserId = isPrivate ? selectDmPeerUserId(global, chatId) : undefined;
+    const resolvedUserId = dmPeerUserId || chatId;
+    const user = isPrivate ? selectUser(global, resolvedUserId) : undefined;
     const canAddContact = user && getCanAddContact(user);
     const isMainThread = threadId === MAIN_THREAD_ID;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const { chatId: currentChatId, threadId: currentThreadId } = selectCurrentMessageList(global) || {};
     const canReportChat = isMainThread && !user && isChatGroup(chat) && !isChatAdmin(chat);
 
-    const chatBot = !isSystemBot(chatId) ? selectBot(global, chatId) : undefined;
-    const userFullInfo = isPrivate ? selectUserFullInfo(global, chatId) : undefined;
+    const chatBot = !isSystemBot(chatId) ? selectBot(global, resolvedUserId) : undefined;
+    const userFullInfo = isPrivate ? selectUserFullInfo(global, resolvedUserId) : undefined;
     const chatFullInfo = !isPrivate ? selectChatFullInfo(global, chatId) : undefined;
     const fullInfo = userFullInfo || chatFullInfo;
     const canGift = selectCanGift(global, chatId);
