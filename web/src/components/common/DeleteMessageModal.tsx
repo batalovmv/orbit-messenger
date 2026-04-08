@@ -12,7 +12,7 @@ import type { IRadioOption } from '../ui/CheckboxGroup';
 
 import {
   getHasAdminRight,
-  getUserFirstOrLastName, isChatBasicGroup,
+  getUserFullName, isChatBasicGroup,
   isChatSuperGroup,
   isSystemBot,
 } from '../../global/helpers';
@@ -42,6 +42,7 @@ import useManagePermissions from '../right/hooks/useManagePermissions';
 
 import PermissionCheckboxList from '../main/PermissionCheckboxList';
 import Button from '../ui/Button';
+import Checkbox from '../ui/Checkbox';
 import CheckboxGroup from '../ui/CheckboxGroup';
 import ListItem from '../ui/ListItem';
 import Modal from '../ui/Modal';
@@ -465,7 +466,14 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
             )}
           </>
         )}
-        {/* Saturn: single delete mode (soft-delete for everyone), no checkbox needed */}
+        {contactName && canDeleteForAll && !shouldShowOption && (
+          <Checkbox
+            className="dialog-checkbox"
+            label={oldLang('ConversationDeleteMessagesFor', contactName)}
+            checked={shouldDeleteForAll}
+            onCheck={setShouldDeleteForAll}
+          />
+        )}
         <div className={buildClassName('dialog-buttons',
           isMediaDropdownOpen ? styles.dialogButtons : styles.proceedButtons)}
         >
@@ -495,7 +503,7 @@ export default memo(withGlobal<OwnProps>(
     const onConfirm = deleteMessageModal?.onConfirm;
     const dmPeerUserId = chatId && isUserId(chatId) ? selectDmPeerUserId(global, chatId) : undefined;
     const contactName = dmPeerUserId
-      ? getUserFirstOrLastName(selectUser(global, dmPeerUserId))
+      ? getUserFullName(selectUser(global, dmPeerUserId))
       : undefined;
     const chatBot = Boolean(chat && !isSystemBot(chat.id) && selectBot(global, chat.id));
     const adminMembersById = chatFullInfo?.adminMembersById;

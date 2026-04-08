@@ -231,7 +231,7 @@ const PollModal = ({
 
   const getQuestionError = useLastCallback(() => {
     if (hasErrors && !question.trim().length) {
-      return lang('lng_polls_choose_question');
+      return lang('PollsChooseQuestion');
     }
 
     return undefined;
@@ -240,7 +240,7 @@ const PollModal = ({
   const getOptionsError = useLastCallback((index: number) => {
     const optionsTrimmed = options.map((o) => o.trim()).filter((o) => o.length);
     if (hasErrors && optionsTrimmed.length < 2 && !options[index].trim().length) {
-      return lang('lng_polls_choose_answers');
+      return lang('PollsChooseAnswers');
     }
     return undefined;
   });
@@ -307,7 +307,7 @@ const PollModal = ({
     const optionsTrimmed = options.map((o) => o.trim()).filter((o) => o.length);
 
     return isQuizMode && (correctOption === undefined || !optionsTrimmed[correctOption]) && (
-      <p className="poll-error">{lang('lng_polls_choose_correct')}</p>
+      <p className="poll-error">{lang('PollsChooseCorrect')}</p>
     );
   }
 

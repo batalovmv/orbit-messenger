@@ -203,7 +203,9 @@ export function getAllowedAttachmentOptions(
       canSendRoundVideos: false,
       canSendAudios: false,
       canSendVoices: false,
-      canSendPlainText: false,
+      // Allow text input while chat is loading (e.g. opening DM from search);
+      // server enforces actual permissions — blocking composer during hydration is wrong UX
+      canSendPlainText: !chat && !paidMessagesStars,
       canSendDocuments: false,
       canAttachToDoLists: false,
     };

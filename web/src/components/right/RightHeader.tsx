@@ -490,7 +490,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
       case HeaderContent.SavedDialogs:
         return (
           <div className="header">
-            <h3 className="title">{oldLang('SavedMessagesTab')}</h3>
+            <h3 className="title">{oldLang('SavedMessages')}</h3>
             <div className="subtitle">{oldLang('Chats', foldersChatCount[SAVED_FOLDER_ID])}</div>
           </div>
         );

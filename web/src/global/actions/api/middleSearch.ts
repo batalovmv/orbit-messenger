@@ -323,16 +323,39 @@ async function searchSharedMedia<T extends GlobalState>(
 ) {
   const resultChatId = isSavedDialog ? global.currentUserId! : peer.id;
 
-  const result = await callApi('searchMessagesInChat', {
-    peer,
-    type,
-    limit: SHARED_MEDIA_SLICE * 2,
-    threadId,
-    offsetId,
-    isSavedDialog,
-  });
+  let result;
+  try {
+    result = await callApi('searchMessagesInChat', {
+      peer,
+      type,
+      limit: SHARED_MEDIA_SLICE * 2,
+      threadId,
+      offsetId,
+      isSavedDialog,
+    });
+  } catch (err) {
+    // API error — write empty results so the UI stops showing a spinner
+    global = getGlobal();
+    const currentSearch = selectCurrentSharedMediaSearch(global, tabId);
+    if (currentSearch) {
+      global = updateSharedMediaSearchResults(
+        global, resultChatId, threadId, type, [], 0, undefined, tabId,
+      );
+      setGlobal(global);
+    }
+    return;
+  }
 
   if (!result) {
+    // Null result — write empty results so the UI stops showing a spinner
+    global = getGlobal();
+    const currentSearch = selectCurrentSharedMediaSearch(global, tabId);
+    if (currentSearch) {
+      global = updateSharedMediaSearchResults(
+        global, resultChatId, threadId, type, [], 0, undefined, tabId,
+      );
+      setGlobal(global);
+    }
     return;
   }
 

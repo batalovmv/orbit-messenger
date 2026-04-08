@@ -190,8 +190,11 @@ export default function useChatListEntry({
     };
 
     if (animationType === ChatAnimationTypes.Opacity) {
-      requestForcedReflow(() => {
+      requestMutation(() => {
         element.style.opacity = '0';
+      });
+      requestForcedReflow(() => {
+        void element.offsetHeight;
         return () => {
           element.classList.add('animate-opacity');
           element.style.opacity = '1';
@@ -201,8 +204,11 @@ export default function useChatListEntry({
     }
 
     if (animationType === ChatAnimationTypes.Move) {
-      requestForcedReflow(() => {
+      requestMutation(() => {
         element.style.transform = `translate3d(0, ${-orderDiff * CHAT_HEIGHT_PX - shiftDiff}px, 0)`;
+      });
+      requestForcedReflow(() => {
+        void element.offsetHeight;
         return () => {
           element.classList.add('animate-transform');
           element.style.transform = '';
@@ -212,8 +218,11 @@ export default function useChatListEntry({
     }
 
     if (animationType === ChatAnimationTypes.Shift) {
-      requestForcedReflow(() => {
+      requestMutation(() => {
         element.style.transform = `translate3d(0, ${-shiftDiff}px, 0)`;
+      });
+      requestForcedReflow(() => {
+        void element.offsetHeight;
         return () => {
           element.classList.add('animate-transform');
           element.style.transform = '';

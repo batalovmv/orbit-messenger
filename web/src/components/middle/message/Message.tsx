@@ -1889,6 +1889,16 @@ const Message = ({
                     iconName="arrow-right"
                   />
                 )}
+                {canReply && (
+                  <Button
+                    className="message-action-button"
+                    color="translucent-white"
+                    round
+                    ariaLabel={oldLang('Reply')}
+                    onClick={handleReplyClick}
+                    iconName="reply"
+                  />
+                )}
               </div>
             </div>
           )}

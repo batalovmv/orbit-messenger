@@ -376,6 +376,12 @@ function scheduleReconnect() {
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX_MS);
     // Ensure token is valid before attempting WS reconnect
     await ensureToken();
+    // If refresh failed (no access token), stop reconnecting — user will be signed out
+    if (!accessToken) {
+      wsIntentionalClose = true;
+      onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateBroken' });
+      return;
+    }
     connectWs();
   }, jitter);
 }
