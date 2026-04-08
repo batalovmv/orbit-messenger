@@ -4,7 +4,7 @@ import { addExtraClass, removeExtraClass, setExtraStyles } from '../lib/teact/te
 
 import type { IAnchorPosition } from '../types';
 
-import { requestForcedReflow } from '../lib/fasterdom/fasterdom';
+import { requestForcedReflow, requestMutation } from '../lib/fasterdom/fasterdom';
 import { useStateRef } from './useStateRef';
 
 interface StaticPositionOptions {
@@ -61,7 +61,9 @@ export default function useMenuPosition(
     const options2 = optionsRef.current;
 
     if (!('getTriggerElement' in options2)) {
-      applyStaticOptions(containerRef, bubbleRef, options2);
+      requestMutation(() => {
+        applyStaticOptions(containerRef, bubbleRef, options2);
+      });
     } else {
       requestForcedReflow(() => {
         const staticOptions = processDynamically(containerRef, bubbleRef, options2);

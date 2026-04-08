@@ -633,7 +633,9 @@ const Profile = ({
       );
     }
 
-    const noContent = (!viewportIds && !botPreviewMedia) || !canRenderContent || !messagesById;
+    const hasEmptySearchResult = viewportIds !== undefined && viewportIds.length === 0;
+    const noContent = (!viewportIds && !botPreviewMedia) || !canRenderContent
+      || (!messagesById && !hasEmptySearchResult);
     const noSpinner = isFirstTab && !canRenderContent;
 
     return (

@@ -1,6 +1,7 @@
 import type { ElementRef } from '../../lib/teact/teact';
 import { useEffect, useLayoutEffect, useState } from '../../lib/teact/teact';
 
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import useLastCallback from '../useLastCallback';
 import useResizeObserver from '../useResizeObserver';
 
@@ -37,10 +38,14 @@ export default function useStyleObserver(
       return undefined;
     }
 
-    el.style.setProperty('transition', `${debounce}ms ${property} linear`, 'important');
+    requestMutation(() => {
+      el.style.setProperty('transition', `${debounce}ms ${property} linear`, 'important');
+    });
 
     return () => {
-      el.style.removeProperty('transition');
+      requestMutation(() => {
+        el.style.removeProperty('transition');
+      });
     };
   }, [debounce, isDisabled, property, ref]);
 

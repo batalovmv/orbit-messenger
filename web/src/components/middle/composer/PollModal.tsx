@@ -366,7 +366,7 @@ const PollModal = ({
         </div>
         {isQuizMode && (
           <>
-            <h3 className="options-header">{lang('lng_polls_solution_title')}</h3>
+            <h3 className="options-header">{lang('PollsSolutionTitle')}</h3>
             <TextArea
               value={solution}
               onChange={handleSolutionChange}

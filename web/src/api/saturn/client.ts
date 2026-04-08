@@ -278,7 +278,9 @@ export function connectWs() {
     ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
     startPing();
-    onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
+    // Don't dispatch connectionStateConnecting here — WS is already open,
+    // we're just waiting for auth_ok which will set connectionStateReady.
+    // Dispatching 'connecting' here would show "Waiting for network" during auth handshake.
   };
 
   ws.onmessage = (event) => {

@@ -8,7 +8,7 @@ import { getGlobal } from '../../../../global';
 import type { ApiSticker } from '../../../../api/types';
 import type { Signal } from '../../../../util/signals';
 
-import { requestMeasure } from '../../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../../lib/fasterdom/fasterdom';
 import { ensureRLottie } from '../../../../lib/rlottie/RLottie.async';
 import { selectCustomEmoji, selectIsAlwaysHighPriorityEmoji } from '../../../../global/selectors';
 import AbsoluteVideo from '../../../../util/AbsoluteVideo';
@@ -155,7 +155,9 @@ export default function useInputCustomEmojis(
   }, [getHtml, synchronizeElements, inputRef, clearPlayers, sharedCanvasRef, isActive, isReady]);
 
   useLayoutEffect(() => {
-    document.documentElement.style.setProperty('--input-custom-emoji-filter', colorFilter || 'none');
+    requestMutation(() => {
+      document.documentElement.style.setProperty('--input-custom-emoji-filter', colorFilter || 'none');
+    });
   }, [colorFilter]);
 
   useEffectWithPrevDeps(([prevCustomColor]) => {

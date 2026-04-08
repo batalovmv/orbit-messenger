@@ -6,6 +6,7 @@ import {
   useRef,
 } from '../../lib/teact/teact';
 
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import buildClassName from '../../util/buildClassName';
 
 import styles from './PinnedMessageNavigation.module.scss';
@@ -40,9 +41,9 @@ const PinnedMessageNavigation: FC<OwnProps> = ({
       clipPath,
     } = markupParams;
 
-    const firstChild = containerRef.current.firstElementChild;
-    if (containerRef?.current) {
-      const currentElement = containerRef.current;
+    const currentElement = containerRef.current;
+    requestMutation(() => {
+      const firstChild = currentElement.firstElementChild;
       const { style } = currentElement;
       style.height = `${trackHeight}px`;
       style.transform = `translateY(-${trackTranslateY}px)`;
@@ -62,7 +63,7 @@ const PinnedMessageNavigation: FC<OwnProps> = ({
         div.style.height = `${markHeight}px`;
         div.style.transform = `translateY(${markTranslateY}px)`;
       }
-    }
+    });
   }, [markupParams]);
 
   if (count === 1) {

@@ -468,6 +468,7 @@ const Message = ({
     markMentionsRead,
     openThread,
     summarizeMessage,
+    updateDraftReplyInfo,
   } = getActions();
 
   const ref = useRef<HTMLDivElement>();
@@ -703,6 +704,12 @@ const Message = ({
       });
     }
   }, [hasSummary, chatId, message.id, requestedTranslationLanguage, isShowingSummary, summary]);
+
+  const handleQuickReply = useLastCallback(() => {
+    updateDraftReplyInfo({
+      replyToMsgId: messageId, replyToPeerId: undefined, quoteText: undefined, quoteOffset: undefined,
+    });
+  });
 
   const handleEffectClick = useLastCallback((e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -1895,7 +1902,7 @@ const Message = ({
                     color="translucent-white"
                     round
                     ariaLabel={oldLang('Reply')}
-                    onClick={handleReplyClick}
+                    onClick={handleQuickReply}
                     iconName="reply"
                   />
                 )}

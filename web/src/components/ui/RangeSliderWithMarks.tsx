@@ -4,6 +4,7 @@ import {
   memo, useLayoutEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
 
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import buildClassName from '../../util/buildClassName';
 
 import styles from './RangeSliderWithMarks.module.scss';
@@ -25,10 +26,13 @@ const RangeSliderWithMarks: FC<OwnProps> = ({ marks, onChange, rangeCount }) => 
 
   useLayoutEffect(() => {
     if (sliderRef.current) {
+      const el = sliderRef.current;
       const fillPercentage = (rangeCountIndex / (marks.length - 1)) * 100;
       const thumbOffset = fillPercentage / 2;
-      sliderRef.current.style.setProperty('--fill-percentage', `${fillPercentage}%`);
-      sliderRef.current.style.setProperty('--thumb-offset', `${thumbOffset}%`);
+      requestMutation(() => {
+        el.style.setProperty('--fill-percentage', `${fillPercentage}%`);
+        el.style.setProperty('--thumb-offset', `${thumbOffset}%`);
+      });
     }
   }, [rangeCountIndex, marks]);
 
