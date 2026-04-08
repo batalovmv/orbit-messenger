@@ -7,6 +7,7 @@ RUN npm ci --ignore-scripts
 COPY . .
 RUN git init && git add -A && git -c user.name=build -c user.email=build@ci commit -m "build" --quiet 2>/dev/null || true
 ENV NODE_OPTIONS="--max-old-space-size=1024"
+ENV APP_ENV=production
 RUN npm run build:production
 
 FROM nginx:alpine
