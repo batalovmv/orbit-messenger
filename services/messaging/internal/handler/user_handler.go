@@ -95,12 +95,12 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 			return response.Error(c, vErr)
 		}
 	}
-	if req.CustomStatus != nil {
+	if req.CustomStatus != nil && *req.CustomStatus != "" {
 		if vErr := validator.RequireString(*req.CustomStatus, "custom_status", 0, 128); vErr != nil {
 			return response.Error(c, vErr)
 		}
 	}
-	if req.CustomStatusEmoji != nil {
+	if req.CustomStatusEmoji != nil && *req.CustomStatusEmoji != "" {
 		if vErr := validator.RequireString(*req.CustomStatusEmoji, "custom_status_emoji", 0, 32); vErr != nil {
 			return response.Error(c, vErr)
 		}
