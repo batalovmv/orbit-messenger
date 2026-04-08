@@ -256,7 +256,11 @@ function createAbortError() {
 // WebSocket management
 
 export function connectWs() {
+  // eslint-disable-next-line no-console
+  console.log('[Saturn WS] connectWs() called, ws state:', ws?.readyState, 'token:', accessToken ? 'present' : 'MISSING');
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    // eslint-disable-next-line no-console
+    console.log('[Saturn WS] Already connected/connecting, skipping');
     return;
   }
   if (!accessToken) {

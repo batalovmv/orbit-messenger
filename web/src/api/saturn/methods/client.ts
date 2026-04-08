@@ -27,12 +27,18 @@ export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
   // Restore auth session on page reload (refresh token from cookie).
   // Runs async — doesn't block initApi so isInited becomes true immediately.
   // The auth gate ensures requests wait for the token before firing.
+  // eslint-disable-next-line no-console
+  console.log('[Saturn] Starting checkAuth...');
   checkAuth().then((isAuthed) => {
+    // eslint-disable-next-line no-console
+    console.log('[Saturn] checkAuth completed, isAuthed:', isAuthed);
     saturnClient.resolveAuthGate();
     if (isAuthed) {
       sendApiUpdate({ '@type': 'requestSync' });
     }
-  }).catch(() => {
+  }).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn] checkAuth failed:', err);
     saturnClient.resolveAuthGate();
   });
 }
