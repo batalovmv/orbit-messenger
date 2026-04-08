@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/auth/internal/service"
@@ -91,8 +92,8 @@ func (h *AuthHandler) requireAuth(c *fiber.Ctx) error {
 }
 
 func (h *AuthHandler) requireAdmin(c *fiber.Ctx) error {
-	role := c.Locals("user_role")
-	if role != "admin" {
+	role, _ := c.Locals("user_role").(string)
+	if !permissions.HasSysPermission(role, permissions.SysManageInvites) {
 		return response.Error(c, apperror.Forbidden("Admin access required"))
 	}
 	return c.Next()
@@ -438,8 +439,12 @@ func (h *AuthHandler) CreateInvite(c *fiber.Ctx) error {
 	if req.Role == "" {
 		req.Role = "member"
 	}
-	if req.Role != "admin" && req.Role != "member" {
+	if !permissions.ValidSystemRoles[req.Role] {
 		return response.Error(c, apperror.BadRequest("Invalid role"))
+	}
+	actorRole, _ := c.Locals("user_role").(string)
+	if !permissions.CanAssignRole(actorRole, req.Role) {
+		return response.Error(c, apperror.Forbidden("You cannot create invites with this role"))
 	}
 	if req.MaxUses <= 0 {
 		req.MaxUses = 1

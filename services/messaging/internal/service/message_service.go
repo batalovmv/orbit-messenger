@@ -21,39 +21,75 @@ type MessageService struct {
 	messages     store.MessageStore
 	chats        store.ChatStore
 	blockedStore store.BlockedUsersStore
+	audit        store.AuditStore
 	nats         Publisher
 	redis        *redis.Client
 }
 
-func NewMessageService(messages store.MessageStore, chats store.ChatStore, blockedStore store.BlockedUsersStore, nats Publisher, rdb *redis.Client) *MessageService {
-	return &MessageService{messages: messages, chats: chats, blockedStore: blockedStore, nats: nats, redis: rdb}
+func NewMessageService(messages store.MessageStore, chats store.ChatStore, blockedStore store.BlockedUsersStore, nats Publisher, rdb *redis.Client, audit ...store.AuditStore) *MessageService {
+	svc := &MessageService{messages: messages, chats: chats, blockedStore: blockedStore, nats: nats, redis: rdb}
+	if len(audit) > 0 {
+		svc.audit = audit[0]
+	}
+	return svc
 }
 
-func (s *MessageService) ListMessages(ctx context.Context, chatID, userID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error) {
+// checkChatAccess verifies membership or privileged access. Returns true if access is granted.
+// For privileged access, it writes an audit log entry (fail-closed).
+func (s *MessageService) checkChatAccess(ctx context.Context, chatID, userID uuid.UUID, userRole string) (bool, error) {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {
-		return nil, "", false, fmt.Errorf("check membership: %w", err)
+		return false, fmt.Errorf("check membership: %w", err)
 	}
-	if !isMember {
+	if isMember {
+		return true, nil
+	}
+
+	// Fallback: privileged access via system permissions
+	if permissions.HasSysPermission(userRole, permissions.SysReadAllContent) && s.audit != nil {
+		entry := &model.AuditEntry{
+			ActorID:    userID,
+			Action:     model.AuditChatPrivilegedRead,
+			TargetType: "chat",
+		}
+		targetStr := chatID.String()
+		entry.TargetID = &targetStr
+
+		if err := s.audit.Log(ctx, entry); err != nil {
+			slog.Error("audit log write failed for privileged access", "error", err, "user_id", userID, "chat_id", chatID)
+			return false, apperror.Internal("audit log write failed")
+		}
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (s *MessageService) ListMessages(ctx context.Context, chatID, userID uuid.UUID, userRole, cursor string, limit int) ([]model.Message, string, bool, error) {
+	hasAccess, err := s.checkChatAccess(ctx, chatID, userID, userRole)
+	if err != nil {
+		return nil, "", false, err
+	}
+	if !hasAccess {
 		return nil, "", false, apperror.Forbidden("Not a member of this chat")
 	}
 
 	return s.messages.ListByChat(ctx, chatID, cursor, limit)
 }
 
-func (s *MessageService) FindByDate(ctx context.Context, chatID, userID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error) {
-	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+func (s *MessageService) FindByDate(ctx context.Context, chatID, userID uuid.UUID, userRole string, date time.Time, limit int) ([]model.Message, string, bool, error) {
+	hasAccess, err := s.checkChatAccess(ctx, chatID, userID, userRole)
 	if err != nil {
-		return nil, "", false, fmt.Errorf("check membership: %w", err)
+		return nil, "", false, err
 	}
-	if !isMember {
+	if !hasAccess {
 		return nil, "", false, apperror.Forbidden("Not a member of this chat")
 	}
 
 	return s.messages.FindByChatAndDate(ctx, chatID, date, limit)
 }
 
-func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
+func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID, userRole string) (*model.Message, error) {
 	msg, err := s.messages.GetByID(ctx, msgID)
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
@@ -62,11 +98,11 @@ func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID
 		return nil, apperror.NotFound("Message not found")
 	}
 
-	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+	hasAccess, err := s.checkChatAccess(ctx, msg.ChatID, userID, userRole)
 	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
+		return nil, err
 	}
-	if !isMember {
+	if !hasAccess {
 		return nil, apperror.Forbidden("Not a member of this chat")
 	}
 

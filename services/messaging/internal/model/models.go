@@ -27,6 +27,9 @@ type User struct {
 	CustomStatus      *string    `json:"custom_status,omitempty"`
 	CustomStatusEmoji *string    `json:"custom_status_emoji,omitempty"`
 	Role              string     `json:"role"`
+	IsActive          bool       `json:"is_active"`
+	DeactivatedAt     *time.Time `json:"deactivated_at,omitempty"`
+	DeactivatedBy     *uuid.UUID `json:"deactivated_by,omitempty"`
 	LastSeenAt        *time.Time `json:"last_seen_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`

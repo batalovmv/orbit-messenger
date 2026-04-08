@@ -143,10 +143,11 @@ func main() {
 	pollStore := store.NewPollStore(pool)
 	scheduledStore := store.NewScheduledMessageStore(pool)
 	searchHistoryStore := store.NewSearchHistoryStore(pool)
+	auditStore := store.NewAuditStore(pool)
 
 	// Services
 	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)
-	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb)
+	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb, auditStore)
 	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
@@ -255,6 +256,8 @@ func main() {
 	gifHandler := handler.NewGIFHandler(gifSvc, logger)
 	pollHandler := handler.NewPollHandler(pollSvc, logger)
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
+	adminSvc := service.NewAdminService(userStore, chatStore, auditStore, natsPublisher)
+	adminHandler := handler.NewAdminHandler(adminSvc)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -281,6 +284,7 @@ func main() {
 	gifHandler.Register(api)
 	pollHandler.Register(api)
 	scheduledHandler.Register(api)
+	adminHandler.Register(api)
 
 	// Graceful shutdown
 	go func() {

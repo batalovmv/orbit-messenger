@@ -18,6 +18,9 @@ type User struct {
 	CustomStatus      *string    `json:"custom_status,omitempty"`
 	CustomStatusEmoji *string    `json:"custom_status_emoji,omitempty"`
 	Role              string     `json:"role"`
+	IsActive          bool       `json:"is_active"`
+	DeactivatedAt     *time.Time `json:"deactivated_at,omitempty"`
+	DeactivatedBy     *uuid.UUID `json:"deactivated_by,omitempty"`
 	TOTPSecret        *string    `json:"-"`
 	TOTPEnabled       bool       `json:"totp_enabled"`
 	InvitedBy         *uuid.UUID `json:"invited_by,omitempty"`

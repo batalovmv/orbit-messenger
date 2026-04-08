@@ -40,6 +40,7 @@ type ChatStore interface {
 	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error
 	ListAll(ctx context.Context, limit int) ([]model.Chat, error)
+	ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error)
 	GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error)
 	GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
 }
@@ -705,6 +706,71 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 		chats = append(chats, c)
 	}
 	return chats, rows.Err()
+}
+
+func (s *chatStore) ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	var rows pgx.Rows
+	var err error
+
+	selectCols := `id, type, name, description, avatar_url, created_by,
+		is_encrypted, max_members, default_permissions, slow_mode_seconds,
+		created_at, updated_at`
+
+	if cursor != "" {
+		rows, err = s.pool.Query(ctx,
+			`SELECT `+selectCols+`
+			 FROM chats
+			 WHERE created_at < (SELECT created_at FROM chats WHERE id = $1)
+			    OR (created_at = (SELECT created_at FROM chats WHERE id = $1) AND id < $1)
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $2`,
+			cursor, limit+1,
+		)
+	} else {
+		rows, err = s.pool.Query(ctx,
+			`SELECT `+selectCols+`
+			 FROM chats
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT $1`,
+			limit+1,
+		)
+	}
+	if err != nil {
+		return nil, "", false, fmt.Errorf("list all chats paginated: %w", err)
+	}
+	defer rows.Close()
+
+	var chats []model.Chat
+	for rows.Next() {
+		var c model.Chat
+		if err := rows.Scan(
+			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
+			&c.IsEncrypted, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.CreatedAt, &c.UpdatedAt,
+		); err != nil {
+			return nil, "", false, err
+		}
+		chats = append(chats, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", false, err
+	}
+
+	hasMore := len(chats) > limit
+	if hasMore {
+		chats = chats[:limit]
+	}
+
+	nextCursor := ""
+	if len(chats) > 0 {
+		nextCursor = chats[len(chats)-1].ID.String()
+	}
+
+	return chats, nextCursor, hasMore, nil
 }
 
 func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {

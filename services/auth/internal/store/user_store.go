@@ -37,21 +37,25 @@ func (s *userStore) Create(ctx context.Context, u *model.User) error {
 	return s.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, display_name, role, invited_by, invite_code)
 		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, status, totp_enabled, created_at, updated_at`,
+		 RETURNING id, status, is_active, totp_enabled, created_at, updated_at`,
 		u.Email, u.PasswordHash, u.DisplayName, u.Role, u.InvitedBy, u.InviteCode,
-	).Scan(&u.ID, &u.Status, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Status, &u.IsActive, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
 }
 
 func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, email, password_hash, phone, display_name, avatar_url, bio,
-		        status, custom_status, custom_status_emoji, role, totp_secret, totp_enabled,
+		        status, custom_status, custom_status_emoji, role,
+		        is_active, deactivated_at, deactivated_by,
+		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id,
 	).Scan(
 		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.Bio,
-		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.TOTPSecret, &u.TOTPEnabled,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
+		&u.TOTPSecret, &u.TOTPEnabled,
 		&u.InvitedBy, &u.InviteCode, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -64,12 +68,16 @@ func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, 
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, email, password_hash, phone, display_name, avatar_url, bio,
-		        status, custom_status, custom_status_emoji, role, totp_secret, totp_enabled,
+		        status, custom_status, custom_status_emoji, role,
+		        is_active, deactivated_at, deactivated_by,
+		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email,
 	).Scan(
 		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.Bio,
-		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.TOTPSecret, &u.TOTPEnabled,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
+		&u.TOTPSecret, &u.TOTPEnabled,
 		&u.InvitedBy, &u.InviteCode, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -89,16 +97,16 @@ func (s *userStore) Update(ctx context.Context, u *model.User) error {
 	return err
 }
 
-// CreateIfNoAdmins atomically checks that no admin exists and inserts the user.
-// Returns ErrAdminExists if an admin already exists (race-safe).
+// CreateIfNoAdmins atomically checks that no superadmin/admin exists and inserts the user.
+// Returns ErrAdminExists if a privileged admin already exists (race-safe).
 func (s *userStore) CreateIfNoAdmins(ctx context.Context, u *model.User) error {
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, display_name, role, invited_by, invite_code)
 		 SELECT $1, $2, $3, $4, $5, $6
-		 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')
-		 RETURNING id, status, totp_enabled, created_at, updated_at`,
+		 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role IN ('superadmin', 'admin'))
+		 RETURNING id, status, is_active, totp_enabled, created_at, updated_at`,
 		u.Email, u.PasswordHash, u.DisplayName, u.Role, u.InvitedBy, u.InviteCode,
-	).Scan(&u.ID, &u.Status, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Status, &u.IsActive, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAdminExists
@@ -110,7 +118,7 @@ func (s *userStore) CreateIfNoAdmins(ctx context.Context, u *model.User) error {
 
 func (s *userStore) CountAdmins(ctx context.Context) (int, error) {
 	var count int
-	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = 'admin'`).Scan(&count)
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role IN ('superadmin', 'admin')`).Scan(&count)
 	return count, err
 }
 

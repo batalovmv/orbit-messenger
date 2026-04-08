@@ -10,7 +10,9 @@ export interface SaturnUser {
   status: 'online' | 'offline' | 'recently';
   custom_status?: string;
   custom_status_emoji?: string;
-  role: 'admin' | 'member';
+  role: 'superadmin' | 'compliance' | 'admin' | 'member';
+  is_active: boolean;
+  deactivated_at?: string;
   totp_enabled?: boolean;
   invited_by?: string;
   last_seen_at?: string;
@@ -284,7 +286,7 @@ export interface SaturnUserSearchHit {
   status?: 'online' | 'offline' | 'recently';
   custom_status?: string;
   custom_status_emoji?: string;
-  role?: 'admin' | 'member';
+  role?: 'superadmin' | 'compliance' | 'admin' | 'member';
   totp_enabled?: boolean;
   invited_by?: string;
   last_seen_at?: string;
@@ -451,4 +453,18 @@ export interface SaturnScheduledMessage {
 export interface SaturnWsMessage {
   type: string;
   data: Record<string, unknown>;
+}
+
+// Admin / Audit types
+export interface SaturnAuditEntry {
+  id: number;
+  actor_id: string;
+  action: string;
+  target_type: string;
+  target_id?: string;
+  details?: Record<string, unknown>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+  actor_name?: string;
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -17,6 +18,13 @@ type UserStore interface {
 	UpdateStatus(ctx context.Context, userID, status string, lastSeenAt *time.Time) error
 	Search(ctx context.Context, query string, limit int) ([]model.User, error)
 	ListAll(ctx context.Context, limit int) ([]model.User, error)
+
+	// Admin methods
+	ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.User, string, bool, error)
+	Deactivate(ctx context.Context, userID, actorID uuid.UUID) error
+	Reactivate(ctx context.Context, userID uuid.UUID) error
+	UpdateRole(ctx context.Context, userID uuid.UUID, newRole string) error
+	CountByRole(ctx context.Context, role string) (int, error)
 }
 
 type userStore struct {
@@ -27,20 +35,41 @@ func NewUserStore(pool *pgxpool.Pool) UserStore {
 	return &userStore{pool: pool}
 }
 
-func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+const userSelectCols = `id, email, display_name, avatar_url, bio, phone,
+		status, custom_status, custom_status_emoji, role,
+		is_active, deactivated_at, deactivated_by,
+		last_seen_at, created_at, updated_at`
+
+func scanUser(row pgx.Row) (*model.User, error) {
 	u := &model.User{}
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, display_name, avatar_url, bio, phone,
-		        status, custom_status, custom_status_emoji, role,
-		        last_seen_at, created_at, updated_at
-		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
+	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
 		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	return u, err
+}
+
+func scanUsers(rows pgx.Rows) ([]model.User, error) {
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
+			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+			&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
+			&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	return scanUser(s.pool.QueryRow(ctx,
+		`SELECT `+userSelectCols+` FROM users WHERE id = $1`, id))
 }
 
 func (s *userStore) Update(ctx context.Context, u *model.User) error {
@@ -68,9 +97,7 @@ func (s *userStore) ListAll(ctx context.Context, limit int) ([]model.User, error
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, email, display_name, avatar_url, bio, phone,
-		        status, custom_status, custom_status_emoji, role,
-		        last_seen_at, created_at, updated_at
+		`SELECT `+userSelectCols+`
 		 FROM users
 		 ORDER BY display_name
 		 LIMIT $1`, limit,
@@ -80,17 +107,7 @@ func (s *userStore) ListAll(ctx context.Context, limit int) ([]model.User, error
 	}
 	defer rows.Close()
 
-	var users []model.User
-	for rows.Next() {
-		var u model.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
-			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
-			&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-	return users, rows.Err()
+	return scanUsers(rows)
 }
 
 // escapeILIKE escapes special ILIKE characters (%, _) in search terms.
@@ -106,9 +123,7 @@ func (s *userStore) Search(ctx context.Context, query string, limit int) ([]mode
 
 	escaped := "%" + escapeILIKE(query) + "%"
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, email, display_name, avatar_url, bio, phone,
-		        status, custom_status, custom_status_emoji, role,
-		        last_seen_at, created_at, updated_at
+		`SELECT `+userSelectCols+`
 		 FROM users
 		 WHERE display_name ILIKE $1 OR email ILIKE $1
 		 ORDER BY display_name
@@ -120,15 +135,107 @@ func (s *userStore) Search(ctx context.Context, query string, limit int) ([]mode
 	}
 	defer rows.Close()
 
-	var users []model.User
-	for rows.Next() {
-		var u model.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
-			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
-			&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
-			return nil, err
-		}
-		users = append(users, u)
+	return scanUsers(rows)
+}
+
+// --- Admin methods ---
+
+func (s *userStore) ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.User, string, bool, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
 	}
-	return users, rows.Err()
+
+	var rows pgx.Rows
+	var err error
+
+	if cursor != "" {
+		rows, err = s.pool.Query(ctx,
+			`SELECT `+userSelectCols+`
+			 FROM users
+			 WHERE display_name > (SELECT display_name FROM users WHERE id = $1)
+			    OR (display_name = (SELECT display_name FROM users WHERE id = $1) AND id > $1)
+			 ORDER BY display_name, id
+			 LIMIT $2`,
+			cursor, limit+1,
+		)
+	} else {
+		rows, err = s.pool.Query(ctx,
+			`SELECT `+userSelectCols+`
+			 FROM users
+			 ORDER BY display_name, id
+			 LIMIT $1`,
+			limit+1,
+		)
+	}
+	if err != nil {
+		return nil, "", false, fmt.Errorf("list all users paginated: %w", err)
+	}
+	defer rows.Close()
+
+	users, err := scanUsers(rows)
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	hasMore := len(users) > limit
+	if hasMore {
+		users = users[:limit]
+	}
+
+	nextCursor := ""
+	if len(users) > 0 {
+		nextCursor = users[len(users)-1].ID.String()
+	}
+
+	return users, nextCursor, hasMore, nil
+}
+
+func (s *userStore) Deactivate(ctx context.Context, userID, actorID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET is_active = false, deactivated_at = now(), deactivated_by = $2, updated_at = now()
+		 WHERE id = $1 AND is_active = true`,
+		userID, actorID,
+	)
+	if err != nil {
+		return fmt.Errorf("deactivate user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user not found or already deactivated")
+	}
+	return nil
+}
+
+func (s *userStore) Reactivate(ctx context.Context, userID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET is_active = true, deactivated_at = NULL, deactivated_by = NULL, updated_at = now()
+		 WHERE id = $1 AND is_active = false`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("reactivate user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user not found or already active")
+	}
+	return nil
+}
+
+func (s *userStore) UpdateRole(ctx context.Context, userID uuid.UUID, newRole string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET role = $2, updated_at = now() WHERE id = $1`,
+		userID, newRole,
+	)
+	if err != nil {
+		return fmt.Errorf("update role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
+}
+
+func (s *userStore) CountByRole(ctx context.Context, role string) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = $1`, role).Scan(&count)
+	return count, err
 }

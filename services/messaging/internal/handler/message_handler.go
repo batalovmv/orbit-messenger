@@ -108,7 +108,7 @@ func (h *MessageHandler) ListMessages(c *fiber.Ctx) error {
 		limit = 100
 	}
 
-	msgs, nextCursor, hasMore, err := h.svc.ListMessages(c.Context(), chatID, uid, cursor, limit)
+	msgs, nextCursor, hasMore, err := h.svc.ListMessages(c.Context(), chatID, uid, getUserRole(c), cursor, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -170,7 +170,7 @@ func (h *MessageHandler) FindByDate(c *fiber.Ctx) error {
 	if limit > 100 {
 		limit = 100
 	}
-	msgs, nextCursor, hasMore, err := h.svc.FindByDate(c.Context(), chatID, uid, date, limit)
+	msgs, nextCursor, hasMore, err := h.svc.FindByDate(c.Context(), chatID, uid, getUserRole(c), date, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -192,7 +192,7 @@ func (h *MessageHandler) GetMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid message ID"))
 	}
 
-	msg, err := h.svc.GetMessage(c.Context(), msgID, uid)
+	msg, err := h.svc.GetMessage(c.Context(), msgID, uid, getUserRole(c))
 	if err != nil {
 		return response.Error(c, err)
 	}

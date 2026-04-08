@@ -57,7 +57,7 @@ func (s *AuthService) Bootstrap(ctx context.Context, email, password, displayNam
 		Email:        email,
 		PasswordHash: string(hash),
 		DisplayName:  displayName,
-		Role:         "admin",
+		Role:         "superadmin",
 	}
 	if err := s.users.CreateIfNoAdmins(ctx, u); err != nil {
 		if errors.Is(err, store.ErrAdminExists) {
@@ -88,6 +88,10 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
 		return nil, nil, apperror.Unauthorized("Invalid email or password")
+	}
+
+	if !u.IsActive {
+		return nil, nil, apperror.Forbidden("Account is deactivated")
 	}
 
 	if u.TOTPEnabled {
@@ -228,6 +232,9 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, ip, userAgent s
 	}
 	if u == nil {
 		return nil, nil, apperror.Unauthorized("User not found")
+	}
+	if !u.IsActive {
+		return nil, nil, apperror.Forbidden("Account is deactivated")
 	}
 
 	pair, err := s.createTokenPair(ctx, u.ID, ip, userAgent)
