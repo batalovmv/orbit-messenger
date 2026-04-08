@@ -141,19 +141,19 @@ const PhoneCall = ({
   const callStatus = useMemo(() => {
     const state = phoneCall?.state;
     if (isHangingUp) {
-      return lang('lng_call_status_hanging');
+      return lang('CallStatusHanging');
     }
     if (isBusy) return 'busy';
     if (state === 'requesting') {
-      return lang('lng_call_status_requesting');
+      return lang('CallStatusRequesting');
     } else if (state === 'requested') {
-      return isOutgoing ? lang('lng_call_status_ringing') : lang('lng_call_status_incoming');
+      return isOutgoing ? lang('CallStatusRinging') : lang('CallStatusIncoming');
     } else if (state === 'waiting') {
-      return lang('lng_call_status_waiting');
+      return lang('CallStatusWaiting');
     } else if (state === 'active' && isConnected) {
       return undefined;
     } else {
-      return lang('lng_call_status_exchanging');
+      return lang('CallStatusExchanging');
     }
   }, [isBusy, isConnected, isHangingUp, isOutgoing, lang, phoneCall?.state]);
 
@@ -305,14 +305,14 @@ const PhoneCall = ({
           icon="microphone"
           isDisabled={!isActive}
           isActive={hasOwnAudio}
-          label={lang(hasOwnAudio ? 'lng_call_mute_audio' : 'lng_call_unmute_audio')}
+          label={lang(hasOwnAudio ? 'CallMuteAudio' : 'CallUnmuteAudio')}
         />
         <PhoneCallButton
           onClick={handleToggleVideo}
           icon="video"
           isDisabled={!isActive}
           isActive={hasOwnVideo}
-          label={lang(hasOwnVideo ? 'lng_call_stop_video' : 'lng_call_start_video')}
+          label={lang(hasOwnVideo ? 'CallStopVideo' : 'CallStartVideo')}
         />
         {hasOwnVideo && (IS_ANDROID || IS_IOS) && (
           <PhoneCallButton
@@ -334,7 +334,7 @@ const PhoneCall = ({
             icon="share-screen"
             isDisabled={!isActive}
             isActive={hasOwnPresentation}
-            label={lang('lng_call_screencast')}
+            label={lang('CallScreencast')}
           />
         )}
         {isIncomingRequested && (
@@ -342,7 +342,7 @@ const PhoneCall = ({
             onClick={requestMasterAndAcceptCall}
             icon="phone-discard"
             isDisabled={isDiscarded}
-            label={lang('lng_call_accept')}
+            label={lang('CallAccept')}
             className={styles.accept}
             iconClassName={styles.acceptIcon}
           />
@@ -351,7 +351,7 @@ const PhoneCall = ({
           onClick={handleHangUp}
           icon="phone-discard"
           isDisabled={isDiscarded}
-          label={lang(isIncomingRequested ? 'lng_call_decline' : 'lng_call_end_call')}
+          label={lang(isIncomingRequested ? 'CallDecline' : 'CallEndCall')}
           className={styles.leave}
         />
       </div>

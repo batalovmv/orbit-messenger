@@ -393,7 +393,7 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
     phoneCall: {
       id: '',
       state: 'requesting',
-      participantId: userId,
+      participantId: user.id,
       isVideo,
       adminId: global.currentUserId,
       accessHash: resolvedChatId,

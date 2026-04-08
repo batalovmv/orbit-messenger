@@ -524,28 +524,24 @@ function handleCallIncoming(data: Record<string, unknown>) {
 function handleCallAccepted(data: Record<string, unknown>) {
   const callId = data.call_id as string;
   const acceptorId = data.user_id as string;
-  // initiator_id comes from the nested call object or top-level
-  const callObj = data.call as Record<string, unknown> | undefined;
-  const initiatorId = (callObj?.initiator_id || data.initiator_id) as string;
 
   if (!callId) return;
 
-  // Set peer ID: if we're the initiator, peer is the acceptor; otherwise peer is the initiator
-  const { setActiveCallPeerId } = require('../methods/calls');
-  if (initiatorId === currentUserId) {
-    setActiveCallPeerId(acceptorId);
-  } else {
-    setActiveCallPeerId(initiatorId || '');
-  }
+  // Skip echo for the callee — already handled by acceptCall() Saturn method
+  if (acceptorId === currentUserId) return;
 
+  // For the caller: set peer to acceptor
+  const { setActiveCallPeerId } = require('../methods/calls');
+  setActiveCallPeerId(acceptorId);
+
+  // Only set state to active; do NOT include adminId/participantId
+  // to avoid overwriting correct values already in global.phoneCall
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
       id: callId,
       accessHash: '',
       state: 'active',
-      adminId: initiatorId || currentUserId || '',
-      participantId: acceptorId || currentUserId || '',
     },
   });
 }
