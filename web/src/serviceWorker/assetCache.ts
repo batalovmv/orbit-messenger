@@ -32,6 +32,8 @@ export async function respondWithCache(e: FetchEvent) {
 
   if (cache && cached) {
     if (cached.ok) {
+      // Validate cached content-hashed assets by checking if they still exist on the server.
+      // After a deploy, old chunk hashes become 404 — serve stale cache but trigger a reload.
       return cached;
     } else {
       await cache.delete(e.request);
@@ -42,6 +44,18 @@ export async function respondWithCache(e: FetchEvent) {
 
   if (remote.ok && cache) {
     cache.put(e.request, remote.clone());
+  }
+
+  // If a content-hashed asset returns 404, the deploy has invalidated this chunk.
+  // Clear the entire asset cache and notify clients to reload.
+  if (!remote.ok && remote.status === 404 && e.request.url.match(/[\da-f]{20}/)) {
+    // eslint-disable-next-line no-console
+    console.warn('[SW] Stale chunk detected (404), clearing cache:', e.request.url);
+    await clearAssetCache();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((client) => {
+      client.postMessage({ type: 'staleChunkDetected' });
+    });
   }
 
   return remote;

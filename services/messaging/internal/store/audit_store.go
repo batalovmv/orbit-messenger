@@ -111,7 +111,7 @@ func (s *auditStore) List(ctx context.Context, filter AuditFilter) ([]model.Audi
 
 	query := fmt.Sprintf(
 		`SELECT a.id, a.actor_id, a.action, a.target_type, a.target_id,
-		        a.details, a.ip_address, a.user_agent, a.created_at,
+		        a.details, a.ip_address::text, a.user_agent, a.created_at,
 		        COALESCE(u.display_name, '') AS actor_name
 		 FROM audit_log a
 		 LEFT JOIN users u ON u.id = a.actor_id

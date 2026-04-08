@@ -32,16 +32,16 @@ self.addEventListener('activate', (e) => {
     console.log('ServiceWorker activated');
   }
 
+  // Always clear asset cache on activate to prevent stale chunks after deploy.
+  // clearAssetCache must complete before claiming clients — don't let the timeout skip it.
   e.waitUntil(
-    Promise.race([
-      // An attempt to fix freezing UI on iOS
-      pause(ACTIVATE_TIMEOUT),
-      Promise.all([
-        clearAssetCache(),
-        // Become available to all pages
+    clearAssetCache().catch(() => {}).then(() => {
+      return Promise.race([
+        // An attempt to fix freezing UI on iOS
+        pause(ACTIVATE_TIMEOUT),
         self.clients.claim(),
-      ]),
-    ]),
+      ]);
+    }),
   );
 });
 

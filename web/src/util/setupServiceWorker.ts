@@ -49,6 +49,12 @@ function handleWorkerMessage(e: MessageEvent) {
         files: validateFiles(payload.files),
       });
       break;
+    case 'staleChunkDetected':
+      // A deploy has invalidated cached JS chunks — reload to get fresh code
+      // eslint-disable-next-line no-console
+      console.warn('[SW] Stale chunk detected after deploy, reloading...');
+      window.location.reload();
+      break;
   }
 }
 
