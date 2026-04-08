@@ -280,7 +280,7 @@ const LeftMainHeader = ({
         >
           {searchContent}
         </SearchInput>
-        {/* StatusButton (emoji status star) removed — Orbit has no Premium status feature */}
+        <StatusButton />
         {hasPasscode && (
           <Button
             round

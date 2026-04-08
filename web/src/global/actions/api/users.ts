@@ -510,6 +510,23 @@ addActionHandler('setEmojiStatus', async (global, actions, payload): Promise<voi
   }
 });
 
+addActionHandler('setCustomStatus', async (global, _actions, payload): Promise<void> => {
+  const { text, emoji } = payload;
+  const { currentUserId } = global;
+
+  // Optimistically update local state
+  if (currentUserId) {
+    global = getGlobal();
+    global = updateUser(global, currentUserId, {
+      customStatus: text || undefined,
+      customStatusEmoji: emoji || undefined,
+    });
+    setGlobal(global);
+  }
+
+  await callApi('updateEmojiStatus', text || emoji ? { title: text, emoji } : undefined);
+});
+
 addActionHandler('saveCloseFriends', async (global, actions, payload): Promise<void> => {
   const { userIds } = payload;
 

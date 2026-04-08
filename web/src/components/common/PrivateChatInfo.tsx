@@ -223,10 +223,24 @@ const PrivateChatInfo = ({
       return undefined;
     }
 
+    const isOnline = isUserOnline(user, userStatus, true);
+
+    if (user.customStatus) {
+      const statusText = user.customStatusEmoji
+        ? `${user.customStatusEmoji} ${user.customStatus}`
+        : user.customStatus;
+      return (
+        <span className={buildClassName('status', isOnline && 'online')}>
+          {mainUsername && <span className={buildClassName('handle', 'withStatus')}>{mainUsername}</span>}
+          <span className="user-status" dir="auto">{statusText}</span>
+        </span>
+      );
+    }
+
     const translatedStatus = getUserStatus(oldLang, user, userStatus);
     const mainUserNameClassName = buildClassName('handle', translatedStatus && 'withStatus');
     return (
-      <span className={buildClassName('status', isUserOnline(user, userStatus, true) && 'online')}>
+      <span className={buildClassName('status', isOnline && 'online')}>
         {mainUsername && <span className={mainUserNameClassName}>{mainUsername}</span>}
         {translatedStatus && <span className="user-status" dir="auto">{translatedStatus}</span>}
       </span>

@@ -360,6 +360,8 @@ function handleUserStatus(data: Record<string, unknown>) {
   const userId = data.user_id as string;
   const status = data.status as string;
   const lastSeen = data.last_seen as string | undefined;
+  const customStatus = data.custom_status as string | undefined;
+  const customStatusEmoji = data.custom_status_emoji as string | undefined;
 
   sendApiUpdate({
     '@type': 'updateUserStatus',
@@ -372,6 +374,18 @@ function handleUserStatus(data: Record<string, unknown>) {
       expires: status === 'online' ? Math.floor(Date.now() / 1000) + 300 : undefined,
     },
   });
+
+  // Propagate custom status changes to user object in global state
+  if (customStatus !== undefined || customStatusEmoji !== undefined) {
+    sendApiUpdate({
+      '@type': 'updateUser',
+      id: userId,
+      user: {
+        customStatus: customStatus || undefined,
+        customStatusEmoji: customStatusEmoji || undefined,
+      },
+    });
+  }
 }
 
 async function handleReactionChanged(data: Record<string, unknown>) {

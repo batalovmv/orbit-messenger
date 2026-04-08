@@ -36,6 +36,8 @@ export interface ApiUser {
   fakeType?: ApiFakeType;
   isAttachBot?: boolean;
   emojiStatus?: ApiEmojiStatusType;
+  customStatus?: string;
+  customStatusEmoji?: string;
   areStoriesHidden?: boolean;
   hasStories?: boolean;
   hasUnreadStories?: boolean;

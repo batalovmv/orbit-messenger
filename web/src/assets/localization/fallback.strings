@@ -238,6 +238,13 @@
 "CallAccept" = "Accept";
 "CallDecline" = "Decline";
 "CallEndCall" = "End Call";
+"CustomStatusDayOff" = "Day Off";
+"CustomStatusVacation" = "Vacation";
+"CustomStatusWorking" = "Working";
+"CustomStatusSick" = "Sick";
+"CustomStatusUnavailable" = "Unavailable";
+"CustomStatusClear" = "Clear Status";
+"CustomStatusPresets" = "Set Status";
 "CallRateLabel" = "Please rate the quality of your call";
 "CallRateComment" = "Comment (optional)";
 "Send" = "Send";

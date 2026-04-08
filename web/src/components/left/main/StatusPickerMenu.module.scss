@@ -27,3 +27,46 @@
     width: calc(100vw - 1rem);
   }
 }
+
+.presets {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--color-borders);
+}
+
+.presetsHeader {
+  padding: 0.25rem 1rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.presetItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--color-text);
+  transition: background-color 0.15s;
+
+  &:hover {
+    background-color: var(--color-chat-hover);
+  }
+}
+
+.presetEmoji {
+  font-size: 1.25rem;
+  line-height: 1;
+  width: 1.5rem;
+  text-align: center;
+}
+
+.presetText {
+  flex: 1;
+  text-align: left;
+}

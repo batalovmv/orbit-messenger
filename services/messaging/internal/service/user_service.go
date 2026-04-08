@@ -17,10 +17,11 @@ type userSearchIndexer interface {
 }
 
 type UserService struct {
-	users   store.UserStore
-	chats   store.ChatStore
-	privacy store.PrivacySettingsStore
-	search  userSearchIndexer
+	users     store.UserStore
+	chats     store.ChatStore
+	privacy   store.PrivacySettingsStore
+	search    userSearchIndexer
+	publisher Publisher
 }
 
 func NewUserService(users store.UserStore, chats store.ChatStore, privacy store.PrivacySettingsStore, search ...userSearchIndexer) *UserService {
@@ -29,6 +30,12 @@ func NewUserService(users store.UserStore, chats store.ChatStore, privacy store.
 		svc.search = search[0]
 	}
 	return svc
+}
+
+// WithPublisher sets the NATS publisher for broadcasting user status changes.
+func (s *UserService) WithPublisher(p Publisher) *UserService {
+	s.publisher = p
+	return s
 }
 
 func (s *UserService) GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error) {
@@ -147,6 +154,32 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, displ
 			// Non-fatal: search index is eventually consistent.
 			slog.WarnContext(ctx, "search: failed to index user", "user_id", u.ID, "error", indexErr)
 		}
+	}
+
+	// Broadcast custom_status change to contacts via NATS
+	if s.publisher != nil && (customStatus != nil || customStatusEmoji != nil) {
+		go func() {
+			contactIDs, cErr := s.chats.GetContactIDs(context.Background(), userID)
+			if cErr != nil {
+				slog.Error("failed to get contact IDs for status broadcast", "error", cErr, "user_id", userID)
+				return
+			}
+			cs := ""
+			if u.CustomStatus != nil {
+				cs = *u.CustomStatus
+			}
+			cse := ""
+			if u.CustomStatusEmoji != nil {
+				cse = *u.CustomStatusEmoji
+			}
+			subject := fmt.Sprintf("orbit.user.%s.status", userID)
+			s.publisher.Publish(subject, "user_status", map[string]interface{}{
+				"user_id":             userID.String(),
+				"status":              u.Status,
+				"custom_status":       cs,
+				"custom_status_emoji": cse,
+			}, contactIDs, userID.String())
+		}()
 	}
 
 	return u, nil

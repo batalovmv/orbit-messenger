@@ -1,56 +1,62 @@
 import type { ElementRef } from '../../../lib/teact/teact';
 import {
-  memo, useCallback, useEffect, useRef,
+  memo, useEffect, useRef,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiSticker } from '../../../api/types';
+import { selectIsContextMenuTranslucent, selectUser } from '../../../global/selectors';
 
-import { selectIsContextMenuTranslucent } from '../../../global/selectors';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 
-import CustomEmojiPicker from '../../common/CustomEmojiPicker';
 import Menu from '../../ui/Menu';
 import Portal from '../../ui/Portal';
 
 import styles from './StatusPickerMenu.module.scss';
 
+const STATUS_PRESETS = [
+  { emoji: '💼', key: 'CustomStatusWorking' },
+  { emoji: '🌴', key: 'CustomStatusDayOff' },
+  { emoji: '🏖️', key: 'CustomStatusVacation' },
+  { emoji: '🤒', key: 'CustomStatusSick' },
+  { emoji: '📵', key: 'CustomStatusUnavailable' },
+] as const;
+
 export type OwnProps = {
   isOpen: boolean;
   statusButtonRef: ElementRef<HTMLButtonElement>;
-  onEmojiStatusSelect: (emojiStatus: ApiSticker) => void;
   onClose: () => void;
 };
 
 interface StateProps {
-  areFeaturedStickersLoaded?: boolean;
   isTranslucent?: boolean;
+  currentCustomStatus?: string;
 }
 
 const StatusPickerMenu = ({
   isOpen,
   statusButtonRef,
-  areFeaturedStickersLoaded,
   isTranslucent,
-  onEmojiStatusSelect,
+  currentCustomStatus,
   onClose,
 }: OwnProps & StateProps) => {
-  const { loadFeaturedEmojiStickers } = getActions();
+  const { setCustomStatus } = getActions();
+  const lang = useLang();
 
   const transformOriginX = useRef<number>(0);
   useEffect(() => {
     transformOriginX.current = statusButtonRef.current!.getBoundingClientRect().right;
   }, [isOpen, statusButtonRef]);
 
-  useEffect(() => {
-    if (isOpen && !areFeaturedStickersLoaded) {
-      loadFeaturedEmojiStickers();
-    }
-  }, [areFeaturedStickersLoaded, isOpen, loadFeaturedEmojiStickers]);
-
-  const handleEmojiSelect = useCallback((sticker: ApiSticker) => {
-    onEmojiStatusSelect(sticker);
+  const handlePresetClick = useLastCallback((emoji: string, text: string) => {
+    setCustomStatus({ text, emoji });
     onClose();
-  }, [onClose, onEmojiStatusSelect]);
+  });
+
+  const handleClearStatus = useLastCallback(() => {
+    setCustomStatus({ text: '', emoji: '' });
+    onClose();
+  });
 
   return (
     <Portal>
@@ -62,23 +68,43 @@ const StatusPickerMenu = ({
         onClose={onClose}
         transformOriginX={transformOriginX.current}
       >
-        <CustomEmojiPicker
-          idPrefix="status-emoji-set-"
-          loadAndPlay={isOpen}
-          isHidden={!isOpen}
-          isStatusPicker
-          isTranslucent={isTranslucent}
-          onDismiss={onClose}
-          onCustomEmojiSelect={handleEmojiSelect}
-        />
+        <div className={styles.presets}>
+          <div className={styles.presetsHeader}>{lang('CustomStatusPresets')}</div>
+          {STATUS_PRESETS.map(({ emoji, key }) => {
+            const text = lang(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={styles.presetItem}
+                onClick={() => handlePresetClick(emoji, text)}
+              >
+                <span className={styles.presetEmoji}>{emoji}</span>
+                <span className={styles.presetText}>{text}</span>
+              </button>
+            );
+          })}
+          {currentCustomStatus && (
+            <button
+              type="button"
+              className={styles.presetItem}
+              onClick={handleClearStatus}
+            >
+              <span className={styles.presetEmoji}>✕</span>
+              <span className={styles.presetText}>{lang('CustomStatusClear')}</span>
+            </button>
+          )}
+        </div>
       </Menu>
     </Portal>
   );
 };
 
 export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
+  const { currentUserId } = global;
+  const currentUser = currentUserId ? selectUser(global, currentUserId) : undefined;
   return {
-    areFeaturedStickersLoaded: Boolean(global.customEmojis.featuredIds?.length),
     isTranslucent: selectIsContextMenuTranslucent(global),
+    currentCustomStatus: currentUser?.customStatus,
   };
 })(StatusPickerMenu));

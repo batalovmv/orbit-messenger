@@ -2592,6 +2592,10 @@ export interface ActionPayloads {
     emojiStatus: ApiEmojiStatusType;
     referrerWebAppKey?: string;
   } & WithTabId;
+  setCustomStatus: {
+    text: string;
+    emoji: string;
+  };
   openSuggestedStatusModal: {
     botId: string;
     webAppKey?: string;

@@ -148,7 +148,7 @@ func main() {
 	// Services
 	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb, auditStore)
-	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc)
+	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc).WithPublisher(natsPublisher)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
 	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)

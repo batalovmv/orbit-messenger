@@ -18,6 +18,8 @@ export function buildApiUser(user: SaturnUser): ApiUser {
     avatarPhotoId: getAvatarPhotoId(user.id, user.avatar_url),
     hasUsername: Boolean(user.email),
     usernames: user.email ? [{ username: user.email, isActive: true, isEditable: true }] : undefined,
+    customStatus: user.custom_status || undefined,
+    customStatusEmoji: user.custom_status_emoji || undefined,
   };
 }
 
