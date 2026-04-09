@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -240,12 +242,22 @@ func (r *R2Client) EnsureBucket(ctx context.Context) error {
 		}
 	}
 
+	if os.Getenv("R2_APPLY_PUBLIC_POLICY") != "true" {
+		slog.Info("skipping R2 public bucket policy apply", "bucket", r.bucket)
+		return nil
+	}
+
 	// Set public-read policy for dev (MinIO). In production R2 handles this via dashboard.
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, r.bucket)
-	_, _ = r.client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+	_, err = r.client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
 		Bucket: &r.bucket,
 		Policy: &policy,
 	})
+	if err != nil {
+		slog.Error("failed to apply R2 public bucket policy", "bucket", r.bucket, "error", err)
+		return fmt.Errorf("put bucket policy %s: %w", r.bucket, err)
+	}
+	slog.Info("applied R2 public bucket policy", "bucket", r.bucket)
 
 	return nil
 }
