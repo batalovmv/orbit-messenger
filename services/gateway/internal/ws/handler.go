@@ -14,20 +14,27 @@ import (
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	pingInterval   = 30 * time.Second
-	pongWait       = 10 * time.Second
-	authTimeout    = 10 * time.Second
-	authCacheTTL   = 30 * time.Second
-	typingCleanup  = 60 * time.Second
+	pingInterval  = 30 * time.Second
+	pongWait      = 10 * time.Second
+	authTimeout   = 10 * time.Second
+	authCacheTTL  = 30 * time.Second
+	typingCleanup = 60 * time.Second
 )
 
 const typingExpire = 6 * time.Second
+
+type ValidatedToken struct {
+	UserID    string
+	ExpiresAt time.Time
+	TokenHash string
+}
 
 // Handler manages WebSocket connections and typing debounce.
 type Handler struct {
@@ -106,9 +113,9 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		// client disconnect — Fiber's WebSocket handler doesn't expose a request context.
 		// The timeout bounds the worst-case resource waste per stalled auth attempt.
 		authCtx, authCancel := context.WithTimeout(context.Background(), authTimeout)
-		uid, err := ValidateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
+		tokenInfo, err := ValidateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
 		authCancel()
-		if err != nil || uid == "" {
+		if err != nil || tokenInfo == nil || tokenInfo.UserID == "" {
 			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"invalid token"}`)})
 			c.Close()
 			return
@@ -118,9 +125,14 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		c.WriteJSON(Envelope{Type: "auth_ok", Data: json.RawMessage(`{}`)})
 
 		conn := &Conn{
-			WS:     c,
-			UserID: uid,
-			done:   make(chan struct{}),
+			WS:          c,
+			UserID:      tokenInfo.UserID,
+			done:        make(chan struct{}),
+			tokenExpiry: tokenInfo.ExpiresAt,
+			tokenHash:   &tokenInfo.TokenHash,
+			revalidateFn: func(ctx context.Context) error {
+				return RevalidateToken(ctx, authClient, rdb, authServiceURL, authData.Token, tokenInfo.TokenHash)
+			},
 		}
 
 		// Atomic check-and-register to prevent duplicate "online" events on multi-device race
@@ -129,12 +141,12 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 			isLastConnection := h.Hub.Unregister(conn)
 			close(conn.done)
 			if isLastConnection {
-				h.publishStatusChange(uid, "offline")
+				h.publishStatusChange(tokenInfo.UserID, "offline")
 			}
 		}()
 
 		if isFirstConnection {
-			h.publishStatusChange(uid, "online")
+			h.publishStatusChange(tokenInfo.UserID, "online")
 		}
 
 		// Set pong handler
@@ -144,6 +156,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 
 		// Start ping loop
 		go h.pingLoop(conn)
+		StartTokenRevalidation(conn)
 
 		// Read loop
 		c.SetReadLimit(64 * 1024) // 64KB max WS message size — prevents memory exhaustion
@@ -162,22 +175,33 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 // Mirrors the blacklist check from middleware/jwt.go to prevent revoked tokens from authenticating WS.
 // Exported so the SFU proxy (Phase 6 Stage 3) can reuse the same auth-frame
 // flow without duplicating cache + blacklist logic.
-func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (string, error) {
+func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (*ValidatedToken, error) {
 	tokenHash := sha256Hash(token)
 	cacheKey := "jwt_cache:" + tokenHash
 	blacklistKey := "jwt_blacklist:" + tokenHash
+	expiresAt, err := parseTokenExpiry(token)
+	if err != nil {
+		return nil, err
+	}
+
+	if !time.Now().Before(expiresAt) {
+		if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+			slog.Error("WS JWT cache del failed after expiry", "error", err)
+		}
+		return nil, nil
+	}
 
 	// Check blacklist first — fail-closed on Redis error
 	blacklisted, blErr := rdb.Exists(ctx, blacklistKey).Result()
 	if blErr != nil {
 		slog.Error("WS blacklist check failed, rejecting token", "error", blErr)
-		return "", fmt.Errorf("blacklist check failed")
+		return nil, fmt.Errorf("blacklist check failed")
 	}
 	if blacklisted > 0 {
 		if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
 			slog.Error("WS JWT cache del failed after blacklist hit", "error", err)
 		}
-		return "", nil
+		return nil, nil
 	}
 
 	// Check cache
@@ -186,30 +210,34 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 			ID string `json:"id"`
 		}
 		if json.Unmarshal([]byte(cached), &u) == nil && u.ID != "" {
-			return u.ID, nil
+			return &ValidatedToken{
+				UserID:    u.ID,
+				ExpiresAt: expiresAt,
+				TokenHash: tokenHash,
+			}, nil
 		}
 	}
 
 	// Call auth service
 	req, err := http.NewRequestWithContext(ctx, "GET", authURL+"/auth/me", nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", nil
+		return nil, nil
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var user struct {
@@ -217,7 +245,7 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		Role string `json:"role"`
 	}
 	if err := json.Unmarshal(body, &user); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Cache
@@ -228,12 +256,61 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		slog.Error("WS JWT cache write failed", "error", err)
 	}
 
-	return user.ID, nil
+	return &ValidatedToken{
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		TokenHash: tokenHash,
+	}, nil
+}
+
+func RevalidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token, tokenHash string) error {
+	blacklistKey := "jwt_blacklist:" + tokenHash
+	blacklisted, err := rdb.Exists(ctx, blacklistKey).Result()
+	if err != nil {
+		slog.Error("WS blacklist revalidation failed", "error", err)
+		return fmt.Errorf("blacklist check failed: %w", err)
+	}
+	if blacklisted > 0 {
+		return fmt.Errorf("token revoked")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", authURL+"/auth/me", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("token rejected: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 func sha256Hash(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+func parseTokenExpiry(token string) (time.Time, error) {
+	claims := jwt.MapClaims{}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
+		return time.Time{}, err
+	}
+
+	exp, err := claims.GetExpirationTime()
+	if err != nil || exp == nil {
+		return time.Time{}, fmt.Errorf("token missing exp")
+	}
+
+	return exp.Time, nil
 }
 
 func (h *Handler) pingLoop(conn *Conn) {

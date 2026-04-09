@@ -46,6 +46,40 @@ type authFrame struct {
 	} `json:"data"`
 }
 
+type sfuAuthSession struct {
+	client       *websocket.Conn
+	done         chan struct{}
+	tokenExpiry  time.Time
+	tokenHash    *string
+	revalidateFn func(context.Context) error
+	closeOnce    sync.Once
+}
+
+func (s *sfuAuthSession) TokenExpiry() time.Time {
+	return s.tokenExpiry
+}
+
+func (s *sfuAuthSession) Revalidate(ctx context.Context) error {
+	if s.revalidateFn == nil {
+		return nil
+	}
+	return s.revalidateFn(ctx)
+}
+
+func (s *sfuAuthSession) Done() <-chan struct{} {
+	return s.done
+}
+
+func (s *sfuAuthSession) Close(code int, text string) error {
+	var closeErr error
+	s.closeOnce.Do(func() {
+		_ = s.client.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		_ = s.client.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(code, text))
+		closeErr = s.client.Close()
+	})
+	return closeErr
+}
+
 // SFUProxyHandler returns a Fiber WebSocket handler that bidirectionally
 // proxies a client WebSocket to the calls service SFU endpoint.
 //
@@ -98,9 +132,9 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 		// jwt_blacklist check and the jwt_cache short-circuit identical to
 		// the main /api/v1/ws endpoint.
 		ctx, cancel := context.WithTimeout(context.Background(), sfuTokenValidateTTL)
-		userID, err := gatewayws.ValidateToken(ctx, authClient, cfg.Redis, cfg.AuthServiceURL, af.Data.Token)
+		tokenInfo, err := gatewayws.ValidateToken(ctx, authClient, cfg.Redis, cfg.AuthServiceURL, af.Data.Token)
 		cancel()
-		if err != nil || userID == "" {
+		if err != nil || tokenInfo == nil || tokenInfo.UserID == "" {
 			slog.Warn("sfu proxy: token rejected", "error", err)
 			_ = client.WriteJSON(map[string]any{"type": "error", "data": map[string]string{"message": "invalid token"}})
 			_ = client.Close()
@@ -111,10 +145,22 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 		_ = client.SetReadDeadline(time.Time{})
 		_ = client.WriteJSON(map[string]any{"type": "auth_ok", "data": map[string]string{}})
 
+		session := &sfuAuthSession{
+			client:      client,
+			done:        make(chan struct{}),
+			tokenExpiry: tokenInfo.ExpiresAt,
+			tokenHash:   &tokenInfo.TokenHash,
+			revalidateFn: func(ctx context.Context) error {
+				return gatewayws.RevalidateToken(ctx, authClient, cfg.Redis, cfg.AuthServiceURL, af.Data.Token, tokenInfo.TokenHash)
+			},
+		}
+		defer close(session.done)
+		gatewayws.StartTokenRevalidation(session)
+
 		// Step 3: dial the calls service with the resolved user id.
 		upstreamURL := upstreamBase + "/calls/" + callID + "/sfu-ws"
 		hdr := http.Header{}
-		hdr.Set("X-User-ID", userID)
+		hdr.Set("X-User-ID", tokenInfo.UserID)
 		hdr.Set("X-Internal-Token", cfg.InternalSecret)
 
 		upstream, _, dialErr := dialer.Dial(upstreamURL, hdr)

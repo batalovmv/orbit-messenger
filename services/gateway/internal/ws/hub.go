@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"sync"
@@ -13,11 +14,18 @@ const writeTimeout = 10 * time.Second
 
 // Conn represents a single WebSocket connection.
 type Conn struct {
-	WS     *websocket.Conn
-	UserID string
-	mu     sync.Mutex
-	done   chan struct{}
-	sendFn func(interface{}) error
+	WS      *websocket.Conn
+	UserID  string
+	mu      sync.Mutex
+	done    chan struct{}
+	sendFn  func(interface{}) error
+	closeFn func(code int, text string) error
+
+	tokenExpiry  time.Time
+	tokenHash    *string
+	revalidateFn func(context.Context) error
+	closeOnce    sync.Once
+	closeErr     error
 
 	// Per-connection typing rate limit fields (protected by mu)
 	lastTyping  time.Time
@@ -38,6 +46,40 @@ func (c *Conn) Send(msg interface{}) error {
 	}
 	c.WS.SetWriteDeadline(time.Now().Add(writeTimeout))
 	return c.WS.WriteMessage(websocket.TextMessage, data)
+}
+
+func (c *Conn) Done() <-chan struct{} {
+	return c.done
+}
+
+func (c *Conn) TokenExpiry() time.Time {
+	return c.tokenExpiry
+}
+
+func (c *Conn) Revalidate(ctx context.Context) error {
+	if c.revalidateFn == nil {
+		return nil
+	}
+	return c.revalidateFn(ctx)
+}
+
+func (c *Conn) Close(code int, text string) error {
+	c.closeOnce.Do(func() {
+		if c.closeFn != nil {
+			c.closeErr = c.closeFn(code, text)
+			return
+		}
+		if c.WS == nil {
+			return
+		}
+
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.WS.SetWriteDeadline(time.Now().Add(writeTimeout))
+		_ = c.WS.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(code, text))
+		c.closeErr = c.WS.Close()
+	})
+	return c.closeErr
 }
 
 // Hub manages WebSocket connections indexed by user ID.
