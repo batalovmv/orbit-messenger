@@ -15,6 +15,7 @@ import (
 
 type ChatStore interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
+	GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 	GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
 	Create(ctx context.Context, chat *model.Chat) error
 	GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
@@ -51,6 +52,27 @@ type chatStore struct {
 
 func NewChatStore(pool *pgxpool.Pool) ChatStore {
 	return &chatStore{pool: pool}
+}
+
+func (s *chatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT chat_id FROM chat_members WHERE user_id = $1 AND role != 'banned'`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {

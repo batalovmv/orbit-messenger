@@ -13,28 +13,29 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockChatStore struct {
-	listByUserFn         func(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
-	getByIDFn            func(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
-	createFn             func(ctx context.Context, chat *model.Chat) error
-	getDirectChatFn      func(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
-	createDirectFn       func(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
-	getMembersFn         func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
-	searchMembersFn      func(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
-	getMemberIDsFn       func(ctx context.Context, chatID uuid.UUID) ([]string, error)
-	addMemberFn          func(ctx context.Context, chatID, userID uuid.UUID, role string) error
-	addMembersFn         func(ctx context.Context, chatID uuid.UUID, userIDs []uuid.UUID, role string) error
-	isMemberFn           func(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error)
-	getMemberFn          func(ctx context.Context, chatID, userID uuid.UUID) (*model.ChatMember, error)
-	getAdminsFn          func(ctx context.Context, chatID uuid.UUID) ([]model.ChatMember, error)
-	updateChatFn         func(ctx context.Context, chatID uuid.UUID, name, description, avatarURL *string) error
-	deleteChatFn         func(ctx context.Context, chatID uuid.UUID) error
-	removeMemberFn       func(ctx context.Context, chatID, userID uuid.UUID) error
-	updateMemberRoleFn   func(ctx context.Context, chatID, userID uuid.UUID, role string, perms int64, customTitle *string) error
-	updateDefaultPermsFn func(ctx context.Context, chatID uuid.UUID, perms int64) error
-	updateMemberPermsFn  func(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
-	updateMemberPrefsFn  func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
-	setSlowModeFn        func(ctx context.Context, chatID uuid.UUID, seconds int) error
-	setSignaturesFn      func(ctx context.Context, chatID uuid.UUID, enabled bool) error
+	listByUserFn           func(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
+	getUserChatIDsFn       func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	getByIDFn              func(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
+	createFn               func(ctx context.Context, chat *model.Chat) error
+	getDirectChatFn        func(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
+	createDirectFn         func(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
+	getMembersFn           func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
+	searchMembersFn        func(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
+	getMemberIDsFn         func(ctx context.Context, chatID uuid.UUID) ([]string, error)
+	addMemberFn            func(ctx context.Context, chatID, userID uuid.UUID, role string) error
+	addMembersFn           func(ctx context.Context, chatID uuid.UUID, userIDs []uuid.UUID, role string) error
+	isMemberFn             func(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error)
+	getMemberFn            func(ctx context.Context, chatID, userID uuid.UUID) (*model.ChatMember, error)
+	getAdminsFn            func(ctx context.Context, chatID uuid.UUID) ([]model.ChatMember, error)
+	updateChatFn           func(ctx context.Context, chatID uuid.UUID, name, description, avatarURL *string) error
+	deleteChatFn           func(ctx context.Context, chatID uuid.UUID) error
+	removeMemberFn         func(ctx context.Context, chatID, userID uuid.UUID) error
+	updateMemberRoleFn     func(ctx context.Context, chatID, userID uuid.UUID, role string, perms int64, customTitle *string) error
+	updateDefaultPermsFn   func(ctx context.Context, chatID uuid.UUID, perms int64) error
+	updateMemberPermsFn    func(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
+	updateMemberPrefsFn    func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
+	setSlowModeFn          func(ctx context.Context, chatID uuid.UUID, seconds int) error
+	setSignaturesFn        func(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	getContactIDsFn        func(ctx context.Context, userID uuid.UUID) ([]string, error)
 	getOrCreateSavedChatFn func(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
 }
@@ -44,6 +45,12 @@ func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor
 		return m.listByUserFn(ctx, userID, cursor, limit)
 	}
 	return nil, "", false, nil
+}
+func (m *mockChatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	if m.getUserChatIDsFn != nil {
+		return m.getUserChatIDsFn(ctx, userID)
+	}
+	return nil, nil
 }
 func (m *mockChatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error) {
 	if m.getByIDFn != nil {
