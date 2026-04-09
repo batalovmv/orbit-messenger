@@ -375,7 +375,7 @@ func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor str
 
 func (s *chatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT user_id FROM chat_members WHERE chat_id = $1 LIMIT 10000`, chatID,
+		`SELECT user_id FROM chat_members WHERE chat_id = $1 AND role != 'banned' LIMIT 10000`, chatID,
 	)
 	if err != nil {
 		return nil, err
@@ -405,7 +405,7 @@ func (s *chatStore) AddMember(ctx context.Context, chatID, userID uuid.UUID, rol
 func (s *chatStore) IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error) {
 	var role string
 	err := s.pool.QueryRow(ctx,
-		`SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2`,
+		`SELECT role FROM chat_members WHERE chat_id = $1 AND user_id = $2 AND role != 'banned'`,
 		chatID, userID,
 	).Scan(&role)
 	if err == pgx.ErrNoRows {
