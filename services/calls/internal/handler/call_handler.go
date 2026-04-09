@@ -173,12 +173,17 @@ func (h *CallHandler) EndCall(c *fiber.Ctx) error {
 }
 
 func (h *CallHandler) GetCall(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
 	callID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid call ID"))
 	}
 
-	call, err := h.svc.GetCall(c.Context(), callID)
+	call, err := h.svc.GetCall(c.Context(), callID, uid)
 	if err != nil {
 		return response.Error(c, err)
 	}

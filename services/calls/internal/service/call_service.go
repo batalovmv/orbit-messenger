@@ -408,12 +408,20 @@ func (s *CallService) EndCall(ctx context.Context, callID, userID uuid.UUID) err
 }
 
 // GetCall returns call details with participants.
-func (s *CallService) GetCall(ctx context.Context, callID uuid.UUID) (*model.Call, error) {
+func (s *CallService) GetCall(ctx context.Context, callID, userID uuid.UUID) (*model.Call, error) {
 	call, err := s.calls.GetByID(ctx, callID)
 	if err != nil {
 		return nil, apperror.Internal("get call")
 	}
 	if call == nil {
+		return nil, apperror.NotFound("Call not found")
+	}
+	inChat, err := s.calls.IsUserInChat(ctx, call.ChatID, userID)
+	if err != nil {
+		s.logger.Error("check chat membership on get call", "error", err, "chat_id", call.ChatID, "user_id", userID)
+		return nil, apperror.Internal("check chat membership")
+	}
+	if !inChat {
 		return nil, apperror.NotFound("Call not found")
 	}
 

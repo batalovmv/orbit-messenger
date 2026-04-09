@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -82,6 +83,69 @@ func TestDeclineCall_StrangerForbidden(t *testing.T) {
 	app := newCallLifecycleApp(cs, &mockParticipantStore{})
 	resp := performCallAction(t, app, http.MethodPut, fmt.Sprintf("/calls/%s/decline", callID), strangerID)
 	requireStatus(t, resp, http.StatusForbidden)
+}
+
+func TestGetCall_StrangerGetsNotFound(t *testing.T) {
+	callID := uuid.New()
+	chatID := uuid.New()
+	initiatorID := uuid.New()
+	strangerID := uuid.New()
+
+	cs := &mockCallStore{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Call, error) {
+			return activeCall(id, chatID, initiatorID), nil
+		},
+		isUserInChatFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, error) {
+			if gotChatID != chatID || gotUserID != strangerID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return false, nil
+		},
+	}
+
+	app := newCallLifecycleApp(cs, &mockParticipantStore{})
+	resp := performCallAction(t, app, http.MethodGet, fmt.Sprintf("/calls/%s", callID), strangerID)
+	requireStatus(t, resp, http.StatusNotFound)
+}
+
+func TestGetCall_MemberGetsRoster(t *testing.T) {
+	callID := uuid.New()
+	chatID := uuid.New()
+	initiatorID := uuid.New()
+	memberID := uuid.New()
+	targetID := uuid.New()
+
+	cs := &mockCallStore{
+		getByIDFn: func(_ context.Context, id uuid.UUID) (*model.Call, error) {
+			return activeCall(id, chatID, initiatorID), nil
+		},
+		isUserInChatFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, error) {
+			if gotChatID != chatID || gotUserID != memberID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return true, nil
+		},
+	}
+	ps := &mockParticipantStore{
+		listByCallFn: func(_ context.Context, gotCallID uuid.UUID) ([]model.CallParticipant, error) {
+			if gotCallID != callID {
+				t.Fatalf("unexpected call ID: %s", gotCallID)
+			}
+			return []model.CallParticipant{{CallID: callID, UserID: targetID, DisplayName: "Orbit User"}}, nil
+		},
+	}
+
+	app := newCallLifecycleApp(cs, ps)
+	resp := performCallAction(t, app, http.MethodGet, fmt.Sprintf("/calls/%s", callID), memberID)
+	requireStatus(t, resp, http.StatusOK)
+
+	var payload model.Call
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Participants) != 1 || payload.Participants[0].UserID != targetID {
+		t.Fatalf("unexpected participants payload: %#v", payload.Participants)
+	}
 }
 
 func TestDeclineCall_MemberSuccess(t *testing.T) {
