@@ -32,6 +32,9 @@ func (h *GIFHandler) Register(app fiber.Router) {
 }
 
 func (h *GIFHandler) Search(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
 	q := c.Query("q")
 	if q == "" {
 		return response.Error(c, apperror.BadRequest("Query parameter 'q' is required"))
@@ -49,6 +52,9 @@ func (h *GIFHandler) Search(c *fiber.Ctx) error {
 }
 
 func (h *GIFHandler) Trending(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
 	limit, _ := strconv.Atoi(c.Query("limit", "20"))
 	if limit <= 0 || limit > 50 {
 		limit = 20
