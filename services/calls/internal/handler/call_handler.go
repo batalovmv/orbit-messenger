@@ -323,7 +323,12 @@ func (h *CallHandler) StopScreenShare(c *fiber.Ctx) error {
 }
 
 func (h *CallHandler) GetICEServers(c *fiber.Ctx) error {
-	servers := h.svc.GetICEServers(h.turnURL, h.turnUser, h.turnPassword)
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	servers := h.svc.GetICEServers(h.turnURL, h.turnUser, h.turnPassword, uid)
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"ice_servers": servers})
 }
 

@@ -2,10 +2,14 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,10 +21,11 @@ import (
 
 // CallService implements call business logic.
 type CallService struct {
-	calls        store.CallStore
-	participants store.ParticipantStore
-	nats         Publisher
-	logger       *slog.Logger
+	calls            store.CallStore
+	participants     store.ParticipantStore
+	nats             Publisher
+	logger           *slog.Logger
+	turnSharedSecret string
 }
 
 // NewCallService creates a new CallService.
@@ -31,6 +36,11 @@ func NewCallService(calls store.CallStore, participants store.ParticipantStore, 
 		nats:         nats,
 		logger:       logger,
 	}
+}
+
+func (s *CallService) WithTURNSharedSecret(secret string) *CallService {
+	s.turnSharedSecret = secret
+	return s
 }
 
 // CreateCallRequest is the input for creating a call.
@@ -624,13 +634,34 @@ type ICEServer struct {
 	Credential string   `json:"credential,omitempty"`
 }
 
+func mintTURNCredentials(secret string, userID uuid.UUID, now time.Time) (string, string) {
+	username := strconv.FormatInt(now.Add(2*time.Hour).Unix(), 10) + ":" + userID.String()
+	mac := hmac.New(sha1.New, []byte(secret))
+	_, _ = mac.Write([]byte(username))
+	return username, base64.StdEncoding.EncodeToString(mac.Sum(nil))
+}
+
 // GetICEServers returns STUN and TURN server configurations.
-func (s *CallService) GetICEServers(turnURL, turnUser, turnPassword string) []ICEServer {
+func (s *CallService) GetICEServers(turnURL, turnUser, turnPassword string, userID uuid.UUID) []ICEServer {
 	servers := []ICEServer{
 		{URLs: []string{"stun:stun.l.google.com:19302"}},
 	}
 
-	if turnURL != "" && turnUser != "" && turnPassword != "" {
+	if turnURL == "" {
+		return servers
+	}
+
+	if s.turnSharedSecret != "" {
+		username, credential := mintTURNCredentials(s.turnSharedSecret, userID, time.Now())
+		servers = append(servers, ICEServer{
+			URLs:       []string{turnURL},
+			Username:   username,
+			Credential: credential,
+		})
+		return servers
+	}
+
+	if turnUser != "" && turnPassword != "" {
 		servers = append(servers, ICEServer{
 			URLs:       []string{turnURL},
 			Username:   turnUser,

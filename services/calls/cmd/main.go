@@ -34,11 +34,20 @@ func main() {
 	// TURN_PUBLIC_URL is what clients use to reach coturn (must be reachable from user browsers).
 	// Falls back to TURN_URL for backwards compatibility with older deployments.
 	turnURL := config.EnvOr("TURN_PUBLIC_URL", config.EnvOr("TURN_URL", ""))
+	// When TURN_SHARED_SECRET is set, coturn must be configured with
+	// use-auth-secret and matching static-auth-secret in turnserver.conf.
+	turnSharedSecret := config.EnvOr("TURN_SHARED_SECRET", "")
 	turnUser := config.EnvOr("TURN_USER", "")
 	turnPassword := config.EnvOr("TURN_PASSWORD", "")
-	if turnURL != "" && (turnUser == "" || turnPassword == "") {
+	if turnURL != "" && turnSharedSecret == "" && (turnUser == "" || turnPassword == "") {
 		slog.Warn("TURN_PUBLIC_URL set but TURN_USER/TURN_PASSWORD missing — TURN server will be dropped from ICE config",
 			"turn_url", turnURL, "has_user", turnUser != "", "has_password", turnPassword != "")
+	}
+	if turnURL != "" && turnSharedSecret == "" && turnUser != "" && turnPassword != "" {
+		slog.Warn("TURN_SHARED_SECRET unset — falling back to static TURN credentials", "turn_url", turnURL)
+	}
+	if turnURL != "" && turnSharedSecret != "" {
+		slog.Info("TURN shared secret configured for short-lived credentials", "turn_url", turnURL)
 	}
 	if turnURL == "" {
 		slog.Warn("TURN_PUBLIC_URL empty — calls will fall back to STUN only, NAT traversal may fail for corporate networks")
@@ -107,7 +116,7 @@ func main() {
 	participantStore := store.NewParticipantStore(pool)
 
 	// Services
-	callSvc := service.NewCallService(callStore, participantStore, natsPublisher, logger)
+	callSvc := service.NewCallService(callStore, participantStore, natsPublisher, logger).WithTURNSharedSecret(turnSharedSecret)
 
 	// SFU (Pion) — group call media plane. Lives inside the calls service.
 	sfuInstance, err := sfu.NewSFU(logger)
