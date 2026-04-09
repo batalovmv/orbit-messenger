@@ -20,6 +20,10 @@ type RateLimitConfig struct {
 	Identifier func(*fiber.Ctx) string
 }
 
+func AuthRateLimitIdentifierByIP(c *fiber.Ctx) string {
+	return "ip:" + c.IP()
+}
+
 // rateLimitScript atomically increments the counter and sets TTL on first hit.
 // Returns [count, ttl_seconds]. This prevents the race where INCR succeeds but
 // EXPIRE fails, leaving a key with no TTL (permanent rate-limit lock).

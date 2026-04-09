@@ -1,12 +1,9 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -128,7 +125,7 @@ func main() {
 		Redis:      rdb,
 		MaxPerMin:  60,
 		KeyPrefix:  "auth_session",
-		Identifier: authSessionRateLimitIdentifier,
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
 	})
 	handler.RegisterAuthProxyRoutes(authGroup, handler.ProxyConfig{
 		AuthServiceURL:      authServiceURL,
@@ -223,29 +220,4 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
-}
-
-func authSessionRateLimitIdentifier(c *fiber.Ctx) string {
-	if token := bearerToken(c.Get("Authorization")); token != "" {
-		return "access:" + hashIdentifier(token)
-	}
-
-	if refreshToken := c.Cookies("refresh_token"); refreshToken != "" {
-		return "refresh:" + hashIdentifier(refreshToken)
-	}
-
-	return c.IP()
-}
-
-func bearerToken(header string) string {
-	if !strings.HasPrefix(header, "Bearer ") {
-		return ""
-	}
-
-	return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
-}
-
-func hashIdentifier(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:8])
 }

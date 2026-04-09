@@ -186,3 +186,43 @@ func TestRateLimit_UsesCustomIdentifier(t *testing.T) {
 		}
 	}
 }
+
+func TestAuthRateLimitIdentifierByIP_SharesBucketAcrossBogusBearers(t *testing.T) {
+	mr := miniredis.RunT(t)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	t.Cleanup(func() {
+		rdb.Close()
+	})
+
+	app := fiber.New()
+	app.Use(middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  1,
+		KeyPrefix:  "auth_ip_only",
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
+	}))
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	doRequestWithBearer := func(bearer string) *http.Response {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "203.0.113.10:12345"
+		req.Header.Set("Authorization", bearer)
+		resp, _ := app.Test(req, -1)
+		return resp
+	}
+
+	first := doRequestWithBearer("Bearer bogus-token-a")
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("first request: expected 200, got %d", first.StatusCode)
+	}
+
+	second := doRequestWithBearer("Bearer bogus-token-b")
+	if second.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("second request from same IP with different bearer: expected 429, got %d", second.StatusCode)
+	}
+}
