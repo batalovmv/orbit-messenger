@@ -1055,7 +1055,7 @@ Signaling: WebSocket через gateway
 nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Тесты:** `go test ./...` зелёный, tsc 12 baseline без новых.
 
-#### Stage 5: Polish (quality indicator + rating) ✅ (commit <будет заполнен после commit>)
+#### Stage 5: Polish (quality indicator + rating) ✅ (commit 7ae30bc)
 
 **Backend (E5.5-E5.7):**
 - [x] `migrations/037_call_rating.sql` — `rating`, `rating_comment`, `rated_by`, `rated_at` + partial index
