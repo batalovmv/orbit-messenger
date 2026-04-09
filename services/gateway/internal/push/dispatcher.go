@@ -20,6 +20,9 @@ const (
 	defaultPushTTL        = 30
 	defaultMaxAttempts    = 3
 	defaultSubscriber     = "mailto:push@orbit.local"
+	// callPushTTL caps how long providers should hold a call notification.
+	// Calls auto-expire after ~60s anyway, so anything longer is wasted.
+	callPushTTL = 30
 )
 
 type HTTPClient interface {
@@ -97,7 +100,37 @@ func (d *Dispatcher) Enabled() bool {
 	return d.publicKey != "" && d.privateKey != "" && d.messagingServiceURL != ""
 }
 
+// sendOptions controls per-delivery web push parameters.
+type sendOptions struct {
+	ttl     int
+	urgency webpush.Urgency
+}
+
+func (d *Dispatcher) defaultOptions() sendOptions {
+	return sendOptions{ttl: d.ttl, urgency: webpush.UrgencyNormal}
+}
+
+func (d *Dispatcher) callOptions() sendOptions {
+	return sendOptions{ttl: callPushTTL, urgency: webpush.UrgencyHigh}
+}
+
 func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
+	return d.sendToUsers(userIDs, payload, d.defaultOptions())
+}
+
+func (d *Dispatcher) SendToUser(userID string, payload []byte) error {
+	return d.sendToUser(userID, payload, d.defaultOptions())
+}
+
+// SendCallToUsers fans out a high-urgency call notification with a short TTL.
+// Call auto-expires after ~60s, so a 30s TTL avoids stale notifications. The
+// loop is fail-open across users: a 410/expired subscription for one user
+// must not block delivery to the rest.
+func (d *Dispatcher) SendCallToUsers(userIDs []string, payload []byte) error {
+	return d.sendToUsers(userIDs, payload, d.callOptions())
+}
+
+func (d *Dispatcher) sendToUsers(userIDs []string, payload []byte, opts sendOptions) error {
 	if !d.Enabled() || len(payload) == 0 {
 		return nil
 	}
@@ -114,7 +147,7 @@ func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
 		}
 		seen[userID] = struct{}{}
 
-		if err := d.SendToUser(userID, payload); err != nil {
+		if err := d.sendToUser(userID, payload, opts); err != nil {
 			errs = append(errs, fmt.Errorf("send push to user %s: %w", userID, err))
 		}
 	}
@@ -122,7 +155,7 @@ func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
 	return errors.Join(errs...)
 }
 
-func (d *Dispatcher) SendToUser(userID string, payload []byte) error {
+func (d *Dispatcher) sendToUser(userID string, payload []byte, opts sendOptions) error {
 	if !d.Enabled() || userID == "" || len(payload) == 0 {
 		return nil
 	}
@@ -137,7 +170,7 @@ func (d *Dispatcher) SendToUser(userID string, payload []byte) error {
 
 	errs := make([]error, 0)
 	for _, subscription := range subscriptions {
-		if err := d.sendToSubscription(userID, subscription, payload); err != nil {
+		if err := d.sendToSubscription(userID, subscription, payload, opts); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -207,7 +240,7 @@ func (d *Dispatcher) deleteSubscription(userID, endpoint string) error {
 	return nil
 }
 
-func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscription, payload []byte) error {
+func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscription, payload []byte, opts sendOptions) error {
 	pushSub := &webpush.Subscription{
 		Endpoint: subscription.Endpoint,
 		Keys: webpush.Keys{
@@ -216,9 +249,15 @@ func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscrip
 		},
 	}
 
+	ttl := opts.ttl
+	if ttl <= 0 {
+		ttl = d.ttl
+	}
+
 	options := &webpush.Options{
 		Subscriber:      d.subscriber,
-		TTL:             d.ttl,
+		TTL:             ttl,
+		Urgency:         opts.urgency,
 		VAPIDPublicKey:  d.publicKey,
 		VAPIDPrivateKey: d.privateKey,
 	}

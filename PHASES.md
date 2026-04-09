@@ -919,7 +919,7 @@ Signaling: WebSocket через gateway
 ### Дополнительные фичи
 
 - [x] Ringtone + vibration на входящий — ringtone через TG Web A, vibration через navigator.vibrate (Stage 1)
-- [ ] Push-уведомление на звонок когда app закрыт — high-priority push (Stage 4)
+- [x] Push-уведомление на звонок когда app закрыт — high-priority push (Stage 4)
 - [ ] Network quality indicator — Stage 5
 - [ ] Call rating после завершения — Stage 5
 
@@ -1020,7 +1020,41 @@ Signaling: WebSocket через gateway
 - [ ] Live-тест 3 окнами Chrome incognito по сценариям 11-13 из docs/calls-plan.md — backend готов к QA, требует ручного прогона
 - [ ] Auto-routing P2P vs SFU на frontend (selectedChat.member_count > 2 → mode='group') — поле сейчас выставляется явно создателем, нужна обвязка в `requestCall`
 
-#### Stage 4: Push для закрытого app ⏳
+#### Stage 4: Push для закрытого app ✅
+
+- [x] **Backend (gateway/internal/push)** — `SendCallToUsers` с `Urgency: high` и `TTL=30s`
+  через рефактор `sendOptions`. Существующий `SendToUsers` остался без изменений
+  (default urgency, default TTL).
+- [x] **Backend (gateway/internal/ws/nats_subscriber)** — `enqueueCallPushDispatch` для
+  `call_incoming`: фильтрует `event.MemberIDs`, исключает `initiator_id` и юзеров,
+  которые уже online в `hub.IsOnline`. Push отправляется в отдельной goroutine
+  через `runAsync` (semaphore-bounded), фейлы — WARN, не блокируют consumer.
+- [x] **Backend payload** — `callPushPayload { type: "call_incoming", call_id, caller_id,
+  call_type, call_mode, chat_id, timestamp }`. `caller_name` пустой — фронт резолвит
+  из кеша users, чтобы не делать лишний RPC в hot path.
+- [x] **Backend tests** — 5 новых:
+  - `dispatcher_test.go`: `SendCallToUsers_UsesHighUrgencyAndShortTTL`,
+    `SendCallToUsers_RemovesStaleSubscriptionAndContinues`,
+    `SendCallToUsers_NoSubscriptionsIsNoop`
+  - `nats_subscriber_test.go`: `CallIncomingPushesOnlyToOfflineRecipients`,
+    `CallIncomingSkipsPushWhenAllRecipientsOnline`
+- [x] **Frontend (web/src/serviceWorker/pushNotification.ts)** — `isCallPushData` type
+  guard + `showCallNotification`: `tag: call-${callId}`, `requireInteraction: true`,
+  `renotify: true`, vibrate, actions `Принять` / `Отклонить`. Существующий
+  message_new path не тронут.
+- [x] **Frontend notificationclick** — `handleCallNotificationClick`: matchAll clients →
+  если есть открытое окно `postMessage({type: 'callAction', ...})` + focus, иначе
+  `openWindow('?call_action=…&call_id=…&call_mode=…')`.
+- [x] **Frontend (setupServiceWorker.ts)** — `handleWorkerMessage` case `callAction`,
+  `pendingCallAction` retry-loop (250ms интервал, 15s deadline). Для p2p ждёт пока
+  `global.phoneCall.id` совпадёт, для group дёргает `connectToActiveGroupCall` /
+  `leaveGroupCall` сразу. URL-параметры `?call_action=…` парсятся при load и
+  стираются через `history.replaceState` чтобы refresh не повторял действие.
+
+**Файлы:** 5 (gateway: dispatcher.go, nats_subscriber.go, dispatcher_test.go,
+nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
+**Тесты:** `go test ./...` зелёный, tsc 12 baseline без новых.
+
 #### Stage 5: Polish (quality indicator + rating) ⏳
 
 ---

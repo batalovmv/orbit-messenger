@@ -16,12 +16,20 @@ import (
 )
 
 type mockPushSender struct {
-	sendToUsersFn func(userIDs []string, payload []byte) error
+	sendToUsersFn     func(userIDs []string, payload []byte) error
+	sendCallToUsersFn func(userIDs []string, payload []byte) error
 }
 
 func (m *mockPushSender) SendToUsers(userIDs []string, payload []byte) error {
 	if m.sendToUsersFn != nil {
 		return m.sendToUsersFn(userIDs, payload)
+	}
+	return nil
+}
+
+func (m *mockPushSender) SendCallToUsers(userIDs []string, payload []byte) error {
+	if m.sendCallToUsersFn != nil {
+		return m.sendCallToUsersFn(userIDs, payload)
 	}
 	return nil
 }
@@ -439,6 +447,120 @@ func waitForCondition(t *testing.T, check func() bool, label string) {
 	}
 
 	t.Fatalf("timed out waiting for %s", label)
+}
+
+func TestSubscriber_HandleEvent_CallIncomingPushesOnlyToOfflineRecipients(t *testing.T) {
+	initiatorID := uuid.New().String()
+	onlineCallee := uuid.New().String()
+	offlineCalleeOne := uuid.New().String()
+	offlineCalleeTwo := uuid.New().String()
+	chatID := uuid.New().String()
+	callID := uuid.New().String()
+
+	hub := NewHub()
+	deliveries := make(chan Envelope, 1)
+	hub.Register(newCapturingConn(onlineCallee, deliveries))
+
+	var pushedRecipients []string
+	var pushedPayload []byte
+	pushSender := &mockPushSender{
+		sendCallToUsersFn: func(userIDs []string, payload []byte) error {
+			pushedRecipients = append([]string(nil), userIDs...)
+			pushedPayload = append([]byte(nil), payload...)
+			return nil
+		},
+		sendToUsersFn: func(userIDs []string, payload []byte) error {
+			t.Fatalf("SendToUsers must not be called for call_incoming, got %+v", userIDs)
+			return nil
+		},
+	}
+
+	subscriber := NewSubscriber(hub, nil, "", "internal-secret", pushSender)
+
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event: EventCallIncoming,
+		Data: json.RawMessage(fmt.Sprintf(
+			`{"id":"%s","type":"video","mode":"group","chat_id":"%s","initiator_id":"%s","status":"ringing"}`,
+			callID, chatID, initiatorID,
+		)),
+		MemberIDs: []string{initiatorID, onlineCallee, offlineCalleeOne, offlineCalleeTwo},
+		SenderID:  initiatorID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	subscriber.handleEvent(&nats.Msg{Subject: "orbit.call." + callID + ".lifecycle", Data: payload})
+
+	// Online callee still gets the WS frame so the in-app ringtone plays.
+	gotEnvelope := waitForEnvelope(t, deliveries)
+	if gotEnvelope.Type != EventCallIncoming {
+		t.Fatalf("expected call_incoming envelope on online callee, got %q", gotEnvelope.Type)
+	}
+
+	waitForCondition(t, func() bool { return len(pushedRecipients) > 0 }, "call push dispatch")
+
+	wantRecipients := map[string]bool{offlineCalleeOne: true, offlineCalleeTwo: true}
+	if len(pushedRecipients) != 2 {
+		t.Fatalf("expected 2 offline push recipients, got %+v", pushedRecipients)
+	}
+	for _, uid := range pushedRecipients {
+		if !wantRecipients[uid] {
+			t.Fatalf("unexpected push recipient %s (initiator/online must be skipped)", uid)
+		}
+	}
+
+	var body callPushPayload
+	if err := json.Unmarshal(pushedPayload, &body); err != nil {
+		t.Fatalf("decode call push payload: %v", err)
+	}
+	if body.Type != "call_incoming" || body.CallID != callID || body.CallerID != initiatorID {
+		t.Fatalf("unexpected call push payload: %+v", body)
+	}
+	if body.CallType != "video" || body.CallMode != "group" || body.ChatID != chatID {
+		t.Fatalf("unexpected call push payload fields: %+v", body)
+	}
+}
+
+func TestSubscriber_HandleEvent_CallIncomingSkipsPushWhenAllRecipientsOnline(t *testing.T) {
+	initiatorID := uuid.New().String()
+	calleeID := uuid.New().String()
+	chatID := uuid.New().String()
+	callID := uuid.New().String()
+
+	hub := NewHub()
+	deliveries := make(chan Envelope, 1)
+	hub.Register(newCapturingConn(calleeID, deliveries))
+
+	var pushCalls int32
+	pushSender := &mockPushSender{
+		sendCallToUsersFn: func(userIDs []string, payload []byte) error {
+			atomic.AddInt32(&pushCalls, 1)
+			return nil
+		},
+	}
+
+	subscriber := NewSubscriber(hub, nil, "", "internal-secret", pushSender)
+
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event: EventCallIncoming,
+		Data: json.RawMessage(fmt.Sprintf(
+			`{"id":"%s","type":"voice","mode":"p2p","chat_id":"%s","initiator_id":"%s","status":"ringing"}`,
+			callID, chatID, initiatorID,
+		)),
+		MemberIDs: []string{initiatorID, calleeID},
+		SenderID:  initiatorID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	subscriber.handleEvent(&nats.Msg{Subject: "orbit.call." + callID + ".lifecycle", Data: payload})
+
+	if got := waitForEnvelope(t, deliveries); got.Type != EventCallIncoming {
+		t.Fatalf("expected call_incoming envelope on online callee, got %q", got.Type)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+	if n := atomic.LoadInt32(&pushCalls); n != 0 {
+		t.Fatalf("expected zero push dispatches when all recipients online, got %d", n)
+	}
 }
 
 func jsonEqual(left, right []byte) bool {

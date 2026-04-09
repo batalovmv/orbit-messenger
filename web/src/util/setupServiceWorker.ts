@@ -1,4 +1,4 @@
-import { getActions } from '../global';
+import { getActions, getGlobal } from '../global';
 
 import { DEBUG, DEBUG_MORE, IS_TEST } from '../config';
 import { IS_ANDROID, IS_IOS, IS_SERVICE_WORKER_SUPPORTED } from './browser/windowEnvironment';
@@ -20,6 +20,61 @@ type WorkerAction = {
 
 const IGNORE_WORKER_PATH = '/k/';
 
+// Stage 4: when SW notification is clicked, the call_incoming WS frame may not
+// have arrived yet (fresh tab, or async order). Park the action and retry on a
+// short interval until phoneCall.id matches in global state.
+type PendingCallAction = {
+  action: 'accept' | 'decline';
+  callId: string;
+  callMode: 'p2p' | 'group';
+};
+let pendingCallAction: PendingCallAction | undefined;
+const CALL_ACTION_POLL_MS = 250;
+const CALL_ACTION_MAX_WAIT_MS = 15000;
+
+function dispatchPendingCallAction() {
+  if (!pendingCallAction) return;
+  const dispatch = getActions();
+  const { action, callId, callMode } = pendingCallAction;
+
+  if (callMode === 'group') {
+    if (action === 'accept') {
+      dispatch.connectToActiveGroupCall?.({ id: callId, accessHash: '' } as any);
+    } else {
+      dispatch.leaveGroupCall?.();
+    }
+    pendingCallAction = undefined;
+    return;
+  }
+
+  // p2p — wait until phoneCall arrives in global state, then act on it.
+  const global = getGlobal();
+  if (global.phoneCall?.id === callId) {
+    if (action === 'accept') {
+      dispatch.acceptCall?.();
+    } else {
+      dispatch.hangUp?.({});
+    }
+    pendingCallAction = undefined;
+  }
+}
+
+function schedulePendingCallActionRetry() {
+  if (!pendingCallAction) return;
+  const start = Date.now();
+  const intervalId = window.setInterval(() => {
+    if (!pendingCallAction || Date.now() - start > CALL_ACTION_MAX_WAIT_MS) {
+      window.clearInterval(intervalId);
+      pendingCallAction = undefined;
+      return;
+    }
+    dispatchPendingCallAction();
+    if (!pendingCallAction) {
+      window.clearInterval(intervalId);
+    }
+  }, CALL_ACTION_POLL_MS);
+}
+
 function handleWorkerMessage(e: MessageEvent) {
   const action: WorkerAction = e.data;
   if (DEBUG_MORE) {
@@ -30,6 +85,15 @@ function handleWorkerMessage(e: MessageEvent) {
   const dispatch = getActions();
   const payload = action.payload;
   switch (action.type) {
+    case 'callAction':
+      pendingCallAction = {
+        action: payload.action === 'decline' ? 'decline' : 'accept',
+        callId: String(payload.callId),
+        callMode: payload.callMode === 'group' ? 'group' : 'p2p',
+      };
+      dispatchPendingCallAction();
+      if (pendingCallAction) schedulePendingCallActionRetry();
+      break;
     case 'focusMessage':
       if (payload.messageId) {
         dispatch.focusMessage?.(payload as any);
@@ -148,4 +212,35 @@ if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
     await navigator.serviceWorker.ready;
     subscribeToWorker();
   });
+}
+
+// Stage 4: handle ?call_action=accept&call_id=…&call_mode=… set by SW openWindow
+// when no app tab existed. Strip the params from the URL so a refresh doesn't
+// re-trigger the action.
+if (typeof window !== 'undefined' && window.location?.search) {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const callAction = params.get('call_action');
+    const callId = params.get('call_id');
+    if (callAction && callId) {
+      const callMode = params.get('call_mode') === 'group' ? 'group' : 'p2p';
+      pendingCallAction = {
+        action: callAction === 'decline' ? 'decline' : 'accept',
+        callId,
+        callMode,
+      };
+      params.delete('call_action');
+      params.delete('call_id');
+      params.delete('call_mode');
+      const cleaned = params.toString();
+      const newUrl = window.location.pathname + (cleaned ? `?${cleaned}` : '') + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+      schedulePendingCallActionRetry();
+    }
+  } catch (error) {
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.warn('[SW] failed to parse call_action params', error);
+    }
+  }
 }

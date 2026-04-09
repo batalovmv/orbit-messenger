@@ -19,6 +19,7 @@ const maxConcurrentFetches = 50 // Bound goroutines spawned for fallback member-
 
 type pushSender interface {
 	SendToUsers(userIDs []string, payload []byte) error
+	SendCallToUsers(userIDs []string, payload []byte) error
 }
 
 // Subscriber listens for NATS events and routes them to WebSocket clients.
@@ -358,6 +359,112 @@ func buildMessagePreview(content *string, messageType string) string {
 	}
 }
 
+// callPushData mirrors the fields published on orbit.call.<id>.lifecycle for
+// the call_incoming event. We only decode what the service worker actually
+// uses to render the notification.
+type callPushData struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Mode        string `json:"mode"`
+	ChatID      string `json:"chat_id"`
+	InitiatorID string `json:"initiator_id"`
+}
+
+type callPushPayload struct {
+	Type       string `json:"type"`
+	CallID     string `json:"call_id"`
+	CallerID   string `json:"caller_id"`
+	CallerName string `json:"caller_name"`
+	CallType   string `json:"call_type"`
+	CallMode   string `json:"call_mode"`
+	ChatID     string `json:"chat_id"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+func (s *Subscriber) enqueueCallPushDispatch(event NATSEvent) {
+	if s.pushDispatcher == nil || len(event.MemberIDs) == 0 {
+		return
+	}
+
+	s.runAsync(
+		"call_push_dispatch",
+		func() {
+			s.dispatchCallPushNotifications(event)
+		},
+	)
+}
+
+func (s *Subscriber) dispatchCallPushNotifications(event NATSEvent) {
+	if s.pushDispatcher == nil {
+		return
+	}
+
+	var call callPushData
+	if err := json.Unmarshal(event.Data, &call); err != nil {
+		slog.Warn("nats: failed to decode call_incoming payload for push", "error", err)
+		return
+	}
+	if call.ID == "" || call.InitiatorID == "" {
+		slog.Warn("nats: skipping call push for malformed payload", "call_id", call.ID)
+		return
+	}
+
+	// Push only to recipients NOT currently connected via WebSocket. Online
+	// members already received the WS frame and will play the in-app ringtone.
+	recipients := make([]string, 0, len(event.MemberIDs))
+	skipped := 0
+	for _, userID := range event.MemberIDs {
+		if userID == "" || userID == event.SenderID || userID == call.InitiatorID {
+			continue
+		}
+		if s.hub.IsOnline(userID) {
+			skipped++
+			continue
+		}
+		recipients = append(recipients, userID)
+	}
+	if len(recipients) == 0 {
+		slog.Info("nats: call push skipped (all recipients online)", "call_id", call.ID, "online", skipped)
+		return
+	}
+
+	payload, err := buildCallPushPayload(call)
+	if err != nil {
+		slog.Warn("nats: failed to marshal call push payload", "error", err, "call_id", call.ID)
+		return
+	}
+
+	slog.Info("nats: dispatching call push", "call_id", call.ID, "recipients", len(recipients), "online_skipped", skipped)
+	if err := s.pushDispatcher.SendCallToUsers(recipients, payload); err != nil {
+		// fail-open per user — log and continue. The dispatcher already
+		// reaped expired subscriptions internally.
+		slog.Warn("nats: call push dispatch failed", "error", err, "call_id", call.ID)
+	}
+}
+
+func buildCallPushPayload(call callPushData) ([]byte, error) {
+	callType := call.Type
+	if callType == "" {
+		callType = "voice"
+	}
+	callMode := call.Mode
+	if callMode == "" {
+		callMode = "p2p"
+	}
+
+	payload := callPushPayload{
+		Type:       "call_incoming",
+		CallID:     call.ID,
+		CallerID:   call.InitiatorID,
+		CallerName: "", // resolved client-side from cached users (avoids extra fetch in hot path)
+		CallType:   callType,
+		CallMode:   callMode,
+		ChatID:     call.ChatID,
+		Timestamp:  time.Now().Unix(),
+	}
+	return json.Marshal(payload)
+}
+
 func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	var event NATSEvent
 	if err := json.Unmarshal(msg.Data, &event); err != nil {
@@ -394,6 +501,12 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 				"member_count", len(event.MemberIDs), "online_users", len(s.hub.OnlineUserIDs()))
 		}
 		s.hub.SendToUsers(event.MemberIDs, envelope, "")
+		// Stage 4: ring closed/backgrounded clients via web push for incoming calls.
+		// Online members already received the WS frame above and will play the
+		// in-app ringtone — push goes only to recipients absent from the hub.
+		if event.Event == EventCallIncoming {
+			s.enqueueCallPushDispatch(event)
+		}
 		return
 	}
 
@@ -472,6 +585,12 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	if isCallEvent(event.Event) {
 		if len(event.MemberIDs) > 0 {
 			s.hub.SendToUsers(event.MemberIDs, envelope, "")
+		}
+		// For incoming calls, push to members who are NOT currently connected via WS
+		// so closed/backgrounded clients still ring. Online members already received
+		// the WS event above and the in-app ringtone will play there.
+		if event.Event == EventCallIncoming {
+			s.enqueueCallPushDispatch(event)
 		}
 		return
 	}

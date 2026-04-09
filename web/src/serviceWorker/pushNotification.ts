@@ -20,6 +20,25 @@ type PushData = {
   };
 };
 
+// Stage 4: high-priority incoming call push payload from gateway nats_subscriber.
+type CallPushData = {
+  type: 'call_incoming';
+  call_id: string;
+  caller_id: string;
+  caller_name?: string;
+  call_type?: 'voice' | 'video';
+  call_mode?: 'p2p' | 'group';
+  chat_id?: string;
+  timestamp?: number;
+};
+
+function isCallPushData(data: unknown): data is CallPushData {
+  return Boolean(data) && typeof data === 'object'
+    && (data as { type?: string }).type === 'call_incoming'
+    && typeof (data as { call_id?: unknown }).call_id === 'string'
+    && typeof (data as { caller_id?: unknown }).caller_id === 'string';
+}
+
 type LegacyPushData = {
   custom: {
     msg_id?: string;
@@ -242,6 +261,40 @@ async function hasMatchingNotification({
   });
 }
 
+function showCallNotification(data: CallPushData) {
+  const callTypeLabel = data.call_type === 'video' ? 'видеозвонок' : 'голосовой звонок';
+  const title = data.caller_name?.trim() || 'Входящий звонок';
+  const body = `Входящий ${callTypeLabel}`;
+  const options: NotificationOptions = {
+    body,
+    // tag is per-call so a re-ring collapses the prior notification rather
+    // than stacking it. requireInteraction prevents auto-dismissal — the
+    // user must accept/decline. renotify forces re-alert if tag is replaced.
+    tag: `call-${data.call_id}`,
+    icon: 'icon-192x192.png',
+    badge: 'icon-192x192.png',
+    requireInteraction: true,
+    // @ts-ignore
+    renotify: true,
+    // @ts-ignore
+    vibrate: [300, 200, 300, 200, 300],
+    data: {
+      isCall: true,
+      callId: data.call_id,
+      callerId: data.caller_id,
+      callMode: data.call_mode || 'p2p',
+      callType: data.call_type || 'voice',
+      chatId: data.chat_id,
+    },
+    // @ts-ignore actions are widely supported in service worker notifications
+    actions: [
+      { action: 'accept', title: 'Принять' },
+      { action: 'decline', title: 'Отклонить' },
+    ],
+  };
+  return self.registration.showNotification(title, options);
+}
+
 export function handlePush(e: PushEvent) {
   const data = getPushData(e);
   if (DEBUG) {
@@ -249,6 +302,13 @@ export function handlePush(e: PushEvent) {
     console.log('[SW] Push received with data', data);
   }
   if (!data) return;
+
+  // Stage 4: incoming call push has its own shape (no message fields).
+  if (isCallPushData(data)) {
+    e.waitUntil(showCallNotification(data));
+    return;
+  }
+
   if (isLegacyPushData(data) && data.mute === LegacyBoolean.True) return;
 
   const notification = getNotificationData(data);
@@ -282,10 +342,70 @@ async function focusChatMessage(client: WindowClient, data: FocusMessageData) {
   }
 }
 
+async function handleCallNotificationClick(
+  appUrl: string,
+  action: string,
+  data: { callId: string; callMode: 'p2p' | 'group'; callType: 'voice' | 'video'; chatId?: string },
+) {
+  const callAction = action === 'decline' ? 'decline' : 'accept';
+  const clients = await getClients();
+  if (clients.length > 0) {
+    await Promise.all(clients.map(async (client) => {
+      client.postMessage({
+        type: 'callAction',
+        payload: {
+          action: callAction,
+          callId: data.callId,
+          callMode: data.callMode,
+          callType: data.callType,
+          chatId: data.chatId,
+        },
+      });
+      if (!client.focused) {
+        try {
+          await client.focus();
+        } catch (error) {
+          if (DEBUG) {
+            // eslint-disable-next-line no-console
+            console.warn('[SW] call focus failed', error);
+          }
+        }
+      }
+    }));
+    return;
+  }
+
+  // No window open — boot a fresh tab. Main thread reads URL params on mount
+  // and dispatches the same action handlers once auth is restored.
+  if (!self.clients.openWindow) return;
+  const url = `${appUrl}?call_action=${callAction}&call_id=${encodeURIComponent(data.callId)}`
+    + `&call_mode=${encodeURIComponent(data.callMode)}`;
+  try {
+    await self.clients.openWindow(url);
+  } catch (error) {
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.warn('[SW] openWindow for call failed', error);
+    }
+  }
+}
+
 export function handleNotificationClick(e: NotificationEvent) {
   const appUrl = self.registration.scope;
   e.notification.close(); // Android needs explicit close.
   const { data } = e.notification;
+
+  // Stage 4: incoming call notification — accept/decline routed back to main thread.
+  if (data?.isCall && data.callId) {
+    e.waitUntil(handleCallNotificationClick(appUrl, e.action, {
+      callId: data.callId,
+      callMode: data.callMode || 'p2p',
+      callType: data.callType || 'voice',
+      chatId: data.chatId,
+    }));
+    return;
+  }
+
   const notifyClients = async () => {
     const clients = await getClients();
     await Promise.all(clients.map((client) => {
