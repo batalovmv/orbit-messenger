@@ -221,6 +221,10 @@ func (h *UploadHandler) ChunkedAbort(c *fiber.Ctx) error {
 
 // mapChunkedError converts service errors to HTTP responses.
 func (h *UploadHandler) mapChunkedError(c *fiber.Ctx, err error, operation string) error {
+	var appErr *apperror.AppError
+	if errors.As(err, &appErr) {
+		return response.Error(c, appErr)
+	}
 	switch {
 	case errors.Is(err, model.ErrFileTooLarge):
 		return response.Error(c, apperror.BadRequest("File too large"))

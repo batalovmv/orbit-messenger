@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,6 +39,17 @@ func main() {
 	r2Bucket := config.EnvOr("R2_BUCKET", "orbit-media")
 	r2PublicEndpoint := config.EnvOr("R2_PUBLIC_ENDPOINT", "") // Browser-accessible S3 endpoint for presigned URLs
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
+	maxUserStorageBytesRaw := config.EnvOr("MAX_USER_STORAGE_BYTES", "0")
+	maxUserStorageBytes, err := strconv.ParseInt(maxUserStorageBytesRaw, 10, 64)
+	if err != nil {
+		slog.Error("invalid MAX_USER_STORAGE_BYTES", "value", maxUserStorageBytesRaw, "error", err)
+		os.Exit(1)
+	}
+	if maxUserStorageBytes <= 0 {
+		slog.Info("storage quota disabled")
+	} else {
+		slog.Info("storage quota configured", "max_user_storage_bytes", maxUserStorageBytes)
+	}
 
 	// PostgreSQL
 	ctx := context.Background()
@@ -114,7 +126,7 @@ func main() {
 	mediaStore := store.NewMediaStore(pool)
 
 	// Service
-	mediaSvc := service.NewMediaService(mediaStore, r2Client, rdb, nc)
+	mediaSvc := service.NewMediaService(mediaStore, r2Client, rdb, nc).WithMaxUserStorageBytes(maxUserStorageBytes)
 
 	// Start orphan cleanup loop (every 6 hours)
 	appCtx, cancel := context.WithCancel(ctx)

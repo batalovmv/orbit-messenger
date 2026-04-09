@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/services/media/internal/model"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
 	"github.com/mst-corp/orbit/services/media/internal/store"
@@ -29,15 +30,35 @@ const (
 
 // MediaService orchestrates upload, processing, download, and deletion.
 type MediaService struct {
-	store store.Store
-	r2    *storage.R2Client
-	rdb   *redis.Client
-	nc    *nats.Conn
+	store               store.Store
+	r2                  *storage.R2Client
+	rdb                 *redis.Client
+	nc                  *nats.Conn
+	maxUserStorageBytes int64
 }
 
 // NewMediaService creates the service.
 func NewMediaService(st store.Store, r2 *storage.R2Client, rdb *redis.Client, nc *nats.Conn) *MediaService {
 	return &MediaService{store: st, r2: r2, rdb: rdb, nc: nc}
+}
+
+func (s *MediaService) WithMaxUserStorageBytes(limit int64) *MediaService {
+	s.maxUserStorageBytes = limit
+	return s
+}
+
+func (s *MediaService) ensureUserStorageAvailable(ctx context.Context, userID uuid.UUID, incomingSize int64) error {
+	if s.maxUserStorageBytes <= 0 {
+		return nil
+	}
+	current, err := s.store.GetUserStorageBytes(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("get user storage bytes: %w", err)
+	}
+	if current+incomingSize > s.maxUserStorageBytes {
+		return apperror.TooManyRequests("Storage quota exceeded")
+	}
+	return nil
 }
 
 // Upload handles a simple (non-chunked) file upload.
@@ -50,6 +71,9 @@ func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileDat
 	}
 	if int64(len(fileData)) > model.SizeLimit(mediaType) {
 		return nil, model.ErrFileTooLarge
+	}
+	if err := s.ensureUserStorageAvailable(ctx, uploaderID, int64(len(fileData))); err != nil {
+		return nil, err
 	}
 
 	mediaID := uuid.New()
@@ -491,6 +515,9 @@ func (s *MediaService) InitChunkedUpload(ctx context.Context, uploaderID uuid.UU
 	}
 	if totalSize > model.SizeLimit(mediaType) {
 		return nil, model.ErrFileTooLarge
+	}
+	if err := s.ensureUserStorageAvailable(ctx, uploaderID, totalSize); err != nil {
+		return nil, err
 	}
 
 	uploadID := uuid.New().String()

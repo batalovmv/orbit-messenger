@@ -25,6 +25,7 @@ type Store interface {
 	GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]*MessageMediaRow, error)
 	LinkToMessage(ctx context.Context, messageID, mediaID uuid.UUID, position int, isSpoiler bool) error
 	CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]string, error)
+	GetUserStorageBytes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// CanAccess returns true if the user may download the media:
 	// they are the uploader OR the media is attached to at least one message.
 	CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error)
@@ -243,6 +244,19 @@ func (s *MediaStore) LinkToMessage(ctx context.Context, messageID, mediaID uuid.
 		 ON CONFLICT DO NOTHING`,
 		messageID, mediaID, position, isSpoiler)
 	return err
+}
+
+func (s *MediaStore) GetUserStorageBytes(ctx context.Context, userID uuid.UUID) (int64, error) {
+	var total int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(size_bytes), 0)
+		FROM media
+		WHERE uploader_id = $1
+	`, userID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("get user storage bytes %s: %w", userID, err)
+	}
+	return total, nil
 }
 
 // CanAccess returns true if userID is the uploader OR the media is attached to at least one message
