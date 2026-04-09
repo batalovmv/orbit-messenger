@@ -122,10 +122,13 @@ func (s *callStore) IsUserInChat(ctx context.Context, chatID, userID uuid.UUID) 
 }
 
 func (s *callStore) ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error) {
+	// make_interval(secs => $1) accepts a float and builds an interval natively —
+	// safer than ($1 || ' seconds')::interval which requires a text-typed arg
+	// and broke pgx type inference ("unable to encode 60 into text format").
 	query := `UPDATE calls SET status = 'missed', ended_at = NOW(), updated_at = NOW()
-		WHERE status = 'ringing' AND created_at < NOW() - ($1 || ' seconds')::interval
+		WHERE status = 'ringing' AND created_at < NOW() - make_interval(secs => $1)
 		RETURNING id, type, mode, chat_id, initiator_id, status, started_at, ended_at, duration_seconds, created_at, updated_at`
-	rows, err := s.pool.Query(ctx, query, int(threshold.Seconds()))
+	rows, err := s.pool.Query(ctx, query, threshold.Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("expire ringing: %w", err)
 	}
