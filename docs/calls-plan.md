@@ -764,6 +764,8 @@ VAPID ключи уже настроены (VAPID_PUBLIC_KEY в .env).
 
 ---
 
-**Last updated:** 2026-04-09 (before Stage 1 work)
+**Last updated:** 2026-04-09
 **Author:** Claude (CTO role)
 **Base commit:** aa6ef2f
+**Stage 1 closed:** 083570d (fix(calls): stabilize P2P — TURN public URL, error propagation, ICE timeouts)
+**Stages 2-5:** pending — open a new chat using the starter prompts above.
