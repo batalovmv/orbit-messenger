@@ -94,6 +94,14 @@ let activeCallStartedAt: number | undefined;
 // Stage 5 — calls shorter than this are not worth rating.
 const RATING_MIN_DURATION_MS = 10_000;
 
+// Dedupe concurrent requestCall invocations. The TG action layer dispatches
+// connectToActivePhoneCall both from the requestCall UI handler and from the
+// PhoneCall.tsx mount-effect, and the two invocations race past any
+// async-aware guard (both pass the check before the first await sets a flag).
+// Sharing the in-flight Promise here means the second caller gets the same
+// result as the first instead of issuing a duplicate POST /calls.
+let pendingRequestCall: Promise<SaturnCall | undefined> | undefined;
+
 export function markCallStarted() {
   activeCallStartedAt = Date.now();
 }
@@ -312,14 +320,32 @@ export async function setCallRating(
   return undefined;
 }
 
-export async function requestCall({
+export function requestCall(args: {
+  user: ApiUser;
+  gAHash?: Uint8Array;
+  isVideo?: boolean;
+  chatId?: string;
+}): Promise<SaturnCall | undefined> {
+  // Concurrent-call dedupe: TG action layer dispatches connectToActivePhoneCall
+  // twice (once from the requestCall UI handler, once from PhoneCall.tsx mount
+  // useEffect). Both reach this function before the first await resolves, so
+  // any async-aware lock is racy. By caching the in-flight Promise, both
+  // callers get the same SaturnCall back instead of issuing duplicate POSTs.
+  if (pendingRequestCall) return pendingRequestCall;
+  pendingRequestCall = doRequestCall(args).finally(() => {
+    pendingRequestCall = undefined;
+  });
+  return pendingRequestCall;
+}
+
+async function doRequestCall({
   user, isVideo, chatId: providedChatId,
 }: {
   user: ApiUser;
   gAHash?: Uint8Array;
   isVideo?: boolean;
   chatId?: string;
-}) {
+}): Promise<SaturnCall | undefined> {
   // In Saturn, DM chatId !== userId. Callers MUST pass the correct chatId —
   // falling back to user.id silently used to corrupt the backend request and
   // cause "Call failed to start" with no clue why.

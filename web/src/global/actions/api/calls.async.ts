@@ -248,6 +248,10 @@ addActionHandler('connectToActivePhoneCall', async (global, actions): Promise<vo
 
   if (!phoneCall) return;
 
+  // The duplicate dispatch from PhoneCall.tsx mount-effect is deduped at the
+  // saturn API layer (requestCall caches its in-flight Promise), so re-entry
+  // here is safe — both calls will receive the same SaturnCall result.
+
   const user = selectPhoneCallUser(global);
 
   if (!user) return;
