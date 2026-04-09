@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
+
+var keywordValueDSNPasswordRegex = regexp.MustCompile(`(?i)\b(password|sslpassword)=([^\s]+)`)
 
 // RedactURL strips any userinfo (username/password) from a URL so it can be
 // safely written to logs. If the URL cannot be parsed, returns "***" to avoid
@@ -15,6 +18,13 @@ import (
 func RedactURL(raw string) string {
 	if raw == "" {
 		return ""
+	}
+	lower := strings.ToLower(raw)
+	if !strings.Contains(raw, "://") {
+		if strings.Contains(lower, "password=") || strings.Contains(lower, "sslpassword=") {
+			return keywordValueDSNPasswordRegex.ReplaceAllString(raw, "${1}=***")
+		}
+		return "***"
 	}
 	u, err := url.Parse(raw)
 	if err != nil {

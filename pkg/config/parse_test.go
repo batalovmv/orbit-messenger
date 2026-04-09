@@ -95,3 +95,38 @@ func TestParsePostgresURL(t *testing.T) {
 		})
 	}
 }
+
+func TestRedactURL_KeywordValueDSN(t *testing.T) {
+	got := RedactURL("host=db.example.com port=5432 user=orbit password=s3cret dbname=orbit")
+	if got == "" {
+		t.Fatal("expected redacted DSN")
+	}
+	if got == "host=db.example.com port=5432 user=orbit password=s3cret dbname=orbit" {
+		t.Fatal("expected password to be redacted")
+	}
+	if got != "host=db.example.com port=5432 user=orbit password=*** dbname=orbit" {
+		t.Fatalf("unexpected redacted DSN: %q", got)
+	}
+}
+
+func TestRedactURL_PostgresURL(t *testing.T) {
+	got := RedactURL("postgres://orbit:s3cret@db.example.com/orbit")
+	if got == "" {
+		t.Fatal("expected redacted URL")
+	}
+	if got == "postgres://orbit:s3cret@db.example.com/orbit" {
+		t.Fatal("expected URL password to be redacted")
+	}
+}
+
+func TestRedactURL_Empty(t *testing.T) {
+	if got := RedactURL(""); got != "" {
+		t.Fatalf("expected empty string, got %q", got)
+	}
+}
+
+func TestRedactURL_InvalidInput(t *testing.T) {
+	if got := RedactURL("not a url at all"); got != "***" {
+		t.Fatalf("expected safe default, got %q", got)
+	}
+}
