@@ -38,7 +38,8 @@ const PermissionsUnset int64 = -1
 // EffectivePermissions resolves the final capability set for a member.
 //   - Owner: all permissions
 //   - Admin: their personal permissions (or default admin if unset / -1)
-//   - Member: per-user override if set (not -1), else chat default_permissions
+//   - Member in channel: always 0 (only admins/owner can post in channels)
+//   - Member in group/direct: per-user override if set (not -1), else chat default_permissions
 //   - Banned/readonly: 0
 //
 // The sentinel PermissionsUnset (-1) distinguishes "not customized" from "explicitly 0".
@@ -54,6 +55,11 @@ func EffectivePermissions(role, chatType string, memberPerms, defaultPerms int64
 	case "banned", "readonly":
 		return 0
 	default: // "member"
+		// Channel members cannot post regardless of configured permissions —
+		// only admins and the owner can publish in channels.
+		if chatType == "channel" {
+			return 0
+		}
 		if memberPerms != PermissionsUnset {
 			return memberPerms
 		}

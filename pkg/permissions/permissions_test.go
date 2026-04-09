@@ -14,9 +14,21 @@ func TestEffectivePermissions_Owner(t *testing.T) {
 }
 
 func TestEffectivePermissions_Admin_DefaultPerms(t *testing.T) {
-	got := EffectivePermissions("admin", "group", 0, 100)
+	// memberPerms=PermissionsUnset means "no per-user override, use role default".
+	got := EffectivePermissions("admin", "group", PermissionsUnset, 100)
 	if got != DefaultAdminPermissions {
-		t.Fatalf("admin with memberPerms=0 should get DefaultAdminPermissions (%d), got %d", DefaultAdminPermissions, got)
+		t.Fatalf("admin with memberPerms unset should get DefaultAdminPermissions (%d), got %d", DefaultAdminPermissions, got)
+	}
+}
+
+// TestEffectivePermissions_Admin_ExplicitlyZero documents the sentinel contract:
+// an admin with memberPerms == 0 (explicitly set, not unset) gets zero
+// capabilities. This is how an owner strips an admin of all rights without
+// demoting them.
+func TestEffectivePermissions_Admin_ExplicitlyZero(t *testing.T) {
+	got := EffectivePermissions("admin", "group", 0, 100)
+	if got != 0 {
+		t.Fatalf("admin with memberPerms=0 (explicit) should get 0, got %d", got)
 	}
 }
 
@@ -47,9 +59,20 @@ func TestEffectivePermissions_Readonly(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEffectivePermissions_MemberGroup_DefaultPerms(t *testing.T) {
-	got := EffectivePermissions("member", "group", 0, DefaultGroupPermissions)
+	// memberPerms=PermissionsUnset means fallback to chat default_permissions.
+	got := EffectivePermissions("member", "group", PermissionsUnset, DefaultGroupPermissions)
 	if got != DefaultGroupPermissions {
-		t.Fatalf("member in group with memberPerms=0 should fallback to defaultPerms (%d), got %d", DefaultGroupPermissions, got)
+		t.Fatalf("member in group with memberPerms unset should fallback to defaultPerms (%d), got %d", DefaultGroupPermissions, got)
+	}
+}
+
+// TestEffectivePermissions_MemberGroup_ExplicitlyZero documents the sentinel
+// contract: a member with memberPerms == 0 (explicitly) gets zero, not the
+// chat default. This is how an admin mutes a single member.
+func TestEffectivePermissions_MemberGroup_ExplicitlyZero(t *testing.T) {
+	got := EffectivePermissions("member", "group", 0, DefaultGroupPermissions)
+	if got != 0 {
+		t.Fatalf("member with memberPerms=0 (explicit) should get 0, got %d", got)
 	}
 }
 
