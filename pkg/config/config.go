@@ -25,7 +25,7 @@ func RedactURL(raw string) string {
 
 // MustEnv returns the value of the environment variable or panics if not set.
 func MustEnv(key string) string {
-	v := os.Getenv(key)
+	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
 		panic(fmt.Sprintf("required environment variable %s is not set", key))
 	}
@@ -34,7 +34,7 @@ func MustEnv(key string) string {
 
 // EnvOr returns the value of the environment variable or the fallback if not set.
 func EnvOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
 	return fallback

@@ -4,6 +4,35 @@ import (
 	"testing"
 )
 
+func TestMustEnv_WhitespaceOnlyPanics(t *testing.T) {
+	t.Setenv("CONFIG_TEST_WHITESPACE", "   ")
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected MustEnv to panic on whitespace-only value")
+		}
+	}()
+
+	MustEnv("CONFIG_TEST_WHITESPACE")
+}
+
+func TestMustEnv_ReturnsTrimmedValue(t *testing.T) {
+	t.Setenv("CONFIG_TEST_SECRET", "  real-secret  ")
+
+	got := MustEnv("CONFIG_TEST_SECRET")
+	if got != "real-secret" {
+		t.Fatalf("expected trimmed value, got %q", got)
+	}
+}
+
+func TestEnvOr_WhitespaceOnlyFallsBack(t *testing.T) {
+	t.Setenv("CONFIG_TEST_DEFAULT", "   ")
+
+	if got := EnvOr("CONFIG_TEST_DEFAULT", "default"); got != "default" {
+		t.Fatalf("expected fallback, got %q", got)
+	}
+}
+
 func TestParsePostgresURL(t *testing.T) {
 	tests := []struct {
 		name     string
