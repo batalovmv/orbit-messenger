@@ -25,3 +25,21 @@ func TestRequireString_SurroundingSpacesStillPass(t *testing.T) {
 		t.Fatalf("expected trimmed string to pass, got %v", err)
 	}
 }
+
+func TestRequireUUID_UppercasePasses(t *testing.T) {
+	if err := RequireUUID("550E8400-E29B-41D4-A716-446655440000", "id"); err != nil {
+		t.Fatalf("expected uppercase UUID to pass, got %v", err)
+	}
+}
+
+func TestRequireUUID_LowercasePasses(t *testing.T) {
+	if err := RequireUUID("550e8400-e29b-41d4-a716-446655440000", "id"); err != nil {
+		t.Fatalf("expected lowercase UUID to pass, got %v", err)
+	}
+}
+
+func TestRequireUUID_InvalidFails(t *testing.T) {
+	if err := RequireUUID("not-a-uuid", "id"); err == nil {
+		t.Fatal("expected invalid UUID to fail")
+	}
+}

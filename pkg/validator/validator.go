@@ -9,7 +9,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/apperror"
 )
 
-var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+var uuidRegex = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // IsValidEmail checks if the string is a valid email address.
 // Rejects RFC 5322 display-name format like "Name <user@example.com>".
