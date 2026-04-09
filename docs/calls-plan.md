@@ -448,7 +448,7 @@ Closes Phase 6 stage 3 (group calls).
 - **Pion docs:** использовать Context7 — `resolve-library-id "pion webrtc"` → `query-docs` про SFU/TrackLocalStaticRTP/AddTrack/sender forwarding.
 - **Reference implementations:** Pion `examples/broadcast`, `examples/sfu` на github.com/pion/webrtc.
 
-### Status (initial implementation, 2026-04-09)
+### Status (initial implementation, 2026-04-09, commit 609e374)
 Stage 3 backend + frontend wiring доставлено. Все backend задачи (E3.B1–B10) и frontend wiring (E3.F1–F3) закрыты:
 - Pion v4 SFU внутри calls service (`internal/webrtc/`), MediaEngine с Opus + VP8
 - Bidirectional WS proxy через gateway (`handler/sfu_proxy.go`), auth-frame паттерн с переиспользованием `ws.ValidateToken`

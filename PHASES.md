@@ -983,7 +983,7 @@ Signaling: WebSocket через gateway
 - [x] `ApiUpdatePhoneCallPeerState` added to `ApiUpdate` union
 
 
-#### Stage 3: Pion SFU (группы) ⏳ (initial implementation, awaiting QA)
+#### Stage 3: Pion SFU (группы) ⏳ (initial implementation, awaiting QA — commit 609e374)
 
 **Backend (services/calls):**
 - [x] E3.B1 `services/calls/go.mod` — добавлен `pion/webrtc/v4` v4.0.7, `pion/rtp`, `pion/rtcp`, `gofiber/contrib/websocket`
