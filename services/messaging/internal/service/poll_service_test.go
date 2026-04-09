@@ -423,6 +423,9 @@ func TestClosePoll_NotCreatorOrAdmin(t *testing.T) {
 		},
 	}
 	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
 		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
 			return &model.ChatMember{Role: "member"}, nil
 		},
@@ -454,6 +457,9 @@ func TestClosePoll_Success_PublishesEvent(t *testing.T) {
 		},
 	}
 	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return true, "admin", nil
+		},
 		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
 			return &model.ChatMember{Role: "admin"}, nil
 		},
@@ -476,6 +482,34 @@ func TestClosePoll_Success_PublishesEvent(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 poll_closed event, got %d", len(events))
 	}
+}
+
+func TestClosePoll_ExMemberCannotCloseOwnPoll(t *testing.T) {
+	msgID := uuid.New()
+	pollID := uuid.New()
+	chatID := uuid.New()
+	userID := uuid.New()
+
+	ps := &mockPollStore{
+		getByMessageIDFn: func(ctx context.Context, mID uuid.UUID) (*model.Poll, error) {
+			return &model.Poll{ID: pollID, MessageID: mID}, nil
+		},
+	}
+	ms := &mockMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &userID}, nil
+		},
+	}
+	cs := &mockChatStore{
+		isMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
+	rec := &RecordingPublisher{}
+	svc := newTestPollService(ps, ms, cs, rec)
+
+	_, err := svc.ClosePoll(context.Background(), msgID, userID)
+	pollAssertAppError(t, err, 403)
 }
 
 // --- Unvote ---

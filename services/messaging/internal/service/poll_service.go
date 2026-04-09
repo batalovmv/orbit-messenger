@@ -308,6 +308,14 @@ func (s *PollService) ClosePoll(ctx context.Context, messageID, userID uuid.UUID
 		return nil, apperror.NotFound("Message not found")
 	}
 
+	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
 	isCreator := msg.SenderID != nil && *msg.SenderID == userID
 	if !isCreator {
 		member, err := s.chats.GetMember(ctx, msg.ChatID, userID)

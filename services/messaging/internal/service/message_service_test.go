@@ -560,18 +560,52 @@ func TestEditMessage_NonAuthor_Forbidden(t *testing.T) {
 	authorID := uuid.New()
 	otherID := uuid.New()
 	msgID := uuid.New()
+	chatID := uuid.New()
 	rec := &RecordingPublisher{}
 
-	cs := &mockChatStore{}
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, string, error) {
+			if gotChatID != chatID || gotUserID != otherID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return true, "member", nil
+		},
+	}
 	ms := &mockMessageStore{
 		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
 			content := "original"
-			return &model.Message{ID: msgID, SenderID: &authorID, Content: &content}, nil
+			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &authorID, Content: &content}, nil
 		},
 	}
 
 	svc := newTestMessageService(ms, cs, rec, nil)
 	_, err := svc.EditMessage(context.Background(), msgID, otherID, "hacked", nil)
+	msgAssertAppError(t, err, 403)
+}
+
+func TestEditMessage_ExMemberCannotEditOwnMessage(t *testing.T) {
+	authorID := uuid.New()
+	msgID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, string, error) {
+			if gotChatID != chatID || gotUserID != authorID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return false, "", nil
+		},
+	}
+	ms := &mockMessageStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			content := "original"
+			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &authorID, Content: &content}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	_, err := svc.EditMessage(context.Background(), msgID, authorID, "edited", nil)
 	msgAssertAppError(t, err, 403)
 }
 
@@ -587,11 +621,20 @@ func TestDeleteMessage_AdminCanDelete(t *testing.T) {
 	rec := &RecordingPublisher{}
 
 	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, string, error) {
+			if gotChatID != chatID || gotUserID != adminID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return true, "admin", nil
+		},
 		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
 			return []string{adminID.String(), authorID.String()}, nil
 		},
 	}
 	ms := &mockMessageStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID}, nil
+		},
 		softDeleteAuthorizedFn: func(_ context.Context, mid, uid uuid.UUID) (uuid.UUID, int, error) {
 			return chatID, 1, nil
 		},
@@ -607,10 +650,21 @@ func TestDeleteMessage_AdminCanDelete(t *testing.T) {
 func TestDeleteMessage_MemberCannotDeleteOthers(t *testing.T) {
 	memberID := uuid.New()
 	msgID := uuid.New()
+	chatID := uuid.New()
 	rec := &RecordingPublisher{}
 
-	cs := &mockChatStore{}
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, string, error) {
+			if gotChatID != chatID || gotUserID != memberID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return true, "member", nil
+		},
+	}
 	ms := &mockMessageStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID}, nil
+		},
 		softDeleteAuthorizedFn: func(_ context.Context, _, _ uuid.UUID) (uuid.UUID, int, error) {
 			return uuid.Nil, 0, fmt.Errorf("forbidden")
 		},
@@ -618,5 +672,30 @@ func TestDeleteMessage_MemberCannotDeleteOthers(t *testing.T) {
 
 	svc := newTestMessageService(ms, cs, rec, nil)
 	err := svc.DeleteMessage(context.Background(), msgID, memberID)
+	msgAssertAppError(t, err, 403)
+}
+
+func TestDeleteMessage_ExMemberCannotDeleteOwnMessage(t *testing.T) {
+	userID := uuid.New()
+	msgID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID) (bool, string, error) {
+			if gotChatID != chatID || gotUserID != userID {
+				t.Fatalf("unexpected membership check: chat=%s user=%s", gotChatID, gotUserID)
+			}
+			return false, "", nil
+		},
+	}
+	ms := &mockMessageStore{
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			return &model.Message{ID: msgID, ChatID: chatID, SenderID: &userID}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	err := svc.DeleteMessage(context.Background(), msgID, userID)
 	msgAssertAppError(t, err, 403)
 }

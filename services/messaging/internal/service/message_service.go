@@ -284,6 +284,13 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 	if msg == nil {
 		return nil, apperror.NotFound("Message not found")
 	}
+	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
 	if msg.SenderID == nil || *msg.SenderID != userID {
 		return nil, apperror.Forbidden("You can only edit your own messages")
 	}
@@ -314,6 +321,21 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 }
 
 func (s *MessageService) DeleteMessage(ctx context.Context, msgID, userID uuid.UUID) error {
+	msg, err := s.messages.GetByID(ctx, msgID)
+	if err != nil {
+		return fmt.Errorf("get message: %w", err)
+	}
+	if msg == nil {
+		return apperror.NotFound("Message not found")
+	}
+	isMember, _, err := s.chats.IsMember(ctx, msg.ChatID, userID)
+	if err != nil {
+		return fmt.Errorf("check membership: %w", err)
+	}
+	if !isMember {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
 	// Atomic ownership check + soft delete to prevent TOCTOU race
 	chatID, seqNum, err := s.messages.SoftDeleteAuthorized(ctx, msgID, userID)
 	if err != nil {
