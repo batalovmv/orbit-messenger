@@ -383,8 +383,16 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 	// via pendingSendUuids. Excluding the sender here would block delivery to their other
 	// tabs/devices (SendToUsers excludes by userID, not by connection).
 	if len(event.MemberIDs) > 0 {
-		slog.Info("nats: delivering to members", "event", event.Event,
-			"member_count", len(event.MemberIDs), "online_users", len(s.hub.OnlineUserIDs()))
+		if isCallEvent(event.Event) {
+			// Phase 6 debug: call events are rare enough that we can afford to
+			// log every delivery until calls are proven stable in prod.
+			slog.Info("nats: call event delivery", "event", event.Event,
+				"subject", msg.Subject, "member_ids", event.MemberIDs,
+				"sender_id", event.SenderID, "online_users", len(s.hub.OnlineUserIDs()))
+		} else {
+			slog.Info("nats: delivering to members", "event", event.Event,
+				"member_count", len(event.MemberIDs), "online_users", len(s.hub.OnlineUserIDs()))
+		}
 		s.hub.SendToUsers(event.MemberIDs, envelope, "")
 		return
 	}

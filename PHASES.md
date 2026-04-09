@@ -952,7 +952,19 @@ Signaling: WebSocket через gateway
 - [x] `wsHandler.ts`: `navigator.vibrate([300,200,300,200,300])` при incoming call
 - [x] `calls.async.ts`: `updatePhoneCallConnectionState` — не hangup на `disconnected` (даёт шанс ICE restart), только на `closed`/`failed`
 
-#### Stage 2: Media state sync ✅
+#### Stage 2: Media state sync ✅ (+ post-QA hardening)
+
+**Post-QA fixes (B1–B8 from review):**
+- [x] B1 backend: gateway NATS subscriber logs every call event delivery (`member_ids`, `sender_id`, `subject`, online user count) so we can verify routing end-to-end
+- [x] B1 frontend: `handleCallDeclined` echo-guards by `currentUserId`, logs the event for debug
+- [x] B1 reducer: `updatePhoneCall` no longer drops `state='discarded'` updates on ID mismatch — terminal transitions are always applied and the call panel is always hidden (old `!phoneCall` early-return was the rot-source when the decline WS event raced Alice's initial phoneCall setup)
+- [x] B2 + B3: REST `mute` / `screen-share` sync moved to a state-driven `useEffect` in `PhoneCall.tsx` — fires on phoneCall.isMuted / .screencastState change regardless of WHICH code path flipped it (UI button, browser "Stop sharing" bar via track.onended, or the implicit screen-share-off when user enables camera)
+- [x] B4: the same state-driven effect also fires during `state='requesting'` so pre-connected mute is broadcast to the peer as soon as a REST round-trip completes
+- [x] B6: `sendMediaState` no longer hardcodes `isBatteryLow: true` — reports `false` (the browser has no standard battery API to read)
+- [x] B7: when auto-restoring camera after screen-share stops, the intermediate (video=off, share=off) `updateStreams`/`sendMediaState` broadcast is skipped — only the final (video=on) state is published to avoid peer UI flicker
+- [x] B8: peer badges use existing i18n keys (`FilterMuted`, `CallScreencast`) instead of hardcoded English strings
+
+
 
 **Frontend:**
 - [x] `p2p.ts`: `updateStreams()` publishes LOCAL media state (derived from own MediaStreams) as `updatePhoneCallMediaState` — no longer clobbered by peer state

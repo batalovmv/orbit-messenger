@@ -240,13 +240,14 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
         }
       }
     }
-    updateStreams();
-    sendMediaState();
-
     if (shouldRestoreCameraAfter) {
-      // Kick off camera restart after the current toggle settles; failure is
-      // swallowed because losing the auto-restore is non-fatal.
+      // Skip intermediate (screen-share=off, video=off) broadcast so the peer
+      // doesn't see a flicker — the next toggleStreamP2p('video', true) will
+      // publish the final (video=on) state in a single round trip.
       void toggleStreamP2p('video', true).catch(() => undefined);
+    } else {
+      updateStreams();
+      sendMediaState();
     }
   } catch (err) {
     // If getUserMedia or replaceTrack threw, we may hold an orphaned stream
@@ -431,7 +432,9 @@ function sendMediaState() {
     '@type': 'MediaState',
     videoRotation: 0,
     isMuted: !streams.ownAudio?.getTracks()[0].enabled,
-    isBatteryLow: true,
+    // Browsers don't expose battery over a standard API anymore; reporting
+    // the default "false" is more honest than the hardcoded "true" placeholder.
+    isBatteryLow: false,
     videoState: streams.ownVideo?.getTracks()[0].enabled ? 'active' : 'inactive',
     screencastState: streams.ownPresentation?.getTracks()[0].enabled ? 'active' : 'inactive',
   });

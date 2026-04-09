@@ -191,17 +191,12 @@ const PhoneCall = ({
       await toggleStreamP2p('presentation');
       stopHidingPresentation();
       stopHidingVideo();
-      // Sync screen-share state with the backend so the peer gets a WS event
-      // for the badge overlay. The local stream state is the source of truth.
-      if (phoneCall?.id) {
-        const isSharing = Boolean(getStreams()?.ownPresentation?.getTracks()[0]?.enabled);
-        void (isSharing
-          ? startScreenShareApi({ callId: phoneCall.id })
-          : stopScreenShareApi({ callId: phoneCall.id }));
-      }
+      // REST sync happens in the state-driven useEffect below — that also
+      // covers the case where the browser's "Stop sharing" bar ended the
+      // track without the user touching the in-app button.
     }, 250);
   }, [
-    hasOwnPresentation, hasOwnVideo, phoneCall?.id,
+    hasOwnPresentation, hasOwnVideo,
     startHidingPresentation, startHidingVideo, stopHidingPresentation, stopHidingVideo,
   ]);
 
@@ -222,17 +217,12 @@ const PhoneCall = ({
   ]);
 
   const handleToggleAudio = useCallback(() => {
-    (async () => {
-      await toggleStreamP2p('audio');
-      if (phoneCall?.id) {
-        const enabled = Boolean(getStreams()?.ownAudio?.getTracks()[0]?.enabled);
-        // Data-channel MediaState is already fired inside toggleStreamP2p; the
-        // REST call persists the state server-side and triggers the WS event
-        // the remote peer needs to render the mute indicator.
-        void apiToggleCallMute({ callId: phoneCall.id, muted: !enabled });
-      }
-    })();
-  }, [phoneCall?.id]);
+    // Purely local toggle — the effect below syncs phoneCall.isMuted with the
+    // backend (via PUT /calls/:id/mute) so the peer gets a WS event regardless
+    // of whether the WebRTC connection is fully up yet (fixes pre-connected
+    // mute rot).
+    void toggleStreamP2p('audio');
+  }, []);
 
   const [isEmojiOpen, openEmoji, closeEmoji] = useFlag();
 
@@ -251,6 +241,43 @@ const PhoneCall = ({
       setTimeout(hangUp, 250);
     }
   }, [hangUp, phoneCall?.reason, phoneCall?.state]);
+
+  // REST sync effects — mirror phoneCall.isMuted / .screencastState to the
+  // backend. Using the global state (rather than calling REST from click
+  // handlers) guarantees:
+  //  • sync happens even when track.onended was triggered by the browser's
+  //    "Stop sharing" bar (no click handler runs in that path)
+  //  • sync happens when handleToggleVideo implicitly stops screen share
+  //  • sync happens in pre-connected call state (WebRTC still handshaking)
+  //
+  // Skip initial mount so we don't REST-broadcast the default state on open.
+  const didMountRef = useRef(false);
+  const lastSyncedMutedRef = useRef<boolean | undefined>(phoneCall?.isMuted);
+  const lastSyncedSharingRef = useRef<boolean | undefined>(phoneCall?.screencastState === 'active');
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      lastSyncedMutedRef.current = phoneCall?.isMuted;
+      lastSyncedSharingRef.current = phoneCall?.screencastState === 'active';
+      return;
+    }
+    if (!phoneCall?.id || phoneCall.state === 'discarded') return;
+
+    const currentMuted = Boolean(phoneCall.isMuted);
+    if (currentMuted !== lastSyncedMutedRef.current) {
+      lastSyncedMutedRef.current = currentMuted;
+      void apiToggleCallMute({ callId: phoneCall.id, muted: currentMuted });
+    }
+
+    const currentSharing = phoneCall.screencastState === 'active';
+    if (currentSharing !== lastSyncedSharingRef.current) {
+      lastSyncedSharingRef.current = currentSharing;
+      void (currentSharing
+        ? startScreenShareApi({ callId: phoneCall.id })
+        : stopScreenShareApi({ callId: phoneCall.id }));
+    }
+  }, [phoneCall?.id, phoneCall?.state, phoneCall?.isMuted, phoneCall?.screencastState]);
 
   return (
     <Modal
@@ -334,13 +361,13 @@ const PhoneCall = ({
           {peerIsMuted && (
             <div className={styles.peerBadge}>
               <i className="icon icon-microphone-alt" aria-hidden />
-              <span>{lang('VoipGroupParticipantsMuted') || 'Muted'}</span>
+              <span>{lang('FilterMuted')}</span>
             </div>
           )}
           {peerIsScreenSharing && (
             <div className={styles.peerBadge}>
               <i className="icon icon-share-screen" aria-hidden />
-              <span>{lang('VoipScreenSharing') || 'Screen sharing'}</span>
+              <span>{lang('CallScreencast')}</span>
             </div>
           )}
         </div>

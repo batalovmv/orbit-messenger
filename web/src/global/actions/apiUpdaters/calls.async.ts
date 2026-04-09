@@ -89,12 +89,19 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (!ARE_CALLS_SUPPORTED) return undefined;
       const { phoneCall, currentUserId } = global;
 
+      // Terminal "discarded" updates must always be applied to the current
+      // phoneCall when IDs match, even if the incoming payload is minimal.
+      // Previously a state='discarded' update with a mismatched id would be
+      // silently dropped which left the caller stuck in "requesting…" when
+      // the callee declined. Now we only bail on ID mismatch for NON-terminal
+      // events (actual concurrent call from a different peer).
       const call: ApiPhoneCall = {
         ...phoneCall,
         ...update.call,
       };
 
       const isOutgoing = phoneCall?.adminId === currentUserId;
+      const isTerminalUpdate = update.call.state === 'discarded';
 
       global = {
         ...global,
@@ -103,7 +110,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       setGlobal(global);
       global = getGlobal();
 
-      if (phoneCall && phoneCall.id && call.id !== phoneCall.id) {
+      if (!isTerminalUpdate && phoneCall && phoneCall.id && call.id !== phoneCall.id) {
         if (call.state !== 'discarded') {
           callApi('discardCall', {
             call,
@@ -132,9 +139,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       if (state === 'discarded') {
-        // Discarded from other device
-        if (!phoneCall) return undefined;
-
+        // Terminal transition — always hide the call panel. The old guard
+        // `if (!phoneCall) return undefined;` left the panel stuck visible
+        // when the decline WS event raced the initial phoneCall setup.
+        // eslint-disable-next-line no-console
+        console.info('[Calls] phoneCall → discarded', { callId: call.id, reason: call.reason });
         return updateTabState(global, {
           ...(call.needRating && { ratingPhoneCall: call }),
           isCallPanelVisible: undefined,

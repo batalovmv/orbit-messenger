@@ -574,8 +574,17 @@ function handleCallAccepted(data: Record<string, unknown>) {
 
 function handleCallDeclined(data: Record<string, unknown>) {
   const callId = data.call_id as string;
+  const userId = data.user_id as string;
+
+  // eslint-disable-next-line no-console
+  console.info('[Calls] call_declined', { callId, userId, self: currentUserId });
 
   if (!callId) return;
+
+  // Echo guard — if we are the one who declined, the local acceptCall/declineCall
+  // path already marked the call as discarded. Applying the event twice can race
+  // with hangUp() and leave phoneCall cleared mid-transition.
+  if (userId === currentUserId) return;
 
   sendApiUpdate({
     '@type': 'updatePhoneCall',
