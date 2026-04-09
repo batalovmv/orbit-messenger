@@ -205,7 +205,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable
       ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      TURN_URL: turn:localhost:3478
+      # Public URL returned to browser clients — must be reachable from user machines.
+      # host.docker.internal works when browser is on the same host as Docker Desktop.
+      TURN_PUBLIC_URL: ${TURN_PUBLIC_URL:-turn:host.docker.internal:3478}
       TURN_USER: ${TURN_USER:-orbit}
       TURN_PASSWORD: ${TURN_PASSWORD:-orbit}
     depends_on:

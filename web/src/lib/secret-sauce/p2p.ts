@@ -19,6 +19,7 @@ type P2pState = {
   conference?: Partial<Conference>;
   isOutgoing: boolean;
   pendingCandidates: string[];
+  pendingCandidateTimer?: ReturnType<typeof setTimeout>;
   streams: {
     video?: MediaStream;
     audio?: MediaStream;
@@ -39,6 +40,9 @@ type P2pState = {
 let state: P2pState | undefined;
 
 const ICE_CANDIDATE_POOL_SIZE = 10;
+// If InitialSetup never arrives, queued ICE candidates are orphaned and the
+// call hangs silently. Abort the call after this timeout so the UI can recover.
+const INITIAL_SETUP_TIMEOUT_MS = 15_000;
 
 export function getStreams() {
   return state?.streams;
@@ -123,9 +127,14 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
 
   value = value === undefined ? !track.enabled : value;
 
+  // Track the stream we acquired so we can stop it if any subsequent step
+  // throws — otherwise the mic/camera LED stays on and the device is
+  // locked until the tab is closed.
+  let acquiredStream: MediaStream | undefined;
   try {
     if (value && !track.enabled) {
       const newStream = await getUserStream(streamType);
+      acquiredStream = newStream;
       newStream.getTracks()[0].onended = () => {
         toggleStreamP2p(streamType, false);
       };
@@ -138,6 +147,7 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
       } else {
         state.streams.ownPresentation = newStream;
       }
+      acquiredStream = undefined; // ownership handed off to state
       if (streamType === 'video' || streamType === 'presentation') {
         toggleStreamP2p(streamType === 'video' ? 'presentation' : 'video', false);
       }
@@ -166,7 +176,12 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
     updateStreams();
     sendMediaState();
   } catch (err) {
-    console.error(err)
+    // If getUserMedia or replaceTrack threw, we may hold an orphaned stream
+    // that the browser never released. Stop its tracks so the mic/camera LED
+    // doesn't stay lit and the device is available for the next attempt.
+    acquiredStream?.getTracks().forEach((t) => t.stop());
+    // eslint-disable-next-line no-console
+    console.error('[p2p] toggleStreamP2p failed', err);
   }
 }
 
@@ -260,7 +275,14 @@ export async function joinPhoneCall(
   });
 
   dc.onmessage = (e) => {
-    processSignalingMessage(JSON.parse(e.data));
+    // Malformed messages from the peer must not crash the whole channel.
+    try {
+      const parsed = JSON.parse(e.data);
+      processSignalingMessage(parsed);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[p2p] failed to parse data channel message', err);
+    }
   };
 
   const audio = new Audio();
@@ -297,21 +319,34 @@ export async function joinPhoneCall(
   }
 
   if (isOutgoing) {
-    await createOffer(conn, {
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
-    })
+    try {
+      await createOffer(conn, {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[p2p] createOffer failed, discarding call', err);
+      onUpdate({
+        '@type': 'updatePhoneCallConnectionState',
+        connectionState: 'failed',
+      });
+      stopPhoneCall();
+    }
   }
 }
 
 export function stopPhoneCall() {
   if (!state) return;
 
+  if (state.pendingCandidateTimer) {
+    clearTimeout(state.pendingCandidateTimer);
+  }
   state.streams.ownVideo?.getTracks().forEach((track) => track.stop());
   state.streams.ownPresentation?.getTracks().forEach((track) => track.stop());
   state.streams.ownAudio?.getTracks().forEach((track) => track.stop());
-  state.dataChannel.close();
-  state.connection.close();
+  try { state.dataChannel.close(); } catch { /* already closed */ }
+  try { state.connection.close(); } catch { /* already closed */ }
   state = undefined;
 }
 
@@ -396,6 +431,21 @@ export async function processSignalingMessage(message: P2pMessage) {
       });
       if (gotInitialSetup) {
         await commitPendingIceCandidates();
+      } else if (!state.pendingCandidateTimer) {
+        // Guard against orphaned candidates: if InitialSetup never arrives
+        // we'd wait forever. Force-fail the call after a sane timeout so the
+        // UI can discard and the user can retry.
+        state.pendingCandidateTimer = setTimeout(() => {
+          if (!state || state.gotInitialSetup) return;
+          // eslint-disable-next-line no-console
+          console.warn('[p2p] InitialSetup never arrived, discarding call');
+          state.pendingCandidates = [];
+          state.onUpdate({
+            '@type': 'updatePhoneCallConnectionState',
+            connectionState: 'failed',
+          });
+          stopPhoneCall();
+        }, INITIAL_SETUP_TIMEOUT_MS);
       }
       break;
     }
@@ -470,6 +520,10 @@ export async function processSignalingMessage(message: P2pMessage) {
         sendInitialSetup(parseSdp(connection.localDescription!, true) as P2pParsedSdp);
       }
       state.gotInitialSetup = true;
+      if (state.pendingCandidateTimer) {
+        clearTimeout(state.pendingCandidateTimer);
+        state.pendingCandidateTimer = undefined;
+      }
       await commitPendingIceCandidates();
       break;
     }

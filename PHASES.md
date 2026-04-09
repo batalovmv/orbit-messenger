@@ -918,14 +918,44 @@ Signaling: WebSocket через gateway
 
 ### Дополнительные фичи
 
-- [~] Ringtone + vibration на входящий — ringtone works via TG Web A call UI, vibration TODO
-- [ ] Push-уведомление на звонок когда app закрыт — high-priority push
-- [ ] Network quality indicator — Nice to Have
-- [ ] Call rating после завершения — Nice to Have
+- [x] Ringtone + vibration на входящий — ringtone через TG Web A, vibration через navigator.vibrate (Stage 1)
+- [ ] Push-уведомление на звонок когда app закрыт — high-priority push (Stage 4)
+- [ ] Network quality indicator — Stage 5
+- [ ] Call rating после завершения — Stage 5
 
 ### Критерий "готово"
 
 Кнопка телефона → ringtone → принять → голос P2P. Видео → камера. Группа "Начать звонок" → 10 участников → video grid → screen share. Call history в профиле.
+
+### Stage-by-stage completion tracker
+
+Полный план доработки: `docs/calls-plan.md`. Разбит на 5 этапов для выполнения в отдельных чатах.
+
+#### Stage 1: P2P Stabilization ✅ (commit <будет заполнен после commit>)
+
+**Backend:**
+- [x] `TURN_PUBLIC_URL` env var — публичный URL coturn для браузера (docker-compose + calls/main.go)
+- [x] Warning log если TURN_PUBLIC_URL есть без credentials / пустой
+- [x] Propagate participant insert errors с rollback call (`CreateCall`, `AcceptCall`)
+- [x] `AddParticipant` / `CreateCall` / `AcceptCall` — проверка `chat_members` (IDOR fix)
+- [x] Auto-expire ringing calls после 60s через background worker (`ExpireRingingCalls`)
+- [x] `Delete`, `IsUserInChat`, `ExpireRinging` methods в CallStore interface
+
+**Frontend:**
+- [x] Статический импорт `setActiveCallId/setActiveCallPeerId` в wsHandler.ts (убран dynamic require)
+- [x] `requestCall` — убран fallback `chatId = user.id`, логирует ошибку если chatId отсутствует
+- [x] `p2p.ts`: ICE candidate timeout 15s если InitialSetup не пришёл
+- [x] `p2p.ts`: `createOffer` обёрнут в try-catch, discard call на ошибку
+- [x] `p2p.ts`: JSON.parse data channel messages обёрнут в try-catch
+- [x] `p2p.ts`: cleanup `acquiredStream` в catch если getUserMedia/replaceTrack упал
+- [x] `p2p.ts`: `stopPhoneCall` — защищённый `close()` + clear pending timer
+- [x] `wsHandler.ts`: `navigator.vibrate([300,200,300,200,300])` при incoming call
+- [x] `calls.async.ts`: `updatePhoneCallConnectionState` — не hangup на `disconnected` (даёт шанс ICE restart), только на `closed`/`failed`
+
+#### Stage 2: Media state sync ⏳
+#### Stage 3: Pion SFU (группы) ⏳
+#### Stage 4: Push для закрытого app ⏳
+#### Stage 5: Polish (quality indicator + rating) ⏳
 
 ---
 

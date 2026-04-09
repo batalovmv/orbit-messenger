@@ -30,9 +30,18 @@ func main() {
 	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
 	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
-	turnURL := config.EnvOr("TURN_URL", "")
+	// TURN_PUBLIC_URL is what clients use to reach coturn (must be reachable from user browsers).
+	// Falls back to TURN_URL for backwards compatibility with older deployments.
+	turnURL := config.EnvOr("TURN_PUBLIC_URL", config.EnvOr("TURN_URL", ""))
 	turnUser := config.EnvOr("TURN_USER", "")
 	turnPassword := config.EnvOr("TURN_PASSWORD", "")
+	if turnURL != "" && (turnUser == "" || turnPassword == "") {
+		slog.Warn("TURN_PUBLIC_URL set but TURN_USER/TURN_PASSWORD missing — TURN server will be dropped from ICE config",
+			"turn_url", turnURL, "has_user", turnUser != "", "has_password", turnPassword != "")
+	}
+	if turnURL == "" {
+		slog.Warn("TURN_PUBLIC_URL empty — calls will fall back to STUN only, NAT traversal may fail for corporate networks")
+	}
 
 	// PostgreSQL — try password as-is first, then without backslashes
 	ctx := context.Background()
@@ -114,6 +123,27 @@ func main() {
 	// Register routes behind internal token middleware
 	api := app.Group("", handler.RequireInternalToken(internalSecret))
 	callHandler.Register(api)
+
+	// Background worker: expire ringing calls older than 60 seconds.
+	// Without this, a ringing call sits forever if the callee's client dies
+	// before declining — caller stuck in "ringing" and new calls blocked.
+	expireCtx, expireCancel := context.WithCancel(ctx)
+	defer expireCancel()
+	go func() {
+		const ringingTimeout = 60 * time.Second
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-expireCtx.Done():
+				return
+			case <-ticker.C:
+				if err := callSvc.ExpireRingingCalls(expireCtx, ringingTimeout); err != nil {
+					slog.Error("expire ringing calls", "error", err)
+				}
+			}
+		}
+	}()
 
 	// Graceful shutdown
 	go func() {

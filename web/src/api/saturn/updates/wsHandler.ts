@@ -3,6 +3,7 @@ import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } 
 import { buildApiChat } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll, getMessageSeqNum } from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
+import { setActiveCallId, setActiveCallPeerId } from '../methods/calls';
 import { sendApiUpdate } from './apiUpdateEmitter';
 
 let currentUserId: string | undefined;
@@ -517,9 +518,19 @@ function handleCallIncoming(data: Record<string, unknown>) {
   if (initiatorId === currentUserId) return;
 
   // Set active call state for signaling
-  const { setActiveCallId, setActiveCallPeerId } = require('../methods/calls');
   setActiveCallId(callId);
   setActiveCallPeerId(initiatorId);
+
+  // Vibrate on incoming — works on mobile PWA; desktop browsers may ignore it
+  // silently if the tab isn't focused. Wrapped in try to guard against browsers
+  // that reject the call (some Safari versions throw rather than no-op).
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate([300, 200, 300, 200, 300]);
+    } catch {
+      // ignore — vibration is best-effort
+    }
+  }
 
   sendApiUpdate({
     '@type': 'updatePhoneCall',
@@ -545,7 +556,6 @@ function handleCallAccepted(data: Record<string, unknown>) {
   if (acceptorId === currentUserId) return;
 
   // For the caller: set peer to acceptor
-  const { setActiveCallPeerId } = require('../methods/calls');
   setActiveCallPeerId(acceptorId);
 
   // Only set state to active; do NOT include adminId/participantId

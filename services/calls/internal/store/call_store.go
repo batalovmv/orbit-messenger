@@ -20,6 +20,13 @@ type CallStore interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string, startedAt, endedAt *time.Time, durationSeconds *int) error
 	GetActiveForChat(ctx context.Context, chatID uuid.UUID) (*model.Call, error)
 	ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.Call, string, bool, error)
+	// Delete removes a call row. Used for rolling back a Create if participant setup fails.
+	Delete(ctx context.Context, id uuid.UUID) error
+	// IsUserInChat checks if a user is a member of a chat (shared DB with messaging service).
+	IsUserInChat(ctx context.Context, chatID, userID uuid.UUID) (bool, error)
+	// ExpireRinging marks all ringing calls older than threshold as missed and
+	// returns their rows so the caller can publish call_ended events.
+	ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error)
 }
 
 type callStore struct {
@@ -92,6 +99,47 @@ func (s *callStore) GetActiveForChat(ctx context.Context, chatID uuid.UUID) (*mo
 		return nil, fmt.Errorf("get active call for chat: %w", err)
 	}
 	return &c, nil
+}
+
+func (s *callStore) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM calls WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete call: %w", err)
+	}
+	return nil
+}
+
+func (s *callStore) IsUserInChat(ctx context.Context, chatID, userID uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM chat_members WHERE chat_id = $1 AND user_id = $2)`,
+		chatID, userID,
+	).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("is user in chat: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *callStore) ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error) {
+	query := `UPDATE calls SET status = 'missed', ended_at = NOW(), updated_at = NOW()
+		WHERE status = 'ringing' AND created_at < NOW() - ($1 || ' seconds')::interval
+		RETURNING id, type, mode, chat_id, initiator_id, status, started_at, ended_at, duration_seconds, created_at, updated_at`
+	rows, err := s.pool.Query(ctx, query, int(threshold.Seconds()))
+	if err != nil {
+		return nil, fmt.Errorf("expire ringing: %w", err)
+	}
+	defer rows.Close()
+
+	var expired []model.Call
+	for rows.Next() {
+		var c model.Call
+		if err := scanCall(rows, &c); err != nil {
+			return nil, fmt.Errorf("scan expired call: %w", err)
+		}
+		expired = append(expired, c)
+	}
+	return expired, rows.Err()
 }
 
 func (s *callStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.Call, string, bool, error) {

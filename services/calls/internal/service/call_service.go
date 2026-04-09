@@ -59,16 +59,32 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 		Status:      model.CallStatusRinging,
 	}
 
+	// Verify caller is a member of the chat (prevents IDOR — can't start a call in
+	// someone else's chat just by knowing the chat ID).
+	inChat, err := s.calls.IsUserInChat(ctx, req.ChatID, initiatorID)
+	if err != nil {
+		s.logger.Error("check chat membership", "error", err, "chat_id", req.ChatID, "user_id", initiatorID)
+		return nil, apperror.Internal("check chat membership")
+	}
+	if !inChat {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
 	if err := s.calls.Create(ctx, call); err != nil {
 		return nil, apperror.Internal("create call")
 	}
 
-	// Add initiator as first participant
+	// Add initiator as first participant. If this fails the call is orphaned
+	// (no participants), so roll back the call creation.
 	if err := s.participants.Add(ctx, &model.CallParticipant{
 		CallID: call.ID,
 		UserID: initiatorID,
 	}); err != nil {
-		s.logger.Error("failed to add initiator as participant", "error", err, "call_id", call.ID)
+		s.logger.Error("failed to add initiator as participant, rolling back call", "error", err, "call_id", call.ID)
+		if delErr := s.calls.Delete(ctx, call.ID); delErr != nil {
+			s.logger.Error("failed to rollback call creation", "error", delErr, "call_id", call.ID)
+		}
+		return nil, apperror.Internal("add initiator")
 	}
 
 	// Publish call_incoming to other members
@@ -92,17 +108,30 @@ func (s *CallService) AcceptCall(ctx context.Context, callID, userID uuid.UUID) 
 		return nil, apperror.BadRequest("Call is not in ringing state")
 	}
 
+	// Verify the accepter is a member of the chat BEFORE mutating state —
+	// prevents strangers from accepting calls they weren't invited to.
+	inChat, err := s.calls.IsUserInChat(ctx, call.ChatID, userID)
+	if err != nil {
+		s.logger.Error("check chat membership on accept", "error", err, "chat_id", call.ChatID, "user_id", userID)
+		return nil, apperror.Internal("check chat membership")
+	}
+	if !inChat {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
 	now := time.Now()
 	if err := s.calls.UpdateStatus(ctx, callID, model.CallStatusActive, &now, nil, nil); err != nil {
 		return nil, apperror.Internal("accept call")
 	}
 
-	// Add accepter as participant
+	// Add accepter as participant. Propagate errors — an accepted call with no
+	// active participant is a broken state.
 	if err := s.participants.Add(ctx, &model.CallParticipant{
 		CallID: callID,
 		UserID: userID,
 	}); err != nil {
-		s.logger.Error("failed to add participant on accept", "error", err)
+		s.logger.Error("failed to add participant on accept", "error", err, "call_id", callID, "user_id", userID)
+		return nil, apperror.Internal("add participant")
 	}
 
 	call.Status = model.CallStatusActive
@@ -230,7 +259,9 @@ func (s *CallService) ListCallHistory(ctx context.Context, userID uuid.UUID, cur
 	return calls, nextCursor, hasMore, nil
 }
 
-// AddParticipant adds a user to a group call.
+// AddParticipant adds a user to a group call. Both the caller (addedByID) and
+// the target user must be members of the underlying chat — without this check
+// any authenticated user could pull strangers into calls they discover the ID of.
 func (s *CallService) AddParticipant(ctx context.Context, callID, userID, addedByID uuid.UUID) error {
 	call, err := s.calls.GetByID(ctx, callID)
 	if err != nil {
@@ -243,6 +274,23 @@ func (s *CallService) AddParticipant(ctx context.Context, callID, userID, addedB
 		return apperror.BadRequest("Call is not active")
 	}
 
+	// Caller must be a member of the chat.
+	callerInChat, err := s.calls.IsUserInChat(ctx, call.ChatID, addedByID)
+	if err != nil {
+		return apperror.Internal("check caller membership")
+	}
+	if !callerInChat {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+	// Target user must also be a member of the chat.
+	targetInChat, err := s.calls.IsUserInChat(ctx, call.ChatID, userID)
+	if err != nil {
+		return apperror.Internal("check target membership")
+	}
+	if !targetInChat {
+		return apperror.Forbidden("Target user is not a member of this chat")
+	}
+
 	if err := s.participants.Add(ctx, &model.CallParticipant{
 		CallID: callID,
 		UserID: userID,
@@ -250,7 +298,10 @@ func (s *CallService) AddParticipant(ctx context.Context, callID, userID, addedB
 		return apperror.Internal("add participant")
 	}
 
-	participants, _ := s.participants.ListByCall(ctx, callID)
+	participants, err := s.participants.ListByCall(ctx, callID)
+	if err != nil {
+		s.logger.Error("list participants after add", "error", err, "call_id", callID)
+	}
 	memberIDs := participantUserIDs(participants)
 
 	subject := fmt.Sprintf("orbit.call.%s.participant", callID)
@@ -259,6 +310,38 @@ func (s *CallService) AddParticipant(ctx context.Context, callID, userID, addedB
 		"user_id": userID,
 	}, memberIDs)
 
+	return nil
+}
+
+// ExpireRingingCalls marks ringing calls older than threshold as missed and
+// publishes call_ended events. Called periodically from a background worker
+// in main.go — without this, ringing calls hang forever if the callee's
+// client crashes before accepting or declining.
+func (s *CallService) ExpireRingingCalls(ctx context.Context, threshold time.Duration) error {
+	expired, err := s.calls.ExpireRinging(ctx, threshold)
+	if err != nil {
+		return fmt.Errorf("expire ringing: %w", err)
+	}
+	for i := range expired {
+		call := &expired[i]
+		// Notify all members of the chat — the initiator needs to see "no answer"
+		// and any callees that were still ringing should dismiss their incoming UI.
+		participants, pErr := s.participants.ListByCall(ctx, call.ID)
+		if pErr != nil {
+			s.logger.Error("list participants for expired call", "error", pErr, "call_id", call.ID)
+		}
+		memberIDs := participantUserIDs(participants)
+		memberIDs = appendUnique(memberIDs, call.InitiatorID.String())
+
+		subject := fmt.Sprintf("orbit.call.%s.lifecycle", call.ID)
+		s.nats.Publish(subject, "call_ended", map[string]interface{}{
+			"call_id":          call.ID,
+			"user_id":          call.InitiatorID,
+			"reason":           "missed",
+			"duration_seconds": nil,
+		}, memberIDs)
+		s.logger.Info("call expired as missed", "call_id", call.ID, "age", time.Since(call.CreatedAt))
+	}
 	return nil
 }
 

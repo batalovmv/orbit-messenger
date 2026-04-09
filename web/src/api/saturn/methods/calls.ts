@@ -282,8 +282,24 @@ export async function requestCall({
   isVideo?: boolean;
   chatId?: string;
 }) {
-  // In Saturn, DM chatId !== userId. Use provided chatId, fall back to userId for TG compat.
-  const chatId = providedChatId || user.id;
+  // In Saturn, DM chatId !== userId. Callers MUST pass the correct chatId —
+  // falling back to user.id silently used to corrupt the backend request and
+  // cause "Call failed to start" with no clue why.
+  if (!providedChatId) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] requestCall called without chatId — DM chatId is required in Saturn');
+    sendApiUpdate({
+      '@type': 'updatePhoneCall',
+      call: {
+        id: '',
+        accessHash: '',
+        state: 'discarded',
+        reason: 'disconnect',
+      } as ApiPhoneCall,
+    });
+    return undefined;
+  }
+  const chatId = providedChatId;
   const call = await createCall({
     chatId,
     type: isVideo ? 'video' : 'voice',

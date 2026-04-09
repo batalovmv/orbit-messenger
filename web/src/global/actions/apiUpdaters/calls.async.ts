@@ -217,7 +217,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       if (!global.phoneCall) return global;
 
-      if (connectionState === 'closed' || connectionState === 'disconnected' || connectionState === 'failed') {
+      // `disconnected` is a recoverable state — RTCPeerConnection may
+      // automatically restart ICE and transition back to `connected`. Hanging
+      // up immediately killed calls on transient network blips. Only hang up
+      // on `closed` or `failed` (both are terminal).
+      if (connectionState === 'closed' || connectionState === 'failed') {
         if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
         return undefined;
       }
