@@ -31,13 +31,22 @@ func makeRefreshCookie(value string, maxAge int) *fiber.Cookie {
 }
 
 type AuthHandler struct {
-	svc            *service.AuthService
-	logger         *slog.Logger
-	internalSecret string
+	svc             *service.AuthService
+	logger          *slog.Logger
+	internalSecret  string
+	bootstrapSecret string
 }
 
-func NewAuthHandler(svc *service.AuthService, logger *slog.Logger, internalSecret string) *AuthHandler {
-	return &AuthHandler{svc: svc, logger: logger, internalSecret: internalSecret}
+// NewAuthHandler constructs an AuthHandler. bootstrapSecret gates the
+// /auth/bootstrap endpoint: when empty, bootstrap is fully disabled; when set,
+// callers must present a matching X-Bootstrap-Secret header.
+func NewAuthHandler(svc *service.AuthService, logger *slog.Logger, internalSecret, bootstrapSecret string) *AuthHandler {
+	return &AuthHandler{
+		svc:             svc,
+		logger:          logger,
+		internalSecret:  internalSecret,
+		bootstrapSecret: bootstrapSecret,
+	}
 }
 
 func (h *AuthHandler) Register(app *fiber.App) {
@@ -118,6 +127,19 @@ func extractBearerToken(c *fiber.Ctx) string {
 // --- Handlers ---
 
 func (h *AuthHandler) Bootstrap(c *fiber.Ctx) error {
+	// Gate: bootstrap is disabled unless BOOTSTRAP_SECRET is configured on the
+	// service. When configured, the caller must present a matching
+	// X-Bootstrap-Secret header. This prevents a race where the first
+	// unauthenticated external request on a fresh deployment mints a
+	// permanent superadmin account.
+	if h.bootstrapSecret == "" {
+		return response.Error(c, apperror.Forbidden("Bootstrap disabled"))
+	}
+	provided := c.Get("X-Bootstrap-Secret")
+	if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(h.bootstrapSecret)) != 1 {
+		return response.Error(c, apperror.Forbidden("Bootstrap disabled"))
+	}
+
 	var req struct {
 		Email       string `json:"email"`
 		Password    string `json:"password"`

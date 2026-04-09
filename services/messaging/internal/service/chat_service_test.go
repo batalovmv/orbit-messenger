@@ -524,19 +524,20 @@ func TestDeleteChat_OnlyOwnerCanDelete(t *testing.T) {
 	assertAppError(t, err, 403)
 }
 
-func TestCreateDirectChat_SelfDM_Allowed(t *testing.T) {
+func TestCreateDirectChat_SelfDM_RedirectsToSavedMessages(t *testing.T) {
 	userID := uuid.New()
-	chatID := uuid.New()
+	savedChatID := uuid.New()
 	rec := &RecordingPublisher{}
 	cs := &mockChatStore{
-		getDirectChatFn: func(_ context.Context, _, _ uuid.UUID) (*uuid.UUID, error) {
-			return nil, nil // no existing self-DM
-		},
-		createDirectFn: func(_ context.Context, u1, u2 uuid.UUID) (*model.Chat, error) {
-			if u1 != u2 {
-				t.Fatal("expected self-DM: user1 == user2")
+		getOrCreateSavedChatFn: func(_ context.Context, u uuid.UUID) (*model.Chat, error) {
+			if u != userID {
+				t.Fatalf("expected saved chat lookup for %s, got %s", userID, u)
 			}
-			return &model.Chat{ID: chatID, Type: "direct"}, nil
+			return &model.Chat{ID: savedChatID, Type: "direct"}, nil
+		},
+		createDirectFn: func(_ context.Context, _, _ uuid.UUID) (*model.Chat, error) {
+			t.Fatal("self-DM must not call CreateDirectChat — expected Saved Messages redirect")
+			return nil, nil
 		},
 	}
 
@@ -545,8 +546,8 @@ func TestCreateDirectChat_SelfDM_Allowed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected self-DM to succeed, got: %v", err)
 	}
-	if chat.ID != chatID {
-		t.Fatalf("expected chatID %s, got %s", chatID, chat.ID)
+	if chat == nil || chat.ID != savedChatID {
+		t.Fatalf("expected Saved Messages chat %s, got %#v", savedChatID, chat)
 	}
 }
 

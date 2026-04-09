@@ -48,12 +48,13 @@ func (m *mockUserStore) Create(_ context.Context, u *model.User) error {
 	}
 	u.ID = uuid.New()
 	u.Status = "offline"
+	u.IsActive = true
 	u.TOTPEnabled = false
 	u.CreatedAt = time.Now()
 	u.UpdatedAt = time.Now()
 	m.users[u.ID] = u
 	m.byEmail[u.Email] = u
-	if u.Role == "admin" {
+	if u.Role == "admin" || u.Role == "superadmin" {
 		m.adminCount++
 	}
 	return nil
@@ -78,6 +79,7 @@ func (m *mockUserStore) CreateIfNoAdmins(_ context.Context, u *model.User) error
 	}
 	u.ID = uuid.New()
 	u.Status = "offline"
+	u.IsActive = true
 	u.TOTPEnabled = false
 	u.CreatedAt = time.Now()
 	u.UpdatedAt = time.Now()
@@ -279,7 +281,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStor
 
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewAuthHandler(svc, logger, "")
+	handler := NewAuthHandler(svc, logger, "", testBootstrapSecret)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -287,6 +289,14 @@ func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStor
 	handler.Register(app)
 
 	return app, svc, userStore
+}
+
+// testBootstrapSecret is the value every test uses to authorize /auth/bootstrap.
+const testBootstrapSecret = "test-bootstrap-secret"
+
+// bootstrapHeaders returns the header map that unlocks /auth/bootstrap in tests.
+func bootstrapHeaders() map[string]string {
+	return map[string]string{"X-Bootstrap-Secret": testBootstrapSecret}
 }
 
 func doRequest(app *fiber.App, method, path string, body interface{}, headers map[string]string) *http.Response {
@@ -322,7 +332,7 @@ func TestBootstrap_HappyPath(t *testing.T) {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -333,8 +343,8 @@ func TestBootstrap_HappyPath(t *testing.T) {
 	if result["email"] != "admin@orbit.test" {
 		t.Errorf("expected email admin@orbit.test, got %v", result["email"])
 	}
-	if result["role"] != "admin" {
-		t.Errorf("expected role admin, got %v", result["role"])
+	if result["role"] != "superadmin" {
+		t.Errorf("expected role superadmin, got %v", result["role"])
 	}
 }
 
@@ -346,14 +356,14 @@ func TestBootstrap_AlreadyExists(t *testing.T) {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	// Second bootstrap should fail
 	resp := doRequest(app, "POST", "/auth/bootstrap", map[string]string{
 		"email":        "admin2@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin2",
-	}, nil)
+	}, bootstrapHeaders())
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", resp.StatusCode)
@@ -375,11 +385,77 @@ func TestBootstrap_ValidationFail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp := doRequest(app, "POST", "/auth/bootstrap", tt.body, nil)
+			resp := doRequest(app, "POST", "/auth/bootstrap", tt.body, bootstrapHeaders())
 			if resp.StatusCode != http.StatusBadRequest {
 				t.Errorf("expected 400, got %d", resp.StatusCode)
 			}
 		})
+	}
+}
+
+// TestBootstrap_RequiresSecretHeader verifies the CRITICAL fix from slot-02:
+// the /auth/bootstrap endpoint must refuse requests that do not carry the
+// configured X-Bootstrap-Secret header.
+func TestBootstrap_RequiresSecretHeader(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	body := map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}
+
+	// Missing header → 403
+	resp := doRequest(app, "POST", "/auth/bootstrap", body, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("missing header: expected 403, got %d", resp.StatusCode)
+	}
+
+	// Wrong secret → 403
+	resp = doRequest(app, "POST", "/auth/bootstrap", body, map[string]string{
+		"X-Bootstrap-Secret": "wrong-secret",
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("wrong secret: expected 403, got %d", resp.StatusCode)
+	}
+
+	// Correct secret → 201
+	resp = doRequest(app, "POST", "/auth/bootstrap", body, bootstrapHeaders())
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("correct secret: expected 201, got %d", resp.StatusCode)
+	}
+}
+
+// TestBootstrap_DisabledWhenSecretEmpty verifies that if BOOTSTRAP_SECRET is
+// not configured, the endpoint is hard-disabled even with any header supplied.
+func TestBootstrap_DisabledWhenSecretEmpty(t *testing.T) {
+	userStore := newMockUserStore()
+	sessionStore := newMockSessionStore()
+	inviteStore := newMockInviteStore()
+
+	cfg := &service.Config{
+		JWTSecret:     "test-jwt-secret-32-chars-minimum!!",
+		AccessTTL:     15 * time.Minute,
+		RefreshTTL:    720 * time.Hour,
+		TOTPIssuer:    "OrbitTest",
+		AdminResetKey: "test-reset-key",
+		FrontendURL:   "http://localhost:3000",
+	}
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	h := NewAuthHandler(svc, logger, "", "") // empty bootstrap secret
+	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
+	h.Register(app)
+
+	resp := doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}, map[string]string{"X-Bootstrap-Secret": "anything"})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403 when secret disabled, got %d", resp.StatusCode)
 	}
 }
 
@@ -391,7 +467,7 @@ func TestLogin_HappyPath(t *testing.T) {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	// Login
 	resp := doRequest(app, "POST", "/auth/login", map[string]string{
@@ -420,7 +496,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	resp := doRequest(app, "POST", "/auth/login", map[string]string{
 		"email":    "admin@orbit.test",
@@ -453,7 +529,7 @@ func TestGetMe_WithValidToken(t *testing.T) {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
 		"email":    "admin@orbit.test",
@@ -532,7 +608,7 @@ func bootstrapAndLogin(t *testing.T, app *fiber.App) string {
 		"email":        "admin@orbit.test",
 		"password":     "securepassword123",
 		"display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 
 	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
 		"email":    "admin@orbit.test",
@@ -778,14 +854,14 @@ func TestRevokeSession_HappyPath(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	h := NewAuthHandler(svc, logger, "")
+	h := NewAuthHandler(svc, logger, "", testBootstrapSecret)
 	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
 	h.Register(app)
 
 	// Bootstrap admin and log in.
 	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
 		"email": "admin@orbit.test", "password": "securepassword123", "display_name": "Admin",
-	}, nil)
+	}, bootstrapHeaders())
 	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
 		"email": "admin@orbit.test", "password": "securepassword123",
 	}, nil)

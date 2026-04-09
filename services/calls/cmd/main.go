@@ -28,7 +28,7 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8084")
 	dbDSN, dbPassword, dbRawPassword := config.DatabaseDSN()
-	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
+	slog.Info("database config", "dsn", config.RedactURL(dbDSN), "password_len", len(dbPassword))
 	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	// TURN_PUBLIC_URL is what clients use to reach coturn (must be reachable from user browsers).

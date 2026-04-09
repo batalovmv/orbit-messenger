@@ -9,6 +9,20 @@ import (
 	"time"
 )
 
+// RedactURL strips any userinfo (username/password) from a URL so it can be
+// safely written to logs. If the URL cannot be parsed, returns "***" to avoid
+// leaking partial credentials.
+func RedactURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "***"
+	}
+	return u.Redacted()
+}
+
 // MustEnv returns the value of the environment variable or panics if not set.
 func MustEnv(key string) string {
 	v := os.Getenv(key)

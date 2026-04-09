@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -32,7 +31,7 @@ func main() {
 	port := config.EnvOr("PORT", "8080")
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
-	slog.Info("resolved NATS URL", "url", redactURL(natsURL))
+	slog.Info("resolved NATS URL", "url", config.RedactURL(natsURL))
 	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
@@ -61,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
-	slog.Info("NATS connected", "url", redactURL(natsURL))
+	slog.Info("NATS connected", "url", config.RedactURL(natsURL))
 
 	// WebSocket Hub
 	hub := ws.NewHub()
@@ -224,15 +223,6 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		slog.Error("shutdown error", "error", err)
 	}
-}
-
-// redactURL strips credentials from a URL for safe logging.
-func redactURL(raw string) string {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "***"
-	}
-	return u.Redacted()
 }
 
 func authSessionRateLimitIdentifier(c *fiber.Ctx) string {

@@ -121,7 +121,14 @@ func main() {
 	inviteStore := store.NewInviteStore(pool)
 	authSvc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, svcCfg)
 	internalSecret := config.EnvOr("INTERNAL_SECRET", "")
-	authHandler := handler.NewAuthHandler(authSvc, logger, internalSecret)
+	// BOOTSTRAP_SECRET gates the /auth/bootstrap endpoint. When empty, the
+	// endpoint is hard-disabled. Set this only during initial provisioning,
+	// then clear it from the environment and restart the service.
+	bootstrapSecret := config.EnvOr("BOOTSTRAP_SECRET", "")
+	if bootstrapSecret == "" {
+		slog.Warn("BOOTSTRAP_SECRET not set — /auth/bootstrap endpoint is disabled")
+	}
+	authHandler := handler.NewAuthHandler(authSvc, logger, internalSecret, bootstrapSecret)
 
 	// Fiber
 	app := fiber.New(fiber.Config{

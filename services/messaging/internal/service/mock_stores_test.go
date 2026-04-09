@@ -35,7 +35,8 @@ type mockChatStore struct {
 	updateMemberPrefsFn  func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	setSlowModeFn        func(ctx context.Context, chatID uuid.UUID, seconds int) error
 	setSignaturesFn      func(ctx context.Context, chatID uuid.UUID, enabled bool) error
-	getContactIDsFn      func(ctx context.Context, userID uuid.UUID) ([]string, error)
+	getContactIDsFn        func(ctx context.Context, userID uuid.UUID) ([]string, error)
+	getOrCreateSavedChatFn func(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
 }
 
 func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -188,11 +189,18 @@ func (m *mockChatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, e
 	return nil, nil
 }
 
+func (m *mockChatStore) ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error) {
+	return nil, "", false, nil
+}
+
 func (m *mockChatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
 	return nil, nil
 }
 
 func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error) {
+	if m.getOrCreateSavedChatFn != nil {
+		return m.getOrCreateSavedChatFn(ctx, userID)
+	}
 	return nil, nil
 }
 

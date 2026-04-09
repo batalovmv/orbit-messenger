@@ -32,7 +32,7 @@ func main() {
 	// Config
 	port := config.EnvOr("PORT", "8082")
 	dbDSN, dbPassword, dbRawPassword := config.DatabaseDSN()
-	slog.Info("database config", "dsn", dbDSN, "password_len", len(dbPassword))
+	slog.Info("database config", "dsn", config.RedactURL(dbDSN), "password_len", len(dbPassword))
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")

@@ -12,21 +12,33 @@ func getUserRole(c *fiber.Ctx) string {
 	return strings.ToLower(strings.TrimSpace(c.Get("X-User-Role")))
 }
 
-// requireSysPermission returns a middleware that checks for a specific system permission.
+// checkSysPermission validates that the current request has the given system permission.
+// Returns nil on success, *apperror.AppError on failure. It is a pure validator — it does
+// NOT call c.Next(), so callers must use it inline inside a handler, not as middleware.
+func checkSysPermission(c *fiber.Ctx, perm int64) error {
+	if _, err := getUserID(c); err != nil {
+		return err
+	}
+	if !permissions.HasSysPermission(getUserRole(c), perm) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	return nil
+}
+
+// requireSysPermission returns a Fiber middleware that enforces a system permission.
+// Use it when mounting on routes/groups: `app.Post("/x", requireSysPermission(perm), handler)`.
 func requireSysPermission(perm int64) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if _, err := getUserID(c); err != nil {
+		if err := checkSysPermission(c, perm); err != nil {
 			return err
-		}
-		if !permissions.HasSysPermission(getUserRole(c), perm) {
-			return apperror.Forbidden("Insufficient permissions")
 		}
 		return c.Next()
 	}
 }
 
-// requireAdminRole checks that the caller has at least admin-level content management permissions.
-// Kept for backward compatibility — wraps requireSysPermission(SysManageContent).
+// requireAdminRole checks that the caller has at least admin-level content management
+// permissions. It is a pure validator intended for inline use inside handlers.
+// Returns nil on success, *apperror.AppError on failure.
 func requireAdminRole(c *fiber.Ctx) error {
-	return requireSysPermission(permissions.SysManageContent)(c)
+	return checkSysPermission(c, permissions.SysManageContent)
 }

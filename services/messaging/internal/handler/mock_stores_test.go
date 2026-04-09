@@ -207,6 +207,10 @@ func (m *mockChatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, e
 	return nil, nil
 }
 
+func (m *mockChatStore) ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error) {
+	return nil, "", false, nil
+}
+
 func (m *mockChatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error) {
 	return nil, nil
 }
@@ -423,6 +427,26 @@ func (m *mockUserStore) ListAll(ctx context.Context, limit int) ([]model.User, e
 		return m.listAllFn(ctx, limit)
 	}
 	return nil, nil
+}
+
+func (m *mockUserStore) ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.User, string, bool, error) {
+	return nil, "", false, nil
+}
+
+func (m *mockUserStore) Deactivate(ctx context.Context, userID, actorID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockUserStore) Reactivate(ctx context.Context, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockUserStore) UpdateRole(ctx context.Context, userID uuid.UUID, newRole string) error {
+	return nil
+}
+
+func (m *mockUserStore) CountByRole(ctx context.Context, role string) (int, error) {
+	return 0, nil
 }
 
 // ---------------------------------------------------------------------------

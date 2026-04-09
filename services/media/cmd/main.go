@@ -96,7 +96,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer nc.Close()
-	slog.Info("NATS connected", "url", natsURL)
+	slog.Info("NATS connected", "url", config.RedactURL(natsURL))
 
 	// R2 / S3 client
 	r2Client, err := storage.NewR2Client(r2Endpoint, r2AccessKey, r2SecretKey, r2Bucket, r2PublicEndpoint)
