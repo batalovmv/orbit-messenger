@@ -192,6 +192,7 @@ func (d *Dispatcher) fetchSubscriptions(userID string) ([]PushSubscription, erro
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("X-Internal-Token", d.internalSecret)
+	req.Header.Set("X-User-ID", userID)
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
@@ -226,6 +227,7 @@ func (d *Dispatcher) deleteSubscription(userID, endpoint string) error {
 		return fmt.Errorf("create delete request: %w", err)
 	}
 	req.Header.Set("X-Internal-Token", d.internalSecret)
+	req.Header.Set("X-User-ID", userID)
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
