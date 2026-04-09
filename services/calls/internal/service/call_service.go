@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -599,6 +600,58 @@ func (s *CallService) GetICEServers(turnURL, turnUser, turnPassword string) []IC
 	}
 
 	return servers
+}
+
+// RateCall lets a participant score a finished call 1-5 with an optional
+// comment. Only users who were ever in the call may rate it, and only the
+// first rater wins — subsequent attempts return 409 via ErrAlreadyRated.
+func (s *CallService) RateCall(ctx context.Context, callID, userID uuid.UUID, rating int, comment string) error {
+	if rating < 1 || rating > 5 {
+		return apperror.BadRequest("Rating must be between 1 and 5")
+	}
+	// Rough bound on comment length — prevents unbounded payloads without
+	// needing a dedicated validator.RequireString call for a single field.
+	if len(comment) > 1000 {
+		return apperror.BadRequest("Comment too long (max 1000 characters)")
+	}
+
+	call, err := s.calls.GetByID(ctx, callID)
+	if err != nil {
+		return apperror.Internal("get call")
+	}
+	if call == nil {
+		return apperror.NotFound("Call not found")
+	}
+	// Rating only makes sense once the call is finished — otherwise the
+	// rater can't have judged its quality.
+	if call.Status != model.CallStatusEnded && call.Status != model.CallStatusMissed && call.Status != model.CallStatusDeclined {
+		return apperror.BadRequest("Call is not finished")
+	}
+
+	wasParticipant, err := s.participants.WasParticipant(ctx, callID, userID)
+	if err != nil {
+		return apperror.Internal("check participant")
+	}
+	// Initiators always count as participants even if their participant row
+	// never landed — guard against that edge case here.
+	if !wasParticipant && userID != call.InitiatorID {
+		return apperror.Forbidden("Only call participants can rate the call")
+	}
+
+	if err := s.calls.Rate(ctx, callID, userID, rating, comment); err != nil {
+		switch {
+		case errors.Is(err, model.ErrCallNotFound):
+			return apperror.NotFound("Call not found")
+		case errors.Is(err, model.ErrAlreadyRated):
+			return apperror.Conflict("Call has already been rated")
+		default:
+			s.logger.Error("rate call", "error", err, "call_id", callID, "user_id", userID)
+			return apperror.Internal("rate call")
+		}
+	}
+
+	s.logger.Info("call rated", "call_id", callID, "user_id", userID, "rating", rating)
+	return nil
 }
 
 // participantUserIDs extracts user ID strings from a slice of participants.

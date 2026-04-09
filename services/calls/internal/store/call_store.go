@@ -29,6 +29,11 @@ type CallStore interface {
 	// ExpireRinging marks all ringing calls older than threshold as missed and
 	// returns their rows so the caller can publish call_ended events.
 	ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error)
+	// Rate atomically persists a rating. Fails if the call is already rated
+	// (rated_by IS NOT NULL) or does not exist. model.ErrAlreadyRated is
+	// returned when a row exists but the rating slot is taken — the handler
+	// distinguishes this from "call not found" so callers see 409, not 404.
+	Rate(ctx context.Context, callID, userID uuid.UUID, rating int, comment string) error
 }
 
 type callStore struct {
@@ -165,6 +170,32 @@ func (s *callStore) ExpireRinging(ctx context.Context, threshold time.Duration) 
 		expired = append(expired, c)
 	}
 	return expired, rows.Err()
+}
+
+func (s *callStore) Rate(ctx context.Context, callID, userID uuid.UUID, rating int, comment string) error {
+	// Atomic guard: only first rater succeeds. WHERE rated_by IS NULL ensures a
+	// second RateCall call for the same row returns 0 affected rows, which we
+	// surface as ErrAlreadyRated. We also fall back to checking existence via
+	// a separate SELECT so we can differentiate "not found" from "already rated".
+	query := `UPDATE calls SET rating = $1, rating_comment = $2, rated_by = $3, rated_at = NOW(), updated_at = NOW()
+		WHERE id = $4 AND rated_by IS NULL`
+	ct, err := s.pool.Exec(ctx, query, rating, comment, userID, callID)
+	if err != nil {
+		return fmt.Errorf("rate call: %w", err)
+	}
+	if ct.RowsAffected() == 1 {
+		return nil
+	}
+	// Zero rows affected — figure out why so the service layer can return
+	// the right HTTP status.
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1)`, callID).Scan(&exists); err != nil {
+		return fmt.Errorf("rate call: check existence: %w", err)
+	}
+	if !exists {
+		return model.ErrCallNotFound
+	}
+	return model.ErrAlreadyRated
 }
 
 func (s *callStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.Call, string, bool, error) {

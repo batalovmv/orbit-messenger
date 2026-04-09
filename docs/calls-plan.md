@@ -572,7 +572,7 @@ feat(calls): high-priority push for incoming calls when app is closed
 
 #### Network quality indicator (ТЗ Should)
 
-- [ ] **E5.1** `web/src/lib/secret-sauce/p2p.ts` — periodic `peerConnection.getStats()` каждые 2 секунды:
+- [x] **E5.1** `web/src/lib/secret-sauce/p2p.ts` — periodic `peerConnection.getStats()` каждые 2 секунды:
   ```typescript
   setInterval(async () => {
       const stats = await conn.getStats();
@@ -589,29 +589,29 @@ feat(calls): high-priority push for incoming calls when app is closed
       });
   }, 2000);
   ```
-- [ ] **E5.2** `web/src/api/types/updates.ts` — добавить `ApiUpdatePhoneCallConnectionQuality`.
-- [ ] **E5.3** `web/src/global/actions/apiUpdaters/calls.ts` — handler обновляет `phoneCall.connectionQuality`.
-- [ ] **E5.4** `PhoneCall.tsx` — показывать иконку связи 📶 (4 bars) в углу (как в нативных call apps).
+- [x] **E5.2** `web/src/api/types/updates.ts` — добавить `ApiUpdatePhoneCallConnectionQuality`.
+- [x] **E5.3** `web/src/global/actions/apiUpdaters/calls.ts` — handler обновляет `phoneCall.connectionQuality`.
+- [x] **E5.4** `PhoneCall.tsx` — показывать иконку связи 📶 (4 bars) в углу (как в нативных call apps).
 
 #### Call rating (ТЗ Nice)
 
-- [ ] **E5.5** Новая миграция `migrations/037_call_rating.sql`:
+- [x] **E5.5** Новая миграция `migrations/037_call_rating.sql`:
   ```sql
   ALTER TABLE calls ADD COLUMN rating INT CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5));
   ALTER TABLE calls ADD COLUMN rating_comment TEXT;
   ALTER TABLE calls ADD COLUMN rated_by UUID REFERENCES users(id);
   ALTER TABLE calls ADD COLUMN rated_at TIMESTAMPTZ;
   ```
-- [ ] **E5.6** `call_handler.go` — новый endpoint `POST /calls/:id/rating`, body `{rating: 1-5, comment: string}`. Проверить что caller был участником call.
-- [ ] **E5.7** `call_service.go:RateCall(callID, userID, rating, comment)` — UPDATE calls SET rating=$1, rating_comment=$2, rated_by=$3, rated_at=NOW() WHERE id=$4 AND rated_by IS NULL (один raters).
-- [ ] **E5.8** `web/src/api/saturn/methods/calls.ts:setCallRating` — реальная реализация:
+- [x] **E5.6** `call_handler.go` — новый endpoint `POST /calls/:id/rating`, body `{rating: 1-5, comment: string}`. Проверить что caller был участником call.
+- [x] **E5.7** `call_service.go:RateCall(callID, userID, rating, comment)` — UPDATE calls SET rating=$1, rating_comment=$2, rated_by=$3, rated_at=NOW() WHERE id=$4 AND rated_by IS NULL (один raters).
+- [x] **E5.8** `web/src/api/saturn/methods/calls.ts:setCallRating` — реальная реализация:
   ```typescript
   export async function setCallRating({ callId, rating, comment }: {...}) {
       return request('POST', `/calls/${callId}/rating`, { rating, comment });
   }
   ```
-- [ ] **E5.9** `RatePhoneCallModal.tsx` — submit через `callApi('setCallRating', {...})`, после успеха — close modal.
-- [ ] **E5.10** Триггер показа модалки — после discardCall если duration > 10s.
+- [x] **E5.9** `RatePhoneCallModal.tsx` — submit через `callApi('setCallRating', {...})`, после успеха — close modal.
+- [x] **E5.10** Триггер показа модалки — после discardCall если duration > 10s.
 
 ### Commit message
 ```

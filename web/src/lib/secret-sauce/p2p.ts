@@ -39,6 +39,9 @@ type P2pState = {
   // screen-share, so that stopping the share can automatically restore it.
   videoEnabledBeforePresentation?: boolean;
   currentCameraDeviceId?: string;
+  // Stage 5 — periodic getStats() poller feeding the connection-quality bars.
+  qualityStatsTimer?: ReturnType<typeof setInterval>;
+  lastEmittedQuality?: 1 | 2 | 3 | 4;
 };
 
 let state: P2pState | undefined;
@@ -47,6 +50,68 @@ const ICE_CANDIDATE_POOL_SIZE = 10;
 // If InitialSetup never arrives, queued ICE candidates are orphaned and the
 // call hangs silently. Abort the call after this timeout so the UI can recover.
 const INITIAL_SETUP_TIMEOUT_MS = 15_000;
+// How often we poll peerConnection.getStats() for quality samples. 2s is a
+// balance between responsiveness and keeping the poller off the hot path.
+const QUALITY_POLL_INTERVAL_MS = 2_000;
+
+type ConnectionQuality = 1 | 2 | 3 | 4;
+
+// Map (rtt, packetLoss) → 1..4 bars. Thresholds are chosen to match what
+// native dialers show: anything below 100ms RTT + <2% loss reads as
+// excellent, 300ms + 5% is still tolerable, everything worse is "poor".
+function qualityFromStats(rtt: number, packetLoss: number): ConnectionQuality {
+  if (rtt < 0.1 && packetLoss < 0.02) return 4;
+  if (rtt < 0.2 && packetLoss < 0.03) return 3;
+  if (rtt < 0.3 && packetLoss < 0.05) return 2;
+  return 1;
+}
+
+async function sampleConnectionQuality(conn: RTCPeerConnection): Promise<ConnectionQuality | undefined> {
+  try {
+    const stats = await conn.getStats();
+    let rtt = 0;
+    let packetsLost = 0;
+    let packetsTotal = 0;
+    stats.forEach((s: any) => {
+      if (s.type === 'remote-inbound-rtp') {
+        if (typeof s.roundTripTime === 'number' && s.roundTripTime > rtt) {
+          rtt = s.roundTripTime;
+        }
+        if (typeof s.packetsLost === 'number') packetsLost += s.packetsLost;
+      }
+      if (s.type === 'inbound-rtp') {
+        if (typeof s.packetsReceived === 'number') packetsTotal += s.packetsReceived;
+        if (typeof s.packetsLost === 'number') packetsLost += s.packetsLost;
+      }
+    });
+    const packetLoss = packetsTotal > 0 ? packetsLost / (packetsTotal + packetsLost) : 0;
+    return qualityFromStats(rtt, packetLoss);
+  } catch {
+    return undefined;
+  }
+}
+
+function startQualityPolling() {
+  if (!state || state.qualityStatsTimer) return;
+  const { connection, onUpdate } = state;
+  state.qualityStatsTimer = setInterval(async () => {
+    if (!state) return;
+    const quality = await sampleConnectionQuality(connection);
+    if (!state || quality === undefined) return;
+    if (state.lastEmittedQuality === quality) return;
+    state.lastEmittedQuality = quality;
+    onUpdate({
+      '@type': 'updatePhoneCallConnectionQuality',
+      quality,
+    });
+  }, QUALITY_POLL_INTERVAL_MS);
+}
+
+function stopQualityPolling() {
+  if (!state?.qualityStatsTimer) return;
+  clearInterval(state.qualityStatsTimer);
+  state.qualityStatsTimer = undefined;
+}
 
 export function getStreams() {
   return state?.streams;
@@ -301,6 +366,11 @@ export async function joinPhoneCall(
       '@type': 'updatePhoneCallConnectionState',
       connectionState: conn.connectionState,
     });
+    if (conn.connectionState === 'connected') {
+      startQualityPolling();
+    } else if (conn.connectionState === 'disconnected' || conn.connectionState === 'failed' || conn.connectionState === 'closed') {
+      stopQualityPolling();
+    }
   };
 
   conn.ontrack = (e) => {
@@ -413,6 +483,7 @@ export async function joinPhoneCall(
 export function stopPhoneCall() {
   if (!state) return;
 
+  stopQualityPolling();
   if (state.pendingCandidateTimer) {
     clearTimeout(state.pendingCandidateTimer);
   }

@@ -86,6 +86,17 @@ export function iceServersToConnections(servers: ICEServer[]): ApiPhoneCallConne
 let activeCallId: string | undefined;
 let activeCallPeerId: string | undefined;
 let activeCallMode: 'p2p' | 'group' | undefined;
+// Timestamp (ms epoch) when the current call's media session started — used
+// by discardCall to decide whether the call lasted long enough to prompt the
+// user for a rating (>10s threshold, matching Telegram's behaviour).
+let activeCallStartedAt: number | undefined;
+
+// Stage 5 — calls shorter than this are not worth rating.
+const RATING_MIN_DURATION_MS = 10_000;
+
+export function markCallStarted() {
+  activeCallStartedAt = Date.now();
+}
 
 export function getActiveCallId() {
   return activeCallId;
@@ -284,9 +295,21 @@ export function sendSignalingData() {
   return Promise.resolve(undefined);
 }
 
-export function setCallRating() {
-  // Not yet implemented
-  return Promise.resolve(undefined);
+export async function setCallRating(
+  args: { call: ApiPhoneCall; rating: number; comment: string },
+): Promise<undefined> {
+  const callId = args?.call?.id;
+  if (!callId) return undefined;
+  try {
+    await request('POST', `/calls/${callId}/rating`, {
+      rating: args.rating,
+      comment: args.comment || '',
+    });
+  } catch {
+    // Rating is non-critical — swallow so we don't surface errors to the user
+    // for something they already dismissed.
+  }
+  return undefined;
 }
 
 export async function requestCall({
@@ -327,6 +350,7 @@ export async function requestCall({
   activeCallId = call.id;
   activeCallPeerId = user.id;
   activeCallMode = 'p2p';
+  activeCallStartedAt = Date.now();
 
   // Fetch ICE servers for WebRTC connection
   const iceServers = await fetchICEServers({ callId: call.id });
@@ -370,6 +394,7 @@ export async function acceptCall({
 
   activeCallId = call.id;
   activeCallPeerId = call.adminId;
+  activeCallStartedAt = Date.now();
 
   // Fetch ICE servers for WebRTC connection
   const iceServers = await fetchICEServers({ callId: call.id });
@@ -406,8 +431,14 @@ export async function discardCall({
     await endCallApi({ callId: activeCallId });
   }
 
+  // Only prompt for rating when the call actually connected for more than
+  // the minimum threshold — missed/instant-declined calls should just close.
+  const durationMs = activeCallStartedAt ? Date.now() - activeCallStartedAt : 0;
+  const needRating = !isPageUnload && durationMs >= RATING_MIN_DURATION_MS;
+
   activeCallId = undefined;
   activeCallPeerId = undefined;
+  activeCallStartedAt = undefined;
 
   if (!isPageUnload) {
     sendApiUpdate({
@@ -416,6 +447,7 @@ export async function discardCall({
         ...call,
         state: 'discarded',
         reason: 'hangup',
+        needRating,
       },
     });
   }

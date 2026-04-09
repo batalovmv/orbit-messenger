@@ -34,6 +34,7 @@ var (
 	ErrAlreadyInCall     = errors.New("active call already exists for this chat")
 	ErrNotParticipant    = errors.New("user is not a participant of this call")
 	ErrInvalidCallStatus = errors.New("invalid call status for this operation")
+	ErrAlreadyRated      = errors.New("call has already been rated")
 )
 
 // ValidCallTypes are the allowed call types.
@@ -61,6 +62,11 @@ type Call struct {
 	DurationSeconds *int       `json:"duration_seconds,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	// Rating (Phase 6 Stage 5) — set once by any participant after the call ends.
+	Rating         *int       `json:"rating,omitempty"`
+	RatingComment  *string    `json:"rating_comment,omitempty"`
+	RatedBy        *uuid.UUID `json:"rated_by,omitempty"`
+	RatedAt        *time.Time `json:"rated_at,omitempty"`
 	// Joined data
 	Participants []CallParticipant `json:"participants,omitempty"`
 	// SfuWsURL is the gateway-relative WebSocket URL the client should

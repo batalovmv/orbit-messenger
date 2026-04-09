@@ -69,6 +69,10 @@ export interface ApiPhoneCall {
   // Remote peer's media state (Stage 2 — media state sync)
   peerIsMuted?: boolean;
   peerIsScreenSharing?: boolean;
+
+  // Connection quality (Stage 5) — 1 (poor) to 4 (excellent), sampled every 2s
+  // from peerConnection.getStats(). Undefined until first sample lands.
+  connectionQuality?: 1 | 2 | 3 | 4;
 }
 
 export type ApiPhoneCallDiscardReason = 'missed' | 'disconnect' | 'hangup' | 'busy';

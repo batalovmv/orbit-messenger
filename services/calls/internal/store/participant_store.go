@@ -21,6 +21,10 @@ type ParticipantStore interface {
 	UpdateScreenShare(ctx context.Context, callID, userID uuid.UUID, isSharing bool) error
 	ListByCall(ctx context.Context, callID uuid.UUID) ([]model.CallParticipant, error)
 	IsParticipant(ctx context.Context, callID, userID uuid.UUID) (bool, error)
+	// WasParticipant checks whether a user was ever a participant, including
+	// those who already left. Used for post-call actions like rating where
+	// current presence is not required.
+	WasParticipant(ctx context.Context, callID, userID uuid.UUID) (bool, error)
 }
 
 type participantStore struct {
@@ -99,6 +103,18 @@ func (s *participantStore) ListByCall(ctx context.Context, callID uuid.UUID) ([]
 		participants = append(participants, p)
 	}
 	return participants, nil
+}
+
+func (s *participantStore) WasParticipant(ctx context.Context, callID, userID uuid.UUID) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM call_participants WHERE call_id = $1 AND user_id = $2)`
+	var exists bool
+	if err := s.pool.QueryRow(ctx, query, callID, userID).Scan(&exists); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("was participant: %w", err)
+	}
+	return exists, nil
 }
 
 func (s *participantStore) IsParticipant(ctx context.Context, callID, userID uuid.UUID) (bool, error) {

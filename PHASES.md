@@ -920,8 +920,8 @@ Signaling: WebSocket через gateway
 
 - [x] Ringtone + vibration на входящий — ringtone через TG Web A, vibration через navigator.vibrate (Stage 1)
 - [x] Push-уведомление на звонок когда app закрыт — high-priority push (Stage 4)
-- [ ] Network quality indicator — Stage 5
-- [ ] Call rating после завершения — Stage 5
+- [x] Network quality indicator — Stage 5
+- [x] Call rating после завершения — Stage 5
 
 ### Критерий "готово"
 
@@ -1055,7 +1055,30 @@ Signaling: WebSocket через gateway
 nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Тесты:** `go test ./...` зелёный, tsc 12 baseline без новых.
 
-#### Stage 5: Polish (quality indicator + rating) ⏳
+#### Stage 5: Polish (quality indicator + rating) ✅ (commit <будет заполнен после commit>)
+
+**Backend (E5.5-E5.7):**
+- [x] `migrations/037_call_rating.sql` — `rating`, `rating_comment`, `rated_by`, `rated_at` + partial index
+- [x] `model.Call` — новые поля Rating/RatingComment/RatedBy/RatedAt + `ErrAlreadyRated`
+- [x] `CallStore.Rate()` — атомарный `UPDATE ... WHERE rated_by IS NULL`, с распознаванием not-found vs already-rated
+- [x] `ParticipantStore.WasParticipant()` — без `left_at IS NULL` фильтра для post-call проверок
+- [x] `CallService.RateCall()` — валидация (rating 1-5, comment ≤1000, call ended, was participant или initiator)
+- [x] `POST /calls/:id/rating` endpoint + проброс через gateway `/calls/*`
+- [x] Тесты: `handler/rate_call_test.go` (happy path, initiator bypass, invalid rating, missing user, not participant, call not finished, not found, already rated, invalid id) + `mock_stores_test.go`
+
+**Frontend (E5.1-E5.4, E5.8-E5.10):**
+- [x] `p2p.ts` — `setInterval` 2s getStats() poller, `qualityFromStats()` mapper (rtt + packetLoss → 1..4), эмитит `updatePhoneCallConnectionQuality` только при изменении bar
+- [x] `p2p.ts` — старт поллинга на `connectionState === 'connected'`, остановка на disconnect/fail/close и в `stopPhoneCall`
+- [x] `api/types/updates.ts` — `ApiUpdatePhoneCallConnectionQuality` type + union
+- [x] `api/types/calls.ts` — `connectionQuality?: 1 | 2 | 3 | 4` в `ApiPhoneCall`
+- [x] `global/actions/apiUpdaters/calls.ts` — handler пишет `phoneCall.connectionQuality`
+- [x] `PhoneCall.tsx` — 4-bar индикатор в header, красный цвет при quality=1 (poor)
+- [x] `PhoneCall.module.scss` — `.quality-indicator` / `.quality-bar` / `.poor`
+- [x] `saturn/methods/calls.ts:setCallRating` — real `POST /calls/:id/rating` вместо no-op
+- [x] `saturn/methods/calls.ts:discardCall` — трекер `activeCallStartedAt`, `needRating: duration ≥ 10s`, модалка триггерится через существующий `apiUpdaters/calls.ts` path (`ratingPhoneCall`)
+- [x] `RatePhoneCallModal` — уже был подключён в `Main.tsx`, теперь `setCallRating` action действительно отправляет запрос
+
+**Тесты:** `go test ./services/calls/...` зелёный, tsc 12 baseline без новых.
 
 ---
 

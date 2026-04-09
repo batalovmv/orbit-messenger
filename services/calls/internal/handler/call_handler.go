@@ -54,6 +54,7 @@ func (h *CallHandler) Register(app fiber.Router) {
 	// having to wait for the WS handshake to land.
 	app.Post("/calls/:id/join", h.JoinGroupCall)
 	app.Delete("/calls/:id/leave", h.LeaveGroupCall)
+	app.Post("/calls/:id/rating", h.RateCall)
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
@@ -329,6 +330,30 @@ func (h *CallHandler) JoinGroupCall(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "joined"})
+}
+
+func (h *CallHandler) RateCall(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+	callID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid call ID"))
+	}
+
+	var req struct {
+		Rating  int    `json:"rating"`
+		Comment string `json:"comment"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if err := h.svc.RateCall(c.Context(), callID, uid, req.Rating, req.Comment); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "rated"})
 }
 
 func (h *CallHandler) LeaveGroupCall(c *fiber.Ctx) error {

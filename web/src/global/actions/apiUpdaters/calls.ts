@@ -78,6 +78,16 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
       return global;
     }
+    case 'updatePhoneCallConnectionQuality': {
+      if (!global.phoneCall) return undefined;
+      return {
+        ...global,
+        phoneCall: {
+          ...global.phoneCall,
+          connectionQuality: update.quality,
+        },
+      };
+    }
     case 'updatePhoneCall': {
       if (!ARE_CALLS_SUPPORTED) return undefined;
 

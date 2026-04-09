@@ -321,6 +321,26 @@ const PhoneCall = ({
         srcObject={streams?.ownVideo}
       />
       <div className={styles.header}>
+        {phoneCall?.connectionQuality !== undefined && (
+          <div
+            className={buildClassName(
+              styles.qualityIndicator,
+              phoneCall.connectionQuality <= 1 && styles.poor,
+            )}
+            title={lang('VoipStatusConnecting') /* reused; visual bars do the talking */}
+            aria-label={`Connection quality: ${phoneCall.connectionQuality} of 4`}
+          >
+            {[1, 2, 3, 4].map((bar) => (
+              <span
+                key={bar}
+                className={buildClassName(
+                  styles.qualityBar,
+                  phoneCall.connectionQuality! >= bar && styles.active,
+                )}
+              />
+            ))}
+          </div>
+        )}
         {IS_REQUEST_FULLSCREEN_SUPPORTED && (
           <Button
             round

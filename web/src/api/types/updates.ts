@@ -727,6 +727,11 @@ export type ApiUpdatePhoneCallConnectionState = {
   connectionState: RTCPeerConnectionState;
 };
 
+export type ApiUpdatePhoneCallConnectionQuality = {
+  '@type': 'updatePhoneCallConnectionQuality';
+  quality: 1 | 2 | 3 | 4;
+};
+
 export type ApiUpdateWebRTCSignaling = {
   '@type': 'updateWebRTCSignaling';
   signalingType: string;
@@ -966,7 +971,8 @@ export type ApiUpdate = (
   ApiUpdatePendingJoinRequests | ApiUpdatePaymentVerificationNeeded | ApiUpdatePaymentStateCompleted |
   ApiUpdatePhoneCall | ApiUpdatePhoneCallSignalingData | ApiUpdatePhoneCallMediaState |
   ApiUpdatePhoneCallPeerState |
-  ApiUpdatePhoneCallConnectionState | ApiUpdateWebRTCSignaling | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
+  ApiUpdatePhoneCallConnectionState | ApiUpdatePhoneCallConnectionQuality |
+  ApiUpdateWebRTCSignaling | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
   ApiUpdateMessageExtendedMedia | ApiUpdateConfig | ApiUpdateTopicNotifySettings | ApiUpdatePinnedTopic |
   ApiUpdatePinnedTopicsOrder | ApiUpdateTopic | ApiUpdateTopics | ApiUpdateRecentEmojiStatuses |
   ApiUpdateRecentReactions | ApiUpdateStory | ApiUpdateReadStories | ApiUpdateDeleteStory | ApiUpdateSentStoryReaction |
