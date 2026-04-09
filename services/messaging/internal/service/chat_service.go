@@ -492,6 +492,10 @@ func (s *ChatService) UpdateMemberRole(ctx context.Context, chatID, userID, targ
 		return apperror.Forbidden("Cannot change the owner's role")
 	}
 
+	if newRole == "owner" && actor.Role != "owner" {
+		return apperror.Forbidden("Only the chat owner can assign the owner role")
+	}
+
 	// Promote to admin or demote from admin: owner only
 	if newRole == "admin" || target.Role == "admin" {
 		if actor.Role != "owner" {

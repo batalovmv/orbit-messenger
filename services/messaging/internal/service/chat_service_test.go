@@ -675,6 +675,67 @@ func TestUpdateMemberRole_AdminCannotPromote(t *testing.T) {
 	assertAppError(t, err, 403)
 }
 
+func TestUpdateMemberRole_AdminCannotPromoteToOwner(t *testing.T) {
+	adminID := uuid.New()
+	memberID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, userID uuid.UUID) (*model.ChatMember, error) {
+			if userID == adminID {
+				return &model.ChatMember{Role: "admin", Permissions: permissions.AllPermissions}, nil
+			}
+			return &model.ChatMember{Role: "member"}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	err := svc.UpdateMemberRole(context.Background(), chatID, adminID, memberID, "owner", 0, nil)
+	assertAppError(t, err, 403)
+}
+
+func TestUpdateMemberRole_OwnerCanTransferOwnership(t *testing.T) {
+	ownerID := uuid.New()
+	memberID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+	updated := false
+
+	cs := &mockChatStore{
+		getMemberFn: func(_ context.Context, _, userID uuid.UUID) (*model.ChatMember, error) {
+			if userID == ownerID {
+				return &model.ChatMember{Role: "owner"}, nil
+			}
+			return &model.ChatMember{Role: "member"}, nil
+		},
+		updateMemberRoleFn: func(_ context.Context, gotChatID, gotUserID uuid.UUID, role string, perms int64, _ *string) error {
+			if gotChatID != chatID {
+				t.Fatalf("unexpected chatID: got %s want %s", gotChatID, chatID)
+			}
+			if gotUserID != memberID {
+				t.Fatalf("unexpected targetID: got %s want %s", gotUserID, memberID)
+			}
+			if role != "owner" {
+				t.Fatalf("unexpected role: got %s want owner", role)
+			}
+			updated = true
+			return nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{ownerID.String(), memberID.String()}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	if err := svc.UpdateMemberRole(context.Background(), chatID, ownerID, memberID, "owner", 0, nil); err != nil {
+		t.Fatalf("owner should be able to assign owner role: %v", err)
+	}
+	if !updated {
+		t.Fatal("expected UpdateMemberRole store call")
+	}
+}
+
 func TestUpdateMemberRole_CannotChangeOwnerRole(t *testing.T) {
 	ownerID := uuid.New()
 	otherOwnerAttempt := uuid.New()
