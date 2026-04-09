@@ -3,6 +3,7 @@ package validator
 import (
 	"net/mail"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -38,10 +39,11 @@ func RequireEmail(email, field string) *apperror.AppError {
 
 // RequireString validates a non-empty string with min/max length.
 func RequireString(val, field string, minLen, maxLen int) *apperror.AppError {
-	if val == "" {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(val, "\u200B", ""))
+	if trimmed == "" {
 		return apperror.BadRequest(field + " is required")
 	}
-	runes := utf8.RuneCountInString(val)
+	runes := utf8.RuneCountInString(trimmed)
 	if runes < minLen {
 		return apperror.BadRequest(field + " is too short")
 	}
