@@ -1,8 +1,9 @@
 # Orbit Audit Fix Plan — Autonomous Execution Contract
 
-**Target commit at start**: `73741d1` (current master HEAD as of writing)
+**Target commit at start**: `55d7e42` (master HEAD after FIX-PLAN was committed; docker smoke tasks added on top)
 **Source of truth for findings**: `audit-reports/2026-04-09/SUMMARY.md`
 **Per-task reports**: `audit-reports/2026-04-09/slot-*.md` (read only when the task block here is insufficient)
+**Total tasks**: 48 (46 fixes + final docker smoke tests)
 
 ## Principles you must internalise before starting
 
@@ -39,6 +40,8 @@ For each task in the order listed below:
 - **NEVER** introduce new external dependencies (`go get`, `npm install <new>`) without explicit mention in the task block. If a fix seems to require one, log as "BLOCKED: needs external dep <name>" and skip.
 - **NEVER** run migrations against any real database. Migration fixes are file-level only (edit `.sql` files under `migrations/`). Migrator code changes go in `pkg/migrator/`.
 - **NEVER** commit secrets. No API keys, no passwords, no tokens in files.
+- **NEVER** run `docker compose up` or `docker compose build` outside TASK-47 and TASK-48. Those are the only tasks authorised to touch the docker stack. Per-task verification uses `go test` only.
+- **ALWAYS** tear down the docker stack with `docker compose down -v` at the end of TASK-47c and TASK-48e, even if earlier sub-steps failed. Leaving containers running between sessions breaks local dev. This is the one mandatory cleanup.
 
 ### Soft rules — prefer but deviate with logged reason
 
@@ -55,6 +58,7 @@ The user wants uninterrupted progress. Halt only on these conditions:
 2. **Git broken** — e.g., `git commit` returns "not a git repository" or "fatal: unable to lock ref". Log "HALT: git" and stop.
 3. **Filesystem full / permission denied** on writes. Log "HALT: fs" and stop.
 4. **PROGRESS.md shows 5 consecutive SKIPPED or FAILED tasks** — something systemic is wrong; log "HALT: cascade failure" and stop.
+5. **Docker Desktop not running** during TASK-47b/47c/48 — `docker` command returns "Cannot connect to the Docker daemon" or similar. Log "HALT: docker unavailable" and stop. Do NOT attempt to fix per-task-fix tasks (TASK-01 through TASK-46) are docker-free and would have already completed; the halt only matters for the smoke tasks at the end.
 
 Everything else — individual task failures, missing files, compile errors in non-scope packages — is a SKIP, not a halt. Log the reason, move to the next task.
 
@@ -120,7 +124,7 @@ Keep entries terse (2-4 lines). No decorative markdown. No emojis.
 
 Ordered by a mix of risk (low-risk warmup first), dependency (auth/authz before calls that rely on it), and scope (backend before frontend, schema migrations in one chunk).
 
-Current total: **47 tasks** (17 HIGH + 30 MEDIUM, all originally in SUMMARY.md).
+Current total: **48 tasks** (46 fixes covering 17 HIGH + 30 MEDIUM from SUMMARY.md, plus TASK-47 docker smoke and TASK-48 migration idempotency smoke).
 
 ---
 
@@ -1322,28 +1326,251 @@ keep partial and log (this task is allowed partial completion per the sub-commit
 
 ---
 
-## TASK-47 — (reserved) Final smoke test
+---
+
+## Phase 17 — Final smoke verification (docker-backed)
+
+## TASK-47 — Final unit + docker stack smoke test
 
 **Source**: housekeeping
-**Scope**: all five services.
+**Scope**: all five services + docker stack.
 
 ### Why
-After 46 task attempts, run a final cross-service test pass and log the result. This is the last step before the session can end.
+After 46 fix attempts, verify that the repository still builds, unit tests still pass, and the full docker stack can be built and started. This catches compilation regressions, Dockerfile drift, and obvious runtime startup failures that unit tests miss.
 
-### Change
-1. Run `go test ./...` in each of `services/{gateway, auth, messaging, media, calls}` and log the result per service.
-2. Run `cd pkg && go test ./...`.
-3. Summarise in PROGRESS.md: how many tasks DONE, SKIPPED, FAILED, PARTIAL. How many services currently green.
-4. No code changes. No commits.
+### Change — three sub-steps, each logged separately
+
+Execute all three sub-steps in order. Each sub-step has its own failure mode. None of them commits — this is pure verification.
+
+---
+
+**Sub-step 47a — Go + pkg unit tests across all services**
+
+Run these commands in order. Log each result in PROGRESS.md with exit code and a one-line summary.
+
+```
+cd pkg && go test ./... 2>&1 | tail -20
+cd services/gateway && go test ./... 2>&1 | tail -20
+cd services/auth && go test ./... 2>&1 | tail -20
+cd services/messaging && go test ./... 2>&1 | tail -20
+cd services/media && go test ./... 2>&1 | tail -20
+cd services/calls && go test ./... 2>&1 | tail -20
+```
+
+Expected: all six packages report `ok` for every sub-package. If any report `FAIL`, log which service and which test failed. Do NOT attempt to fix at this point — the fix tasks have already been executed. Just record the state.
+
+On completion of 47a, append to PROGRESS.md:
+```
+## <timestamp> TASK-47a DONE
+pkg: ok | gateway: ok | auth: ok | messaging: ok | media: ok | calls: ok
+(or: messaging: FAIL TestXxx — see log)
+```
+
+---
+
+**Sub-step 47b — Docker build (compile every Dockerfile, no runtime)**
+
+Run from repo root:
+
+```
+docker compose build 2>&1 | tail -80
+```
+
+This builds every service image but does NOT start containers. Expected duration: 3-10 minutes on a warm cache, 15-30 minutes on a cold cache. Do NOT use `--no-cache` — the goal is to verify the current state, not to force a clean rebuild.
+
+**On build failure — ONE diagnostic attempt**:
+- If the failure is a Go compilation error (`undefined: X`, `imported and not used: Y`, syntax error) in a specific file, read that file, try to identify the cause from the recent commits, and attempt ONE fix. Re-run `docker compose build`. If it still fails, log `PARTIAL: 47b build failure persisted after one fix attempt` and move to 47c anyway.
+- If the failure is an npm/webpack error in `web/` build stage, DO NOT attempt to fix — frontend build failures are too varied for autonomous recovery. Log `SKIPPED: 47b frontend build failed` and move to 47c anyway.
+- If the failure is infrastructure (Docker Desktop not running, disk full, network error pulling base image), log `HALT: 47b environment failure — <reason>` and STOP the entire session. This is a stop condition.
+
+On success, append to PROGRESS.md:
+```
+## <timestamp> TASK-47b DONE
+All images built successfully. Duration: <X> minutes.
+```
+
+---
+
+**Sub-step 47c — Docker stack runtime smoke test**
+
+Run from repo root:
+
+```
+docker compose up -d
+sleep 30
+docker compose ps
+```
+
+Then verify each of the five Go services is reachable on its health endpoint. Use curl with a short timeout:
+
+```
+curl -sSf -m 5 http://localhost:8080/health && echo " gateway OK"
+curl -sSf -m 5 http://localhost:8081/health && echo " auth OK"
+curl -sSf -m 5 http://localhost:8082/health && echo " messaging OK"
+curl -sSf -m 5 http://localhost:8083/health && echo " media OK"
+curl -sSf -m 5 http://localhost:8084/health && echo " calls OK"
+```
+
+Collect the results. For any service that fails the health check, capture the last 30 log lines:
+
+```
+docker compose logs --tail=30 <service_name>
+```
+
+After collecting results (success OR failure), **ALWAYS tear down**:
+
+```
+docker compose down -v
+```
+
+The `-v` flag removes volumes so the next run starts from a fresh DB. This is critical — leaving volumes behind pollutes subsequent manual runs.
+
+**On failure**: DO NOT attempt to fix any runtime failure. Runtime docker issues are usually environmental (port conflicts, host resources, Docker Desktop state) and autonomous fix attempts will waste time and potentially leave the system in a worse state. Log the failures with log tails, tear down, and move on.
+
+On completion of 47c, append to PROGRESS.md:
+```
+## <timestamp> TASK-47c DONE (or PARTIAL)
+Health check results:
+- gateway: OK / FAIL
+- auth: OK / FAIL
+- messaging: OK / FAIL
+- media: OK / FAIL
+- calls: OK / FAIL
+
+Failed services log tails (if any):
+<paste last 10 relevant lines per failed service>
+
+Stack torn down.
+```
 
 ### Acceptance
-- PROGRESS.md has a final summary block `## FINAL SUMMARY` with the statistics.
+- 47a completed with per-service result in PROGRESS.md.
+- 47b completed with build result in PROGRESS.md (or PARTIAL / HALT per rules above).
+- 47c completed with health-check matrix in PROGRESS.md and `docker compose down -v` executed.
 
 ### Test gate
 (the task IS the test gate)
 
 ### Commit message
 (no commit)
+
+### On failure
+keep partial and log (each sub-step handles its own failure mode as described above)
+
+---
+
+## TASK-48 — Migration idempotency smoke test (docker postgres only)
+
+**Source**: housekeeping, follow-up to TASK-33/34/35
+**Scope**: docker postgres service + `migrations/` files (read-only).
+
+### Why
+TASK-33, TASK-34, and TASK-35 modified migration files to be idempotent but only via file edits — no live verification. This task spins up ONLY postgres, applies migrations, tears down without removing the volume, spins up again (which triggers the migrator a second time), and confirms the second run does not fail with duplicate-object errors.
+
+This is the only task that verifies migration file changes against a real PostgreSQL engine.
+
+### Change — five ordered sub-steps
+
+Run from repo root. Do not interleave with other tasks. Each command has a logged result.
+
+**Sub-step 48a — Start only postgres + auth (auth runs the migrator on startup)**
+
+```
+docker compose up -d postgres
+sleep 5
+docker compose up -d auth
+sleep 20
+docker compose logs auth 2>&1 | tail -40
+```
+
+Capture the auth logs. Look for either:
+- Success indicator: `migrator completed` / `applied N migrations` / similar wording from `pkg/migrator`.
+- Failure: any `ERROR` or `panic` or SQL error from the migrator.
+
+If migration fails on the FIRST run, this is a real bug introduced by TASK-33/34/35 — log as `FAIL: 48a first migration run failed — <error>` and SKIP the remaining sub-steps (48b-48e). Move to appendix.
+
+If migration succeeds, append to PROGRESS.md:
+```
+## <timestamp> TASK-48a DONE
+First migration run succeeded. Applied migrations visible in log.
+```
+
+**Sub-step 48b — Stop auth service (keep postgres volume)**
+
+```
+docker compose stop auth
+```
+
+Do NOT run `docker compose down` here — that would remove the container network but preserve volumes. Use `stop` which keeps everything and just halts the process. Log completion.
+
+**Sub-step 48c — Re-start auth service (triggers migrator a second time on the same DB)**
+
+```
+docker compose start auth
+sleep 20
+docker compose logs auth 2>&1 | tail -40
+```
+
+Check the new log tail for migration output. Expected behaviour: migrator should detect existing `schema_migrations` entries for all known files, compare checksums (TASK-36), and skip them without errors. No `duplicate_table`, no `duplicate_object`, no `duplicate_key`.
+
+On success, append to PROGRESS.md:
+```
+## <timestamp> TASK-48c DONE
+Second migration run idempotent — no duplicate-object errors.
+```
+
+On failure:
+```
+## <timestamp> TASK-48c FAIL
+Second migration run failed with:
+<paste last 20 error lines>
+```
+
+The failure indicates TASK-35 (idempotent DDL) did not fully cover a real case. Do NOT try to fix it now — log for operator review.
+
+**Sub-step 48d — Verify checksum guard from TASK-36**
+
+If TASK-36 was committed (check PROGRESS.md for `TASK-36 DONE`), perform an additional check:
+
+Pick any migration file that was NOT edited by TASK-33/34/35 (e.g., `migrations/001_init.sql` or similar early one — verify by `ls migrations/ | head`). Make a tiny content change (add a comment `-- checksum test`), stop auth, start auth again, read logs.
+
+Expected: auth should refuse to start with a clear error about checksum mismatch naming the edited file.
+
+After checking, **REVERT the edit**:
+```
+cd migrations && git checkout -- <the-edited-file>
+```
+
+Log the result:
+```
+## <timestamp> TASK-48d DONE
+Checksum guard verified: mismatch detected and reported. Edit reverted.
+```
+
+If the checksum guard did NOT detect the mismatch (auth started normally), that means TASK-36 did not actually ship or did not work as intended. Log as `FAIL: 48d checksum guard did not catch mismatch — TASK-36 needs review`.
+
+**Sub-step 48e — Full teardown**
+
+```
+docker compose down -v
+```
+
+Remove all volumes to leave a clean slate for the next local dev run. Log completion.
+
+### Acceptance
+- 48a logged with first-migration-run result.
+- 48c logged with idempotency result.
+- 48d logged with checksum-guard result (or SKIPPED if TASK-36 was skipped).
+- 48e: `docker compose down -v` executed, no stray containers or volumes left.
+
+### Test gate
+(the task IS the test gate)
+
+### Commit message
+(no commit)
+
+### On failure
+keep partial and log — each sub-step handles its own failure mode. Always ensure 48e (teardown) runs even if earlier sub-steps failed — wrap the whole sequence in logic that guarantees cleanup.
 
 ---
 
