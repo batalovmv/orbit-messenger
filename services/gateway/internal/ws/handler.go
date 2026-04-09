@@ -106,7 +106,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		// client disconnect — Fiber's WebSocket handler doesn't expose a request context.
 		// The timeout bounds the worst-case resource waste per stalled auth attempt.
 		authCtx, authCancel := context.WithTimeout(context.Background(), authTimeout)
-		uid, err := validateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
+		uid, err := ValidateToken(authCtx, authClient, rdb, authServiceURL, authData.Token)
 		authCancel()
 		if err != nil || uid == "" {
 			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"invalid token"}`)})
@@ -158,9 +158,11 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 	})
 }
 
-// validateToken checks JWT via auth service with Redis cache.
+// ValidateToken checks JWT via auth service with Redis cache.
 // Mirrors the blacklist check from middleware/jwt.go to prevent revoked tokens from authenticating WS.
-func validateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (string, error) {
+// Exported so the SFU proxy (Phase 6 Stage 3) can reuse the same auth-frame
+// flow without duplicating cache + blacklist logic.
+func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, authURL, token string) (string, error) {
 	tokenHash := sha256Hash(token)
 	cacheKey := "jwt_cache:" + tokenHash
 	blacklistKey := "jwt_blacklist:" + tokenHash

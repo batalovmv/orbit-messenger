@@ -47,6 +47,13 @@ func (h *CallHandler) Register(app fiber.Router) {
 	app.Put("/calls/:id/screen-share/start", h.StartScreenShare)
 	app.Put("/calls/:id/screen-share/stop", h.StopScreenShare)
 	app.Get("/calls/:id/ice-servers", h.GetICEServers)
+	// Group-call lifecycle (Stage 3): join/leave a group call as a SFU peer.
+	// The actual SFU media plane lives behind the GET /calls/:id/sfu-ws WS
+	// endpoint registered by SFUHandler — these REST helpers exist so the
+	// frontend can refresh participant state and publish NATS events without
+	// having to wait for the WS handshake to land.
+	app.Post("/calls/:id/join", h.JoinGroupCall)
+	app.Delete("/calls/:id/leave", h.LeaveGroupCall)
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
@@ -307,4 +314,34 @@ func (h *CallHandler) StopScreenShare(c *fiber.Ctx) error {
 func (h *CallHandler) GetICEServers(c *fiber.Ctx) error {
 	servers := h.svc.GetICEServers(h.turnURL, h.turnUser, h.turnPassword)
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"ice_servers": servers})
+}
+
+func (h *CallHandler) JoinGroupCall(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+	callID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid call ID"))
+	}
+	if err := h.svc.JoinGroupCall(c.Context(), callID, uid); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "joined"})
+}
+
+func (h *CallHandler) LeaveGroupCall(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+	callID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid call ID"))
+	}
+	if err := h.svc.LeaveGroupCall(c.Context(), callID, uid, true); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "left"})
 }

@@ -353,8 +353,8 @@ feat(calls): media state sync — screen share, mute, camera toggle
 
 ### Backend задачи
 
-- [ ] **E3.B1** `services/calls/go.mod` — добавить `github.com/pion/webrtc/v4`.
-- [ ] **E3.B2** `services/calls/internal/webrtc/sfu.go`:
+- [x] **E3.B1** `services/calls/go.mod` — добавить `github.com/pion/webrtc/v4`.
+- [x] **E3.B2** `services/calls/internal/webrtc/sfu.go`:
   ```go
   type SFU struct {
       rooms map[uuid.UUID]*Room
@@ -365,7 +365,7 @@ feat(calls): media state sync — screen share, mute, camera toggle
   func (s *SFU) GetOrCreateRoom(callID uuid.UUID) *Room
   func (s *SFU) CloseRoom(callID uuid.UUID)
   ```
-- [ ] **E3.B3** `services/calls/internal/webrtc/room.go`:
+- [x] **E3.B3** `services/calls/internal/webrtc/room.go`:
   ```go
   type Room struct {
       ID          uuid.UUID
@@ -379,7 +379,7 @@ feat(calls): media state sync — screen share, mute, camera toggle
   func (r *Room) RemoveLocalTrack(trackID string)
   func (r *Room) signalAllPeers()  // renegotiate all peers after track add/remove
   ```
-- [ ] **E3.B4** `services/calls/internal/webrtc/peer.go`:
+- [x] **E3.B4** `services/calls/internal/webrtc/peer.go`:
   ```go
   type Peer struct {
       UserID uuid.UUID
@@ -394,24 +394,24 @@ feat(calls): media state sync — screen share, mute, camera toggle
   func (p *Peer) HandleOffer(sdp string) error
   func (p *Peer) AddICECandidate(candidate string) error
   ```
-- [ ] **E3.B5** Новый HTTP handler в calls service: `GET /calls/:id/sfu-ws` — websocket upgrade (fiber websocket), валидация JWT через gateway internal auth, создание Peer + join Room.
-- [ ] **E3.B6** Gateway proxy `/api/v1/calls/:id/sfu-ws` → calls:8084 (websocket proxy). Сохранять user context через X-User-ID header в handshake.
-- [ ] **E3.B7** `call_service.go` — при CreateCall с `mode='group'` (или когда количество участников > 2) в response возвращать `sfu_ws_url: /api/v1/calls/:id/sfu-ws`.
-- [ ] **E3.B8** `calls/cmd/main.go` — инициализация SFU, передача в handler, periodic cleanup пустых rooms (раз в 5 минут).
-- [ ] **E3.B9** Codec configuration: VP8 (90000), Opus (48000). SDP munging если нужно.
-- [ ] **E3.B10** Disconnect handling: OnConnectionStateChange → Disconnected/Failed → Room.RemovePeer → publish NATS `call_participant_left`.
+- [x] **E3.B5** Новый HTTP handler в calls service: `GET /calls/:id/sfu-ws` — websocket upgrade (fiber websocket), валидация JWT через gateway internal auth, создание Peer + join Room.
+- [x] **E3.B6** Gateway proxy `/api/v1/calls/:id/sfu-ws` → calls:8084 (websocket proxy). Сохранять user context через X-User-ID header в handshake.
+- [x] **E3.B7** `call_service.go` — при CreateCall с `mode='group'` (или когда количество участников > 2) в response возвращать `sfu_ws_url: /api/v1/calls/:id/sfu-ws`.
+- [x] **E3.B8** `calls/cmd/main.go` — инициализация SFU, передача в handler, periodic cleanup пустых rooms (раз в 5 минут).
+- [x] **E3.B9** Codec configuration: VP8 (90000), Opus (48000). SDP munging если нужно.
+- [x] **E3.B10** Disconnect handling: OnConnectionStateChange → Disconnected/Failed → Room.RemovePeer → publish NATS `call_participant_left`.
 
 ### Frontend задачи
 
-- [ ] **E3.F1** `web/src/api/saturn/methods/calls.ts` — имплементировать реальные методы:
+- [x] **E3.F1** `web/src/api/saturn/methods/calls.ts` — имплементировать реальные методы:
   - `createGroupCall({ chatId, type })` → POST /calls с mode='group'
   - `joinGroupCall({ callId })` → open WS к sfu_ws_url, создать RTCPeerConnection, add local tracks, handle offer/answer/ICE
   - `leaveGroupCall({ callId })` → close WS + PC
   - `fetchGroupCallParticipants({ callId })` → GET /calls/:id (участники в response)
-- [ ] **E3.F2** Новый модуль `web/src/lib/secret-sauce/sfu.ts` (или adapt существующий `secretsauce.ts`):
+- [x] **E3.F2** Новый модуль `web/src/lib/secret-sauce/sfu.ts` (или adapt существующий `secretsauce.ts`):
   - `joinSfuCall(wsUrl, localStream, onRemoteTrack, onPeerLeave)` — single RTCPeerConnection, ontrack → добавляет remote stream в grid.
   - Signaling через WS: offer/answer/ICE packed как JSON {type, payload}.
-- [ ] **E3.F3** `web/src/api/saturn/updates/wsHandler.ts:168-171` — заменить no-op на реальные:
+- [x] **E3.F3** `web/src/api/saturn/updates/wsHandler.ts:168-171` — заменить no-op на реальные:
   - `call_participant_joined` → update groupCall.participants, dispatch updateGroupCallParticipants
   - `call_participant_left` → remove from participants
   - `screen_share_started/stopped` → update participant.isScreenSharing
@@ -447,6 +447,23 @@ Closes Phase 6 stage 3 (group calls).
 ### Контекст для нового чата
 - **Pion docs:** использовать Context7 — `resolve-library-id "pion webrtc"` → `query-docs` про SFU/TrackLocalStaticRTP/AddTrack/sender forwarding.
 - **Reference implementations:** Pion `examples/broadcast`, `examples/sfu` на github.com/pion/webrtc.
+
+### Status (initial implementation, 2026-04-09)
+Stage 3 backend + frontend wiring доставлено. Все backend задачи (E3.B1–B10) и frontend wiring (E3.F1–F3) закрыты:
+- Pion v4 SFU внутри calls service (`internal/webrtc/`), MediaEngine с Opus + VP8
+- Bidirectional WS proxy через gateway (`handler/sfu_proxy.go`), auth-frame паттерн с переиспользованием `ws.ValidateToken`
+- Saturn SFU client `lib/secret-sauce/sfu.ts` + реальные `joinGroupCall` / `leaveGroupCall` в `methods/calls.ts`
+- WS update handlers для `call_participant_joined` / `call_participant_left`
+- 4 smoke-теста для room/peer lifecycle (passing)
+- `cd services/calls && go build ./...` чисто, `go test ./...` зелёный
+- `cd services/gateway && go build ./...` чисто, `go test ./...` зелёный
+- `cd web && npx tsc --noEmit` — 12 baseline ошибок без новых
+
+**Что отложено в Stage 3.5:**
+- Глубокая интеграция existing TG Web A `GroupCall.tsx` UI с Saturn SFU streams (E3.F4) — backend готов, текущее WS-уведомление дёргает `updateGroupCallParticipants`, но video grid маппинг остался от Colibri-формата. Нужен либо адаптер reducer'а к новому schema, либо новый минимальный grid компонент.
+- E3.F5 ringtone/banner для group call — отложено вместе с UI integration.
+- Live-тест 3 окнами Chrome incognito по сценариям 11–13 — backend готов, требует ручного прогона.
+- Auto-routing P2P vs SFU на frontend (selectedChat.member_count > 2 → mode='group') — поле выставляется явно создателем, нужна обвязка в `requestCall`.
 
 ---
 

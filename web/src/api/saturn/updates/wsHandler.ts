@@ -167,8 +167,10 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       handleCallEnded(msg.data);
       break;
     case 'call_participant_joined':
+      handleCallParticipantJoined(msg.data);
+      break;
     case 'call_participant_left':
-      // Group call participant changes — future implementation
+      handleCallParticipantLeft(msg.data);
       break;
     case 'call_muted':
     case 'call_unmuted':
@@ -632,6 +634,38 @@ function handleCallMuteChanged(data: Record<string, unknown>) {
   sendApiUpdate({
     '@type': 'updatePhoneCallPeerState',
     peerIsMuted: isMuted,
+  } as any);
+}
+
+// Group call (Phase 6 Stage 3) — peer entered the SFU room.
+// We do not need to mutate phoneCall state here; the SFU client itself
+// installs new RTCPeerConnection.ontrack callbacks that surface remote
+// streams via the apiUpdateEmitter. The event is mostly used to refresh
+// the participant grid in the group call panel via a generic update.
+function handleCallParticipantJoined(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const userId = data.user_id as string;
+  if (!callId || !userId) return;
+  if (userId === currentUserId) return;
+  sendApiUpdate({
+    '@type': 'updateGroupCallParticipants',
+    groupCallId: callId,
+    participants: [{ userId, isJoined: true }],
+    nextOffset: undefined,
+  } as any);
+}
+
+// Group call (Phase 6 Stage 3) — peer left the SFU room (or auto-ended).
+function handleCallParticipantLeft(data: Record<string, unknown>) {
+  const callId = data.call_id as string;
+  const userId = data.user_id as string;
+  if (!callId || !userId) return;
+  if (userId === currentUserId) return;
+  sendApiUpdate({
+    '@type': 'updateGroupCallParticipants',
+    groupCallId: callId,
+    participants: [{ userId, isJoined: false, isLeft: true }],
+    nextOffset: undefined,
   } as any);
 }
 

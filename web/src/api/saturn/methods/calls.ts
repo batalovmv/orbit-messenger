@@ -1,8 +1,11 @@
 import type { ApiPhoneCall, ApiUser } from '../../types';
 import type { ApiPhoneCallConnection, ApiCallProtocol } from '../../../lib/secret-sauce';
+import {
+  joinSfuCall, leaveSfuCall, type SfuRemoteTrack,
+} from '../../../lib/secret-sauce/sfu';
 
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
-import { request, sendWsMessage } from '../client';
+import { request, sendWsMessage, getAccessToken, getBaseUrl } from '../client';
 
 // Saturn call types
 interface SaturnCall {
@@ -17,6 +20,9 @@ interface SaturnCall {
   duration_seconds?: number;
   created_at: string;
   participants?: SaturnCallParticipant[];
+  // Stage 3 — group calls return the SFU WebSocket URL the client should
+  // open to join the media plane. Empty for p2p calls.
+  sfu_ws_url?: string;
 }
 
 interface SaturnCallParticipant {
@@ -413,13 +419,182 @@ export function confirmCall() {
   return Promise.resolve(undefined);
 }
 
-// Group call stubs (Phase 6 future: full group call implementation)
-export function createGroupCall() { return Promise.resolve(undefined); }
-export function joinGroupCall() { return Promise.resolve(undefined); }
-export function leaveGroupCall() { return Promise.resolve(undefined); }
-export function discardGroupCall() { return Promise.resolve(undefined); }
+// ─────────────────────────────────────────────────────────────────────────────
+// Group calls (Phase 6 Stage 3 — Pion SFU)
+//
+// The TG Web A action layer (createGroupCall / joinGroupCall / etc.) drives
+// these methods. We implement the Saturn-flavoured versions: REST roundtrip
+// to the calls service for participant bookkeeping, plus a single Pion SFU
+// WebSocket via lib/secret-sauce/sfu.ts for media.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const remoteSfuStreams = new Map<string, MediaStream>();
+
+export function getSfuRemoteStreams(): ReadonlyMap<string, MediaStream> {
+  return remoteSfuStreams;
+}
+
+function buildSfuWsBase(): string {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) return '';
+  return baseUrl.replace(/^http/, 'ws');
+}
+
+/**
+ * Saturn createGroupCall — POST /calls with mode='group'. Returns the call
+ * row (including sfu_ws_url) so the action layer can hand it off to
+ * connectToActiveGroupCall via callApi('joinGroupCall').
+ */
+export async function createGroupCall({ chatId, type, memberIds }: {
+  chatId: string;
+  type?: 'voice' | 'video';
+  memberIds?: string[];
+}): Promise<SaturnCall | undefined> {
+  return createCall({
+    chatId,
+    type: type || 'voice',
+    mode: 'group',
+    memberIds,
+  });
+}
+
+/**
+ * Saturn joinGroupCall — opens the SFU WebSocket and returns once the first
+ * SDP exchange is complete. Called by ui/calls.ts action handlers after the
+ * group call panel has been opened. The signature accepts a loose object so
+ * existing TG callers (which pass `{call, params, inviteHash}`) keep working.
+ */
+export async function joinGroupCall(args?: { call?: { id?: string; type?: string }; isVideo?: boolean }): Promise<SaturnCall | undefined> {
+  const callId = args?.call?.id;
+  if (!callId) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] joinGroupCall called without call.id');
+    return undefined;
+  }
+
+  // 1. Mark this user as a participant in the DB. The REST hop also fires
+  //    NATS call_participant_joined so the OTHER peers see the new tile
+  //    immediately, even before our WS handshake lands.
+  try {
+    await request<{ status: string }>('POST', `/calls/${callId}/join`);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] join REST failed', e);
+    return undefined;
+  }
+
+  // 2. Pull ICE servers (gateway proxies the same /calls/:id/ice-servers we
+  //    use for p2p) so the SFU's PeerConnection can use coturn.
+  const iceServersRaw = await fetchICEServers({ callId });
+  const iceServers: RTCIceServer[] = (iceServersRaw || []).map((s) => ({
+    urls: s.urls,
+    username: s.username,
+    credential: s.credential,
+  }));
+
+  const accessToken = getAccessToken();
+  if (!accessToken) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] joinGroupCall: missing access token');
+    return undefined;
+  }
+
+  const isVideo = args?.isVideo ?? args?.call?.type === 'video';
+
+  try {
+    await joinSfuCall({
+      callId,
+      wsBaseUrl: buildSfuWsBase(),
+      accessToken,
+      iceServers,
+      isVideo: Boolean(isVideo),
+      onRemoteTrack: (track: SfuRemoteTrack) => {
+        remoteSfuStreams.set(track.trackId, track.stream);
+        sendApiUpdate({
+          '@type': 'updateGroupCallStreams',
+          userId: track.userId,
+          streamId: track.trackId,
+        } as any);
+      },
+      onRemoteTrackRemoved: (trackId: string) => {
+        remoteSfuStreams.delete(trackId);
+        sendApiUpdate({
+          '@type': 'updateGroupCallStreams',
+          userId: '',
+          streamId: trackId,
+        } as any);
+      },
+      onConnectionStateChange: (state) => {
+        // eslint-disable-next-line no-console
+        console.log('[Saturn:calls] SFU connection state:', state);
+      },
+      onError: (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[Saturn:calls] SFU error', err);
+      },
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] joinSfuCall failed', e);
+    // Best-effort REST rollback so the participant row doesn't linger.
+    try { await request('DELETE', `/calls/${callId}/leave`); } catch { /* ignore */ }
+    return undefined;
+  }
+
+  activeCallId = callId;
+  return undefined;
+}
+
+/**
+ * Saturn leaveGroupCall — closes the SFU session and tells the calls
+ * service to drop the participant. Backend auto-ends the call if this was
+ * the last peer.
+ */
+export async function leaveGroupCall(args?: { call?: { id?: string }; isPageUnload?: boolean }): Promise<undefined> {
+  const callId = args?.call?.id || activeCallId;
+  leaveSfuCall();
+  remoteSfuStreams.clear();
+  if (callId) {
+    try {
+      await request('DELETE', `/calls/${callId}/leave`);
+    } catch {
+      // ignore — backend cleanup will fire on WS drop too
+    }
+  }
+  if (activeCallId === callId) {
+    activeCallId = undefined;
+  }
+  return undefined;
+}
+
+export function discardGroupCall(args?: { call?: { id?: string } }) {
+  return leaveGroupCall(args);
+}
+
+/**
+ * GET /calls/:id — returns the raw Saturn call row (used internally; the
+ * TG-style action layer hits a different shape so we keep getGroupCall as a
+ * no-op for compatibility with the legacy fetchGroupCall path).
+ */
+export async function fetchSaturnCall(callId: string): Promise<SaturnCall | undefined> {
+  return fetchCall({ callId });
+}
+
+// Legacy TG-style API surface — Saturn does not use these in the SFU group
+// call flow (joinGroupCall fetches everything it needs itself), but the TG
+// Web A action layer still imports them. Returning undefined keeps the
+// existing fetchGroupCall path inert without breaking the type contract.
 export function getGroupCall() { return Promise.resolve(undefined); }
-export function fetchGroupCallParticipants() { return Promise.resolve(undefined); }
+export async function fetchGroupCallParticipants(args?: { call?: { id?: string } }): Promise<SaturnCallParticipant[] | undefined> {
+  const callId = args?.call?.id;
+  if (!callId) return undefined;
+  const call = await fetchCall({ callId });
+  return call?.participants;
+}
+
+// The remaining methods are not used by the Saturn group call path but the
+// TG Web A action layer still imports them. They stay as no-ops to keep the
+// type surface compatible until those code paths are removed.
 export function editGroupCallParticipant() { return Promise.resolve(undefined); }
 export function editGroupCallTitle() { return Promise.resolve(undefined); }
 export function exportGroupCallInvite() { return Promise.resolve(undefined); }

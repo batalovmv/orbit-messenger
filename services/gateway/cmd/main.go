@@ -166,6 +166,26 @@ func main() {
 	})
 	app.Get("/api/v1/ws", wsHandler.Upgrade(authServiceURL, rdb))
 
+	// SFU signaling WebSocket — group voice/video calls (Phase 6 Stage 3).
+	// Registered BEFORE the generic /api/v1/calls/* HTTP proxy so that ws://
+	// upgrades go through the bidirectional proxy instead of doProxy()'s
+	// fasthttp HTTP path. Auth is the standard JWT middleware: by the time
+	// the upgrade handler runs, X-User-ID is set from the validated token.
+	sfuWsRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 10, KeyPrefix: "sfu-ws",
+	})
+	app.Get(
+		"/api/v1/calls/:id/sfu-ws",
+		sfuWsRateLimit,
+		handler.SFUProxyUpgradeGuard(),
+		handler.SFUProxyHandler(handler.SFUProxyConfig{
+			CallsServiceURL: callsServiceURL,
+			AuthServiceURL:  authServiceURL,
+			InternalSecret:  internalSecret,
+			Redis:           rdb,
+		}),
+	)
+
 	// Public endpoints (no JWT) — must be registered before apiGroup
 	inviteRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
 		Redis: rdb, MaxPerMin: 20, KeyPrefix: "invite",

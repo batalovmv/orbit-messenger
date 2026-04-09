@@ -18,6 +18,7 @@ import (
 	"github.com/mst-corp/orbit/services/calls/internal/handler"
 	"github.com/mst-corp/orbit/services/calls/internal/service"
 	"github.com/mst-corp/orbit/services/calls/internal/store"
+	sfu "github.com/mst-corp/orbit/services/calls/internal/webrtc"
 )
 
 func main() {
@@ -108,8 +109,16 @@ func main() {
 	// Services
 	callSvc := service.NewCallService(callStore, participantStore, natsPublisher, logger)
 
+	// SFU (Pion) — group call media plane. Lives inside the calls service.
+	sfuInstance, err := sfu.NewSFU(logger)
+	if err != nil {
+		slog.Error("failed to init SFU", "error", err)
+		os.Exit(1)
+	}
+
 	// Handlers
 	callHandler := handler.NewCallHandler(callSvc, logger, turnURL, turnUser, turnPassword)
+	sfuHandler := handler.NewSFUHandler(callSvc, sfuInstance, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -123,6 +132,11 @@ func main() {
 	// Register routes behind internal token middleware
 	api := app.Group("", handler.RequireInternalToken(internalSecret))
 	callHandler.Register(api)
+	sfuHandler.Register(api)
+
+	// SFU cleanup: drop rooms whose peers have all disconnected without
+	// the explicit leave path firing (e.g. browser crash before WS close).
+	go sfuInstance.StartCleanupLoop(ctx, 30*time.Second)
 
 	// Background worker: expire ringing calls older than 60 seconds.
 	// Without this, a ringing call sits forever if the callee's client dies

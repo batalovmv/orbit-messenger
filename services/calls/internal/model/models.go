@@ -63,6 +63,9 @@ type Call struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 	// Joined data
 	Participants []CallParticipant `json:"participants,omitempty"`
+	// SfuWsURL is the gateway-relative WebSocket URL the client should
+	// open to join the SFU for group calls. Empty for p2p calls.
+	SfuWsURL string `json:"sfu_ws_url,omitempty"`
 }
 
 // CallParticipant represents a user in a call.

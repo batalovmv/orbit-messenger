@@ -87,12 +87,155 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 		return nil, apperror.Internal("add initiator")
 	}
 
+	// For group calls, hand the client the SFU WebSocket URL it should
+	// open after acceptance. P2P calls keep the empty value (Stage 1 path).
+	if call.Mode == model.CallModeGroup {
+		call.SfuWsURL = fmt.Sprintf("/api/v1/calls/%s/sfu-ws", call.ID)
+	}
+
 	// Publish call_incoming to other members
 	subject := fmt.Sprintf("orbit.call.%s.lifecycle", call.ID)
 	s.nats.Publish(subject, "call_incoming", call, req.MemberIDs, initiatorID.String())
 
 	s.logger.Info("call created", "call_id", call.ID, "chat_id", req.ChatID, "type", req.Type, "mode", req.Mode)
 	return call, nil
+}
+
+// JoinGroupCall is called by the SFU WebSocket handler when a user opens
+// the signaling connection. It validates that the user is allowed in the
+// chat the call belongs to, marks them as a participant in the database,
+// and publishes call_participant_joined so other peers update their UI.
+//
+// Group calls in p2p mode are rejected — the SFU signaling endpoint is
+// only meaningful for mode='group'.
+func (s *CallService) JoinGroupCall(ctx context.Context, callID, userID uuid.UUID) error {
+	call, err := s.calls.GetByID(ctx, callID)
+	if err != nil {
+		return apperror.Internal("get call")
+	}
+	if call == nil {
+		return apperror.NotFound("Call not found")
+	}
+	if call.Mode != model.CallModeGroup {
+		return apperror.BadRequest("Not a group call")
+	}
+	if call.Status != model.CallStatusActive && call.Status != model.CallStatusRinging {
+		return apperror.BadRequest("Call is not active")
+	}
+
+	inChat, err := s.calls.IsUserInChat(ctx, call.ChatID, userID)
+	if err != nil {
+		return apperror.Internal("check chat membership")
+	}
+	if !inChat {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
+	// Promote ringing → active on first non-initiator join, mirroring the
+	// AcceptCall flow for p2p. Without this, group calls would never leave
+	// "ringing" if the initiator is the only one to dial in via SFU.
+	if call.Status == model.CallStatusRinging && userID != call.InitiatorID {
+		now := time.Now()
+		if err := s.calls.UpdateStatus(ctx, callID, model.CallStatusActive, &now, nil, nil); err != nil {
+			return apperror.Internal("activate call")
+		}
+		call.Status = model.CallStatusActive
+		call.StartedAt = &now
+	}
+
+	if err := s.participants.Add(ctx, &model.CallParticipant{
+		CallID: callID,
+		UserID: userID,
+	}); err != nil {
+		s.logger.Error("join group call: add participant", "error", err, "call_id", callID, "user_id", userID)
+		return apperror.Internal("add participant")
+	}
+
+	participants, err := s.participants.ListByCall(ctx, callID)
+	if err != nil {
+		s.logger.Error("join group call: list participants", "error", err, "call_id", callID)
+	}
+	memberIDs := participantUserIDs(participants)
+	memberIDs = appendUnique(memberIDs, call.InitiatorID.String())
+
+	subject := fmt.Sprintf("orbit.call.%s.participant", callID)
+	s.nats.Publish(subject, "call_participant_joined", map[string]interface{}{
+		"call_id": callID,
+		"user_id": userID,
+		"call":    call,
+	}, memberIDs, userID.String())
+
+	s.logger.Info("group call joined", "call_id", callID, "user_id", userID)
+	return nil
+}
+
+// LeaveGroupCall is the inverse of JoinGroupCall: marks the participant as
+// left, publishes call_participant_left so other peers see the tile drop, and
+// — if endIfEmpty is true and no participants remain — finishes the call.
+//
+// endIfEmpty exists so the SFU disconnect path can auto-terminate the call,
+// while an explicit REST DELETE /calls/:id/leave can choose whether to.
+func (s *CallService) LeaveGroupCall(ctx context.Context, callID, userID uuid.UUID, endIfEmpty bool) error {
+	call, err := s.calls.GetByID(ctx, callID)
+	if err != nil {
+		return apperror.Internal("get call")
+	}
+	if call == nil {
+		return apperror.NotFound("Call not found")
+	}
+	if call.Mode != model.CallModeGroup {
+		return apperror.BadRequest("Not a group call")
+	}
+
+	// Remove tolerates "already left" — a peer that crashed and rejoined
+	// might never have re-marked itself as in the DB row.
+	if err := s.participants.Remove(ctx, callID, userID); err != nil {
+		s.logger.Warn("leave group call: remove participant", "error", err, "call_id", callID, "user_id", userID)
+	}
+
+	remaining, err := s.participants.ListByCall(ctx, callID)
+	if err != nil {
+		s.logger.Error("leave group call: list participants", "error", err, "call_id", callID)
+	}
+	memberIDs := participantUserIDs(remaining)
+	memberIDs = appendUnique(memberIDs, call.InitiatorID.String())
+
+	subject := fmt.Sprintf("orbit.call.%s.participant", callID)
+	s.nats.Publish(subject, "call_participant_left", map[string]interface{}{
+		"call_id": callID,
+		"user_id": userID,
+	}, memberIDs, userID.String())
+
+	s.logger.Info("group call left", "call_id", callID, "user_id", userID, "remaining", len(remaining))
+
+	// Auto-end the call if this was the last participant. Active call rows
+	// without any participants are dead state — UI sees "ringing" forever.
+	if endIfEmpty && len(remaining) == 0 && (call.Status == model.CallStatusActive || call.Status == model.CallStatusRinging) {
+		now := time.Now()
+		var durationSeconds *int
+		newStatus := model.CallStatusEnded
+		if call.Status == model.CallStatusRinging {
+			newStatus = model.CallStatusMissed
+		}
+		if call.StartedAt != nil {
+			d := int(math.Round(now.Sub(*call.StartedAt).Seconds()))
+			durationSeconds = &d
+		}
+		if err := s.calls.UpdateStatus(ctx, callID, newStatus, nil, &now, durationSeconds); err != nil {
+			s.logger.Error("auto-end empty call", "error", err, "call_id", callID)
+		} else {
+			lifecycleSubject := fmt.Sprintf("orbit.call.%s.lifecycle", callID)
+			s.nats.Publish(lifecycleSubject, "call_ended", map[string]interface{}{
+				"call_id":          callID,
+				"user_id":          userID,
+				"reason":           "hangup",
+				"duration_seconds": durationSeconds,
+			}, memberIDs, userID.String())
+			s.logger.Info("group call auto-ended (last leaver)", "call_id", callID, "status", newStatus)
+		}
+	}
+
+	return nil
 }
 
 // AcceptCall accepts a ringing call.

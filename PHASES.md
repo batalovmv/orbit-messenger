@@ -983,7 +983,43 @@ Signaling: WebSocket через gateway
 - [x] `ApiUpdatePhoneCallPeerState` added to `ApiUpdate` union
 
 
-#### Stage 3: Pion SFU (группы) ⏳
+#### Stage 3: Pion SFU (группы) ⏳ (initial implementation, awaiting QA)
+
+**Backend (services/calls):**
+- [x] E3.B1 `services/calls/go.mod` — добавлен `pion/webrtc/v4` v4.0.7, `pion/rtp`, `pion/rtcp`, `gofiber/contrib/websocket`
+- [x] E3.B2 `internal/webrtc/sfu.go` — `SFU` со shared MediaEngine (Opus + VP8), `GetOrCreateRoom`, `CloseRoom`, `StartCleanupLoop` (drops empty rooms каждые 30s)
+- [x] E3.B3 `internal/webrtc/room.go` — `Room` с `peers`, `localTracks`, `SignalAllPeers` (port of canonical Pion sfu-ws), `dispatchKeyFrame` (PLI на каждом renegotiate)
+- [x] E3.B4 `internal/webrtc/peer.go` — `Peer` с server-driven offer flow: `OnTrack` копирует RTP в `TrackLocalStaticRTP` и публикует в Room, `OnICECandidate` шлёт candidate в WS, `OnConnectionStateChange` тригерит cleanup при failed/closed/disconnected
+- [x] E3.B9 `internal/webrtc/codec.go` — MediaEngine с Opus (PT 111) + VP8 (PT 96)
+- [x] E3.B5 `internal/handler/sfu_handler.go` — `GET /calls/:id/sfu-ws` (fiber websocket), валидирует X-User-ID, дёргает `JoinGroupCall` на upgrade, `LeaveGroupCall` на disconnect, auto-CloseRoom если последний peer
+- [x] E3.B7 `call_service.go` `CreateCall` — для `mode='group'` устанавливает `SfuWsURL = /api/v1/calls/{id}/sfu-ws` в response
+- [x] `JoinGroupCall(callID, userID)` service метод — IDOR-проверка, ringing→active промоушен на первом join не-инициатора, `participants.Add`, NATS `call_participant_joined`
+- [x] `LeaveGroupCall(callID, userID, endIfEmpty)` service метод — `Remove`, NATS `call_participant_left`, auto-end (status=ended/missed) когда `endIfEmpty && remaining=0`
+- [x] REST endpoints: `POST /calls/:id/join`, `DELETE /calls/:id/leave`
+- [x] E3.B8 `cmd/main.go` — `sfu.NewSFU`, `sfu.StartCleanupLoop`, регистрация `SFUHandler` за `RequireInternalToken` middleware
+- [x] E3.B10 — disconnect handling через `OnConnectionStateChange` + Room.attemptSync auto-detect closed PCs, NATS publish через `LeaveGroupCall`
+- [x] Smoke-тесты: `internal/webrtc/sfu_test.go` — TestSFU_RoomLifecycle, TestSFU_CleanupEmptyRooms, TestPeer_NewAndClose, TestRoom_PeerCountAfterRemove (4 passing)
+- [x] Rate limiting: SFU WS endpoint защищён в gateway отдельным rate limit (10 connect/min/IP, ключ `sfu-ws`)
+
+**Backend (services/gateway):**
+- [x] E3.B6 `internal/handler/sfu_proxy.go` — bidirectional WebSocket proxy `/api/v1/calls/:id/sfu-ws` → calls:8084
+- [x] Auth-frame паттерн (browser не может ставить Authorization headers): client шлёт `{type:"auth", data:{token}}`, gateway переиспользует `ws.ValidateToken` с jwt_blacklist + jwt_cache
+- [x] После auth_ok gateway dial calls service через `fasthttp/websocket.Dialer` с `X-User-ID` + `X-Internal-Token`, две goroutine bidirectional pump
+- [x] `cmd/main.go` — registration перед обычным `/calls/*` HTTP proxy, исключён `jwtMW` (auth по фрейму)
+- [x] Экспортирован `ws.ValidateToken` для переиспользования в SFU proxy
+
+**Frontend (web):**
+- [x] E3.F2 `web/src/lib/secret-sauce/sfu.ts` — Saturn SFU client: `joinSfuCall` (open WS, send auth frame, accept first server-driven offer, attach local media, send answer), `leaveSfuCall`, `toggleSfuMute/Video/ScreenShare` (replaceTrack для screen share без renegotiate), single RTCPeerConnection
+- [x] E3.F1 `api/saturn/methods/calls.ts` — `createGroupCall` (POST /calls mode='group'), `joinGroupCall` (REST join + sfu.joinSfuCall с ICE servers), `leaveGroupCall` (sfu.leaveSfuCall + REST DELETE), legacy `getGroupCall`/`fetchGroupCallParticipants` оставлены no-op для совместимости
+- [x] `client.ts` — экспортированы `getAccessToken`/`getBaseUrl` для построения SFU WS URL
+- [x] E3.F3 `api/saturn/updates/wsHandler.ts` — `handleCallParticipantJoined` / `handleCallParticipantLeft` дёргают `updateGroupCallParticipants` (обновляют participant grid в group call panel)
+- [x] tsc check — без новых ошибок (12 pre-existing baseline)
+
+**Не входит в Stage 3 (отложено):**
+- [ ] Глубокая интеграция existing TG Web A `GroupCall.tsx` UI с Saturn SFU streams (E3.F4) — текущий код подаёт `updateGroupCallParticipants` события, но участок UI map которая показывает video grid от Colibri-формата remains untouched. Для production нужен либо адаптер `groupCalls` reducer'а к новой schema, либо новый минимальный grid компонент. Логика handshake и backend полностью готовы — это вопрос UI wiring.
+- [ ] Live-тест 3 окнами Chrome incognito по сценариям 11-13 из docs/calls-plan.md — backend готов к QA, требует ручного прогона
+- [ ] Auto-routing P2P vs SFU на frontend (selectedChat.member_count > 2 → mode='group') — поле сейчас выставляется явно создателем, нужна обвязка в `requestCall`
+
 #### Stage 4: Push для закрытого app ⏳
 #### Stage 5: Polish (quality indicator + rating) ⏳
 
