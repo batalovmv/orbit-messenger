@@ -22,7 +22,10 @@ func sanitizeProxyPath(rawPath string) string {
 	p := strings.TrimPrefix(rawPath, "/api/v1")
 	p = path.Clean(p)
 	if p == "." || p == "" {
-		return "/"
+		p = "/"
+	}
+	if strings.Contains(p, "/internal") {
+		return ""
 	}
 	return p
 }
@@ -139,7 +142,11 @@ func AuthProxyHandler(cfg ProxyConfig) fiber.Handler {
 	}
 
 	return func(c *fiber.Ctx) error {
-		url := cfg.AuthServiceURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.AuthServiceURL + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -198,7 +205,11 @@ func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
 		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB
 	}
 	return func(c *fiber.Ctx) error {
-		url := mediaURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := mediaURL + proxyPath
 		if err := doProxy(c, url, client, frontendURL); err != nil {
 			slog.Error("media public proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
@@ -223,7 +234,11 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		MaxResponseBodySize: 100 * 1024 * 1024, // 100MB response (for large file info etc)
 	}
 	apiGroup.All("/media/*", func(c *fiber.Ctx) error {
-		url := cfg.MediaServiceURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.MediaServiceURL + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -242,7 +257,11 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		WriteTimeout: 15 * time.Second,
 	}
 	apiGroup.All("/calls/*", func(c *fiber.Ctx) error {
-		url := cfg.CallsServiceURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.CallsServiceURL + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -255,7 +274,11 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		return nil
 	})
 	apiGroup.All("/calls", func(c *fiber.Ctx) error {
-		url := cfg.CallsServiceURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.CallsServiceURL + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
@@ -270,14 +293,16 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 
 	// Block /internal/* paths — these are service-to-service only, not for user traffic
 	apiGroup.All("/internal/*", func(c *fiber.Ctx) error {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"error": "forbidden", "message": "Internal endpoints are not accessible via API", "status": 403,
-		})
+		return response.Error(c, apperror.NotFound("Not found"))
 	})
 
 	// Messaging routes: proxy with JWT already validated by middleware
 	apiGroup.All("/*", func(c *fiber.Ctx) error {
-		url := cfg.MessagingServiceURL + sanitizeProxyPath(c.Path())
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.MessagingServiceURL + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -115,6 +116,88 @@ func TestRegisterAuthProxyRoutes_UsesExpectedMiddlewareBuckets(t *testing.T) {
 
 			if payload.Path != tt.expectedPath {
 				t.Fatalf("expected upstream path %q, got %q", tt.expectedPath, payload.Path)
+			}
+		})
+	}
+}
+
+func TestSetupProxy_BlocksInternalPathsAfterSanitization(t *testing.T) {
+	var hits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(proxyTestResponse{
+			Method: r.Method,
+			Path:   r.URL.Path,
+		})
+	}))
+	defer upstream.Close()
+
+	app := fiber.New()
+	apiGroup := app.Group("/api/v1")
+	SetupProxy(app, apiGroup, ProxyConfig{
+		MessagingServiceURL: upstream.URL,
+		MediaServiceURL:     upstream.URL,
+		CallsServiceURL:     upstream.URL,
+		FrontendURL:         "http://localhost:3000",
+		InternalSecret:      "secret",
+	})
+
+	tests := []struct {
+		name         string
+		path         string
+		wantStatus   int
+		wantUpstream int32
+		wantPath     string
+	}{
+		{
+			name:         "dot segment breakout blocked",
+			path:         "/api/v1/chats/../../internal/foo",
+			wantStatus:   http.StatusNotFound,
+			wantUpstream: 0,
+		},
+		{
+			name:         "direct internal path blocked",
+			path:         "/api/v1/internal/foo",
+			wantStatus:   http.StatusNotFound,
+			wantUpstream: 0,
+		},
+		{
+			name:         "legit path proxied",
+			path:         "/api/v1/chats/legit",
+			wantStatus:   http.StatusOK,
+			wantUpstream: 1,
+			wantPath:     "/chats/legit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hits.Store(0)
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+
+			resp, err := app.Test(req, -1)
+			if err != nil {
+				t.Fatalf("app.Test: %v", err)
+			}
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Fatalf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
+			}
+			if got := hits.Load(); got != tt.wantUpstream {
+				t.Fatalf("expected upstream hits %d, got %d", tt.wantUpstream, got)
+			}
+
+			if tt.wantPath == "" {
+				return
+			}
+
+			var payload proxyTestResponse
+			if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if payload.Path != tt.wantPath {
+				t.Fatalf("expected upstream path %q, got %q", tt.wantPath, payload.Path)
 			}
 		})
 	}
