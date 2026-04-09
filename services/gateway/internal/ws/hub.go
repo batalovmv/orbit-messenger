@@ -156,6 +156,21 @@ func (h *Hub) SendToUsers(userIDs []string, msg interface{}, excludeUserID strin
 	}
 }
 
+// CloseUserConnections closes every active connection for the user with a policy-violation frame.
+func (h *Hub) CloseUserConnections(userID string) {
+	h.mu.RLock()
+	src := h.conns[userID]
+	snapshot := make([]*Conn, len(src))
+	copy(snapshot, src)
+	h.mu.RUnlock()
+
+	for _, conn := range snapshot {
+		if err := conn.Close(closeCodePolicyViolation, "account deactivated"); err != nil {
+			slog.Warn("ws: close user connection failed", "user_id", userID, "error", err)
+		}
+	}
+}
+
 // OnlineUserIDs returns the list of currently connected user IDs.
 func (h *Hub) OnlineUserIDs() []string {
 	h.mu.RLock()

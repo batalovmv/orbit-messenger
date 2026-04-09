@@ -390,6 +390,17 @@ func newCapturingConn(userID string, deliveries chan Envelope) *Conn {
 	}
 }
 
+func newClosableConn(userID string, closes chan string) *Conn {
+	return &Conn{
+		UserID: userID,
+		done:   make(chan struct{}),
+		closeFn: func(code int, text string) error {
+			closes <- fmt.Sprintf("%d:%s", code, text)
+			return nil
+		},
+	}
+}
+
 func marshalTestNATSEvent(t *testing.T, event NATSEvent) []byte {
 	t.Helper()
 
@@ -517,6 +528,51 @@ func TestSubscriber_HandleEvent_CallIncomingPushesOnlyToOfflineRecipients(t *tes
 	}
 	if body.CallType != "video" || body.CallMode != "group" || body.ChatID != chatID {
 		t.Fatalf("unexpected call push payload fields: %+v", body)
+	}
+}
+
+func TestSubscriber_HandleEvent_UserDeactivatedClosesOnlyMatchingConnections(t *testing.T) {
+	targetUserID := uuid.New().String()
+	otherUserID := uuid.New().String()
+
+	targetCloseOne := make(chan string, 1)
+	targetCloseTwo := make(chan string, 1)
+	otherClose := make(chan string, 1)
+
+	hub := NewHub()
+	hub.Register(newClosableConn(targetUserID, targetCloseOne))
+	hub.Register(newClosableConn(targetUserID, targetCloseTwo))
+	hub.Register(newClosableConn(otherUserID, otherClose))
+
+	subscriber := NewSubscriber(hub, nil, "", "")
+
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event:     EventUserDeactivated,
+		Data:      json.RawMessage(fmt.Sprintf(`{"user_id":"%s"}`, targetUserID)),
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	subscriber.handleEvent(&nats.Msg{
+		Subject: fmt.Sprintf("orbit.user.%s.deactivated", targetUserID),
+		Data:    payload,
+	})
+
+	wantClose := fmt.Sprintf("%d:%s", closeCodePolicyViolation, "account deactivated")
+	for i, closes := range []<-chan string{targetCloseOne, targetCloseTwo} {
+		select {
+		case got := <-closes:
+			if got != wantClose {
+				t.Fatalf("target close %d mismatch: want %q, got %q", i, wantClose, got)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for close on target connection %d", i)
+		}
+	}
+
+	select {
+	case got := <-otherClose:
+		t.Fatalf("unexpected close for other user: %q", got)
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 

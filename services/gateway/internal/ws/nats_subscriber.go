@@ -62,6 +62,7 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.messages.read",
 		"orbit.chat.*.typing",
 		"orbit.user.*.status",
+		"orbit.user.*.deactivated",
 		"orbit.chat.*.lifecycle",
 		"orbit.chat.*.member.*",
 		"orbit.user.*.mention",
@@ -485,6 +486,22 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
+	if event.Event == EventUserDeactivated {
+		userID := extractUserIDFromUserSubject(msg.Subject)
+		if userID == "" {
+			var data struct {
+				UserID string `json:"user_id"`
+			}
+			if err := json.Unmarshal(event.Data, &data); err == nil {
+				userID = data.UserID
+			}
+		}
+		if userID != "" {
+			s.hub.CloseUserConnections(userID)
+		}
+		return
+	}
+
 	// Route to specific members (messaging service provides member_ids for chat events).
 	// Send to ALL members including the sender — the frontend handles dedup for own messages
 	// via pendingSendUuids. Excluding the sender here would block delivery to their other
@@ -664,6 +681,18 @@ func extractUserIDFromMediaSubject(subject string) string {
 	if len(parts) >= 3 && parts[0] == "orbit" && parts[1] == "media" {
 		if _, err := uuid.Parse(parts[2]); err != nil {
 			slog.Warn("nats: invalid user ID in media subject, dropping", "subject", subject)
+			return ""
+		}
+		return parts[2]
+	}
+	return ""
+}
+
+func extractUserIDFromUserSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) >= 4 && parts[0] == "orbit" && parts[1] == "user" {
+		if _, err := uuid.Parse(parts[2]); err != nil {
+			slog.Warn("nats: invalid user ID in user subject, dropping", "subject", subject)
 			return ""
 		}
 		return parts[2]

@@ -17,6 +17,7 @@ const (
 	EventTyping          = "typing"
 	EventStopTyping      = "stop_typing"
 	EventUserStatus      = "user_status"
+	EventUserDeactivated = "user_deactivated"
 	EventPong            = "pong"
 
 	EventChatCreated       = "chat_created"
