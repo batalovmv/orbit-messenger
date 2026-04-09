@@ -85,6 +85,7 @@ export function iceServersToConnections(servers: ICEServer[]): ApiPhoneCallConne
 // Store the current active call ID for signaling
 let activeCallId: string | undefined;
 let activeCallPeerId: string | undefined;
+let activeCallMode: 'p2p' | 'group' | undefined;
 
 export function getActiveCallId() {
   return activeCallId;
@@ -100,6 +101,14 @@ export function setActiveCallPeerId(id: string | undefined) {
 
 export function getActiveCallPeerId() {
   return activeCallPeerId;
+}
+
+export function setActiveCallMode(mode: 'p2p' | 'group' | undefined) {
+  activeCallMode = mode;
+}
+
+export function getActiveCallMode() {
+  return activeCallMode;
 }
 
 // REST methods
@@ -317,6 +326,7 @@ export async function requestCall({
 
   activeCallId = call.id;
   activeCallPeerId = user.id;
+  activeCallMode = 'p2p';
 
   // Fetch ICE servers for WebRTC connection
   const iceServers = await fetchICEServers({ callId: call.id });
@@ -542,6 +552,7 @@ export async function joinGroupCall(args?: { call?: { id?: string; type?: string
   }
 
   activeCallId = callId;
+  activeCallMode = 'group';
   return undefined;
 }
 
@@ -563,6 +574,7 @@ export async function leaveGroupCall(args?: { call?: { id?: string }; isPageUnlo
   }
   if (activeCallId === callId) {
     activeCallId = undefined;
+    activeCallMode = undefined;
   }
   return undefined;
 }

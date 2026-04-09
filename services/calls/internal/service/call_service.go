@@ -93,9 +93,20 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 		call.SfuWsURL = fmt.Sprintf("/api/v1/calls/%s/sfu-ws", call.ID)
 	}
 
-	// Publish call_incoming to other members
+	// Publish call_incoming to other members.
+	// If the caller didn't supply member_ids (e.g. group calls initiated via API),
+	// auto-fetch from the chat_members table so the notification always reaches everyone.
+	memberIDs := req.MemberIDs
+	if len(memberIDs) == 0 {
+		fetched, fetchErr := s.calls.GetChatMemberIDs(ctx, req.ChatID)
+		if fetchErr != nil {
+			s.logger.Warn("failed to fetch chat member ids for call_incoming", "error", fetchErr, "call_id", call.ID)
+		} else {
+			memberIDs = fetched
+		}
+	}
 	subject := fmt.Sprintf("orbit.call.%s.lifecycle", call.ID)
-	s.nats.Publish(subject, "call_incoming", call, req.MemberIDs, initiatorID.String())
+	s.nats.Publish(subject, "call_incoming", call, memberIDs, initiatorID.String())
 
 	s.logger.Info("call created", "call_id", call.ID, "chat_id", req.ChatID, "type", req.Type, "mode", req.Mode)
 	return call, nil

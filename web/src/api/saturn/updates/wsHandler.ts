@@ -1,9 +1,10 @@
+import type { ApiGroupCall } from '../../types';
 import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll, getMessageSeqNum } from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
-import { setActiveCallId, setActiveCallPeerId } from '../methods/calls';
+import { getActiveCallMode, setActiveCallId, setActiveCallMode, setActiveCallPeerId } from '../methods/calls';
 import { sendApiUpdate } from './apiUpdateEmitter';
 
 let currentUserId: string | undefined;
@@ -515,15 +516,16 @@ function handleCallIncoming(data: Record<string, unknown>) {
   const callId = (call.id || data.call_id) as string;
   const initiatorId = (call.initiator_id) as string;
   const isVideo = call.type === 'video';
+  const mode = (call.mode as string) || 'p2p';
+  const chatId = call.chat_id as string | undefined;
 
   if (!callId || !initiatorId) return;
 
   // Don't show incoming call if we initiated it
   if (initiatorId === currentUserId) return;
 
-  // Set active call state for signaling
   setActiveCallId(callId);
-  setActiveCallPeerId(initiatorId);
+  setActiveCallMode(mode === 'group' ? 'group' : 'p2p');
 
   // Vibrate on incoming — works on mobile PWA; desktop browsers may ignore it
   // silently if the tab isn't focused. Wrapped in try to guard against browsers
@@ -536,6 +538,33 @@ function handleCallIncoming(data: Record<string, unknown>) {
     }
   }
 
+  if (mode === 'group') {
+    // Register the group call in global state so GroupCallTopPane shows a "Join" banner.
+    sendApiUpdate({
+      '@type': 'updateGroupCall',
+      call: {
+        id: callId,
+        accessHash: '',
+        participantsCount: 1,
+        participants: {} as ApiGroupCall['participants'],
+        connectionState: 'disconnected',
+        version: 0,
+        chatId: chatId || '',
+        isLoaded: true,
+      },
+    });
+    if (chatId) {
+      sendApiUpdate({
+        '@type': 'updateGroupCallChatId',
+        call: { id: callId, accessHash: '' },
+        chatId,
+      });
+    }
+    return;
+  }
+
+  // p2p incoming call path
+  setActiveCallPeerId(initiatorId);
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
@@ -609,6 +638,26 @@ function handleCallEnded(data: Record<string, unknown>) {
 
   if (!callId) return;
 
+  // For group calls, tear down via the group call state machine.
+  // getActiveCallMode() reflects what handleCallIncoming (or joinGroupCall) set.
+  const callMode = (data.mode as string) || getActiveCallMode();
+  if (callMode === 'group') {
+    setActiveCallMode(undefined);
+    setActiveCallId(undefined);
+    sendApiUpdate({
+      '@type': 'updateGroupCall',
+      call: {
+        id: callId,
+        accessHash: '',
+        participantsCount: 0,
+        participants: {} as ApiGroupCall['participants'],
+        connectionState: 'discarded',
+        version: 0,
+      },
+    });
+    return;
+  }
+
   sendApiUpdate({
     '@type': 'updatePhoneCall',
     call: {
@@ -650,7 +699,8 @@ function handleCallParticipantJoined(data: Record<string, unknown>) {
   sendApiUpdate({
     '@type': 'updateGroupCallParticipants',
     groupCallId: callId,
-    participants: [{ userId, isJoined: true }],
+    // GroupCallParticipant.id is the user ID string
+    participants: [{ id: userId, hasJustJoined: true, source: 0, date: new Date() }],
     nextOffset: undefined,
   } as any);
 }
@@ -664,7 +714,7 @@ function handleCallParticipantLeft(data: Record<string, unknown>) {
   sendApiUpdate({
     '@type': 'updateGroupCallParticipants',
     groupCallId: callId,
-    participants: [{ userId, isJoined: false, isLeft: true }],
+    participants: [{ id: userId, isLeft: true, source: 0, date: new Date() }],
     nextOffset: undefined,
   } as any);
 }

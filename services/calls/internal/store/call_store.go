@@ -24,6 +24,8 @@ type CallStore interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	// IsUserInChat checks if a user is a member of a chat (shared DB with messaging service).
 	IsUserInChat(ctx context.Context, chatID, userID uuid.UUID) (bool, error)
+	// GetChatMemberIDs returns all user IDs that are members of the given chat.
+	GetChatMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
 	// ExpireRinging marks all ringing calls older than threshold as missed and
 	// returns their rows so the caller can publish call_ended events.
 	ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error)
@@ -119,6 +121,26 @@ func (s *callStore) IsUserInChat(ctx context.Context, chatID, userID uuid.UUID) 
 		return false, fmt.Errorf("is user in chat: %w", err)
 	}
 	return exists, nil
+}
+
+func (s *callStore) GetChatMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT user_id FROM chat_members WHERE chat_id = $1`,
+		chatID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get chat member ids: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan member id: %w", err)
+		}
+		ids = append(ids, id.String())
+	}
+	return ids, rows.Err()
 }
 
 func (s *callStore) ExpireRinging(ctx context.Context, threshold time.Duration) ([]model.Call, error) {
