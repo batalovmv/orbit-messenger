@@ -725,9 +725,7 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		body.Close()
 		if n > 0 {
 			detectedMIME := http.DetectContentType(sniffBuf[:n])
-			// Only reject if detected type is concrete (not application/octet-stream)
-			// and doesn't match the allowed list for this media type
-			if detectedMIME != "application/octet-stream" && !model.AllowedMIME(meta.MediaType, detectedMIME) {
+			if !isAllowedChunkedMIME(meta.MediaType, meta.MimeType, detectedMIME) {
 				if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
 					slog.Error("cleanup R2 after MIME mismatch", "key", meta.R2Key, "error", delErr)
 				}
@@ -765,6 +763,16 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 
 	s.publishMediaReady(m.ID)
 	return m, nil
+}
+
+func isAllowedChunkedMIME(mediaType, declaredMIME, detectedMIME string) bool {
+	if mediaType == model.MediaTypeFile {
+		return detectedMIME == "application/octet-stream" || model.AllowedMIME(mediaType, detectedMIME)
+	}
+	if detectedMIME == "application/octet-stream" {
+		return declaredMIME == "application/octet-stream"
+	}
+	return detectedMIME == declaredMIME && model.AllowedMIME(mediaType, detectedMIME)
 }
 
 // StartCleanupLoop runs orphan cleanup every interval.

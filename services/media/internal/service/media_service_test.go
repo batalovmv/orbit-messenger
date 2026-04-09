@@ -80,3 +80,15 @@ func TestInitChunkedUpload_OverQuotaRejected(t *testing.T) {
 		t.Fatalf("expected 429, got %d", appErr.Status)
 	}
 }
+
+func TestIsAllowedChunkedMIME_RejectsUnknownMagicDeclaredAsImage(t *testing.T) {
+	if isAllowedChunkedMIME("photo", "image/jpeg", "application/octet-stream") {
+		t.Fatal("expected unknown-magic image declaration to be rejected")
+	}
+}
+
+func TestIsAllowedChunkedMIME_FileAllowsOctetStreamFallback(t *testing.T) {
+	if !isAllowedChunkedMIME("file", "application/octet-stream", "application/octet-stream") {
+		t.Fatal("expected generic file octet-stream to be allowed")
+	}
+}
