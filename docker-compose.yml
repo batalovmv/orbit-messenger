@@ -144,6 +144,9 @@ services:
       ORBIT_ADMIN_RESET_KEY: ${ORBIT_ADMIN_RESET_KEY}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MIGRATIONS_DIR: /migrations
+    volumes:
+      - ./migrations:/migrations:ro
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

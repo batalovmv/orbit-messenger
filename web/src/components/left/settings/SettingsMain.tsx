@@ -201,7 +201,7 @@ export default memo(withGlobal<OwnProps>(
       sessionCount: global.activeSessions.orderedHashes.length,
       currentUserId,
       canBuyPremium: !selectIsPremiumPurchaseBlocked(global),
-      isSaturnAdmin: global.saturnRole === 'admin',
+      isSaturnAdmin: global.saturnRole === 'admin' || global.saturnRole === 'superadmin',
     };
   },
 )(SettingsMain));

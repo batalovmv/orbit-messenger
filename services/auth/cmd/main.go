@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/migrator"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/auth/internal/handler"
 	"github.com/mst-corp/orbit/services/auth/internal/service"
@@ -88,6 +89,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// Run pending SQL migrations from MIGRATIONS_DIR (default: /migrations).
+	// Tracked in schema_migrations; idempotent on restart.
+	migrationsDir := config.EnvOr("MIGRATIONS_DIR", "/migrations")
+	if _, statErr := os.Stat(migrationsDir); statErr == nil {
+		if mErr := migrator.Run(ctx, pool, migrationsDir); mErr != nil {
+			slog.Error("migrator failed", "error", mErr)
+			os.Exit(1)
+		}
+	} else {
+		slog.Warn("migrations directory not found, skipping migrator", "dir", migrationsDir)
+	}
 
 	// Redis
 	opts, err := redis.ParseURL(redisURL)

@@ -266,7 +266,7 @@ func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPasswo
 	if err != nil {
 		return fmt.Errorf("get user: %w", err)
 	}
-	if u == nil || u.Role != "admin" {
+	if u == nil || (u.Role != "admin" && u.Role != "superadmin") {
 		return apperror.NotFound("Admin not found")
 	}
 

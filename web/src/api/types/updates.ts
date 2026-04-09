@@ -116,7 +116,7 @@ export type ApiUpdateCurrentUser = {
   '@type': 'updateCurrentUser';
   currentUser: ApiUser;
   currentUserFullInfo: ApiUserFullInfo;
-  saturnRole?: 'admin' | 'member';
+  saturnRole?: 'superadmin' | 'compliance' | 'admin' | 'member';
 };
 
 export type ApiUpdateChat = {
