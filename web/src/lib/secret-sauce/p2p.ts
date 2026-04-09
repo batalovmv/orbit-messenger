@@ -35,6 +35,10 @@ type P2pState = {
   audio: HTMLAudioElement;
   gotInitialSetup?: boolean;
   facingMode?: VideoFacingModeEnum;
+  // True when the camera was enabled right before the user started a
+  // screen-share, so that stopping the share can automatically restore it.
+  videoEnabledBeforePresentation?: boolean;
+  currentCameraDeviceId?: string;
 };
 
 let state: P2pState | undefined;
@@ -48,10 +52,22 @@ export function getStreams() {
   return state?.streams;
 }
 
+// Publish the LOCAL media state — derived from the owning MediaStreams — so
+// that PhoneCall.tsx buttons can drive their state from global.phoneCall.
 function updateStreams() {
-  state?.onUpdate({
-    ...state.mediaState,
+  if (!state) return;
+  const { streams, onUpdate } = state;
+  const isMuted = !(streams.ownAudio?.getTracks()[0]?.enabled);
+  const videoState = streams.ownVideo?.getTracks()[0]?.enabled ? 'active' : 'inactive';
+  const screencastState = streams.ownPresentation?.getTracks()[0]?.enabled ? 'active' : 'inactive';
+
+  onUpdate({
     '@type': 'updatePhoneCallMediaState',
+    isMuted,
+    videoState,
+    screencastState,
+    videoRotation: 0,
+    isBatteryLow: false,
   });
 }
 
@@ -74,24 +90,60 @@ function getUserStream(streamType: StreamType, facing: VideoFacingModeEnum = 'us
   });
 }
 
+async function listCameraDeviceIds(): Promise<string[]> {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((d) => d.kind === 'videoinput').map((d) => d.deviceId).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export async function switchCameraInputP2p() {
-  if (!state || !state.facingMode) {
+  if (!state) {
     return;
   }
 
   const stream = state.streams.ownVideo;
-
   if (!stream) return;
 
   const track = stream.getTracks()[0];
-
   if (!track) {
     return;
   }
 
   const sender = state.connection.getSenders().find((l) => track.id === l.track?.id);
-
   if (!sender) {
+    return;
+  }
+
+  // Prefer explicit device cycling on desktops / devices with multiple webcams.
+  // Fall back to mobile facingMode toggle when enumeration is empty or fails.
+  const deviceIds = await listCameraDeviceIds();
+  if (deviceIds.length > 1) {
+    const settings = typeof track.getSettings === 'function' ? track.getSettings() : {} as MediaTrackSettings;
+    const activeId = state.currentCameraDeviceId || settings.deviceId || '';
+    const activeIdx = deviceIds.indexOf(activeId);
+    const nextDeviceId = deviceIds[(activeIdx + 1) % deviceIds.length];
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { deviceId: { exact: nextDeviceId } },
+      });
+      track.stop();
+      await sender.replaceTrack(newStream.getTracks()[0]);
+      state.streams.ownVideo = newStream;
+      state.currentCameraDeviceId = nextDeviceId;
+      updateStreams();
+      sendMediaState();
+      return;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[p2p] switchCameraInputP2p deviceId path failed, falling back', err);
+    }
+  }
+
+  if (!state.facingMode) {
     return;
   }
 
@@ -99,11 +151,14 @@ export async function switchCameraInputP2p() {
   try {
     const newStream = await getUserStream('video', state.facingMode);
 
+    track.stop();
     await sender.replaceTrack(newStream.getTracks()[0]);
     state.streams.ownVideo = newStream;
     updateStreams();
-  } catch (e) {
-
+    sendMediaState();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[p2p] switchCameraInputP2p facingMode path failed', err);
   }
 }
 
@@ -131,8 +186,17 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
   // throws — otherwise the mic/camera LED stays on and the device is
   // locked until the tab is closed.
   let acquiredStream: MediaStream | undefined;
+  let shouldRestoreCameraAfter = false;
   try {
     if (value && !track.enabled) {
+      // Starting a screen share: remember whether the camera was live so we can
+      // bring it back automatically once the user stops sharing the screen.
+      if (streamType === 'presentation') {
+        state.videoEnabledBeforePresentation = Boolean(
+          state.streams.ownVideo?.getTracks()[0].enabled,
+        );
+      }
+
       const newStream = await getUserStream(streamType);
       acquiredStream = newStream;
       newStream.getTracks()[0].onended = () => {
@@ -144,6 +208,10 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
       } else if (streamType === 'video') {
         state.streams.ownVideo = newStream;
         state.facingMode = 'user';
+        const videoTrack = newStream.getTracks()[0];
+        state.currentCameraDeviceId = typeof videoTrack.getSettings === 'function'
+          ? videoTrack.getSettings().deviceId
+          : undefined;
       } else {
         state.streams.ownPresentation = newStream;
       }
@@ -151,9 +219,6 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
       if (streamType === 'video' || streamType === 'presentation') {
         toggleStreamP2p(streamType === 'video' ? 'presentation' : 'video', false);
       }
-      // if (streamType === 'video') {
-      //   state.facingMode = 'user';
-      // }
     } else if (!value && track.enabled) {
       track.stop();
       const newStream = streamType === 'audio' ? state.silence
@@ -166,15 +231,23 @@ export async function toggleStreamP2p(streamType: StreamType, value: boolean | u
         state.streams.ownAudio = newStream;
       } else if (streamType === 'video') {
         state.streams.ownVideo = newStream;
+        state.currentCameraDeviceId = undefined;
       } else {
         state.streams.ownPresentation = newStream;
+        if (state.videoEnabledBeforePresentation) {
+          shouldRestoreCameraAfter = true;
+          state.videoEnabledBeforePresentation = false;
+        }
       }
-      // if (streamType === 'video') {
-      //   state.facingMode = undefined;
-      // }
     }
     updateStreams();
     sendMediaState();
+
+    if (shouldRestoreCameraAfter) {
+      // Kick off camera restart after the current toggle settles; failure is
+      // swallowed because losing the auto-restore is non-fatal.
+      void toggleStreamP2p('video', true).catch(() => undefined);
+    }
   } catch (err) {
     // If getUserMedia or replaceTrack threw, we may hold an orphaned stream
     // that the browser never released. Stop its tracks so the mic/camera LED
@@ -419,9 +492,15 @@ export async function processSignalingMessage(message: P2pMessage) {
 
   switch (message['@type']) {
     case 'MediaState': {
+      // Peer's MediaState arrived over the data channel — publish it as a
+      // dedicated peer-state update so the UI can show mute/screen-share
+      // indicators without overwriting our own local state.
       state.mediaState = message;
-      updateStreams();
-      sendMediaState();
+      state.onUpdate({
+        '@type': 'updatePhoneCallPeerState',
+        peerIsMuted: Boolean(message.isMuted),
+        peerIsScreenSharing: message.screencastState === 'active',
+      });
       break;
     }
     case 'Candidates': {

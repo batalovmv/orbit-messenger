@@ -65,6 +65,10 @@ export interface ApiPhoneCall {
   videoRotation?: VideoRotation;
   screencastState?: VideoState;
   isBatteryLow?: boolean;
+
+  // Remote peer's media state (Stage 2 — media state sync)
+  peerIsMuted?: boolean;
+  peerIsScreenSharing?: boolean;
 }
 
 export type ApiPhoneCallDiscardReason = 'missed' | 'disconnect' | 'hangup' | 'busy';

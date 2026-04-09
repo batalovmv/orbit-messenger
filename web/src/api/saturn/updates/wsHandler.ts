@@ -175,8 +175,10 @@ async function handleWsMessage(msg: SaturnWsMessage) {
       handleCallMuteChanged(msg.data);
       break;
     case 'screen_share_started':
+      handleScreenShareChanged(msg.data, true);
+      break;
     case 'screen_share_stopped':
-      // Screen share state changes — future implementation
+      handleScreenShareChanged(msg.data, false);
       break;
     case 'webrtc_offer':
     case 'webrtc_answer':
@@ -615,11 +617,27 @@ function handleCallMuteChanged(data: Record<string, unknown>) {
 
   if (!callId || !userId) return;
 
+  // Echo guard — our own mute is handled locally by the toggleStreamP2p path.
+  if (userId === currentUserId) return;
+
   sendApiUpdate({
-    '@type': 'updatePhoneCallMediaState',
-    visId: callId,
-    visAccessHash: '',
-    visIsMuted: isMuted,
+    '@type': 'updatePhoneCallPeerState',
+    peerIsMuted: isMuted,
+  } as any);
+}
+
+function handleScreenShareChanged(data: Record<string, unknown>, isActive: boolean) {
+  const callId = data.call_id as string;
+  const userId = data.user_id as string;
+
+  if (!callId || !userId) return;
+
+  // Only react to the remote peer — the local user already knows their own state.
+  if (userId === currentUserId) return;
+
+  sendApiUpdate({
+    '@type': 'updatePhoneCallPeerState',
+    peerIsScreenSharing: isActive,
   } as any);
 }
 

@@ -952,7 +952,25 @@ Signaling: WebSocket через gateway
 - [x] `wsHandler.ts`: `navigator.vibrate([300,200,300,200,300])` при incoming call
 - [x] `calls.async.ts`: `updatePhoneCallConnectionState` — не hangup на `disconnected` (даёт шанс ICE restart), только на `closed`/`failed`
 
-#### Stage 2: Media state sync ⏳
+#### Stage 2: Media state sync ✅
+
+**Frontend:**
+- [x] `p2p.ts`: `updateStreams()` publishes LOCAL media state (derived from own MediaStreams) as `updatePhoneCallMediaState` — no longer clobbered by peer state
+- [x] `p2p.ts`: peer `MediaState` data-channel message → dispatched as `updatePhoneCallPeerState` (peerIsMuted / peerIsScreenSharing)
+- [x] `p2p.ts`: auto-restore camera track when user stops screen share (remembers `videoEnabledBeforePresentation`)
+- [x] `p2p.ts`: `switchCameraInputP2p` cycles through `enumerateDevices()` video inputs on desktops with multiple webcams, falls back to `facingMode` toggle on mobile
+- [x] `p2p.ts`: new `state.currentCameraDeviceId` tracks selected camera
+- [x] `PhoneCall.tsx`: mute/camera/screen-share buttons now read state from `phoneCall.isMuted` / `.videoState` / `.screencastState` (single source of truth, no more `getStreams()` polling for button UI)
+- [x] `PhoneCall.tsx`: `handleToggleAudio` fires REST `PUT /calls/:id/mute` after local toggle → peer gets `call_muted` WS event
+- [x] `PhoneCall.tsx`: `handleTogglePresentation` fires REST `PUT /calls/:id/screen-share/{start,stop}` after local toggle → peer gets `screen_share_*` WS event
+- [x] `PhoneCall.tsx`: peer indicators overlay — "Muted" and "Screen sharing" badges when `phoneCall.peerIsMuted` / `.peerIsScreenSharing`
+- [x] `wsHandler.ts`: `handleCallMuteChanged` dispatches `updatePhoneCallPeerState` (echo-guarded by `currentUserId`)
+- [x] `wsHandler.ts`: `handleScreenShareChanged` for `screen_share_started` / `screen_share_stopped` → peer state update
+- [x] `calls.async.ts`: new `updatePhoneCallPeerState` reducer — simple spread merge into `global.phoneCall`
+- [x] `ApiPhoneCall`: added `peerIsMuted?`, `peerIsScreenSharing?` fields
+- [x] `ApiUpdatePhoneCallPeerState` added to `ApiUpdate` union
+
+
 #### Stage 3: Pion SFU (группы) ⏳
 #### Stage 4: Push для закрытого app ⏳
 #### Stage 5: Polish (quality indicator + rating) ⏳

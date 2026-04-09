@@ -10,6 +10,11 @@ import type { ApiPhoneCall, ApiUser } from '../../../api/types';
 import {
   getStreams, IS_SCREENSHARE_SUPPORTED, switchCameraInputP2p, toggleStreamP2p,
 } from '../../../lib/secret-sauce';
+import {
+  startScreenShareApi,
+  stopScreenShareApi,
+  toggleCallMute as apiToggleCallMute,
+} from '../../../api/saturn/methods/calls';
 import { selectTabState } from '../../../global/selectors';
 import { selectPhoneCallUser } from '../../../global/selectors/calls';
 import {
@@ -160,10 +165,17 @@ const PhoneCall = ({
   const hasVideo = phoneCall?.videoState === 'active';
   const hasPresentation = phoneCall?.screencastState === 'active';
 
+  // Stage 2 — phoneCall.mediaState is the single source of truth for UI buttons.
+  // The underlying MediaStream is still read via getStreams() for the <video>
+  // tags (it doesn't live in global state), but button state is driven by
+  // the reactive global.phoneCall so toggles render immediately.
   const streams = getStreams();
-  const hasOwnAudio = streams?.ownAudio?.getTracks()[0].enabled;
-  const hasOwnPresentation = streams?.ownPresentation?.getTracks()[0].enabled;
-  const hasOwnVideo = streams?.ownVideo?.getTracks()[0].enabled;
+  const hasOwnAudio = phoneCall ? phoneCall.isMuted === false : false;
+  const hasOwnPresentation = phoneCall?.screencastState === 'active';
+  const hasOwnVideo = phoneCall?.videoState === 'active';
+
+  const peerIsMuted = Boolean(phoneCall?.peerIsMuted);
+  const peerIsScreenSharing = Boolean(phoneCall?.peerIsScreenSharing);
 
   const [isHidingPresentation, startHidingPresentation, stopHidingPresentation] = useFlag();
   const [isHidingVideo, startHidingVideo, stopHidingVideo] = useFlag();
@@ -179,9 +191,18 @@ const PhoneCall = ({
       await toggleStreamP2p('presentation');
       stopHidingPresentation();
       stopHidingVideo();
+      // Sync screen-share state with the backend so the peer gets a WS event
+      // for the badge overlay. The local stream state is the source of truth.
+      if (phoneCall?.id) {
+        const isSharing = Boolean(getStreams()?.ownPresentation?.getTracks()[0]?.enabled);
+        void (isSharing
+          ? startScreenShareApi({ callId: phoneCall.id })
+          : stopScreenShareApi({ callId: phoneCall.id }));
+      }
     }, 250);
   }, [
-    hasOwnPresentation, hasOwnVideo, startHidingPresentation, startHidingVideo, stopHidingPresentation, stopHidingVideo,
+    hasOwnPresentation, hasOwnVideo, phoneCall?.id,
+    startHidingPresentation, startHidingVideo, stopHidingPresentation, stopHidingVideo,
   ]);
 
   const handleToggleVideo = useCallback(() => {
@@ -201,8 +222,17 @@ const PhoneCall = ({
   ]);
 
   const handleToggleAudio = useCallback(() => {
-    void toggleStreamP2p('audio');
-  }, []);
+    (async () => {
+      await toggleStreamP2p('audio');
+      if (phoneCall?.id) {
+        const enabled = Boolean(getStreams()?.ownAudio?.getTracks()[0]?.enabled);
+        // Data-channel MediaState is already fired inside toggleStreamP2p; the
+        // REST call persists the state server-side and triggers the WS event
+        // the remote peer needs to render the mute indicator.
+        void apiToggleCallMute({ callId: phoneCall.id, muted: !enabled });
+      }
+    })();
+  }, [phoneCall?.id]);
 
   const [isEmojiOpen, openEmoji, closeEmoji] = useFlag();
 
@@ -299,6 +329,22 @@ const PhoneCall = ({
         <h1>{user?.firstName}</h1>
         <span className={styles.status}>{callStatus || formatMediaDuration(timeElapsed || 0)}</span>
       </div>
+      {isActive && (peerIsMuted || peerIsScreenSharing) && (
+        <div className={styles.peerIndicators}>
+          {peerIsMuted && (
+            <div className={styles.peerBadge}>
+              <i className="icon icon-microphone-alt" aria-hidden />
+              <span>{lang('VoipGroupParticipantsMuted') || 'Muted'}</span>
+            </div>
+          )}
+          {peerIsScreenSharing && (
+            <div className={styles.peerBadge}>
+              <i className="icon icon-share-screen" aria-hidden />
+              <span>{lang('VoipScreenSharing') || 'Screen sharing'}</span>
+            </div>
+          )}
+        </div>
+      )}
       <div className={styles.buttons}>
         <PhoneCallButton
           onClick={handleToggleAudio}

@@ -298,12 +298,12 @@ Closes Phase 6 stage 1 (P2P stabilization).
 
 ### Задачи
 
-- [ ] **E2.1** `web/src/lib/secret-sauce/p2p.ts` — проверить что screen share использует `getDisplayMedia`, затем `sender.replaceTrack(screenTrack)`. Когда stop — возвращать camera track.
-- [ ] **E2.2** Убедиться что `toggleCallMute` вызывает и REST (`PUT /calls/:id/mute`) и локально глушит audio track + отправляет MediaState через data channel. Сейчас может быть рассинхрон.
-- [ ] **E2.3** `switchCameraInputP2p` — проверить на девайсах с несколькими камерами (mobile emulation в Chrome DevTools).
-- [ ] **E2.4** `web/src/components/calls/PhoneCall.tsx` — кнопки screen share / camera / mute читают state из `phoneCall.mediaState` (единый источник правды).
-- [ ] **E2.5** WS event `call_muted`/`call_unmuted` от peer → `handleCallMuteChanged` → update `phoneCall.mediaState.isOtherPeerMuted`. Показывать иконку mute над аватаркой peer'а.
-- [ ] **E2.6** Screen share: при получении `screen_share_started` WS event → обновить UI peer'а (badge "Screen sharing").
+- [x] **E2.1** `web/src/lib/secret-sauce/p2p.ts` — `getDisplayMedia` + `sender.replaceTrack(screenTrack)` verified; added auto camera track restore on presentation stop (tracks `videoEnabledBeforePresentation`).
+- [x] **E2.2** Mute path now: local audio track off/on (toggleStreamP2p) + data-channel MediaState + REST `PUT /calls/:id/mute` (PhoneCall.tsx `handleToggleAudio`). Peer receives `call_muted` WS event.
+- [x] **E2.3** `switchCameraInputP2p` cycles through `enumerateDevices()` videoinputs; falls back to facingMode toggle for mobile.
+- [x] **E2.4** `PhoneCall.tsx` buttons (mute/camera/screen-share) read from `phoneCall.isMuted` / `.videoState` / `.screencastState`. `updateStreams()` in p2p.ts now publishes LOCAL state (not peer).
+- [x] **E2.5** `wsHandler.handleCallMuteChanged` → `updatePhoneCallPeerState` (echo-guarded). `PhoneCall.tsx` renders peer "Muted" badge overlay.
+- [x] **E2.6** `wsHandler.handleScreenShareChanged` (started/stopped) → `updatePhoneCallPeerState` with `peerIsScreenSharing`. `PhoneCall.tsx` renders "Screen sharing" badge.
 
 ### Тестирование
 
@@ -767,5 +767,6 @@ VAPID ключи уже настроены (VAPID_PUBLIC_KEY в .env).
 **Last updated:** 2026-04-09
 **Author:** Claude (CTO role)
 **Base commit:** aa6ef2f
-**Stage 1 closed:** 083570d (fix(calls): stabilize P2P — TURN public URL, error propagation, ICE timeouts)
+**Stage 1 closed:** 083570d (fix(calls): stabilize P2P — TURN public URL, error propagation, ICE timeouts) + 6ec571e (fix ExpireRinging SQL type mismatch)
+**Stage 2 closed:** <pending commit hash> (feat(calls): media state sync — screen share, mute, camera toggle)
 **Stages 2-5:** pending — open a new chat using the starter prompts above.

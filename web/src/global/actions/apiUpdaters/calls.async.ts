@@ -75,6 +75,16 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
           ...omit(update, ['@type']),
         } as ApiPhoneCall,
       };
+    case 'updatePhoneCallPeerState': {
+      if (!global.phoneCall) return undefined;
+      return {
+        ...global,
+        phoneCall: {
+          ...global.phoneCall,
+          ...omit(update, ['@type']),
+        } as ApiPhoneCall,
+      };
+    }
     case 'updatePhoneCall': {
       if (!ARE_CALLS_SUPPORTED) return undefined;
       const { phoneCall, currentUserId } = global;

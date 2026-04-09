@@ -716,6 +716,12 @@ export type ApiUpdatePhoneCallMediaState = {
   isBatteryLow: boolean;
 };
 
+export type ApiUpdatePhoneCallPeerState = {
+  '@type': 'updatePhoneCallPeerState';
+  peerIsMuted?: boolean;
+  peerIsScreenSharing?: boolean;
+};
+
 export type ApiUpdatePhoneCallConnectionState = {
   '@type': 'updatePhoneCallConnectionState';
   connectionState: RTCPeerConnectionState;
@@ -959,6 +965,7 @@ export type ApiUpdate = (
   ApiUpdateGroupCallConnectionState | ApiUpdateGroupCallLeavePresentation | ApiUpdateGroupCallChatId |
   ApiUpdatePendingJoinRequests | ApiUpdatePaymentVerificationNeeded | ApiUpdatePaymentStateCompleted |
   ApiUpdatePhoneCall | ApiUpdatePhoneCallSignalingData | ApiUpdatePhoneCallMediaState |
+  ApiUpdatePhoneCallPeerState |
   ApiUpdatePhoneCallConnectionState | ApiUpdateWebRTCSignaling | ApiUpdateBotMenuButton | ApiUpdateTranscribedAudio | ApiUpdateUserEmojiStatus |
   ApiUpdateMessageExtendedMedia | ApiUpdateConfig | ApiUpdateTopicNotifySettings | ApiUpdatePinnedTopic |
   ApiUpdatePinnedTopicsOrder | ApiUpdateTopic | ApiUpdateTopics | ApiUpdateRecentEmojiStatuses |
