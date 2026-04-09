@@ -234,6 +234,11 @@ func (h *CallHandler) AddParticipant(c *fiber.Ctx) error {
 }
 
 func (h *CallHandler) RemoveParticipant(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
 	callID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid call ID"))
@@ -244,7 +249,7 @@ func (h *CallHandler) RemoveParticipant(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
 
-	if err := h.svc.RemoveParticipant(c.Context(), callID, targetUID); err != nil {
+	if err := h.svc.RemoveParticipant(c.Context(), callID, targetUID, uid); err != nil {
 		return response.Error(c, err)
 	}
 

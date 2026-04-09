@@ -320,6 +320,15 @@ func (s *CallService) DeclineCall(ctx context.Context, callID, userID uuid.UUID)
 		return apperror.BadRequest("Call is not in ringing state")
 	}
 
+	inChat, err := s.calls.IsUserInChat(ctx, call.ChatID, userID)
+	if err != nil {
+		s.logger.Error("check chat membership on decline", "error", err, "chat_id", call.ChatID, "user_id", userID)
+		return apperror.Internal("check chat membership")
+	}
+	if !inChat {
+		return apperror.Forbidden("Not a member of this chat")
+	}
+
 	now := time.Now()
 	if err := s.calls.UpdateStatus(ctx, callID, model.CallStatusDeclined, nil, &now, nil); err != nil {
 		return apperror.Internal("decline call")
@@ -351,6 +360,17 @@ func (s *CallService) EndCall(ctx context.Context, callID, userID uuid.UUID) err
 	}
 	if call.Status != model.CallStatusActive && call.Status != model.CallStatusRinging {
 		return apperror.BadRequest("Call is already ended")
+	}
+
+	if userID != call.InitiatorID {
+		isParticipant, err := s.participants.IsParticipant(ctx, callID, userID)
+		if err != nil {
+			s.logger.Error("check participant on end", "error", err, "call_id", callID, "user_id", userID)
+			return apperror.Internal("check participant")
+		}
+		if !isParticipant {
+			return apperror.Forbidden("Not allowed to end this call")
+		}
 	}
 
 	now := time.Now()
@@ -501,7 +521,18 @@ func (s *CallService) ExpireRingingCalls(ctx context.Context, threshold time.Dur
 }
 
 // RemoveParticipant removes a user from a call.
-func (s *CallService) RemoveParticipant(ctx context.Context, callID, userID uuid.UUID) error {
+func (s *CallService) RemoveParticipant(ctx context.Context, callID, userID, actorID uuid.UUID) error {
+	call, err := s.calls.GetByID(ctx, callID)
+	if err != nil {
+		return apperror.Internal("get call")
+	}
+	if call == nil {
+		return apperror.NotFound("Call not found")
+	}
+	if actorID != call.InitiatorID {
+		return apperror.Forbidden("Only the call initiator can remove participants")
+	}
+
 	if err := s.participants.Remove(ctx, callID, userID); err != nil {
 		return apperror.Internal("remove participant")
 	}
