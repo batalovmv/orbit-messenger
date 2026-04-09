@@ -62,6 +62,9 @@ func (h *StickerHandler) ListFeatured(c *fiber.Ctx) error {
 }
 
 func (h *StickerHandler) Search(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
 	q := c.Query("q")
 	if q == "" {
 		return response.Error(c, apperror.BadRequest("Query parameter 'q' is required"))

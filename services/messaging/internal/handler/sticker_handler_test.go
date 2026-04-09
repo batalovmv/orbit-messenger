@@ -66,6 +66,18 @@ func TestSearchStickers_MissingQuery(t *testing.T) {
 	}
 }
 
+func TestSearchStickers_MissingUserID(t *testing.T) {
+	app := newStickerApp(&mockStickerStore{})
+	req, _ := http.NewRequest(http.MethodGet, "/stickers/search?q=orbit", nil)
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
 func TestSearchStickers_EmptyQuery(t *testing.T) {
 	app := newStickerApp(&mockStickerStore{})
 	req, _ := http.NewRequest(http.MethodGet, "/stickers/search?q=", nil)
