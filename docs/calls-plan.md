@@ -768,5 +768,6 @@ VAPID ключи уже настроены (VAPID_PUBLIC_KEY в .env).
 **Author:** Claude (CTO role)
 **Base commit:** aa6ef2f
 **Stage 1 closed:** 083570d (fix(calls): stabilize P2P — TURN public URL, error propagation, ICE timeouts) + 6ec571e (fix ExpireRinging SQL type mismatch)
-**Stage 2 closed:** f1c31a1 (feat(calls): media state sync — screen share, mute, camera toggle)
+**Stage 2 closed:** f1c31a1 (feat) + b80a0d1 (fix: post-QA hardening B1–B8)
+**Stage 2 QA:** PASS — all 8 scenarios green (live UI + code review); B1 decline-stuck-modal blocker confirmed fixed live.
 **Stages 2-5:** pending — open a new chat using the starter prompts above.
