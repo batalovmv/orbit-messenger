@@ -165,11 +165,13 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 		if err != nil {
 			return nil, fmt.Errorf("get existing chat: %w", err)
 		}
-		// If caller requested E2E but existing chat is not encrypted, reject.
-		// Upgrading an existing plaintext DM to E2E is not supported —
-		// old messages would remain unencrypted.
+		// Prevent encryption mode mismatch: upgrading plaintext→E2E or
+		// downgrading E2E→plaintext are both unsupported for existing DMs.
 		if isEncrypted && !chat.IsEncrypted {
 			return nil, apperror.Conflict("a non-encrypted DM already exists with this user")
+		}
+		if !isEncrypted && chat.IsEncrypted {
+			return nil, apperror.Conflict("an E2E encrypted DM already exists with this user")
 		}
 		return chat, nil
 	}

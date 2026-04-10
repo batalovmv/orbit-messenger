@@ -40,6 +40,20 @@ CREATE TABLE IF NOT EXISTS key_transparency_log (
 
 CREATE INDEX IF NOT EXISTS idx_ktl_user ON key_transparency_log(user_id);
 
+DO $$ BEGIN
+    CREATE TRIGGER trg_user_keys_updated_at
+        BEFORE UPDATE ON user_keys
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    CREATE TRIGGER trg_one_time_prekeys_updated_at
+        BEFORE UPDATE ON one_time_prekeys
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Compliance keys (escrow, schema-only - flow not implemented yet)
 CREATE TABLE IF NOT EXISTS compliance_keys (
     chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,

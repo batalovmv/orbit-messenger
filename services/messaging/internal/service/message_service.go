@@ -139,6 +139,11 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		return nil, apperror.NotFound("Chat not found")
 	}
 
+	// Prevent plaintext messages in E2E encrypted chats
+	if chat.IsEncrypted {
+		return nil, apperror.BadRequest("Cannot send plaintext messages to an E2E encrypted chat")
+	}
+
 	member, err := s.chats.GetMember(ctx, chatID, senderID)
 	if err != nil {
 		return nil, fmt.Errorf("get member: %w", err)
@@ -452,6 +457,9 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	}
 	if chat == nil {
 		return nil, apperror.NotFound("Target chat not found")
+	}
+	if chat.IsEncrypted {
+		return nil, apperror.BadRequest("Cannot forward plaintext messages to an E2E encrypted chat")
 	}
 
 	member, err := s.chats.GetMember(ctx, toChatID, senderID)
@@ -773,6 +781,9 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	}
 	if chat == nil {
 		return nil, apperror.NotFound("Chat not found")
+	}
+	if chat.IsEncrypted {
+		return nil, apperror.BadRequest("Cannot send plaintext media to an E2E encrypted chat")
 	}
 
 	member, err := s.chats.GetMember(ctx, chatID, senderID)

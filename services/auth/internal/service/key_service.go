@@ -173,8 +173,8 @@ func (s *KeyService) ListUserDevices(ctx context.Context, userID uuid.UUID) ([]m
 	return devices, nil
 }
 
-func (s *KeyService) GetPreKeyCount(ctx context.Context, userID uuid.UUID) (int, error) {
-	count, err := s.prekeys.CountRemaining(ctx, userID)
+func (s *KeyService) GetPreKeyCount(ctx context.Context, userID, deviceID uuid.UUID) (int, error) {
+	count, err := s.prekeys.CountRemaining(ctx, userID, deviceID)
 	if err != nil {
 		return 0, fmt.Errorf("count prekeys: %w", err)
 	}

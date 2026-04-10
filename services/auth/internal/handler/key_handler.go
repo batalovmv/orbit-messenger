@@ -34,6 +34,7 @@ func (h *KeyHandler) Register(router fiber.Router) {
 	keys.Get("/:userId/devices", h.ListUserDevices)
 	keys.Get("/count", h.GetPreKeyCount)
 	keys.Get("/transparency-log", h.GetTransparencyLog)
+	keys.Delete("/device", h.RevokeDevice)
 }
 
 // requireInternalToken verifies that the request was proxied by the gateway.
@@ -290,8 +291,12 @@ func (h *KeyHandler) GetPreKeyCount(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, err)
 	}
+	deviceID, err := getDeviceID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
 
-	count, err := h.keySvc.GetPreKeyCount(c.Context(), userID)
+	count, err := h.keySvc.GetPreKeyCount(c.Context(), userID, deviceID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -328,4 +333,21 @@ func (h *KeyHandler) GetTransparencyLog(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"entries": entries})
+}
+
+func (h *KeyHandler) RevokeDevice(c *fiber.Ctx) error {
+	userID, err := getKeyUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	deviceID, err := getDeviceID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	if err := h.keySvc.RevokeDevice(c.Context(), userID, deviceID); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "ok"})
 }

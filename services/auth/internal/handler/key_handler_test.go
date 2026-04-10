@@ -63,7 +63,7 @@ func (m *mockKeyStore) GetIdentityKey(ctx context.Context, userID uuid.UUID) ([]
 type mockPreKeyStore struct {
 	uploadBatchFn    func(ctx context.Context, userID, deviceID uuid.UUID, keys []model.OneTimePreKey) (int, error)
 	consumeOneFn     func(ctx context.Context, userID uuid.UUID) (*model.OneTimePreKey, error)
-	countRemainingFn func(ctx context.Context, userID uuid.UUID) (int, error)
+	countRemainingFn func(ctx context.Context, userID, deviceID uuid.UUID) (int, error)
 	deleteByDeviceFn func(ctx context.Context, userID, deviceID uuid.UUID) error
 }
 
@@ -81,9 +81,9 @@ func (m *mockPreKeyStore) ConsumeOne(ctx context.Context, userID uuid.UUID) (*mo
 	return nil, nil
 }
 
-func (m *mockPreKeyStore) CountRemaining(ctx context.Context, userID uuid.UUID) (int, error) {
+func (m *mockPreKeyStore) CountRemaining(ctx context.Context, userID, deviceID uuid.UUID) (int, error) {
 	if m.countRemainingFn != nil {
-		return m.countRemainingFn(ctx, userID)
+		return m.countRemainingFn(ctx, userID, deviceID)
 	}
 	return 0, nil
 }
@@ -440,12 +440,13 @@ func TestGetIdentityKey_Success(t *testing.T) {
 
 func TestGetPreKeyCount_Success(t *testing.T) {
 	app, _, preKeyStore, _ := setupKeyTestApp(t)
-	preKeyStore.countRemainingFn = func(ctx context.Context, userID uuid.UUID) (int, error) {
+	preKeyStore.countRemainingFn = func(ctx context.Context, userID, deviceID uuid.UUID) (int, error) {
 		return 12, nil
 	}
 
 	resp := doRequest(app, http.MethodGet, "/keys/count", nil, internalHeaders(map[string]string{
-		"X-User-ID": uuid.New().String(),
+		"X-User-ID":   uuid.New().String(),
+		"X-Device-ID": uuid.New().String(),
 	}))
 
 	if resp.StatusCode != http.StatusOK {

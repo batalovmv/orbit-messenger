@@ -13,7 +13,7 @@ import (
 type PreKeyStore interface {
 	UploadBatch(ctx context.Context, userID, deviceID uuid.UUID, keys []model.OneTimePreKey) (int, error)
 	ConsumeOne(ctx context.Context, userID uuid.UUID) (*model.OneTimePreKey, error)
-	CountRemaining(ctx context.Context, userID uuid.UUID) (int, error)
+	CountRemaining(ctx context.Context, userID, deviceID uuid.UUID) (int, error)
 	DeleteByDevice(ctx context.Context, userID, deviceID uuid.UUID) error
 }
 
@@ -97,11 +97,11 @@ func (s *preKeyStore) ConsumeOne(ctx context.Context, userID uuid.UUID) (*model.
 	return key, nil
 }
 
-func (s *preKeyStore) CountRemaining(ctx context.Context, userID uuid.UUID) (int, error) {
+func (s *preKeyStore) CountRemaining(ctx context.Context, userID, deviceID uuid.UUID) (int, error) {
 	var count int
 	err := s.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM one_time_prekeys WHERE user_id = $1 AND used = false`,
-		userID,
+		`SELECT COUNT(*) FROM one_time_prekeys WHERE user_id = $1 AND device_id = $2 AND used = false`,
+		userID, deviceID,
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count remaining prekeys: %w", err)
