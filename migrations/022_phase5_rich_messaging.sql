@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS message_reactions (
     PRIMARY KEY (message_id, user_id, emoji)
 );
 
-CREATE INDEX idx_message_reactions_message ON message_reactions(message_id);
-CREATE INDEX idx_message_reactions_user    ON message_reactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_message ON message_reactions(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_reactions_user    ON message_reactions(user_id);
 
 CREATE TABLE IF NOT EXISTS chat_available_reactions (
     chat_id        UUID PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
@@ -22,9 +22,15 @@ CREATE TABLE IF NOT EXISTS chat_available_reactions (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TRIGGER trg_chat_available_reactions_updated_at
-    BEFORE UPDATE ON chat_available_reactions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$
+BEGIN
+    CREATE TRIGGER trg_chat_available_reactions_updated_at
+        BEFORE UPDATE ON chat_available_reactions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
 -- ============================================================================
 -- Sticker packs & stickers
@@ -43,9 +49,15 @@ CREATE TABLE IF NOT EXISTS sticker_packs (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TRIGGER trg_sticker_packs_updated_at
-    BEFORE UPDATE ON sticker_packs
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$
+BEGIN
+    CREATE TRIGGER trg_sticker_packs_updated_at
+        BEFORE UPDATE ON sticker_packs
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS stickers (
     id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,7 +70,7 @@ CREATE TABLE IF NOT EXISTS stickers (
     position  INT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_stickers_pack ON stickers(pack_id, position);
+CREATE INDEX IF NOT EXISTS idx_stickers_pack ON stickers(pack_id, position);
 
 CREATE TABLE IF NOT EXISTS user_installed_stickers (
     user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -68,7 +80,7 @@ CREATE TABLE IF NOT EXISTS user_installed_stickers (
     PRIMARY KEY (user_id, pack_id)
 );
 
-CREATE INDEX idx_user_installed_stickers_user ON user_installed_stickers(user_id, position);
+CREATE INDEX IF NOT EXISTS idx_user_installed_stickers_user ON user_installed_stickers(user_id, position);
 
 CREATE TABLE IF NOT EXISTS recent_stickers (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -77,7 +89,7 @@ CREATE TABLE IF NOT EXISTS recent_stickers (
     PRIMARY KEY (user_id, sticker_id)
 );
 
-CREATE INDEX idx_recent_stickers_user ON recent_stickers(user_id, used_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recent_stickers_user ON recent_stickers(user_id, used_at DESC);
 
 -- ============================================================================
 -- Saved GIFs
@@ -95,7 +107,7 @@ CREATE TABLE IF NOT EXISTS saved_gifs (
     UNIQUE (user_id, tenor_id)
 );
 
-CREATE INDEX idx_saved_gifs_user ON saved_gifs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_gifs_user ON saved_gifs(user_id, created_at DESC);
 
 -- ============================================================================
 -- Polls
@@ -114,7 +126,7 @@ CREATE TABLE IF NOT EXISTS polls (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_polls_message ON polls(message_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_polls_message ON polls(message_id);
 
 CREATE TABLE IF NOT EXISTS poll_options (
     id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -123,7 +135,7 @@ CREATE TABLE IF NOT EXISTS poll_options (
     position INT NOT NULL
 );
 
-CREATE INDEX idx_poll_options_poll ON poll_options(poll_id, position);
+CREATE INDEX IF NOT EXISTS idx_poll_options_poll ON poll_options(poll_id, position);
 
 CREATE TABLE IF NOT EXISTS poll_votes (
     poll_id   UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
@@ -133,7 +145,7 @@ CREATE TABLE IF NOT EXISTS poll_votes (
     PRIMARY KEY (poll_id, user_id, option_id)
 );
 
-CREATE INDEX idx_poll_votes_option ON poll_votes(option_id);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_option ON poll_votes(option_id);
 
 -- ============================================================================
 -- Scheduled messages
@@ -153,11 +165,17 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_scheduled_messages_pending ON scheduled_messages(scheduled_at)
+CREATE INDEX IF NOT EXISTS idx_scheduled_messages_pending ON scheduled_messages(scheduled_at)
     WHERE is_sent = FALSE;
-CREATE INDEX idx_scheduled_messages_user_chat ON scheduled_messages(sender_id, chat_id)
+CREATE INDEX IF NOT EXISTS idx_scheduled_messages_user_chat ON scheduled_messages(sender_id, chat_id)
     WHERE is_sent = FALSE;
 
-CREATE TRIGGER trg_scheduled_messages_updated_at
-    BEFORE UPDATE ON scheduled_messages
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$
+BEGIN
+    CREATE TRIGGER trg_scheduled_messages_updated_at
+        BEFORE UPDATE ON scheduled_messages
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;

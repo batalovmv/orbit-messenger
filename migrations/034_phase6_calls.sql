@@ -1,6 +1,6 @@
 -- Phase 6: Voice & Video Calls
 
-CREATE TABLE calls (
+CREATE TABLE IF NOT EXISTS calls (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type            TEXT NOT NULL CHECK (type IN ('voice', 'video')),
     mode            TEXT NOT NULL CHECK (mode IN ('p2p', 'group')),
@@ -14,7 +14,7 @@ CREATE TABLE calls (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE call_participants (
+CREATE TABLE IF NOT EXISTS call_participants (
     call_id          UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
     user_id          UUID NOT NULL REFERENCES users(id),
     joined_at        TIMESTAMPTZ DEFAULT NOW(),
@@ -26,10 +26,10 @@ CREATE TABLE call_participants (
 );
 
 -- Fast lookup of active calls in a chat (prevent duplicate active calls)
-CREATE INDEX idx_calls_chat_active ON calls (chat_id) WHERE status IN ('ringing', 'active');
+CREATE INDEX IF NOT EXISTS idx_calls_chat_active ON calls (chat_id) WHERE status IN ('ringing', 'active');
 
 -- Call history queries by user (via participants)
-CREATE INDEX idx_call_participants_user ON call_participants (user_id);
+CREATE INDEX IF NOT EXISTS idx_call_participants_user ON call_participants (user_id);
 
 -- Call history ordering
-CREATE INDEX idx_calls_created_at ON calls (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_calls_created_at ON calls (created_at DESC);

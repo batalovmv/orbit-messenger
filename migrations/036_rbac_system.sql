@@ -2,8 +2,14 @@
 
 -- 1. Expand users.role to include new system roles
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check
-    CHECK (role IN ('superadmin', 'compliance', 'admin', 'member'));
+DO $$
+BEGIN
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+        CHECK (role IN ('superadmin', 'compliance', 'admin', 'member'));
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
 -- 2. Promote existing admins to superadmin
 UPDATE users SET role = 'superadmin' WHERE role = 'admin';
@@ -17,11 +23,17 @@ CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active) WHERE NOT is_
 
 -- 4. Expand invites.role to support new roles
 ALTER TABLE invites DROP CONSTRAINT IF EXISTS invites_role_check;
-ALTER TABLE invites ADD CONSTRAINT invites_role_check
-    CHECK (role IN ('superadmin', 'compliance', 'admin', 'member'));
+DO $$
+BEGIN
+    ALTER TABLE invites ADD CONSTRAINT invites_role_check
+        CHECK (role IN ('superadmin', 'compliance', 'admin', 'member'));
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
 -- 5. Append-only audit log
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id          BIGSERIAL PRIMARY KEY,
     actor_id    UUID NOT NULL REFERENCES users(id),
     action      TEXT NOT NULL,
@@ -33,10 +45,10 @@ CREATE TABLE audit_log (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_audit_actor ON audit_log(actor_id, created_at DESC);
-CREATE INDEX idx_audit_target ON audit_log(target_type, target_id, created_at DESC);
-CREATE INDEX idx_audit_action ON audit_log(action, created_at DESC);
-CREATE INDEX idx_audit_created ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
 
 -- 6. Append-only enforcement via triggers (prevent UPDATE and DELETE)
 CREATE OR REPLACE FUNCTION prevent_audit_mutation() RETURNS TRIGGER AS $$
@@ -45,10 +57,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER audit_log_no_update
-    BEFORE UPDATE ON audit_log
-    FOR EACH ROW EXECUTE FUNCTION prevent_audit_mutation();
+DO $$
+BEGIN
+    CREATE TRIGGER audit_log_no_update
+        BEFORE UPDATE ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION prevent_audit_mutation();
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
 
-CREATE TRIGGER audit_log_no_delete
-    BEFORE DELETE ON audit_log
-    FOR EACH ROW EXECUTE FUNCTION prevent_audit_mutation();
+DO $$
+BEGIN
+    CREATE TRIGGER audit_log_no_delete
+        BEFORE DELETE ON audit_log
+        FOR EACH ROW EXECUTE FUNCTION prevent_audit_mutation();
+EXCEPTION
+    WHEN duplicate_object THEN
+        NULL;
+END $$;
