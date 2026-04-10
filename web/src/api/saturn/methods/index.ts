@@ -33,10 +33,13 @@ import {
   leaveChat,
 } from './chats';
 import { fetchMessageLink } from './messages';
+import * as botsApi from './bots';
+import * as integrationsApi from './integrations';
 
 export {
   destroy, disconnect, init, setCurrentUser,
 } from './client';
+export { botsApi, integrationsApi };
 
 // Phase 6: Call methods
 export {
@@ -55,7 +58,7 @@ export function fetchNearestCountry() {
 }
 
 export function fetchPopularAppBots() {
-  return Promise.resolve(undefined);
+  return botsApi.fetchBots().then((r) => r?.data);
 }
 
 export function checkSearchPostsFlood() {
@@ -452,7 +455,7 @@ export function fetchPromoData(): Promise<ApiPromoData | undefined> {
 }
 
 export function loadAttachBots() {
-  return Promise.resolve(undefined);
+  return botsApi.fetchBots().then((r) => r?.data);
 }
 
 export async function fetchNotificationExceptions() {

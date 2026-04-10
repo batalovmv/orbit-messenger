@@ -1,0 +1,51 @@
+import { request } from '../client';
+import type {
+  SaturnBot, SaturnBotCommand, SaturnBotCreateResponse, SaturnBotInstallation,
+} from '../types';
+
+export async function fetchBots(limit = 50, offset = 0) {
+  return request<{ data: SaturnBot[]; total: number }>('GET', `/bots?limit=${limit}&offset=${offset}`);
+}
+
+export async function fetchBot(botId: string) {
+  return request<SaturnBot>('GET', `/bots/${botId}`);
+}
+
+export async function createBot(data: { username: string; display_name: string; description?: string }) {
+  return request<SaturnBotCreateResponse>('POST', '/bots', data);
+}
+
+export async function updateBot(
+  botId: string,
+  data: Partial<{ display_name: string; description: string; short_description: string }>,
+) {
+  return request<SaturnBot>('PATCH', `/bots/${botId}`, data);
+}
+
+export async function deleteBot(botId: string) {
+  return request<void>('DELETE', `/bots/${botId}`);
+}
+
+export async function rotateToken(botId: string) {
+  return request<{ token: string }>('POST', `/bots/${botId}/token/rotate`);
+}
+
+export async function setBotCommands(botId: string, commands: Array<{ command: string; description: string }>) {
+  return request<SaturnBotCommand[]>('PUT', `/bots/${botId}/commands`, { commands });
+}
+
+export async function fetchBotCommands(botId: string) {
+  return request<SaturnBotCommand[]>('GET', `/bots/${botId}/commands`);
+}
+
+export async function installBot(botId: string, chatId: string, scopes: number) {
+  return request<SaturnBotInstallation>('POST', `/bots/${botId}/install`, { chat_id: chatId, scopes });
+}
+
+export async function uninstallBot(botId: string, chatId: string) {
+  return request<void>('DELETE', `/bots/${botId}/install`, { chat_id: chatId });
+}
+
+export async function fetchChatBots(chatId: string) {
+  return request<SaturnBotInstallation[]>('GET', `/chats/${chatId}/bots`);
+}

@@ -249,3 +249,32 @@ Notes: go test ./internal/handler/... -v passed with 7 requested scenarios, incl
 Status: DONE
 Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/handler/mock_stores_test.go, services/integrations/internal/handler/connector_handler_test.go
 Notes: go test ./... -v passed for services/integrations.
+
+## TASK-56: Frontend Saturn types for bots and integrations
+Status: DONE
+Files: web/src/api/saturn/types.ts
+Notes: web TypeScript check passed after adding the Phase 8 Saturn API shapes.
+
+## TASK-57: Frontend Saturn methods for bots
+Status: DONE
+Files: web/src/api/saturn/methods/bots.ts
+Notes: web TypeScript check passed after adding the bots Saturn API module.
+
+## TASK-58: Frontend Saturn methods for integrations
+Status: DONE
+Files: web/src/api/saturn/methods/integrations.ts
+Notes: web TypeScript check passed after adding the integrations Saturn API module.
+
+## TASK-59: Wire new methods into Saturn index
+Status: DONE
+Files: web/src/api/saturn/methods/index.ts, web/src/api/saturn/methods/types.ts, web/src/api/saturn/methods/init.ts
+Notes: web TypeScript check passed. Exporting botsApi/integrationsApi required narrowing the generic Methods type to function exports only, because the Saturn method dispatcher treats methods/index.ts as a callable-method map.
+
+## TASK-60: FINAL CHECKPOINT
+Status: DONE
+Files: phase-8-plan/PROGRESS.md, web/src/api/saturn/types.ts, web/src/api/saturn/methods/bots.ts, web/src/api/saturn/methods/integrations.ts, web/src/api/saturn/methods/index.ts, web/src/api/saturn/methods/types.ts, web/src/api/saturn/methods/init.ts
+Notes: pkg, services/bots, services/integrations, and services/gateway all passed the requested build/vet/test commands. Sanity counts: services/bots/internal = 22 Go files, services/integrations/internal = 12 Go files, migrations/04[1-4]*.sql = 7 files. The migration count exceeds the plan's expectation because the repo already contained 041_feature_flags.sql and 042_e2e_keys.sql before Phase 8 work started.
+
+## Final Summary
+Status: DONE
+Notes: Phase 8 foundation tasks 01-60 were completed in order. Bots and integrations backend foundations are implemented end-to-end, gateway proxy/ws wiring is in place, frontend Saturn API types/methods exist for future UI integration, and checkpoint commits/tags were created along the way. Remaining repo deviations from the plan are documented inline above where they occurred (branch/toolchain drift, hashed-secret semantics, pre-existing migration numbering collisions, and final file-count differences).

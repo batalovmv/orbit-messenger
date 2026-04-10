@@ -469,3 +469,84 @@ export interface SaturnAuditEntry {
   created_at: string;
   actor_name?: string;
 }
+
+// === Bots ===
+
+export interface SaturnBot {
+  id: string;
+  user_id: string;
+  owner_id: string;
+  username: string;
+  display_name: string;
+  avatar_url?: string;
+  description?: string;
+  short_description?: string;
+  is_system: boolean;
+  is_inline: boolean;
+  webhook_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaturnBotCommand {
+  id: string;
+  bot_id: string;
+  command: string;
+  description: string;
+}
+
+export interface SaturnBotInstallation {
+  bot_id: string;
+  chat_id: string;
+  installed_by: string;
+  scopes: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SaturnBotCreateResponse {
+  bot: SaturnBot;
+  token: string;
+}
+
+// === Integrations ===
+
+export interface SaturnIntegrationConnector {
+  id: string;
+  name: string;
+  display_name: string;
+  type: 'inbound_webhook' | 'outbound_webhook' | 'polling';
+  bot_id?: string;
+  config: Record<string, unknown>;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaturnIntegrationRoute {
+  id: string;
+  connector_id: string;
+  chat_id: string;
+  event_filter?: string;
+  template?: string;
+  is_active: boolean;
+}
+
+export interface SaturnIntegrationDelivery {
+  id: string;
+  connector_id: string;
+  event_type: string;
+  status: 'pending' | 'delivered' | 'failed' | 'dead_letter';
+  correlation_key?: string;
+  attempt_count: number;
+  last_error?: string;
+  delivered_at?: string;
+  created_at: string;
+}
+
+export interface SaturnConnectorCreateResponse {
+  connector: SaturnIntegrationConnector;
+  secret: string;
+}

@@ -26,7 +26,7 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
 export function callApi<T extends keyof Methods>(fnName: T, ...args: MethodArgs<T>): MethodResponse<T>;
 export function callApi(fnName: string, ...args: any[]): any;
 export function callApi(fnName: string, ...args: any[]): any {
-  const method = (methods as Record<string, (...args: any[]) => unknown>)[fnName];
+  const method = (methods as unknown as Record<string, (...args: any[]) => unknown>)[fnName];
   if (!method) {
     if (DEBUG && !SILENCED_METHODS.has(fnName)) {
       // eslint-disable-next-line no-console
