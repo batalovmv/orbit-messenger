@@ -31,7 +31,50 @@ const PROGRESSIVE_URL_PREFIX = './progressive/';
 const DOWNLOAD_URL_PREFIX = './download/';
 const MAX_MEDIA_RETRIES = 5;
 
-const memoryCache = new Map<string, ApiPreparedMedia>();
+const BLOB_URL_CACHE_MAX = 128;
+
+// LRU map for blob URLs: on eviction past the cap, revoke the blob URL to free renderer memory.
+// Non-blob entries (data URLs, strings) are stored but never revoked.
+class BlobUrlCache {
+  private cache = new Map<string, ApiPreparedMedia>();
+
+  get(key: string): ApiPreparedMedia | undefined {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      // Refresh LRU order.
+      this.cache.delete(key);
+      this.cache.set(key, value);
+    }
+    return value;
+  }
+
+  set(key: string, value: ApiPreparedMedia): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= BLOB_URL_CACHE_MAX) {
+      // Evict the oldest entry (first key in insertion order).
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) {
+        const evicted = this.cache.get(oldest);
+        this.cache.delete(oldest);
+        if (typeof evicted === 'string' && evicted.startsWith('blob:')) {
+          URL.revokeObjectURL(evicted);
+        }
+      }
+    }
+    this.cache.set(key, value);
+  }
+
+  delete(key: string): void {
+    this.cache.delete(key);
+  }
+
+  has(key: string): boolean {
+    return this.cache.has(key);
+  }
+}
+
+const memoryCache = new BlobUrlCache();
 const fetchPromises = new Map<string, Promise<ApiPreparedMedia | undefined>>();
 const progressCallbacks = new Map<string, Map<string, ApiOnProgress>>();
 const cancellableCallbacks = new Map<string, ApiOnProgress>();
