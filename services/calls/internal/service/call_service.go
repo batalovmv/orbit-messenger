@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/services/calls/internal/model"
@@ -59,7 +60,8 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 		return nil, apperror.Internal("check active call")
 	}
 	if existing != nil {
-		return nil, apperror.Conflict("Active call already exists for this chat")
+		s.attachSfuURL(existing)
+		return existing, nil
 	}
 
 	call := &model.Call{
@@ -82,6 +84,18 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 	}
 
 	if err := s.calls.Create(ctx, call); err != nil {
+		if isUniqueViolation(err) {
+			existing, lookupErr := s.calls.GetActiveForChat(ctx, req.ChatID)
+			if lookupErr != nil {
+				s.logger.Error("fetch active call after create conflict", "error", lookupErr, "chat_id", req.ChatID)
+				return nil, apperror.Internal("create call")
+			}
+			if existing != nil {
+				s.attachSfuURL(existing)
+				return existing, nil
+			}
+			return nil, apperror.Conflict("Active call already exists for this chat")
+		}
 		return nil, apperror.Internal("create call")
 	}
 
@@ -100,9 +114,7 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 
 	// For group calls, hand the client the SFU WebSocket URL it should
 	// open after acceptance. P2P calls keep the empty value (Stage 1 path).
-	if call.Mode == model.CallModeGroup {
-		call.SfuWsURL = fmt.Sprintf("/api/v1/calls/%s/sfu-ws", call.ID)
-	}
+	s.attachSfuURL(call)
 
 	// Publish call_incoming to other members.
 	// If the caller didn't supply member_ids (e.g. group calls initiated via API),
@@ -121,6 +133,18 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 
 	s.logger.Info("call created", "call_id", call.ID, "chat_id", req.ChatID, "type", req.Type, "mode", req.Mode)
 	return call, nil
+}
+
+func (s *CallService) attachSfuURL(call *model.Call) {
+	if call == nil || call.Mode != model.CallModeGroup {
+		return
+	}
+	call.SfuWsURL = fmt.Sprintf("/api/v1/calls/%s/sfu-ws", call.ID)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // JoinGroupCall is called by the SFU WebSocket handler when a user opens

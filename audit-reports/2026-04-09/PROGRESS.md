@@ -108,3 +108,7 @@ Access JWTs now carry session jti, ValidateAccessToken rejects deleted sessions 
 ## 2026-04-10T07:29:07Z TASK-26 DONE 1075bc2
 Compose now requires TURN_USER/TURN_PASSWORD for both coturn and calls, and .env.example warns against orbit:orbit. YAML parse gate passed via python/yaml.
 
+
+## 2026-04-10T07:30:52Z TASK-27 DONE ea0dba7
+SendNow now uses atomic ClaimScheduled and is idempotent when cron or a prior SendNow already claimed the row; DeliverPending kept its stronger existing ClaimAndMarkPending path. cd services/messaging && go test ./internal/service passed.
+
