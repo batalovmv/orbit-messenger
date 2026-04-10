@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
+	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/integrations/internal/model"
 	"github.com/mst-corp/orbit/services/integrations/internal/service"
@@ -50,7 +51,8 @@ func newIntegrationHandlerTestApp(
 		mr.Close()
 	})
 
-	svc := service.NewIntegrationService(connectorStore, routeStore, deliveryStore, nil, slog.Default())
+	testKey := make([]byte, 32) // zero key for tests
+	svc := service.NewIntegrationService(connectorStore, routeStore, deliveryStore, nil, testKey, slog.Default())
 	h := NewConnectorHandler(svc, slog.Default()).WithRedis(rdb)
 
 	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
@@ -135,7 +137,12 @@ func TestCreateConnector_ValidationError(t *testing.T) {
 
 func TestReceiveWebhook_Success(t *testing.T) {
 	connectorID := uuid.New()
-	secretHash := "stored-digest-for-test"
+	rawSecret := "test-webhook-secret-value"
+	testKey := make([]byte, 32) // same zero key as in newIntegrationHandlerTestApp
+	encryptedSecret, err := orchidCrypto.Encrypt(rawSecret, testKey)
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
 	payload := []byte(`{"event":"deal.updated","external_event_id":"evt-1"}`)
 
 	connectorStore := &mockConnectorStore{
@@ -151,7 +158,7 @@ func TestReceiveWebhook_Success(t *testing.T) {
 			}, nil
 		},
 		getSecretHashFn: func(ctx context.Context, id uuid.UUID) (string, error) {
-			return secretHash, nil
+			return encryptedSecret, nil
 		},
 	}
 	routeStore := &mockRouteStore{
@@ -166,10 +173,11 @@ func TestReceiveWebhook_Success(t *testing.T) {
 	}
 
 	app := newIntegrationHandlerTestApp(t, connectorStore, routeStore, deliveryStore)
+	ts := time.Now().UTC().Format(time.RFC3339)
 	resp := doIntegrationRawRequest(t, app, http.MethodPost, "/webhooks/in/"+connectorID.String(), payload, map[string]string{
 		"Content-Type":       "application/json",
-		"X-Orbit-Signature":  signIntegrationPayload(secretHash, payload),
-		"X-Orbit-Timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"X-Orbit-Signature":  signIntegrationPayload(rawSecret, payload, ts),
+		"X-Orbit-Timestamp":  ts,
 	})
 
 	if resp.StatusCode != http.StatusOK {
@@ -180,6 +188,11 @@ func TestReceiveWebhook_Success(t *testing.T) {
 func TestReceiveWebhook_InvalidSignature(t *testing.T) {
 	connectorID := uuid.New()
 	payload := []byte(`{"event":"deal.updated"}`)
+	testKey := make([]byte, 32)
+	encryptedSecret, err := orchidCrypto.Encrypt("real-secret", testKey)
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
 
 	connectorStore := &mockConnectorStore{
 		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Connector, error) {
@@ -191,7 +204,7 @@ func TestReceiveWebhook_InvalidSignature(t *testing.T) {
 			}, nil
 		},
 		getSecretHashFn: func(ctx context.Context, id uuid.UUID) (string, error) {
-			return "stored-digest-for-test", nil
+			return encryptedSecret, nil
 		},
 	}
 
@@ -310,8 +323,12 @@ func decodeIntegrationJSON(t *testing.T, body io.Reader, target any) {
 	}
 }
 
-func signIntegrationPayload(secretHash string, payload []byte) string {
-	mac := hmac.New(sha256.New, []byte(secretHash))
+func signIntegrationPayload(rawSecret string, payload []byte, timestamp string) string {
+	mac := hmac.New(sha256.New, []byte(rawSecret))
+	if timestamp != "" {
+		mac.Write([]byte(timestamp))
+		mac.Write([]byte("."))
+	}
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }

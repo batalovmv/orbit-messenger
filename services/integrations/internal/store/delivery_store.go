@@ -133,7 +133,7 @@ func (s *deliveryStore) UpdateStatus(ctx context.Context, id uuid.UUID, status s
 		return fmt.Errorf("update delivery status: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return model.ErrRouteNotFound
+		return model.ErrDeliveryNotFound
 	}
 
 	return nil
@@ -144,15 +144,22 @@ func (s *deliveryStore) GetPendingRetries(ctx context.Context, limit int) ([]mod
 		limit = 50
 	}
 
+	// Atomically claim rows by setting status='processing' in a single UPDATE RETURNING.
+	// This prevents concurrent workers from picking up the same delivery.
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, connector_id, route_id, external_event_id, event_type, payload, status,
-		       orbit_message_id, correlation_key, attempt_count, max_attempts, last_error,
-		       next_retry_at, delivered_at, created_at
-		FROM integration_deliveries
-		WHERE status IN ('pending', 'failed')
-		  AND next_retry_at <= NOW()
-		ORDER BY next_retry_at
-		LIMIT $1
+		UPDATE integration_deliveries
+		SET status = 'processing'
+		WHERE id IN (
+			SELECT id FROM integration_deliveries
+			WHERE status IN ('pending', 'failed')
+			  AND next_retry_at <= NOW()
+			ORDER BY next_retry_at
+			LIMIT $1
+			FOR UPDATE SKIP LOCKED
+		)
+		RETURNING id, connector_id, route_id, external_event_id, event_type, payload, 'processing'::text,
+		          orbit_message_id, correlation_key, attempt_count, max_attempts, last_error,
+		          next_retry_at, delivered_at, created_at
 	`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get pending delivery retries: %w", err)
@@ -198,7 +205,7 @@ func (s *deliveryStore) MarkDeadLetter(ctx context.Context, id uuid.UUID, lastEr
 		return fmt.Errorf("mark delivery dead letter: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return model.ErrRouteNotFound
+		return model.ErrDeliveryNotFound
 	}
 
 	return nil

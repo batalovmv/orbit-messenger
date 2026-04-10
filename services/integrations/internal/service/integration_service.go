@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/services/integrations/internal/client"
 	"github.com/mst-corp/orbit/services/integrations/internal/model"
 	"github.com/mst-corp/orbit/services/integrations/internal/store"
@@ -35,11 +36,12 @@ const (
 var templatePlaceholderRegex = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}`)
 
 type IntegrationService struct {
-	connectors store.ConnectorStore
-	routes     store.RouteStore
-	deliveries store.DeliveryStore
-	msgClient  *client.MessagingClient
-	logger     *slog.Logger
+	connectors    store.ConnectorStore
+	routes        store.RouteStore
+	deliveries    store.DeliveryStore
+	msgClient     *client.MessagingClient
+	encryptionKey []byte
+	logger        *slog.Logger
 }
 
 type UpdateConnectorInput struct {
@@ -69,21 +71,27 @@ func NewIntegrationService(
 	routes store.RouteStore,
 	deliveries store.DeliveryStore,
 	msgClient *client.MessagingClient,
+	encryptionKey []byte,
 	logger *slog.Logger,
 ) *IntegrationService {
 	return &IntegrationService{
-		connectors: connectors,
-		routes:     routes,
-		deliveries: deliveries,
-		msgClient:  msgClient,
-		logger:     logger,
+		connectors:    connectors,
+		routes:        routes,
+		deliveries:    deliveries,
+		msgClient:     msgClient,
+		encryptionKey: encryptionKey,
+		logger:        logger,
 	}
 }
 
 func (s *IntegrationService) CreateConnector(ctx context.Context, createdBy uuid.UUID, req model.CreateConnectorRequest) (*model.Connector, string, error) {
-	rawSecret, hash, err := generateWebhookSecret()
+	rawSecret, err := generateWebhookSecret()
 	if err != nil {
 		return nil, "", fmt.Errorf("generate webhook secret: %w", err)
+	}
+	encrypted, err := orchidCrypto.Encrypt(rawSecret, s.encryptionKey)
+	if err != nil {
+		return nil, "", fmt.Errorf("encrypt webhook secret: %w", err)
 	}
 
 	connector := &model.Connector{
@@ -91,7 +99,7 @@ func (s *IntegrationService) CreateConnector(ctx context.Context, createdBy uuid
 		DisplayName: strings.TrimSpace(req.DisplayName),
 		Type:        strings.TrimSpace(req.Type),
 		Config:      model.JSONB([]byte("{}")),
-		SecretHash:  &hash,
+		SecretHash:  &encrypted,
 		IsActive:    true,
 		CreatedBy:   createdBy,
 	}
@@ -204,11 +212,15 @@ func (s *IntegrationService) RotateSecret(ctx context.Context, id uuid.UUID) (st
 		return "", apperror.NotFound("Connector not found")
 	}
 
-	rawSecret, hash, err := generateWebhookSecret()
+	rawSecret, err := generateWebhookSecret()
 	if err != nil {
 		return "", fmt.Errorf("generate connector secret: %w", err)
 	}
-	if err := s.connectors.SetSecretHash(ctx, id, hash); err != nil {
+	encrypted, err := orchidCrypto.Encrypt(rawSecret, s.encryptionKey)
+	if err != nil {
+		return "", fmt.Errorf("encrypt connector secret: %w", err)
+	}
+	if err := s.connectors.SetSecretHash(ctx, id, encrypted); err != nil {
 		if errors.Is(err, model.ErrConnectorNotFound) {
 			return "", apperror.NotFound("Connector not found")
 		}
@@ -304,24 +316,32 @@ func (s *IntegrationService) RetryDelivery(ctx context.Context, id uuid.UUID) er
 	return nil
 }
 
-func (s *IntegrationService) VerifySignature(ctx context.Context, connectorID uuid.UUID, payload []byte, signature string) error {
-	secretHash, err := s.connectors.GetSecretHash(ctx, connectorID)
+func (s *IntegrationService) VerifySignature(ctx context.Context, connectorID uuid.UUID, payload []byte, signature string, timestamp string) error {
+	secretEnc, err := s.connectors.GetSecretHash(ctx, connectorID)
 	if err != nil {
 		if errors.Is(err, model.ErrConnectorNotFound) {
 			return apperror.NotFound("Connector not found")
 		}
-		return fmt.Errorf("get connector secret hash: %w", err)
+		return fmt.Errorf("get connector secret: %w", err)
 	}
-	if strings.TrimSpace(secretHash) == "" {
+	if strings.TrimSpace(secretEnc) == "" {
 		return nil
 	}
 
+	// When connector has a secret, signature AND timestamp are both required
 	normalizedSignature := normalizeSignature(signature)
 	if normalizedSignature == "" {
-		return apperror.Unauthorized("Invalid webhook signature")
+		return apperror.Unauthorized("Missing webhook signature")
 	}
 
-	expected := signPayload(secretHash, payload)
+	// Decrypt to get the raw secret for HMAC verification
+	rawSecret, err := orchidCrypto.Decrypt(secretEnc, s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("decrypt connector secret: %w", err)
+	}
+
+	// Include timestamp in HMAC to prevent replay attacks
+	expected := signPayload(rawSecret, payload, timestamp)
 	if subtle.ConstantTimeCompare([]byte(expected), []byte(normalizedSignature)) != 1 {
 		return apperror.Unauthorized("Invalid webhook signature")
 	}
@@ -335,6 +355,7 @@ func (s *IntegrationService) ProcessInboundWebhook(
 	eventType string,
 	payload model.JSONB,
 	signature string,
+	timestamp string,
 	correlationKey string,
 	externalEventID string,
 ) error {
@@ -358,7 +379,7 @@ func (s *IntegrationService) ProcessInboundWebhook(
 		return apperror.Forbidden("Connector is deactivated")
 	}
 
-	if err := s.VerifySignature(ctx, connectorID, payloadBytes, signature); err != nil {
+	if err := s.VerifySignature(ctx, connectorID, payloadBytes, signature, timestamp); err != nil {
 		return err
 	}
 
@@ -606,19 +627,20 @@ func compactJSON(raw []byte) string {
 	return buf.String()
 }
 
-func generateWebhookSecret() (string, string, error) {
+func generateWebhookSecret() (string, error) {
 	random := make([]byte, 32)
 	if _, err := rand.Read(random); err != nil {
-		return "", "", fmt.Errorf("read random bytes: %w", err)
+		return "", fmt.Errorf("read random bytes: %w", err)
 	}
-
-	raw := hex.EncodeToString(random)
-	sum := sha256.Sum256([]byte(raw))
-	return raw, hex.EncodeToString(sum[:]), nil
+	return hex.EncodeToString(random), nil
 }
 
-func signPayload(secretHash string, payload []byte) string {
-	mac := hmac.New(sha256.New, []byte(secretHash))
+func signPayload(rawSecret string, payload []byte, timestamp string) string {
+	mac := hmac.New(sha256.New, []byte(rawSecret))
+	if timestamp != "" {
+		mac.Write([]byte(timestamp))
+		mac.Write([]byte("."))
+	}
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }

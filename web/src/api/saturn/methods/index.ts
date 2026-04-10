@@ -455,7 +455,8 @@ export function fetchPromoData(): Promise<ApiPromoData | undefined> {
 }
 
 export function loadAttachBots() {
-  return botsApi.fetchBots().then((r) => r?.data);
+  // Stub: attach bots need chat-specific installed bots, not global list
+  return Promise.resolve(undefined);
 }
 
 export async function fetchNotificationExceptions() {

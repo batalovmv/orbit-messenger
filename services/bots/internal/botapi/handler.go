@@ -29,18 +29,20 @@ type UpdateQueue interface {
 }
 
 type BotAPIHandler struct {
-	svc         BotService
-	msgClient   *client.MessagingClient
-	redis       *redis.Client
-	updateQueue UpdateQueue
-	logger      *slog.Logger
+	svc           BotService
+	msgClient     *client.MessagingClient
+	redis         *redis.Client
+	updateQueue   UpdateQueue
+	encryptionKey []byte
+	logger        *slog.Logger
 }
 
-func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, logger *slog.Logger) *BotAPIHandler {
+func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, encryptionKey []byte, logger *slog.Logger) *BotAPIHandler {
 	return &BotAPIHandler{
-		svc:       svc,
-		msgClient: msgClient,
-		logger:    logger,
+		svc:           svc,
+		msgClient:     msgClient,
+		encryptionKey: encryptionKey,
+		logger:        logger,
 	}
 }
 
@@ -145,6 +147,19 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 		return botError(c, err)
 	}
 
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
+	if err != nil {
+		return botError(c, err)
+	}
+	if !installed {
+		return botError(c, apperror.Forbidden("Bot is not installed in this chat"))
+	}
+
 	messageID, err := uuid.Parse(req.MessageID)
 	if err != nil {
 		return botError(c, apperror.BadRequest("Invalid message_id"))
@@ -173,6 +188,19 @@ func (h *BotAPIHandler) deleteMessage(c *fiber.Ctx) error {
 	}
 	if err := validator.RequireUUID(req.MessageID, "message_id"); err != nil {
 		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
+	if err != nil {
+		return botError(c, err)
+	}
+	if !installed {
+		return botError(c, apperror.Forbidden("Bot is not installed in this chat"))
 	}
 
 	messageID, err := uuid.Parse(req.MessageID)

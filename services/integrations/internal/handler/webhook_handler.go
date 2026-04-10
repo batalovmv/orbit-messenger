@@ -49,17 +49,22 @@ func (h *ConnectorHandler) receiveWebhook(c *fiber.Ctx) error {
 	}
 
 	rawBody := append([]byte(nil), c.Body()...)
+	if len(rawBody) > 64*1024 {
+		return response.Error(c, apperror.BadRequest("Payload too large (max 64KB)"))
+	}
 	if len(rawBody) == 0 || !json.Valid(rawBody) {
 		return response.Error(c, apperror.BadRequest("Invalid JSON payload"))
 	}
 
 	signature := strings.TrimSpace(c.Get("X-Orbit-Signature"))
+	timestamp := strings.TrimSpace(c.Get("X-Orbit-Timestamp"))
+	// Timestamp validation happens regardless of signature presence when connector has a secret
 	if signature != "" {
-		if err := validateWebhookTimestamp(c.Get("X-Orbit-Timestamp")); err != nil {
+		if err := validateWebhookTimestamp(timestamp); err != nil {
 			return response.Error(c, err)
 		}
 	}
-	if err := h.svc.VerifySignature(c.Context(), connectorID, rawBody, signature); err != nil {
+	if err := h.svc.VerifySignature(c.Context(), connectorID, rawBody, signature, timestamp); err != nil {
 		return response.Error(c, err)
 	}
 
@@ -81,6 +86,7 @@ func (h *ConnectorHandler) receiveWebhook(c *fiber.Ctx) error {
 		eventType,
 		model.JSONB(rawBody),
 		signature,
+		timestamp,
 		correlationKey,
 		externalEventID,
 	); err != nil {

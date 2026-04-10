@@ -1,14 +1,13 @@
 package botapi
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"net"
 	"net/url"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/crypto"
 )
 
 func (h *BotAPIHandler) setWebhook(c *fiber.Ctx) error {
@@ -26,14 +25,16 @@ func (h *BotAPIHandler) setWebhook(c *fiber.Ctx) error {
 	}
 
 	webhookURL := strings.TrimSpace(req.URL)
-	var secretHash *string
+	var secretEnc *string
 	if strings.TrimSpace(req.Secret) != "" {
-		sum := sha256.Sum256([]byte(strings.TrimSpace(req.Secret)))
-		value := hex.EncodeToString(sum[:])
-		secretHash = &value
+		encrypted, encErr := crypto.Encrypt(strings.TrimSpace(req.Secret), h.encryptionKey)
+		if encErr != nil {
+			return botError(c, apperror.Internal("failed to encrypt webhook secret"))
+		}
+		secretEnc = &encrypted
 	}
 
-	if _, err := h.svc.SetWebhook(c.Context(), bot.ID, &webhookURL, secretHash); err != nil {
+	if _, err := h.svc.SetWebhook(c.Context(), bot.ID, &webhookURL, secretEnc); err != nil {
 		return botError(c, err)
 	}
 
@@ -98,8 +99,8 @@ func validateWebhookURL(raw string) error {
 		return apperror.BadRequest("failed to resolve webhook host")
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
-			return apperror.BadRequest("private webhook hosts are not allowed")
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
+			return apperror.BadRequest("private or reserved webhook hosts are not allowed")
 		}
 	}
 

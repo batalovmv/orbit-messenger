@@ -14,6 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/bots/internal/botapi"
 	"github.com/mst-corp/orbit/services/bots/internal/client"
@@ -41,7 +42,8 @@ func main() {
 		"media_service_url", mediaServiceURL,
 	)
 
-	ctx := context.Background()
+	ctx, cancelCtx := context.WithCancel(context.Background())
+	defer cancelCtx()
 
 	pool, err := pgxpool.New(ctx, dbDSN)
 	if err != nil {
@@ -80,12 +82,13 @@ func main() {
 	commandStore := store.NewCommandStore(pool)
 	installationStore := store.NewInstallationStore(pool)
 	updateQueue := service.NewUpdateQueue(rdb)
-	webhookWorker := service.NewWebhookWorker(rdb, logger)
+	encryptionKey := orchidCrypto.DeriveKey(botTokenSecret)
+	webhookWorker := service.NewWebhookWorker(rdb, encryptionKey, logger)
 
 	botService := service.NewBotService(botStore, tokenStore, commandStore, installationStore, botTokenSecret)
 	botHandler := handler.NewBotHandler(botService, logger)
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
-	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
+	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
 	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
 	if err := natsSubscriber.Start(); err != nil {
 		logger.Error("failed to start bot nats subscriber", "error", err)
@@ -120,6 +123,7 @@ func main() {
 	<-quit
 
 	logger.Info("shutting down bots service")
+	cancelCtx() // Stop webhook worker and other goroutines
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		logger.Error("bots service shutdown failed", "error", err)
 	}

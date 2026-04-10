@@ -10,10 +10,10 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/integrations/internal/client"
 	"github.com/mst-corp/orbit/services/integrations/internal/handler"
@@ -28,7 +28,6 @@ func main() {
 	port := config.EnvOr("PORT", "8087")
 	dbDSN := config.MustEnv("DATABASE_URL")
 	redisURL := config.MustEnv("REDIS_URL")
-	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	messagingServiceURL := config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082")
 
@@ -64,19 +63,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	nc, err := nats.Connect(natsURL, nats.ReconnectWait(2*time.Second), nats.MaxReconnects(-1))
-	if err != nil {
-		logger.Error("failed to connect to nats", "error", err)
-		os.Exit(1)
-	}
-	defer nc.Close()
-
 	connectorStore := store.NewConnectorStore(pool)
 	routeStore := store.NewRouteStore(pool)
 	deliveryStore := store.NewDeliveryStore(pool)
 
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
-	integrationService := service.NewIntegrationService(connectorStore, routeStore, deliveryStore, msgClient, logger)
+
+	encryptionKey := orchidCrypto.DeriveKey(internalSecret)
+	integrationService := service.NewIntegrationService(connectorStore, routeStore, deliveryStore, msgClient, encryptionKey, logger)
 	deliveryWorker := service.NewDeliveryWorker(deliveryStore, msgClient, logger)
 	connectorHandler := handler.NewConnectorHandler(integrationService, logger).WithRedis(rdb)
 

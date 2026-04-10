@@ -62,7 +62,7 @@ func (h *ConnectorHandler) getDelivery(c *fiber.Ctx) error {
 }
 
 func (h *ConnectorHandler) retryDelivery(c *fiber.Ctx) error {
-	if err := checkIntegrationLogsPermission(c); err != nil {
+	if err := checkManageIntegrationsPermission(c); err != nil {
 		return response.Error(c, err)
 	}
 

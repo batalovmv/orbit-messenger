@@ -503,6 +503,7 @@ export interface SaturnBotInstallation {
   scopes: number;
   is_active: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface SaturnBotCreateResponse {

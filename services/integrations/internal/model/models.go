@@ -86,9 +86,10 @@ func (j JSONB) Value() (driver.Value, error) {
 var (
 	ErrConnectorNotFound = errors.New("connector not found")
 	ErrConnectorAlreadyExists = errors.New("connector already exists")
-	ErrRouteNotFound     = errors.New("route not found")
-	ErrDuplicateRoute    = errors.New("route already exists for this connector and chat")
-	ErrInvalidSignature  = errors.New("invalid webhook signature")
+	ErrRouteNotFound      = errors.New("route not found")
+	ErrDuplicateRoute     = errors.New("route already exists for this connector and chat")
+	ErrInvalidSignature   = errors.New("invalid webhook signature")
+	ErrDeliveryNotFound   = errors.New("delivery not found")
 )
 
 type CreateConnectorRequest struct {

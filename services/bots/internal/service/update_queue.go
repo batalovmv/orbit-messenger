@@ -56,6 +56,16 @@ func (q *UpdateQueue) Push(botID uuid.UUID, update botapi.Update) error {
 	return nil
 }
 
+// atomicPopScript atomically reads and removes up to N items from a list.
+// KEYS[1] = list key, ARGV[1] = count
+var atomicPopScript = redis.NewScript(`
+local items = redis.call('LRANGE', KEYS[1], 0, ARGV[1] - 1)
+if #items > 0 then
+  redis.call('LTRIM', KEYS[1], #items, -1)
+end
+return items
+`)
+
 func (q *UpdateQueue) Pop(ctx context.Context, botID uuid.UUID, limit int, timeout time.Duration) ([]botapi.Update, error) {
 	if q.redis == nil {
 		return nil, fmt.Errorf("redis is not configured")
@@ -89,12 +99,10 @@ func (q *UpdateQueue) Pop(ctx context.Context, botID uuid.UUID, limit int, timeo
 		return updates, nil
 	}
 
-	items, err := q.redis.LRange(ctx, key, 0, int64(remaining-1)).Result()
-	if err != nil {
-		return nil, fmt.Errorf("lrange bot updates: %w", err)
-	}
-	if len(items) == 0 {
-		return updates, nil
+	// Atomic pop via Lua script — prevents race between LRANGE and LTRIM
+	items, err := atomicPopScript.Run(ctx, q.redis, []string{key}, remaining).StringSlice()
+	if err != nil && err != redis.Nil {
+		return nil, fmt.Errorf("atomic pop bot updates: %w", err)
 	}
 
 	for _, item := range items {
@@ -105,12 +113,28 @@ func (q *UpdateQueue) Pop(ctx context.Context, botID uuid.UUID, limit int, timeo
 		updates = append(updates, update)
 	}
 
-	if err := q.redis.LTrim(ctx, key, int64(len(items)), -1).Err(); err != nil {
-		return nil, fmt.Errorf("ltrim bot updates: %w", err)
-	}
-
 	return updates, nil
 }
+
+// ackScript atomically removes all updates with update_id < offset.
+// KEYS[1] = list key, ARGV[1] = offset, ARGV[2] = TTL seconds
+var ackScript = redis.NewScript(`
+local items = redis.call('LRANGE', KEYS[1], 0, -1)
+if #items == 0 then return 0 end
+redis.call('DEL', KEYS[1])
+local kept = 0
+for _, item in ipairs(items) do
+  local update = cjson.decode(item)
+  if update.update_id >= tonumber(ARGV[1]) then
+    redis.call('RPUSH', KEYS[1], item)
+    kept = kept + 1
+  end
+end
+if kept > 0 then
+  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+end
+return kept
+`)
 
 func (q *UpdateQueue) Ack(botID uuid.UUID, offset int64) error {
 	if q.redis == nil {
@@ -122,37 +146,9 @@ func (q *UpdateQueue) Ack(botID uuid.UUID, offset int64) error {
 
 	ctx := context.Background()
 	key := q.queueKey(botID)
+	ttlSeconds := int(botUpdatesTTL.Seconds())
 
-	items, err := q.redis.LRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		return fmt.Errorf("read bot updates for ack: %w", err)
-	}
-	if len(items) == 0 {
-		return nil
-	}
-
-	remaining := make([]string, 0, len(items))
-	for _, item := range items {
-		update, err := decodeUpdate(item)
-		if err != nil {
-			return err
-		}
-		if update.UpdateID >= offset {
-			remaining = append(remaining, item)
-		}
-	}
-
-	pipe := q.redis.TxPipeline()
-	pipe.Del(ctx, key)
-	if len(remaining) > 0 {
-		values := make([]any, len(remaining))
-		for i, item := range remaining {
-			values[i] = item
-		}
-		pipe.RPush(ctx, key, values...)
-		pipe.Expire(ctx, key, botUpdatesTTL)
-	}
-	if _, err := pipe.Exec(ctx); err != nil {
+	if err := ackScript.Run(ctx, q.redis, []string{key}, offset, ttlSeconds).Err(); err != nil && err != redis.Nil {
 		return fmt.Errorf("ack bot updates: %w", err)
 	}
 
