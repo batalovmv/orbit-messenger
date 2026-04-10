@@ -164,3 +164,28 @@ Notes: go test ./internal/handler/... -v passed with 8 handler scenarios coverin
 Status: DONE
 Files: services/bots/internal/handler/mock_stores_test.go, services/bots/internal/handler/bot_handler_test.go
 Notes: go test ./... -v passed for services/bots.
+
+## TASK-38: Integrations service go.mod
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum
+
+## TASK-39: Integrations model package
+Status: DONE
+Files: services/integrations/internal/model/models.go, services/integrations/go.mod, services/integrations/go.sum
+
+## TASK-40: Connector store
+Status: DONE
+Files: services/integrations/internal/store/connector_store.go
+
+## TASK-41: Route store
+Status: DONE
+Files: services/integrations/internal/store/route_store.go
+
+## TASK-42: Delivery store
+Status: DONE
+Files: services/integrations/internal/store/delivery_store.go
+
+## TASK-43: CHECKPOINT
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/model/models.go, services/integrations/internal/store/connector_store.go, services/integrations/internal/store/route_store.go, services/integrations/internal/store/delivery_store.go
+Notes: services/integrations go build/vet passed. Local toolchain and shared pkg replacement again resolved the module to go 1.25.0 with pgx/v5 v5.9.1 instead of the plan's stated go 1.24 baseline.
