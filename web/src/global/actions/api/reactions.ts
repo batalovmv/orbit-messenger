@@ -240,8 +240,18 @@ addActionHandler('toggleReaction', async (global, actions, payload): Promise<voi
     }
   } catch (error) {
     global = getGlobal();
-    global = addMessageReaction(global, message, userReactions);
-    setGlobal(global);
+    // Stale rollback guard: only roll back if the current state still reflects
+    // our optimistic update. If a newer successful update has already been
+    // applied, the current reactions will differ from localReactions — skip.
+    const currentMessage = selectChatMessage(global, chatId, messageId);
+    const currentReactions = currentMessage ? getUserReactions(currentMessage) : undefined;
+    const isStillOptimistic = currentReactions
+      && currentReactions.length === localReactions.length
+      && localReactions.every((r, i) => isSameReaction(r, currentReactions[i]));
+    if (isStillOptimistic) {
+      global = addMessageReaction(global, message, userReactions);
+      setGlobal(global);
+    }
   }
 });
 
