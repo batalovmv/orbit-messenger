@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mst-corp/orbit/services/integrations/internal/model"
 )
@@ -44,6 +45,10 @@ func (s *connectorStore) Create(ctx context.Context, c *model.Connector) error {
 	`, c.Name, c.DisplayName, c.Type, c.BotID, c.Config, c.SecretHash, c.IsActive, c.CreatedBy).
 		Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return model.ErrConnectorAlreadyExists
+		}
 		return fmt.Errorf("create connector: %w", err)
 	}
 
@@ -170,6 +175,10 @@ func (s *connectorStore) Update(ctx context.Context, c *model.Connector) error {
 		WHERE id = $7
 	`, c.Name, c.DisplayName, c.Type, c.BotID, c.Config, c.IsActive, c.ID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return model.ErrConnectorAlreadyExists
+		}
 		return fmt.Errorf("update connector: %w", err)
 	}
 	if tag.RowsAffected() == 0 {

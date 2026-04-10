@@ -189,3 +189,38 @@ Files: services/integrations/internal/store/delivery_store.go
 Status: DONE
 Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/model/models.go, services/integrations/internal/store/connector_store.go, services/integrations/internal/store/route_store.go, services/integrations/internal/store/delivery_store.go
 Notes: services/integrations go build/vet passed. Local toolchain and shared pkg replacement again resolved the module to go 1.25.0 with pgx/v5 v5.9.1 instead of the plan's stated go 1.24 baseline.
+
+## TASK-44: Integration service layer
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/model/models.go, services/integrations/internal/store/connector_store.go, services/integrations/internal/client/messaging_client.go, services/integrations/internal/service/integration_service.go
+Notes: go build ./internal/service/... passed. As with bots, the plan stores only a SHA-256 digest of the webhook secret, so inbound signature verification uses the persisted digest as the HMAC key because the raw secret is intentionally not recoverable.
+
+## TASK-45: Delivery retry worker
+Status: DONE
+Files: services/integrations/internal/service/delivery_worker.go
+Notes: go build ./internal/service/... passed. The worker retries pending/failed deliveries every 10 seconds, uses the service-layer payload envelope for re-send/edit, and moves exhausted deliveries to dead_letter.
+
+## TASK-46: Connector management handler
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/handler/connector_handler.go
+Notes: go build ./internal/handler/... passed. Management endpoints are wired with pkg/response, validator-based input checks, and X-User-Role permission guards for SysManageIntegrations.
+
+## TASK-47: Inbound webhook handler
+Status: DONE
+Files: services/integrations/internal/handler/webhook_handler.go
+Notes: go build ./internal/handler/... passed. Public inbound webhooks now validate raw JSON bodies, apply Redis-backed 60 req/min per-connector throttling, require a fresh timestamp when a signature header is present, and pass the raw payload into the service layer for HMAC verification and routing.
+
+## TASK-48: Delivery log handler
+Status: DONE
+Files: services/integrations/internal/handler/connector_handler.go, services/integrations/internal/handler/delivery_handler.go, services/integrations/internal/store/delivery_store.go
+Notes: go build ./internal/handler/... passed. Delivery listing now supports server-side status filtering through a private store extension while keeping the public DeliveryStore interface from the plan intact.
+
+## TASK-49: Integrations cmd/main.go - full wiring
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/cmd/main.go
+Notes: go build ./cmd/... passed. integrations now wires pgx, Redis, NATS, messaging client, management API under /api/v1, public inbound webhooks under /api/v1/webhooks/in/:connectorId, and the background delivery retry worker.
+
+## TASK-50: CHECKPOINT
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/cmd/main.go, services/integrations/internal/model/models.go, services/integrations/internal/store/connector_store.go, services/integrations/internal/store/delivery_store.go, services/integrations/internal/client/messaging_client.go, services/integrations/internal/service/integration_service.go, services/integrations/internal/service/delivery_worker.go, services/integrations/internal/handler/connector_handler.go, services/integrations/internal/handler/webhook_handler.go, services/integrations/internal/handler/delivery_handler.go
+Notes: services/integrations go build/vet passed. Module resolution still follows the local toolchain/pkg replacement reality rather than the plan baseline: go.mod stayed on go 1.25.0 and nats/redis/pgx resolved to newer compatible versions.

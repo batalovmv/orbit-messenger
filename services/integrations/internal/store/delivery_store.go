@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -63,6 +64,10 @@ func (s *deliveryStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Deliv
 }
 
 func (s *deliveryStore) ListByConnector(ctx context.Context, connectorID uuid.UUID, limit, offset int) ([]model.Delivery, int, error) {
+	return s.ListByConnectorFiltered(ctx, connectorID, nil, limit, offset)
+}
+
+func (s *deliveryStore) ListByConnectorFiltered(ctx context.Context, connectorID uuid.UUID, status *string, limit, offset int) ([]model.Delivery, int, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -70,12 +75,19 @@ func (s *deliveryStore) ListByConnector(ctx context.Context, connectorID uuid.UU
 		offset = 0
 	}
 
+	var statusArg any
+	if status != nil && strings.TrimSpace(*status) != "" {
+		trimmed := strings.TrimSpace(*status)
+		statusArg = trimmed
+	}
+
 	var total int
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM integration_deliveries
 		WHERE connector_id = $1
-	`, connectorID).Scan(&total); err != nil {
+		  AND ($2::text IS NULL OR status = $2)
+	`, connectorID, statusArg).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count deliveries: %w", err)
 	}
 
@@ -85,9 +97,10 @@ func (s *deliveryStore) ListByConnector(ctx context.Context, connectorID uuid.UU
 		       next_retry_at, delivered_at, created_at
 		FROM integration_deliveries
 		WHERE connector_id = $1
+		  AND ($2::text IS NULL OR status = $2)
 		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`, connectorID, limit, offset)
+		LIMIT $3 OFFSET $4
+	`, connectorID, statusArg, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list deliveries: %w", err)
 	}
