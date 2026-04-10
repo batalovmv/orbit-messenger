@@ -192,15 +192,15 @@ func (c *Client) checkRateLimit(ctx context.Context) error {
 	}
 
 	key := fmt.Sprintf("ratelimit:tenor:%s", time.Now().UTC().Format("200601021504"))
+	if err := c.redis.SetNX(ctx, key, 0, rateLimitWindow).Err(); err != nil {
+		c.logger.Warn("Tenor rate limit Redis init failed", "error", err)
+		return nil
+	}
+
 	count, err := c.redis.Incr(ctx, key).Result()
 	if err != nil {
 		c.logger.Warn("Tenor rate limit Redis unavailable", "error", err)
 		return nil
-	}
-	if count == 1 {
-		if err := c.redis.Expire(ctx, key, rateLimitWindow).Err(); err != nil {
-			c.logger.Warn("failed to set Tenor rate limit expiry", "error", err)
-		}
 	}
 	if count > rateLimitPerWindow {
 		return apperror.TooManyRequests("Tenor rate limit exceeded")
