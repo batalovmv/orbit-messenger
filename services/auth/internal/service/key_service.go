@@ -156,6 +156,14 @@ func (s *KeyService) GetIdentityKey(ctx context.Context, userID uuid.UUID) ([]by
 	return identityKey, nil
 }
 
+func (s *KeyService) ListUserDevices(ctx context.Context, userID uuid.UUID) ([]model.UserDeviceKeys, error) {
+	devices, err := s.keys.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user devices: %w", err)
+	}
+	return devices, nil
+}
+
 func (s *KeyService) GetPreKeyCount(ctx context.Context, userID uuid.UUID) (int, error) {
 	count, err := s.prekeys.CountRemaining(ctx, userID)
 	if err != nil {

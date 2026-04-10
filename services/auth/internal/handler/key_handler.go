@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/base64"
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -28,6 +29,7 @@ func (h *KeyHandler) Register(router fiber.Router) {
 	keys.Post("/one-time-prekeys", h.UploadOneTimePreKeys)
 	keys.Get("/:userId/bundle", h.GetKeyBundle)
 	keys.Get("/:userId/identity", h.GetIdentityKey)
+	keys.Get("/:userId/devices", h.ListUserDevices)
 	keys.Get("/count", h.GetPreKeyCount)
 	keys.Get("/transparency-log", h.GetTransparencyLog)
 }
@@ -239,6 +241,33 @@ func (h *KeyHandler) GetIdentityKey(c *fiber.Ctx) error {
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"identity_key": base64.RawURLEncoding.EncodeToString(key),
 	})
+}
+
+func (h *KeyHandler) ListUserDevices(c *fiber.Ctx) error {
+	userID, err := uuid.Parse(c.Params("userId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid user ID"))
+	}
+
+	devices, err := h.keySvc.ListUserDevices(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	type deviceInfo struct {
+		DeviceID   uuid.UUID `json:"device_id"`
+		UploadedAt time.Time `json:"uploaded_at"`
+	}
+
+	result := make([]deviceInfo, len(devices))
+	for i, device := range devices {
+		result[i] = deviceInfo{
+			DeviceID:   device.DeviceID,
+			UploadedAt: device.UploadedAt,
+		}
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"devices": result})
 }
 
 func (h *KeyHandler) GetPreKeyCount(c *fiber.Ctx) error {
