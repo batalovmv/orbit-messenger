@@ -15,6 +15,7 @@ import Transition from '../ui/Transition';
 import AuthCode from './AuthCode.async';
 import AuthEmailLogin from './AuthEmailLogin';
 import AuthPassword from './AuthPassword.async';
+import AuthQrCode from './AuthQrCode';
 import AuthSaturnRegister from './AuthSaturnRegister';
 
 import './Auth.scss';
@@ -63,7 +64,7 @@ const Auth = ({
       case 'authorizationStateWaitPhoneNumber':
         return <AuthEmailLogin />;
       case 'authorizationStateWaitQrCode':
-        return <AuthEmailLogin />;
+        return <AuthQrCode />;
       default:
         return <AuthEmailLogin />;
     }
