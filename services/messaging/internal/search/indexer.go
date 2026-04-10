@@ -119,14 +119,16 @@ func (idx *Indexer) indexMessageEvent(msg *nats.Msg) {
 		return
 	}
 
+	// Skip E2E encrypted messages — they have no plaintext to index.
+	if m.Type == "encrypted" || m.Content == nil || *m.Content == "" {
+		return
+	}
+
 	senderID := ""
 	if m.SenderID != nil {
 		senderID = *m.SenderID
 	}
-	content := ""
-	if m.Content != nil {
-		content = *m.Content
-	}
+	content := *m.Content
 
 	doc := BuildMessageDocument(
 		m.ID,
