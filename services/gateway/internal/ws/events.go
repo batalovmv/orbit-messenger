@@ -30,6 +30,11 @@ const (
 	EventMediaUploadProgress = "media_upload_progress"
 	EventMediaReady          = "media_ready"
 
+	// Bot events
+	EventBotInstalled   = "bot_installed"
+	EventBotUninstalled = "bot_uninstalled"
+	EventCallbackQuery  = "callback_query"
+
 	// Call events
 	EventCallIncoming          = "call_incoming"
 	EventCallAccepted          = "call_accepted"

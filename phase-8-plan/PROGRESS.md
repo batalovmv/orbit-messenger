@@ -224,3 +224,18 @@ Notes: go build ./cmd/... passed. integrations now wires pgx, Redis, NATS, messa
 Status: DONE
 Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/cmd/main.go, services/integrations/internal/model/models.go, services/integrations/internal/store/connector_store.go, services/integrations/internal/store/delivery_store.go, services/integrations/internal/client/messaging_client.go, services/integrations/internal/service/integration_service.go, services/integrations/internal/service/delivery_worker.go, services/integrations/internal/handler/connector_handler.go, services/integrations/internal/handler/webhook_handler.go, services/integrations/internal/handler/delivery_handler.go
 Notes: services/integrations go build/vet passed. Module resolution still follows the local toolchain/pkg replacement reality rather than the plan baseline: go.mod stayed on go 1.25.0 and nats/redis/pgx resolved to newer compatible versions.
+
+## TASK-51: Gateway proxy - add bots and integrations routes
+Status: DONE
+Files: services/gateway/internal/handler/proxy.go, services/gateway/cmd/main.go, docker-compose.yml
+Notes: services/gateway go build/vet passed. Because bots/integrations were implemented with handlers mounted under /api/v1, the new gateway proxies explicitly prepend /api/v1 on those upstreams while keeping the public Bot API proxy on the raw /bot/:token path.
+
+## TASK-52: Gateway WS event types for bots
+Status: DONE
+Files: services/gateway/internal/ws/events.go, services/gateway/internal/ws/nats_subscriber.go
+Notes: services/gateway go build/vet passed. Added bot event constants and the core-NATS fallback subscription for orbit.chat.*.bot.*; JetStream mode continues to consume them through the existing orbit.> durable subscription.
+
+## TASK-53: CHECKPOINT
+Status: DONE
+Files: services/gateway/internal/handler/proxy.go, services/gateway/cmd/main.go, services/gateway/internal/ws/events.go, services/gateway/internal/ws/nats_subscriber.go, docker-compose.yml
+Notes: services/gateway go build/vet passed after wiring bots/integrations proxy routes and bot WebSocket event coverage.

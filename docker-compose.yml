@@ -113,6 +113,8 @@ services:
       MESSAGING_SERVICE_URL: http://messaging:8082
       MEDIA_SERVICE_URL: http://media:8083
       CALLS_SERVICE_URL: http://calls:8084
+      BOTS_SERVICE_URL: http://bots:8086
+      INTEGRATIONS_SERVICE_URL: http://integrations:8087
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SECRET: ${INTERNAL_SECRET}

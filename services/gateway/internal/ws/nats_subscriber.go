@@ -108,6 +108,7 @@ func (s *Subscriber) Start() error {
 		"orbit.user.*.deactivated",
 		"orbit.chat.*.lifecycle",
 		"orbit.chat.*.member.*",
+		"orbit.chat.*.bot.*",
 		"orbit.user.*.mention",
 		"orbit.media.*.ready",
 		"orbit.call.*.lifecycle",

@@ -35,6 +35,8 @@ type ProxyConfig struct {
 	MessagingServiceURL string
 	MediaServiceURL     string
 	CallsServiceURL     string
+	BotsServiceURL      string
+	IntegrationsServiceURL string
 	FrontendURL         string
 	InternalSecret      string
 }
@@ -132,6 +134,56 @@ func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 			slog.Error("invite proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
+}
+
+func PublicBotAPIProxy(botsURL, frontendURL string) fiber.Handler {
+	client := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+
+	return func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(botsURL, "/") + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, client, frontendURL); err != nil {
+			slog.Error("bot api proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Bots service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
+}
+
+func PublicIntegrationWebhookProxy(integrationsURL, frontendURL string) fiber.Handler {
+	client := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+
+	return func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(integrationsURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, client, frontendURL); err != nil {
+			slog.Error("integrations webhook proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Integrations service unavailable", "status": 502,
 			})
 		}
 		return nil
@@ -264,6 +316,14 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
+	botsClient := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+	integrationsClient := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
 	apiGroup.All("/calls/*", func(c *fiber.Ctx) error {
 		proxyPath := sanitizeProxyPath(c.Path())
 		if proxyPath == "" {
@@ -321,6 +381,78 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 	// Block /internal/* paths — these are service-to-service only, not for user traffic
 	apiGroup.All("/internal/*", func(c *fiber.Ctx) error {
 		return response.Error(c, apperror.NotFound("Not found"))
+	})
+
+	// Bots management routes live under /api/v1 on the bots service.
+	apiGroup.All("/bots/*", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.BotsServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, botsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("bots proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Bots service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+	apiGroup.All("/bots", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.BotsServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, botsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("bots proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Bots service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+
+	// Integrations management routes live under /api/v1 on the integrations service.
+	apiGroup.All("/integrations/*", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.IntegrationsServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, integrationsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("integrations proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Integrations service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+	apiGroup.All("/integrations", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.IntegrationsServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, integrationsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("integrations proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Integrations service unavailable", "status": 502,
+			})
+		}
+		return nil
 	})
 
 	// Messaging routes: proxy with JWT already validated by middleware

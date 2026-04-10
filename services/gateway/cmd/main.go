@@ -35,6 +35,8 @@ func main() {
 	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
 	callsServiceURL := config.EnvOr("CALLS_URL", config.EnvOr("CALLS_SERVICE_URL", "http://localhost:8084"))
+	botsURL := config.EnvOr("BOTS_SERVICE_URL", config.EnvOr("BOTS_URL", "http://localhost:8086"))
+	integrationsURL := config.EnvOr("INTEGRATIONS_SERVICE_URL", config.EnvOr("INTEGRATIONS_URL", "http://localhost:8087"))
 	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
 	vapidPublicKey := config.EnvOr("VAPID_PUBLIC_KEY", "")
 	vapidPrivateKey := config.EnvOr("VAPID_PRIVATE_KEY", "")
@@ -216,6 +218,9 @@ func main() {
 		Redis: rdb, MaxPerMin: 20, KeyPrefix: "invite",
 	})
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
+	app.All("/api/v1/bot/:token", handler.PublicBotAPIProxy(botsURL, frontendURL))
+	app.All("/api/v1/bot/:token/*", handler.PublicBotAPIProxy(botsURL, frontendURL))
+	app.Post("/api/v1/webhooks/in/:connectorId", handler.PublicIntegrationWebhookProxy(integrationsURL, frontendURL))
 
 	// API group with JWT + rate limiting
 	// Note: media GET routes are handled by apiGroup.All("/media/*") in SetupProxy,
@@ -228,6 +233,8 @@ func main() {
 		MessagingServiceURL: messagingServiceURL,
 		MediaServiceURL:     mediaServiceURL,
 		CallsServiceURL:     callsServiceURL,
+		BotsServiceURL:      botsURL,
+		IntegrationsServiceURL: integrationsURL,
 		FrontendURL:         frontendURL,
 		InternalSecret:      internalSecret,
 	})
