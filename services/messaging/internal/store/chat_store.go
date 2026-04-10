@@ -16,10 +16,11 @@ import (
 type ChatStore interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
 	GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	IsFeatureEnabled(ctx context.Context, key string) (bool, error)
 	GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
 	Create(ctx context.Context, chat *model.Chat) error
 	GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
-	CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
+	CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error)
 	GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
 	SearchMembers(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
 	GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
@@ -74,6 +75,21 @@ func (s *chatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uui
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+func (s *chatStore) IsFeatureEnabled(ctx context.Context, key string) (bool, error) {
+	var enabled bool
+	err := s.pool.QueryRow(ctx,
+		`SELECT enabled FROM feature_flags WHERE key = $1`,
+		key,
+	).Scan(&enabled)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get feature flag: %w", err)
+	}
+	return enabled, nil
 }
 
 func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -287,7 +303,7 @@ func (s *chatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (
 	return &chatID, nil
 }
 
-func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error) {
+func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -296,12 +312,13 @@ func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID
 
 	chat := &model.Chat{
 		Type:               "direct",
+		IsEncrypted:        isEncrypted,
 		DefaultPermissions: permissions.DefaultDirectPermissions,
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO chats (type, default_permissions) VALUES ('direct', $1)
+		`INSERT INTO chats (type, is_encrypted, default_permissions) VALUES ('direct', $1, $2)
 		 RETURNING id, type, is_encrypted, max_members, default_permissions, disappearing_timer, created_at, updated_at`,
-		permissions.DefaultDirectPermissions,
+		isEncrypted, permissions.DefaultDirectPermissions,
 	).Scan(&chat.ID, &chat.Type, &chat.IsEncrypted, &chat.MaxMembers, &chat.DefaultPermissions, &chat.DisappearingTimer, &chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, err

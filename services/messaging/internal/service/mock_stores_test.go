@@ -15,10 +15,11 @@ import (
 type mockChatStore struct {
 	listByUserFn           func(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error)
 	getUserChatIDsFn       func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	isFeatureEnabledFn     func(ctx context.Context, key string) (bool, error)
 	getByIDFn              func(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
 	createFn               func(ctx context.Context, chat *model.Chat) error
 	getDirectChatFn        func(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
-	createDirectFn         func(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
+	createDirectFn         func(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error)
 	getMembersFn           func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
 	searchMembersFn        func(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
 	getMemberIDsFn         func(ctx context.Context, chatID uuid.UUID) ([]string, error)
@@ -53,6 +54,12 @@ func (m *mockChatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([
 	}
 	return nil, nil
 }
+func (m *mockChatStore) IsFeatureEnabled(ctx context.Context, key string) (bool, error) {
+	if m.isFeatureEnabledFn != nil {
+		return m.isFeatureEnabledFn(ctx, key)
+	}
+	return false, nil
+}
 func (m *mockChatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error) {
 	if m.getByIDFn != nil {
 		return m.getByIDFn(ctx, chatID)
@@ -74,9 +81,9 @@ func (m *mockChatStore) GetDirectChat(ctx context.Context, u1, u2 uuid.UUID) (*u
 	}
 	return nil, nil
 }
-func (m *mockChatStore) CreateDirectChat(ctx context.Context, u1, u2 uuid.UUID) (*model.Chat, error) {
+func (m *mockChatStore) CreateDirectChat(ctx context.Context, u1, u2 uuid.UUID, isEncrypted bool) (*model.Chat, error) {
 	if m.createDirectFn != nil {
-		return m.createDirectFn(ctx, u1, u2)
+		return m.createDirectFn(ctx, u1, u2, isEncrypted)
 	}
 	return nil, nil
 }

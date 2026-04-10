@@ -534,14 +534,14 @@ func TestCreateDirectChat_SelfDM_RedirectsToSavedMessages(t *testing.T) {
 			}
 			return &model.Chat{ID: savedChatID, Type: "direct"}, nil
 		},
-		createDirectFn: func(_ context.Context, _, _ uuid.UUID) (*model.Chat, error) {
+		createDirectFn: func(_ context.Context, _, _ uuid.UUID, _ bool) (*model.Chat, error) {
 			t.Fatal("self-DM must not call CreateDirectChat — expected Saved Messages redirect")
 			return nil, nil
 		},
 	}
 
 	svc := newTestChatService(cs, rec)
-	chat, err := svc.CreateDirectChat(context.Background(), userID, userID)
+	chat, err := svc.CreateDirectChat(context.Background(), userID, userID, false)
 	if err != nil {
 		t.Fatalf("expected self-DM to succeed, got: %v", err)
 	}
@@ -557,27 +557,37 @@ func TestCreateDirectChat_NATS_ChatCreated(t *testing.T) {
 	rec := &RecordingPublisher{}
 
 	cs := &mockChatStore{
+		isFeatureEnabledFn: func(_ context.Context, key string) (bool, error) {
+			if key != "e2e_dm_enabled" {
+				t.Fatalf("unexpected feature flag key: %s", key)
+			}
+			return true, nil
+		},
 		getDirectChatFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*uuid.UUID, error) {
 			if gotUserID != userID || gotOtherUserID != otherUserID {
 				t.Fatalf("unexpected direct chat lookup args: %s %s", gotUserID, gotOtherUserID)
 			}
 			return nil, nil
 		},
-		createDirectFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*model.Chat, error) {
+		createDirectFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID, isEncrypted bool) (*model.Chat, error) {
 			if gotUserID != userID || gotOtherUserID != otherUserID {
 				t.Fatalf("unexpected create direct args: %s %s", gotUserID, gotOtherUserID)
+			}
+			if !isEncrypted {
+				t.Fatal("expected encrypted direct chat creation")
 			}
 
 			chatType := "direct"
 			return &model.Chat{
-				ID:   chatID,
-				Type: chatType,
+				ID:          chatID,
+				Type:        chatType,
+				IsEncrypted: true,
 			}, nil
 		},
 	}
 
 	svc := newTestChatService(cs, rec)
-	chat, err := svc.CreateDirectChat(context.Background(), userID, otherUserID)
+	chat, err := svc.CreateDirectChat(context.Background(), userID, otherUserID, true)
 	if err != nil {
 		t.Fatalf("CreateDirectChat: %v", err)
 	}
@@ -604,6 +614,35 @@ func TestCreateDirectChat_NATS_ChatCreated(t *testing.T) {
 	if ev.SenderID != userID.String() {
 		t.Fatalf("expected sender ID %s, got %s", userID, ev.SenderID)
 	}
+}
+
+func TestCreateDirectChat_EncryptedFeatureDisabled(t *testing.T) {
+	userID := uuid.New()
+	otherUserID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		getDirectChatFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*uuid.UUID, error) {
+			if gotUserID != userID || gotOtherUserID != otherUserID {
+				t.Fatalf("unexpected direct chat lookup args: %s %s", gotUserID, gotOtherUserID)
+			}
+			return nil, nil
+		},
+		isFeatureEnabledFn: func(_ context.Context, key string) (bool, error) {
+			if key != "e2e_dm_enabled" {
+				t.Fatalf("unexpected feature flag key: %s", key)
+			}
+			return false, nil
+		},
+		createDirectFn: func(_ context.Context, _, _ uuid.UUID, _ bool) (*model.Chat, error) {
+			t.Fatal("feature-disabled encrypted DM must not be created")
+			return nil, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	_, err := svc.CreateDirectChat(context.Background(), userID, otherUserID, true)
+	assertAppError(t, err, 400)
 }
 
 func TestCreateChat_GroupDefaultPerms(t *testing.T) {

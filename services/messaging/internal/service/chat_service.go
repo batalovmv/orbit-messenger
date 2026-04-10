@@ -150,7 +150,7 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*m
 	return chat, nil
 }
 
-func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID) (*model.Chat, error) {
+func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID, isEncrypted bool) (*model.Chat, error) {
 	// Self-DM → redirect to Saved Messages (direct_chat_lookup requires user1 < user2).
 	if userID == otherUserID {
 		return s.GetOrCreateSavedChat(ctx, userID)
@@ -168,7 +168,11 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 		return chat, nil
 	}
 
-	chat, err := s.chats.CreateDirectChat(ctx, userID, otherUserID)
+	if isEncrypted && !s.isFeatureEnabled(ctx, "e2e_dm_enabled") {
+		return nil, apperror.BadRequest("E2E encryption is not enabled")
+	}
+
+	chat, err := s.chats.CreateDirectChat(ctx, userID, otherUserID, isEncrypted)
 	if err != nil {
 		return nil, fmt.Errorf("create DM: %w", err)
 	}
@@ -188,6 +192,14 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 	s.indexChat(chat)
 
 	return chat, nil
+}
+
+func (s *ChatService) isFeatureEnabled(ctx context.Context, key string) bool {
+	enabled, err := s.chats.IsFeatureEnabled(ctx, key)
+	if err != nil {
+		return false
+	}
+	return enabled
 }
 
 // CreateChat creates a group chat. memberIDs are added after creation (owner is always added).

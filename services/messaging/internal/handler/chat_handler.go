@@ -79,7 +79,8 @@ func (h *ChatHandler) CreateDirectChat(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		UserID string `json:"user_id"`
+		UserID      string `json:"user_id"`
+		IsEncrypted bool   `json:"is_encrypted"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -90,7 +91,7 @@ func (h *ChatHandler) CreateDirectChat(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid user_id"))
 	}
 
-	chat, err := h.svc.CreateDirectChat(c.Context(), uid, otherID)
+	chat, err := h.svc.CreateDirectChat(c.Context(), uid, otherID, req.IsEncrypted)
 	if err != nil {
 		return response.Error(c, err)
 	}
