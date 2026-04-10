@@ -420,12 +420,13 @@ func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID
 		if !isMember {
 			return apperror.Forbidden("Not a member of this chat")
 		}
-		if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
-			return fmt.Errorf("leave chat: %w", err)
-		}
 		memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
 		if mErr != nil {
 			slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+		}
+		memberIDs = appendUniqueString(memberIDs, targetID.String())
+		if err := s.chats.RemoveMember(ctx, chatID, targetID); err != nil {
+			return fmt.Errorf("leave chat: %w", err)
 		}
 		s.nats.Publish(
 			fmt.Sprintf("orbit.chat.%s.member.removed", chatID),
@@ -752,4 +753,13 @@ func (s *ChatService) indexChat(chat *model.Chat) {
 	if err := s.search.IndexChat(chat.ID.String(), chat.Type, name, description); err != nil {
 		slog.Warn("search: failed to index chat", "chat_id", chat.ID, "error", err)
 	}
+}
+
+func appendUniqueString(values []string, candidate string) []string {
+	for _, value := range values {
+		if value == candidate {
+			return values
+		}
+	}
+	return append(values, candidate)
 }

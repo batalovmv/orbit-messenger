@@ -46,7 +46,6 @@ func defaultGroupChat(chatID uuid.UUID) *model.Chat {
 	}
 }
 
-
 func assertAppError(t *testing.T, err error, wantStatus int) {
 	t.Helper()
 	var appErr *apperror.AppError
@@ -782,6 +781,43 @@ func TestRemoveMember_SelfLeave_AlwaysAllowed(t *testing.T) {
 	}
 	if !removed {
 		t.Fatal("RemoveMember should have been called")
+	}
+}
+
+func TestRemoveMember_SelfLeave_FanoutIncludesLeaver(t *testing.T) {
+	memberID := uuid.New()
+	chatID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _ uuid.UUID, _ uuid.UUID) (bool, string, error) {
+			return true, "member", nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{"another-device-user"}, nil
+		},
+		removeMemberFn: func(_ context.Context, _, _ uuid.UUID) error { return nil },
+	}
+
+	svc := newTestChatService(cs, rec)
+	if err := svc.RemoveMember(context.Background(), chatID, memberID, memberID); err != nil {
+		t.Fatalf("self-leave should succeed: %v", err)
+	}
+
+	events := rec.FindByEvent("chat_member_removed")
+	if len(events) != 1 {
+		t.Fatalf("expected 1 chat_member_removed event, got %d", len(events))
+	}
+
+	foundLeaver := false
+	for _, id := range events[0].MemberIDs {
+		if id == memberID.String() {
+			foundLeaver = true
+			break
+		}
+	}
+	if !foundLeaver {
+		t.Fatal("expected self-leave fanout to include the leaver")
 	}
 }
 
