@@ -233,6 +233,7 @@ func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UU
 
 type mockMessageStore struct {
 	createFn               func(ctx context.Context, msg *model.Message) error
+	createEncryptedFn      func(ctx context.Context, msg *model.Message, envelope []byte) error
 	getByIDFn              func(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	listByChatFn           func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error)
 	findByChatAndDateFn    func(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
@@ -254,6 +255,17 @@ func (m *mockMessageStore) Create(ctx context.Context, msg *model.Message) error
 	}
 	msg.ID = uuid.New()
 	msg.CreatedAt = time.Now()
+	return nil
+}
+
+func (m *mockMessageStore) CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error {
+	if m.createEncryptedFn != nil {
+		return m.createEncryptedFn(ctx, msg, envelope)
+	}
+	msg.ID = uuid.New()
+	msg.CreatedAt = time.Now()
+	msg.Type = model.MessageTypeEncrypted
+	msg.EncryptedContent = envelope
 	return nil
 }
 

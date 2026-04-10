@@ -20,7 +20,7 @@ var (
 )
 
 const messageSelectColumns = `
-	m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
+	m.id, m.chat_id, m.sender_id, m.type, m.content, m.encrypted_content, m.entities, m.reply_to_id,
 	m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 	m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 	m.is_one_time, m.viewed_at, m.viewed_by,
@@ -30,6 +30,7 @@ const messageSelectColumns = `
 
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
+	CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error
 	CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error)
@@ -67,7 +68,7 @@ func NewMessageStore(pool *pgxpool.Pool) MessageStore {
 
 func scanMessage(scanner messageScanner, msg *model.Message) error {
 	return scanner.Scan(
-		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
+		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.EncryptedContent, &msg.Entities, &msg.ReplyToID,
 		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
 		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
 		&msg.IsOneTime, &msg.ViewedAt, &msg.ViewedBy,
@@ -104,6 +105,43 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *messageStore) CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var seq int64
+	err = tx.QueryRow(ctx,
+		`UPDATE chats SET next_sequence_number = next_sequence_number + 1
+		 WHERE id = $1
+		 RETURNING next_sequence_number - 1`,
+		msg.ChatID,
+	).Scan(&seq)
+	if err != nil {
+		return fmt.Errorf("get sequence: %w", err)
+	}
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO messages (chat_id, sender_id, type, content, encrypted_content, sequence_number)
+		 VALUES ($1, $2, 'encrypted', NULL, $3, $4)
+		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
+		           sequence_number, created_at, viewed_at, viewed_by`,
+		msg.ChatID, msg.SenderID, envelope, seq,
+	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
+		&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
+	if err != nil {
+		return fmt.Errorf("insert encrypted message: %w", err)
+	}
+
+	msg.Type = model.MessageTypeEncrypted
+	msg.Content = nil
+	msg.EncryptedContent = envelope
 
 	return tx.Commit(ctx)
 }
