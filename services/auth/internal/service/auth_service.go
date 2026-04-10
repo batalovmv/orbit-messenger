@@ -103,7 +103,7 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 		}
 	}
 
-	pair, err := s.createTokenPair(ctx, u.ID, ip, userAgent)
+	pair, err := s.createTokenPair(ctx, u.ID, nil, ip, userAgent)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -237,7 +237,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken, ip, userAgent s
 		return nil, nil, apperror.Forbidden("Account is deactivated")
 	}
 
-	pair, err := s.createTokenPair(ctx, u.ID, ip, userAgent)
+	pair, err := s.createTokenPair(ctx, u.ID, sess.DeviceID, ip, userAgent)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -505,7 +505,7 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) 
 
 // --- internal helpers ---
 
-func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, ip, userAgent string) (*TokenPair, error) {
+func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, deviceID *uuid.UUID, ip, userAgent string) (*TokenPair, error) {
 	now := time.Now()
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
@@ -523,8 +523,13 @@ func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, ip,
 	refreshStr := hex.EncodeToString(refreshBytes)
 
 	// Store session in DB
+	if deviceID == nil {
+		did := uuid.New()
+		deviceID = &did
+	}
 	sess := &model.Session{
 		UserID:    userID,
+		DeviceID:  deviceID,
 		TokenHash: hashToken(refreshStr),
 		IPAddress: &ip,
 		UserAgent: &userAgent,

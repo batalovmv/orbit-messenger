@@ -36,10 +36,10 @@ func NewSessionStore(pool *pgxpool.Pool) SessionStore {
 
 func (s *sessionStore) Create(ctx context.Context, sess *model.Session) error {
 	return s.pool.QueryRow(ctx,
-		`INSERT INTO sessions (user_id, token_hash, ip_address, user_agent, expires_at)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO sessions (user_id, device_id, token_hash, ip_address, user_agent, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, created_at`,
-		sess.UserID, sess.TokenHash, sess.IPAddress, sess.UserAgent, sess.ExpiresAt,
+		sess.UserID, sess.DeviceID, sess.TokenHash, sess.IPAddress, sess.UserAgent, sess.ExpiresAt,
 	).Scan(&sess.ID, &sess.CreatedAt)
 }
 
