@@ -440,12 +440,12 @@ export async function fetchExportedChatInvites({
 }
 
 export async function fetchChatInviteInfo({ hash }: { hash: string }) {
-  const data = await client.request<any>('GET', `/chats/invite/${hash}`);
+  const data = await client.request<any>('GET', `/chats/invite/${encodeURIComponent(hash)}`);
   return data;
 }
 
 export async function joinChat({ hash }: { hash: string }) {
-  const data = await client.request<any>('POST', `/chats/join/${hash}`);
+  const data = await client.request<any>('POST', `/chats/join/${encodeURIComponent(hash)}`);
   return data;
 }
 
