@@ -89,7 +89,7 @@ services:
     command: >
       -n --log-file=stdout
       --realm=${TURN_REALM:-orbit.local}
-      --user=${TURN_USER:-orbit}:${TURN_PASSWORD:-orbit}
+      --user=${TURN_USER:?TURN_USER is required}:${TURN_PASSWORD:?TURN_PASSWORD is required}
       --lt-cred-mech
       --fingerprint
       --min-port=49152
@@ -208,8 +208,8 @@ services:
       # Public URL returned to browser clients — must be reachable from user machines.
       # host.docker.internal works when browser is on the same host as Docker Desktop.
       TURN_PUBLIC_URL: ${TURN_PUBLIC_URL:-turn:host.docker.internal:3478}
-      TURN_USER: ${TURN_USER:-orbit}
-      TURN_PASSWORD: ${TURN_PASSWORD:-orbit}
+      TURN_USER: ${TURN_USER:?TURN_USER is required}
+      TURN_PASSWORD: ${TURN_PASSWORD:?TURN_PASSWORD is required}
     depends_on:
       postgres: { condition: service_healthy }
       nats: { condition: service_healthy }
