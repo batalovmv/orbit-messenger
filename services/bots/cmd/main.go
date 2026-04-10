@@ -79,11 +79,19 @@ func main() {
 	tokenStore := store.NewTokenStore(pool)
 	commandStore := store.NewCommandStore(pool)
 	installationStore := store.NewInstallationStore(pool)
+	updateQueue := service.NewUpdateQueue(rdb)
+	webhookWorker := service.NewWebhookWorker(rdb, logger)
 
 	botService := service.NewBotService(botStore, tokenStore, commandStore, installationStore, botTokenSecret)
 	botHandler := handler.NewBotHandler(botService, logger)
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
-	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, logger).WithRedis(rdb)
+	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
+	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
+	if err := natsSubscriber.Start(); err != nil {
+		logger.Error("failed to start bot nats subscriber", "error", err)
+		os.Exit(1)
+	}
+	go webhookWorker.Start(ctx)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,

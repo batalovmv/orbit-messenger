@@ -132,3 +132,21 @@ Files: services/bots/internal/botapi/updates_handler.go
 Status: DONE
 Files: services/bots/cmd/main.go, services/bots/internal/client/messaging_client.go, services/bots/internal/botapi/middleware.go, services/bots/internal/botapi/models.go, services/bots/internal/botapi/handler.go, services/bots/internal/botapi/callback_handler.go, services/bots/internal/botapi/webhook_handler.go, services/bots/internal/botapi/updates_handler.go
 Notes: Bot API routes are registered under /bot/:token with token middleware, and services/bots go build/vet passed.
+
+## TASK-31: NATS subscriber for bot events
+Status: DONE
+Files: services/bots/internal/service/nats_subscriber.go, services/bots/internal/store/installation_store.go
+
+## TASK-32: Webhook delivery worker
+Status: DONE
+Files: services/bots/internal/service/webhook_worker.go
+Notes: due the plan's hashed-secret storage, webhook signing uses the persisted digest as the HMAC key during delivery.
+
+## TASK-33: Update queue for getUpdates
+Status: DONE
+Files: services/bots/internal/service/update_queue.go
+
+## TASK-34: CHECKPOINT
+Status: DONE
+Files: services/bots/cmd/main.go, services/bots/internal/service/nats_subscriber.go, services/bots/internal/service/webhook_worker.go, services/bots/internal/service/update_queue.go, services/bots/internal/botapi/handler.go
+Notes: services/bots go build/vet passed. cmd/main.go now wires Bot API update queue, webhook worker, and bot NATS subscriptions on startup.

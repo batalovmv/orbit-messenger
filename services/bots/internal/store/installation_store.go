@@ -226,12 +226,11 @@ func (s *installationStore) ListByBot(ctx context.Context, botID uuid.UUID) ([]m
 
 func (s *installationStore) ListChatsWithWebhookBots(ctx context.Context, chatID uuid.UUID) ([]WebhookBotInfo, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT bi.bot_id, b.user_id, b.webhook_url, b.webhook_secret_hash, bi.scopes
+		SELECT bi.bot_id, b.user_id, COALESCE(b.webhook_url, ''), b.webhook_secret_hash, bi.scopes
 		FROM bot_installations bi
 		JOIN bots b ON b.id = bi.bot_id
 		WHERE bi.chat_id = $1
 		  AND bi.is_active = true
-		  AND b.webhook_url IS NOT NULL
 	`, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("list chat webhook bots: %w", err)

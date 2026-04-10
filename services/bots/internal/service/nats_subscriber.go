@@ -1,0 +1,162 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/mst-corp/orbit/services/bots/internal/botapi"
+	"github.com/mst-corp/orbit/services/bots/internal/store"
+	"github.com/nats-io/nats.go"
+)
+
+type BotNATSSubscriber struct {
+	nc            *nats.Conn
+	installations store.InstallationStore
+	webhookWorker *WebhookWorker
+	updateQueue   *UpdateQueue
+	logger        *slog.Logger
+}
+
+type natsEvent struct {
+	Event     string          `json:"event"`
+	Data      json.RawMessage `json:"data"`
+	MemberIDs []string        `json:"member_ids"`
+	SenderID  string          `json:"sender_id,omitempty"`
+	Timestamp string          `json:"timestamp"`
+}
+
+func NewBotNATSSubscriber(
+	nc *nats.Conn,
+	installations store.InstallationStore,
+	webhookWorker *WebhookWorker,
+	updateQueue *UpdateQueue,
+	logger *slog.Logger,
+) *BotNATSSubscriber {
+	return &BotNATSSubscriber{
+		nc:            nc,
+		installations: installations,
+		webhookWorker: webhookWorker,
+		updateQueue:   updateQueue,
+		logger:        logger,
+	}
+}
+
+func (s *BotNATSSubscriber) Start() error {
+	if s.nc == nil {
+		return fmt.Errorf("nats connection is not configured")
+	}
+
+	if _, err := s.nc.Subscribe("orbit.chat.*.message.new", s.handleEvent); err != nil {
+		return fmt.Errorf("subscribe message events: %w", err)
+	}
+	if _, err := s.nc.Subscribe("orbit.chat.*.member.*", s.handleEvent); err != nil {
+		return fmt.Errorf("subscribe member events: %w", err)
+	}
+
+	return nil
+}
+
+func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
+	var event natsEvent
+	if err := json.Unmarshal(msg.Data, &event); err != nil {
+		s.logger.Error("failed to decode bot nats event", "error", err, "subject", msg.Subject)
+		return
+	}
+
+	chatID := extractChatID(msg.Subject)
+	if chatID == uuid.Nil {
+		s.logger.Warn("failed to extract chat id from subject", "subject", msg.Subject)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	bots, err := s.installations.ListChatsWithWebhookBots(ctx, chatID)
+	if err != nil {
+		s.logger.Error("failed to list installed bots for chat", "chat_id", chatID, "error", err)
+		return
+	}
+
+	update := buildBotUpdate(chatID, event)
+	for _, info := range bots {
+		if event.SenderID != "" && info.UserID.String() == event.SenderID {
+			continue
+		}
+
+		if info.WebhookURL != "" {
+			secretHash := ""
+			if info.SecretHash != nil {
+				secretHash = *info.SecretHash
+			}
+			if err := s.webhookWorker.Enqueue(info.BotID, info.WebhookURL, secretHash, update); err != nil {
+				s.logger.Error("enqueue webhook delivery failed", "bot_id", info.BotID, "error", err)
+			}
+			continue
+		}
+
+		if err := s.updateQueue.Push(info.BotID, update); err != nil {
+			s.logger.Error("push bot update failed", "bot_id", info.BotID, "error", err)
+		}
+	}
+}
+
+func extractChatID(subject string) uuid.UUID {
+	parts := strings.Split(subject, ".")
+	if len(parts) < 3 {
+		return uuid.Nil
+	}
+	chatID, err := uuid.Parse(parts[2])
+	if err != nil {
+		return uuid.Nil
+	}
+	return chatID
+}
+
+func buildBotUpdate(chatID uuid.UUID, event natsEvent) botapi.Update {
+	message := &botapi.APIMessage{
+		MessageID: uuid.NewString(),
+		ChatID:    chatID.String(),
+		FromID:    event.SenderID,
+		Text:      event.Event,
+		Date:      time.Now().Unix(),
+	}
+
+	var payload struct {
+		ID         string `json:"id"`
+		ChatID     string `json:"chat_id"`
+		SenderID   string `json:"sender_id"`
+		SenderName string `json:"sender_name"`
+		Content    string `json:"content"`
+		CreatedAt  string `json:"created_at"`
+	}
+	if err := json.Unmarshal(event.Data, &payload); err == nil {
+		if payload.ID != "" {
+			message.MessageID = payload.ID
+		}
+		if payload.ChatID != "" {
+			message.ChatID = payload.ChatID
+		}
+		if payload.SenderID != "" {
+			message.FromID = payload.SenderID
+		}
+		if payload.SenderName != "" {
+			message.FromName = payload.SenderName
+		}
+		if payload.Content != "" {
+			message.Text = payload.Content
+		}
+		if payload.CreatedAt != "" {
+			if createdAt, err := time.Parse(time.RFC3339, payload.CreatedAt); err == nil {
+				message.Date = createdAt.Unix()
+			}
+		}
+	}
+
+	return botapi.Update{Message: message}
+}
