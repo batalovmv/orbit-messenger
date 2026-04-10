@@ -26,7 +26,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// Config
+	// Config (force redeploy)
 	port := config.EnvOr("PORT", "8080")
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
