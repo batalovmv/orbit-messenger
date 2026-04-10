@@ -239,3 +239,13 @@ Notes: services/gateway go build/vet passed. Added bot event constants and the c
 Status: DONE
 Files: services/gateway/internal/handler/proxy.go, services/gateway/cmd/main.go, services/gateway/internal/ws/events.go, services/gateway/internal/ws/nats_subscriber.go, docker-compose.yml
 Notes: services/gateway go build/vet passed after wiring bots/integrations proxy routes and bot WebSocket event coverage.
+
+## TASK-54: Integrations handler tests
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/handler/mock_stores_test.go, services/integrations/internal/handler/connector_handler_test.go
+Notes: go test ./internal/handler/... -v passed with 7 requested scenarios, including Redis-backed inbound webhook validation using miniredis and the current digest-as-HMAC-key secret semantics from the service layer.
+
+## TASK-55: CHECKPOINT
+Status: DONE
+Files: services/integrations/go.mod, services/integrations/go.sum, services/integrations/internal/handler/mock_stores_test.go, services/integrations/internal/handler/connector_handler_test.go
+Notes: go test ./... -v passed for services/integrations.
