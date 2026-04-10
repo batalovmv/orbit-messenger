@@ -27,6 +27,9 @@ return {count, ttl}
 `)
 
 func (h *ConnectorHandler) RegisterPublic(router fiber.Router) {
+	// Registered at root path (no /api/v1 prefix) so Fiber's group-level Use()
+	// middleware on the /api/v1 authenticated group does not interfere.
+	// The gateway proxies POST /api/v1/webhooks/in/:id → here as /webhooks/in/:id.
 	router.Post("/webhooks/in/:connectorId", h.receiveWebhook)
 }
 

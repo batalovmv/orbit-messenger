@@ -82,11 +82,14 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-integrations"})
 	})
 
+	// Public inbound webhook endpoint is registered at /webhooks/in/:connectorId
+	// (WITHOUT the /api/v1 prefix) to ensure Fiber's group-level Use() middleware
+	// from the authenticated api group does NOT apply to it.
+	// The gateway's PublicIntegrationWebhookProxy forwards to this path directly.
+	connectorHandler.RegisterPublic(app)
+
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	connectorHandler.Register(api)
-
-	publicAPI := app.Group("/api/v1")
-	connectorHandler.RegisterPublic(publicAPI)
 
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
 	defer cancelWorker()

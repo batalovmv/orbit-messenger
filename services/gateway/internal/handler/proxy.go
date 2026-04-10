@@ -181,7 +181,9 @@ func PublicIntegrationWebhookProxy(integrationsURL, frontendURL string) fiber.Ha
 		if proxyPath == "" {
 			return response.Error(c, apperror.NotFound("Not found"))
 		}
-		url := strings.TrimRight(integrationsURL, "/") + "/api/v1" + proxyPath
+		// Integrations service serves the public webhook at /webhooks/in/:id
+		// (without /api/v1 prefix) to avoid Fiber group-level auth middleware.
+		url := strings.TrimRight(integrationsURL, "/") + proxyPath
 		if q := c.Request().URI().QueryString(); len(q) > 0 {
 			url += "?" + string(q)
 		}
