@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
 
@@ -53,7 +54,13 @@ func (p *NATSPublisher) Publish(subject string, event string, data interface{}, 
 		return
 	}
 
-	if err := p.nc.Publish(subject, payload); err != nil {
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    payload,
+		Header:  nats.Header{},
+	}
+	msg.Header.Set("Nats-Msg-Id", uuid.New().String())
+	if err := p.nc.PublishMsg(msg); err != nil {
 		slog.Error("failed to publish NATS event", "error", err, "subject", subject, "event", event)
 	}
 }

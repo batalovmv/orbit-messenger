@@ -878,7 +878,14 @@ func (s *MediaService) publishMediaReady(mediaID uuid.UUID) {
 		return
 	}
 	subject := fmt.Sprintf("orbit.media.%s.ready", m.UploaderID.String())
-	if err := s.nc.Publish(subject, data); err != nil {
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    data,
+		Header:  nats.Header{},
+	}
+	// Nats-Msg-Id enables JetStream server-side dedup and gateway dedup cache.
+	msg.Header.Set("Nats-Msg-Id", uuid.New().String())
+	if err := s.nc.PublishMsg(msg); err != nil {
 		slog.Error("publish media_ready failed", "error", err)
 	}
 }

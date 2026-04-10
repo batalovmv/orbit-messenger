@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
 
@@ -53,7 +54,15 @@ func (p *NATSPublisher) Publish(subject string, event string, data interface{}, 
 		slog.Error("nats: marshal error", "error", err, "event", event)
 		return
 	}
-	if err := p.nc.Publish(subject, payload); err != nil {
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    payload,
+		Header:  nats.Header{},
+	}
+	// Nats-Msg-Id enables JetStream server-side dedup within the 2-minute window
+	// and is also used by the gateway dedup cache to skip duplicate redeliveries.
+	msg.Header.Set("Nats-Msg-Id", uuid.New().String())
+	if err := p.nc.PublishMsg(msg); err != nil {
 		slog.Error("nats: publish error", "error", err, "subject", subject)
 	}
 }
