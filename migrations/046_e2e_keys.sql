@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS user_keys (
     signed_prekey BYTEA NOT NULL,
     signed_prekey_signature BYTEA NOT NULL,
     signed_prekey_id INT NOT NULL,
-    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (user_id, device_id)
 );
@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS one_time_prekeys (
     key_id INT NOT NULL,
     public_key BYTEA NOT NULL,
     used BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, device_id, key_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_otp_user_device ON one_time_prekeys(user_id, device_id, used);
@@ -40,7 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_ktl_user ON key_transparency_log(user_id);
 
 -- Compliance keys (escrow, schema-only - flow not implemented yet)
 CREATE TABLE IF NOT EXISTS compliance_keys (
-    chat_id UUID NOT NULL,
+    chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
     user_id UUID NOT NULL,
     device_id UUID NOT NULL,
     encrypted_session_key BYTEA NOT NULL,

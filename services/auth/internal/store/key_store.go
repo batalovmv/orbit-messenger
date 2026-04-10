@@ -54,7 +54,7 @@ func (s *keyStore) GetByUserAndDevice(ctx context.Context, userID, deviceID uuid
 	keys := &model.UserDeviceKeys{}
 	err := s.pool.QueryRow(ctx,
 		`SELECT user_id, device_id, identity_key, signed_prekey,
-		        signed_prekey_signature, signed_prekey_id, uploaded_at, updated_at
+		        signed_prekey_signature, signed_prekey_id, created_at, updated_at
 		 FROM user_keys
 		 WHERE user_id = $1 AND device_id = $2`,
 		userID, deviceID,
@@ -65,7 +65,7 @@ func (s *keyStore) GetByUserAndDevice(ctx context.Context, userID, deviceID uuid
 		&keys.SignedPreKey,
 		&keys.SignedPreKeySignature,
 		&keys.SignedPreKeyID,
-		&keys.UploadedAt,
+		&keys.CreatedAt,
 		&keys.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -80,10 +80,10 @@ func (s *keyStore) GetByUserAndDevice(ctx context.Context, userID, deviceID uuid
 func (s *keyStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.UserDeviceKeys, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT user_id, device_id, identity_key, signed_prekey,
-		        signed_prekey_signature, signed_prekey_id, uploaded_at, updated_at
+		        signed_prekey_signature, signed_prekey_id, created_at, updated_at
 		 FROM user_keys
 		 WHERE user_id = $1
-		 ORDER BY uploaded_at DESC`,
+		 ORDER BY created_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *keyStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]model.Us
 			&item.SignedPreKey,
 			&item.SignedPreKeySignature,
 			&item.SignedPreKeyID,
-			&item.UploadedAt,
+			&item.CreatedAt,
 			&item.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan user keys: %w", err)

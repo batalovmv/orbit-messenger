@@ -134,7 +134,7 @@ func main() {
 		slog.Warn("BOOTSTRAP_SECRET not set — /auth/bootstrap endpoint is disabled")
 	}
 	authHandler := handler.NewAuthHandler(authSvc, logger, internalSecret, bootstrapSecret)
-	keyHandler := handler.NewKeyHandler(keySvc, logger)
+	keyHandler := handler.NewKeyHandler(keySvc, logger, internalSecret)
 
 	// Fiber
 	app := fiber.New(fiber.Config{

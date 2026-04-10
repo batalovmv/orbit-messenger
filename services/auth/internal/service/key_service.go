@@ -122,11 +122,21 @@ func (s *KeyService) GetKeyBundle(ctx context.Context, targetUserID uuid.UUID) (
 		return nil, fmt.Errorf("consume prekey: %w", err)
 	}
 	if prekey != nil {
+		// Find the device that owns the consumed prekey. If the device was
+		// revoked but orphaned prekeys remain, discard the prekey to avoid
+		// returning a bundle with mismatched identity_key / device_id.
+		found := false
 		for _, device := range devices {
 			if device.DeviceID == prekey.DeviceID {
 				selected = device
+				found = true
 				break
 			}
+		}
+		if !found {
+			slog.Warn("orphaned prekey consumed — device no longer registered",
+				"user_id", targetUserID, "prekey_device_id", prekey.DeviceID)
+			prekey = nil // drop orphaned prekey; bundle still valid without OTK
 		}
 	}
 
@@ -140,7 +150,6 @@ func (s *KeyService) GetKeyBundle(ctx context.Context, targetUserID uuid.UUID) (
 	if prekey != nil {
 		bundle.OneTimePreKey = prekey.PublicKey
 		bundle.OneTimePreKeyID = &prekey.KeyID
-		bundle.DeviceID = prekey.DeviceID
 	}
 	return bundle, nil
 }

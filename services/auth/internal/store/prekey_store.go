@@ -33,6 +33,12 @@ func (s *preKeyStore) UploadBatch(ctx context.Context, userID, deviceID uuid.UUI
 		return 0, nil
 	}
 
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
 	var batch pgx.Batch
 	for _, key := range keys {
 		batch.Queue(
@@ -42,15 +48,20 @@ func (s *preKeyStore) UploadBatch(ctx context.Context, userID, deviceID uuid.UUI
 		)
 	}
 
-	results := s.pool.SendBatch(ctx, &batch)
-	defer results.Close()
+	results := tx.SendBatch(ctx, &batch)
 
 	inserted := 0
 	for range keys {
 		if _, err := results.Exec(); err != nil {
-			return inserted, fmt.Errorf("upload prekey batch: %w", err)
+			results.Close()
+			return 0, fmt.Errorf("upload prekey batch: %w", err)
 		}
 		inserted++
+	}
+	results.Close()
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit prekey batch: %w", err)
 	}
 	return inserted, nil
 }

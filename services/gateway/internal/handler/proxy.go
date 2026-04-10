@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -79,9 +80,13 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	if role := c.Get("X-User-Role"); role != "" {
 		req.Header.Set("X-User-Role", role)
 	}
-	// Temporary passthrough until device_id is embedded in JWT claims.
-	if deviceID := c.Get("X-Device-ID"); deviceID != "" {
-		req.Header.Set("X-Device-ID", deviceID)
+	// X-Device-ID is client-supplied and untrusted until embedded in JWT claims.
+	// Forward only if it looks like a valid UUID (36 chars) to prevent header injection.
+	// Auth service must treat this as advisory, not proof of device ownership.
+	if deviceID := c.Get("X-Device-ID"); len(deviceID) == 36 {
+		if _, err := uuid.Parse(deviceID); err == nil {
+			req.Header.Set("X-Device-ID", deviceID)
+		}
 	}
 	// Sign the request so downstream services can verify it came from the gateway
 	if len(internalSecret) > 0 && internalSecret[0] != "" {

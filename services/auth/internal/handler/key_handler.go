@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"log/slog"
 	"time"
@@ -14,16 +15,17 @@ import (
 )
 
 type KeyHandler struct {
-	keySvc *service.KeyService
-	logger *slog.Logger
+	keySvc         *service.KeyService
+	logger         *slog.Logger
+	internalSecret string
 }
 
-func NewKeyHandler(keySvc *service.KeyService, logger *slog.Logger) *KeyHandler {
-	return &KeyHandler{keySvc: keySvc, logger: logger}
+func NewKeyHandler(keySvc *service.KeyService, logger *slog.Logger, internalSecret string) *KeyHandler {
+	return &KeyHandler{keySvc: keySvc, logger: logger, internalSecret: internalSecret}
 }
 
 func (h *KeyHandler) Register(router fiber.Router) {
-	keys := router.Group("/keys")
+	keys := router.Group("/keys", h.requireInternalToken)
 	keys.Post("/identity", h.RegisterDeviceKeys)
 	keys.Post("/signed-prekey", h.RotateSignedPreKey)
 	keys.Post("/one-time-prekeys", h.UploadOneTimePreKeys)
@@ -32,6 +34,19 @@ func (h *KeyHandler) Register(router fiber.Router) {
 	keys.Get("/:userId/devices", h.ListUserDevices)
 	keys.Get("/count", h.GetPreKeyCount)
 	keys.Get("/transparency-log", h.GetTransparencyLog)
+}
+
+// requireInternalToken verifies that the request was proxied by the gateway.
+// Without a valid X-Internal-Token, X-User-ID and X-Device-ID cannot be trusted.
+func (h *KeyHandler) requireInternalToken(c *fiber.Ctx) error {
+	token := c.Get("X-Internal-Token")
+	if token == "" || h.internalSecret == "" {
+		return response.Error(c, apperror.Unauthorized("missing internal token"))
+	}
+	if subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) != 1 {
+		return response.Error(c, apperror.Unauthorized("invalid internal token"))
+	}
+	return c.Next()
 }
 
 func getKeyUserID(c *fiber.Ctx) (uuid.UUID, error) {
@@ -256,14 +271,14 @@ func (h *KeyHandler) ListUserDevices(c *fiber.Ctx) error {
 
 	type deviceInfo struct {
 		DeviceID   uuid.UUID `json:"device_id"`
-		UploadedAt time.Time `json:"uploaded_at"`
+		CreatedAt time.Time `json:"created_at"`
 	}
 
 	result := make([]deviceInfo, len(devices))
 	for i, device := range devices {
 		result[i] = deviceInfo{
 			DeviceID:   device.DeviceID,
-			UploadedAt: device.UploadedAt,
+			CreatedAt: device.CreatedAt,
 		}
 	}
 
@@ -285,12 +300,29 @@ func (h *KeyHandler) GetPreKeyCount(c *fiber.Ctx) error {
 }
 
 func (h *KeyHandler) GetTransparencyLog(c *fiber.Ctx) error {
-	userID, err := uuid.Parse(c.Query("user_id"))
+	callerID, err := getKeyUserID(c)
 	if err != nil {
-		return response.Error(c, apperror.BadRequest("invalid user ID"))
+		return response.Error(c, err)
 	}
 
-	entries, err := h.keySvc.GetTransparencyLog(c.Context(), userID, c.QueryInt("limit", 50))
+	// Allow querying own log or another user's log (transparency logs are public
+	// in Signal Protocol — needed for key verification). Use caller's ID as default.
+	targetStr := c.Query("user_id")
+	targetID := callerID
+	if targetStr != "" {
+		parsed, err := uuid.Parse(targetStr)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("invalid user ID"))
+		}
+		targetID = parsed
+	}
+
+	limit := c.QueryInt("limit", 50)
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	entries, err := h.keySvc.GetTransparencyLog(c.Context(), targetID, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}

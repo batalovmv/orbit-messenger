@@ -309,7 +309,7 @@ func (s *messageStore) Update(ctx context.Context, msg *model.Message) error {
 
 func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE messages SET is_deleted = true, content = NULL, entities = NULL WHERE id = $1`, id,
+		`UPDATE messages SET is_deleted = true, content = NULL, encrypted_content = NULL, entities = NULL WHERE id = $1`, id,
 	)
 	return err
 }
@@ -376,7 +376,7 @@ func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID u
 	var chatID uuid.UUID
 	var seqNum int
 	err := s.pool.QueryRow(ctx,
-		`UPDATE messages m SET is_deleted = true, content = NULL, entities = NULL
+		`UPDATE messages m SET is_deleted = true, content = NULL, encrypted_content = NULL, entities = NULL
 		 WHERE m.id = $1 AND m.is_deleted = false
 		 AND (
 		     m.sender_id = $2

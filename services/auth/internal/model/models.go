@@ -65,7 +65,7 @@ type UserDeviceKeys struct {
 	SignedPreKey          []byte    `json:"signed_prekey"`            // X25519 public, 32 bytes
 	SignedPreKeySignature []byte    `json:"signed_prekey_signature"`  // Ed25519 sig, 64 bytes
 	SignedPreKeyID        int       `json:"signed_prekey_id"`
-	UploadedAt            time.Time `json:"uploaded_at"`
+	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
 }
 

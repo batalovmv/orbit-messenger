@@ -114,6 +114,8 @@ func (m *mockTransparencyStore) ListByUser(ctx context.Context, userID uuid.UUID
 	return nil, nil
 }
 
+const testInternalSecret = "test-internal-secret"
+
 func setupKeyTestApp(t *testing.T) (*fiber.App, *mockKeyStore, *mockPreKeyStore, *mockTransparencyStore) {
 	t.Helper()
 
@@ -123,7 +125,7 @@ func setupKeyTestApp(t *testing.T) (*fiber.App, *mockKeyStore, *mockPreKeyStore,
 
 	keySvc := service.NewKeyService(keyStore, preKeyStore, transparencyStore)
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	keyHandler := NewKeyHandler(keySvc, logger)
+	keyHandler := NewKeyHandler(keySvc, logger, testInternalSecret)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -131,6 +133,15 @@ func setupKeyTestApp(t *testing.T) (*fiber.App, *mockKeyStore, *mockPreKeyStore,
 	keyHandler.Register(app)
 
 	return app, keyStore, preKeyStore, transparencyStore
+}
+
+// internalHeaders returns headers with valid X-Internal-Token for key handler tests.
+func internalHeaders(extra map[string]string) map[string]string {
+	h := map[string]string{"X-Internal-Token": testInternalSecret}
+	for k, v := range extra {
+		h[k] = v
+	}
+	return h
 }
 
 func encodeKey(size int, b byte) string {
@@ -157,16 +168,34 @@ func TestRegisterDeviceKeys_Success(t *testing.T) {
 		"signed_prekey":           encodeKey(32, 2),
 		"signed_prekey_signature": encodeKey(64, 3),
 		"signed_prekey_id":        7,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   uuid.New().String(),
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
 	}
 	if !called {
 		t.Fatal("expected key store upsert to be called")
+	}
+}
+
+func TestRegisterDeviceKeys_MissingInternalToken(t *testing.T) {
+	app, _, _, _ := setupKeyTestApp(t)
+
+	resp := doRequest(app, http.MethodPost, "/keys/identity", map[string]interface{}{
+		"identity_key":            encodeKey(32, 1),
+		"signed_prekey":           encodeKey(32, 2),
+		"signed_prekey_signature": encodeKey(64, 3),
+		"signed_prekey_id":        7,
+	}, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-Device-ID": uuid.New().String(),
+	})
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without internal token, got %d", resp.StatusCode)
 	}
 }
 
@@ -178,9 +207,9 @@ func TestRegisterDeviceKeys_MissingUserID(t *testing.T) {
 		"signed_prekey":           encodeKey(32, 2),
 		"signed_prekey_signature": encodeKey(64, 3),
 		"signed_prekey_id":        7,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
@@ -195,10 +224,10 @@ func TestRegisterDeviceKeys_InvalidKeySize(t *testing.T) {
 		"signed_prekey":           encodeKey(32, 2),
 		"signed_prekey_signature": encodeKey(64, 3),
 		"signed_prekey_id":        7,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   uuid.New().String(),
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -213,9 +242,9 @@ func TestRegisterDeviceKeys_MissingDeviceID(t *testing.T) {
 		"signed_prekey":           encodeKey(32, 2),
 		"signed_prekey_signature": encodeKey(64, 3),
 		"signed_prekey_id":        7,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -247,10 +276,10 @@ func TestRotateSignedPreKey_Success(t *testing.T) {
 		"signed_prekey":           encodeKey(32, 9),
 		"signed_prekey_signature": encodeKey(64, 8),
 		"signed_prekey_id":        2,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   userID.String(),
 		"X-Device-ID": deviceID.String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -276,10 +305,10 @@ func TestUploadOneTimePreKeys_Success(t *testing.T) {
 
 	resp := doRequest(app, http.MethodPost, "/keys/one-time-prekeys", map[string]interface{}{
 		"prekeys": prekeys,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   uuid.New().String(),
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", resp.StatusCode)
@@ -303,10 +332,10 @@ func TestUploadOneTimePreKeys_TooMany(t *testing.T) {
 
 	resp := doRequest(app, http.MethodPost, "/keys/one-time-prekeys", map[string]interface{}{
 		"prekeys": prekeys,
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   uuid.New().String(),
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -318,10 +347,10 @@ func TestUploadOneTimePreKeys_EmptyBatch(t *testing.T) {
 
 	resp := doRequest(app, http.MethodPost, "/keys/one-time-prekeys", map[string]interface{}{
 		"prekeys": []map[string]interface{}{},
-	}, map[string]string{
+	}, internalHeaders(map[string]string{
 		"X-User-ID":   uuid.New().String(),
 		"X-Device-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -348,7 +377,7 @@ func TestGetKeyBundle_Success(t *testing.T) {
 			SignedPreKey:          signed,
 			SignedPreKeySignature: signature,
 			SignedPreKeyID:        3,
-			UploadedAt:            time.Now(),
+			CreatedAt:            time.Now(),
 		}}, nil
 	}
 	preKeyStore.consumeOneFn = func(ctx context.Context, gotUserID uuid.UUID) (*model.OneTimePreKey, error) {
@@ -361,7 +390,7 @@ func TestGetKeyBundle_Success(t *testing.T) {
 		}, nil
 	}
 
-	resp := doRequest(app, http.MethodGet, "/keys/"+userID.String()+"/bundle", nil, nil)
+	resp := doRequest(app, http.MethodGet, "/keys/"+userID.String()+"/bundle", nil, internalHeaders(nil))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -384,7 +413,7 @@ func TestGetKeyBundle_UserNotFound(t *testing.T) {
 		return nil, nil
 	}
 
-	resp := doRequest(app, http.MethodGet, "/keys/"+uuid.New().String()+"/bundle", nil, nil)
+	resp := doRequest(app, http.MethodGet, "/keys/"+uuid.New().String()+"/bundle", nil, internalHeaders(nil))
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
@@ -398,7 +427,7 @@ func TestGetIdentityKey_Success(t *testing.T) {
 		return identity, nil
 	}
 
-	resp := doRequest(app, http.MethodGet, "/keys/"+userID.String()+"/identity", nil, nil)
+	resp := doRequest(app, http.MethodGet, "/keys/"+userID.String()+"/identity", nil, internalHeaders(nil))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -415,9 +444,9 @@ func TestGetPreKeyCount_Success(t *testing.T) {
 		return 12, nil
 	}
 
-	resp := doRequest(app, http.MethodGet, "/keys/count", nil, map[string]string{
+	resp := doRequest(app, http.MethodGet, "/keys/count", nil, internalHeaders(map[string]string{
 		"X-User-ID": uuid.New().String(),
-	})
+	}))
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -443,7 +472,9 @@ func TestGetTransparencyLog_Success(t *testing.T) {
 		}}, nil
 	}
 
-	resp := doRequest(app, http.MethodGet, "/keys/transparency-log?user_id="+userID.String()+"&limit=10", nil, nil)
+	resp := doRequest(app, http.MethodGet, "/keys/transparency-log?user_id="+userID.String()+"&limit=10", nil, internalHeaders(map[string]string{
+		"X-User-ID": userID.String(),
+	}))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
