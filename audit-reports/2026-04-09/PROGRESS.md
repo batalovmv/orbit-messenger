@@ -84,3 +84,9 @@ Gateway WS and SFU proxy now cache JWT expiry locally and re-check token validit
 
 ## 2026-04-09T22:47:41Z TASK-23 DONE 4959e6e
 Gateway now subscribes to `orbit.user.*.deactivated` and closes only the target user's active WS connections with `1008 account deactivated`. `go test ./internal/ws` passed in `services/gateway`.
+
+## 2026-04-10T07:09:52Z TASK-00 DECISION
+User-declared clean tree was incorrect: `audit-reports/2026-04-09/SUMMARY.md` had unexpected local edits. Stashing that read-only file before TASK-16 retry per FIX-PLAN precondition.
+
+## 2026-04-10T07:09:52Z TASK-21 DONE 7f78011 (retroactive — previous session logged commit but missed PROGRESS entry)
+Search ACL filtering now uses one lightweight `GetUserChatIDs` query instead of up to 10 heavyweight chat-list reads. `go test ./internal/service` passed in `services/messaging`.

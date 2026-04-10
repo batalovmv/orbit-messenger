@@ -35,11 +35,16 @@ type MediaService struct {
 	rdb                 *redis.Client
 	nc                  *nats.Conn
 	maxUserStorageBytes int64
+	presignGetURL       func(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
 // NewMediaService creates the service.
 func NewMediaService(st store.Store, r2 *storage.R2Client, rdb *redis.Client, nc *nats.Conn) *MediaService {
-	return &MediaService{store: st, r2: r2, rdb: rdb, nc: nc}
+	svc := &MediaService{store: st, r2: r2, rdb: rdb, nc: nc}
+	if r2 != nil {
+		svc.presignGetURL = r2.PresignedGetURL
+	}
+	return svc
 }
 
 func (s *MediaService) WithMaxUserStorageBytes(limit int64) *MediaService {
@@ -406,7 +411,10 @@ func (s *MediaService) GetR2Key(ctx context.Context, id, userID uuid.UUID, varia
 }
 
 // GetPresignedURL returns a presigned download URL for a media file.
-func (s *MediaService) GetPresignedURL(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *MediaService) GetPresignedURL(ctx context.Context, id, userID uuid.UUID) (string, error) {
+	if err := s.ensurePresignAccess(ctx, id, userID); err != nil {
+		return "", err
+	}
 	m, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return "", err
@@ -414,11 +422,14 @@ func (s *MediaService) GetPresignedURL(ctx context.Context, id uuid.UUID) (strin
 	if m == nil {
 		return "", model.ErrMediaNotFound
 	}
-	return s.r2.PresignedGetURL(ctx, m.R2Key, presignTTL)
+	return s.presignURL(ctx, m.R2Key)
 }
 
 // GetThumbnailURL returns a presigned URL for the thumbnail.
-func (s *MediaService) GetThumbnailURL(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *MediaService) GetThumbnailURL(ctx context.Context, id, userID uuid.UUID) (string, error) {
+	if err := s.ensurePresignAccess(ctx, id, userID); err != nil {
+		return "", err
+	}
 	m, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return "", err
@@ -429,11 +440,14 @@ func (s *MediaService) GetThumbnailURL(ctx context.Context, id uuid.UUID) (strin
 	if m.ThumbnailR2Key == nil {
 		return "", model.ErrNoThumbnail
 	}
-	return s.r2.PresignedGetURL(ctx, *m.ThumbnailR2Key, presignTTL)
+	return s.presignURL(ctx, *m.ThumbnailR2Key)
 }
 
 // GetMediumURL returns a presigned URL for the medium-resolution variant.
-func (s *MediaService) GetMediumURL(ctx context.Context, id uuid.UUID) (string, error) {
+func (s *MediaService) GetMediumURL(ctx context.Context, id, userID uuid.UUID) (string, error) {
+	if err := s.ensurePresignAccess(ctx, id, userID); err != nil {
+		return "", err
+	}
 	m, err := s.store.GetByID(ctx, id)
 	if err != nil {
 		return "", err
@@ -444,7 +458,7 @@ func (s *MediaService) GetMediumURL(ctx context.Context, id uuid.UUID) (string, 
 	if m.MediumR2Key == nil {
 		return "", model.ErrNoMedium
 	}
-	return s.r2.PresignedGetURL(ctx, *m.MediumR2Key, presignTTL)
+	return s.presignURL(ctx, *m.MediumR2Key)
 }
 
 // GetInfo returns media metadata.
@@ -466,6 +480,29 @@ func (s *MediaService) GetInfo(ctx context.Context, id, userID uuid.UUID) (*mode
 		return nil, model.ErrMediaNotFound
 	}
 	return m, nil
+}
+
+func (s *MediaService) ensurePresignAccess(ctx context.Context, id, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		return fmt.Errorf("user ID is required")
+	}
+
+	ok, err := s.store.CanAccess(ctx, id, userID)
+	if err != nil {
+		return fmt.Errorf("access check: %w", err)
+	}
+	if !ok {
+		return model.ErrMediaNotFound
+	}
+
+	return nil
+}
+
+func (s *MediaService) presignURL(ctx context.Context, key string) (string, error) {
+	if s.presignGetURL == nil {
+		return "", fmt.Errorf("presign client not configured")
+	}
+	return s.presignGetURL(ctx, key, presignTTL)
 }
 
 // Delete removes a media file (only uploader can delete).

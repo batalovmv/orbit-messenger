@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -48,6 +49,27 @@ func (q *quotaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (
 	return true, nil
 }
 
+type presignStore struct {
+	quotaStore
+	media        map[uuid.UUID]*model.Media
+	canAccess    bool
+	canAccessErr error
+}
+
+func (p *presignStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Media, error) {
+	if p.media == nil {
+		return nil, nil
+	}
+	return p.media[id], nil
+}
+
+func (p *presignStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
+	if p.canAccessErr != nil {
+		return false, p.canAccessErr
+	}
+	return p.canAccess, nil
+}
+
 func TestEnsureUserStorageAvailable_DisabledByDefault(t *testing.T) {
 	svc := NewMediaService(&quotaStore{userStorageBytes: 10 * 1024 * 1024}, nil, nil, nil).WithMaxUserStorageBytes(0)
 	if err := svc.ensureUserStorageAvailable(context.Background(), uuid.New(), 50*1024*1024); err != nil {
@@ -90,5 +112,103 @@ func TestIsAllowedChunkedMIME_RejectsUnknownMagicDeclaredAsImage(t *testing.T) {
 func TestIsAllowedChunkedMIME_FileAllowsOctetStreamFallback(t *testing.T) {
 	if !isAllowedChunkedMIME("file", "application/octet-stream", "application/octet-stream") {
 		t.Fatal("expected generic file octet-stream to be allowed")
+	}
+}
+
+func TestGetPresignedURL_OwnerGetsURL(t *testing.T) {
+	ownerID := uuid.New()
+	mediaID := uuid.New()
+	st := &presignStore{
+		canAccess: true,
+		media: map[uuid.UUID]*model.Media{
+			mediaID: {
+				ID:             mediaID,
+				UploaderID:     ownerID,
+				R2Key:          "media/original.jpg",
+				ThumbnailR2Key: strPtr("media/thumb.jpg"),
+				MediumR2Key:    strPtr("media/medium.jpg"),
+			},
+		},
+	}
+	svc := NewMediaService(st, nil, nil, nil)
+	svc.presignGetURL = func(ctx context.Context, key string, ttl time.Duration) (string, error) {
+		return "https://example.test/" + key, nil
+	}
+
+	url, err := svc.GetPresignedURL(context.Background(), mediaID, ownerID)
+	if err != nil {
+		t.Fatalf("expected presigned URL, got error: %v", err)
+	}
+	if url != "https://example.test/media/original.jpg" {
+		t.Fatalf("unexpected URL: %q", url)
+	}
+}
+
+func TestPresignedURLs_NonOwnerGetsMediaNotFound(t *testing.T) {
+	ownerID := uuid.New()
+	otherUserID := uuid.New()
+	mediaID := uuid.New()
+	st := &presignStore{
+		canAccess: false,
+		media: map[uuid.UUID]*model.Media{
+			mediaID: {
+				ID:             mediaID,
+				UploaderID:     ownerID,
+				R2Key:          "media/original.jpg",
+				ThumbnailR2Key: strPtr("media/thumb.jpg"),
+				MediumR2Key:    strPtr("media/medium.jpg"),
+			},
+		},
+	}
+	svc := NewMediaService(st, nil, nil, nil)
+	svc.presignGetURL = func(ctx context.Context, key string, ttl time.Duration) (string, error) {
+		t.Fatal("presign must not run when access is denied")
+		return "", nil
+	}
+
+	tests := []struct {
+		name string
+		fn   func(context.Context, uuid.UUID, uuid.UUID) (string, error)
+	}{
+		{name: "original", fn: svc.GetPresignedURL},
+		{name: "thumbnail", fn: svc.GetThumbnailURL},
+		{name: "medium", fn: svc.GetMediumURL},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.fn(context.Background(), mediaID, otherUserID)
+			if err != model.ErrMediaNotFound {
+				t.Fatalf("expected ErrMediaNotFound, got %v", err)
+			}
+		})
+	}
+}
+
+func TestPresignedURLs_NilUserIDGetsError(t *testing.T) {
+	mediaID := uuid.New()
+	st := &presignStore{canAccess: true}
+	svc := NewMediaService(st, nil, nil, nil)
+	svc.presignGetURL = func(ctx context.Context, key string, ttl time.Duration) (string, error) {
+		t.Fatal("presign must not run for nil user ID")
+		return "", nil
+	}
+
+	tests := []struct {
+		name string
+		fn   func(context.Context, uuid.UUID, uuid.UUID) (string, error)
+	}{
+		{name: "original", fn: svc.GetPresignedURL},
+		{name: "thumbnail", fn: svc.GetThumbnailURL},
+		{name: "medium", fn: svc.GetMediumURL},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.fn(context.Background(), mediaID, uuid.Nil)
+			if err == nil {
+				t.Fatal("expected error for nil user ID")
+			}
+		})
 	}
 }
