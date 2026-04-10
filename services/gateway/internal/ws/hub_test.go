@@ -1,8 +1,11 @@
 package ws
 
 import (
+	"encoding/json"
+	"fmt"
 	"sort"
 	"testing"
+	"time"
 )
 
 // newTestConn creates a *Conn with no real WebSocket connection.
@@ -152,4 +155,65 @@ func TestHub_ConcurrentRegisterUnregister(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		<-done
 	}
+}
+
+func TestHub_SendToUser_DisconnectsSlowSubscriberWithoutBlockingOthers(t *testing.T) {
+	hub := NewHub()
+
+	releaseSlowWriter := make(chan struct{})
+	slowCloses := make(chan string, 1)
+	slowDone := make(chan struct{})
+	slowConn := &Conn{
+		UserID: "slow-user",
+		done:   slowDone,
+		send:   make(chan interface{}, sendQueueCapacity),
+		sendFn: func(interface{}) error {
+			<-releaseSlowWriter
+			return nil
+		},
+		closeFn: func(code int, text string) error {
+			slowCloses <- fmt.Sprintf("%d:%s", code, text)
+			close(slowDone)
+			return nil
+		},
+	}
+
+	fastDeliveries := make(chan Envelope, 1)
+	fastConn := newCapturingConn("fast-user", fastDeliveries)
+
+	hub.Register(slowConn)
+	hub.Register(fastConn)
+
+	msg := Envelope{Type: EventPong, Data: json.RawMessage(`{}`)}
+
+	start := time.Now()
+	for i := 0; i < sendQueueCapacity+8; i++ {
+		hub.SendToUser("slow-user", msg)
+	}
+	if elapsed := time.Since(start); elapsed > 250*time.Millisecond {
+		t.Fatalf("slow fanout blocked for %s", elapsed)
+	}
+
+	select {
+	case got := <-slowCloses:
+		want := fmt.Sprintf("%d:%s", closeCodePolicyViolation, "slow consumer")
+		if got != want {
+			t.Fatalf("unexpected close payload: want %q, got %q", want, got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for slow consumer disconnect")
+	}
+
+	hub.SendToUser("fast-user", msg)
+
+	select {
+	case got := <-fastDeliveries:
+		if got.Type != EventPong {
+			t.Fatalf("unexpected fast delivery type: %q", got.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for fast delivery")
+	}
+
+	close(releaseSlowWriter)
 }

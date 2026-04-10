@@ -3,7 +3,9 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -11,6 +13,13 @@ import (
 )
 
 const writeTimeout = 10 * time.Second
+const sendWriteTimeout = 5 * time.Second
+const sendQueueCapacity = 256
+
+var (
+	errConnClosed    = errors.New("ws: connection closed")
+	errSendQueueFull = errors.New("ws: send queue full")
+)
 
 // Conn represents a single WebSocket connection.
 type Conn struct {
@@ -20,12 +29,14 @@ type Conn struct {
 	done    chan struct{}
 	sendFn  func(interface{}) error
 	closeFn func(code int, text string) error
+	send    chan interface{}
 
 	tokenExpiry  time.Time
 	tokenHash    *string
 	revalidateFn func(context.Context) error
 	closeOnce    sync.Once
 	closeErr     error
+	writerOnce   sync.Once
 
 	// Per-connection typing rate limit fields (protected by mu)
 	lastTyping  time.Time
@@ -34,8 +45,35 @@ type Conn struct {
 
 // Send sends a JSON message to the client, thread-safe.
 func (c *Conn) Send(msg interface{}) error {
+	if c.send != nil {
+		return c.enqueue(msg)
+	}
+
+	return c.write(msg)
+}
+
+func (c *Conn) enqueue(msg interface{}) error {
+	select {
+	case <-c.done:
+		return errConnClosed
+	default:
+	}
+
+	select {
+	case c.send <- msg:
+		return nil
+	default:
+		return errSendQueueFull
+	}
+}
+
+func (c *Conn) write(msg interface{}) error {
 	if c.sendFn != nil {
 		return c.sendFn(msg)
+	}
+
+	if c.WS == nil {
+		return errors.New("ws: connection not initialized")
 	}
 
 	c.mu.Lock()
@@ -61,6 +99,69 @@ func (c *Conn) Revalidate(ctx context.Context) error {
 		return nil
 	}
 	return c.revalidateFn(ctx)
+}
+
+func (c *Conn) ensureWriter() {
+	if c.send == nil {
+		return
+	}
+
+	c.writerOnce.Do(func() {
+		go c.writerLoop()
+	})
+}
+
+func (c *Conn) writerLoop() {
+	for {
+		select {
+		case <-c.done:
+			c.drainSendQueue()
+			return
+		case msg := <-c.send:
+			if err := c.writeQueued(msg); err != nil {
+				closeText := "write error"
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
+					closeText = "write timeout"
+				}
+				go func() {
+					if closeErr := c.Close(closeCodePolicyViolation, closeText); closeErr != nil {
+						slog.Warn("ws: close after write failure failed", "user_id", c.UserID, "error", closeErr)
+					}
+				}()
+				return
+			}
+		}
+	}
+}
+
+func (c *Conn) writeQueued(msg interface{}) error {
+	if c.sendFn != nil {
+		return c.sendFn(msg)
+	}
+	if c.WS == nil {
+		return errConnClosed
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.WS.SetWriteDeadline(time.Now().Add(sendWriteTimeout))
+	return c.WS.WriteMessage(websocket.TextMessage, data)
+}
+
+func (c *Conn) drainSendQueue() {
+	for {
+		select {
+		case <-c.send:
+		default:
+			return
+		}
+	}
 }
 
 func (c *Conn) Close(code int, text string) error {
@@ -98,6 +199,10 @@ func NewHub() *Hub {
 func (h *Hub) Register(conn *Conn) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if conn.send == nil && conn.WS != nil {
+		conn.send = make(chan interface{}, sendQueueCapacity)
+	}
+	conn.ensureWriter()
 	isFirst := len(h.conns[conn.UserID]) == 0
 	h.conns[conn.UserID] = append(h.conns[conn.UserID], conn)
 	slog.Info("ws: user connected", "user_id", conn.UserID, "total", len(h.conns[conn.UserID]))
@@ -141,6 +246,17 @@ func (h *Hub) SendToUser(userID string, msg interface{}) {
 
 	for _, c := range snapshot {
 		if err := c.Send(msg); err != nil {
+			if errors.Is(err, errSendQueueFull) || errors.Is(err, errConnClosed) {
+				// Disconnect instead of silently dropping fanout frames. Until TASK-46
+				// lands JetStream replay, a slow client may briefly miss events and
+				// must reconnect to resync from the HTTP history endpoints.
+				go func(conn *Conn) {
+					if closeErr := conn.Close(closeCodePolicyViolation, "slow consumer"); closeErr != nil {
+						slog.Warn("ws: slow consumer close failed", "user_id", userID, "error", closeErr)
+					}
+				}(c)
+				continue
+			}
 			slog.Error("ws: send error", "user_id", userID, "error", err)
 		}
 	}
