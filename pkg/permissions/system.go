@@ -3,26 +3,29 @@ package permissions
 // System-level permission bits — what a user CAN do at the system (org-wide) level.
 // These are separate from chat-level permissions (permissions.go).
 const (
-	SysManageUsers    int64 = 1 << 0  // 1    — create/deactivate/reactivate users
-	SysManageInvites  int64 = 1 << 1  // 2    — create/revoke invite codes
-	SysManageChats    int64 = 1 << 2  // 4    — delete/archive any chat
-	SysViewAllChats   int64 = 1 << 3  // 8    — see list of all chats
-	SysReadAllContent int64 = 1 << 4  // 16   — read messages in any chat
-	SysManageSettings int64 = 1 << 5  // 32   — system-wide settings
-	SysManageContent  int64 = 1 << 6  // 64   — sticker packs, etc.
-	SysViewAuditLog   int64 = 1 << 7  // 128  — view audit trail
-	SysExportData     int64 = 1 << 8  // 256  — export chat/user data
-	SysAssignRoles    int64 = 1 << 9  // 512  — assign system roles
-	SysManageSecurity int64 = 1 << 10 // 1024 — reset 2FA, revoke sessions
+	SysManageUsers        int64 = 1 << 0  // 1    — create/deactivate/reactivate users
+	SysManageInvites      int64 = 1 << 1  // 2    — create/revoke invite codes
+	SysManageChats        int64 = 1 << 2  // 4    — delete/archive any chat
+	SysViewAllChats       int64 = 1 << 3  // 8    — see list of all chats
+	SysReadAllContent     int64 = 1 << 4  // 16   — read messages in any chat
+	SysManageSettings     int64 = 1 << 5  // 32   — system-wide settings
+	SysManageContent      int64 = 1 << 6  // 64   — sticker packs, etc.
+	SysViewAuditLog       int64 = 1 << 7  // 128  — view audit trail
+	SysExportData         int64 = 1 << 8  // 256  — export chat/user data
+	SysAssignRoles        int64 = 1 << 9  // 512  — assign system roles
+	SysManageSecurity     int64 = 1 << 10 // 1024 — reset 2FA, revoke sessions
+	SysManageBots         int64 = 1 << 11 // 2048 — create/delete bots, rotate tokens
+	SysManageIntegrations int64 = 1 << 12 // 4096 — create/modify connectors, routes
+	SysViewBotLogs        int64 = 1 << 13 // 8192 — view bot delivery logs, integration logs
 
-	AllSysPermissions int64 = (1 << 11) - 1 // 2047
+	AllSysPermissions int64 = (1 << 14) - 1 // 16383
 )
 
 // rolePermissions maps each system role to its permission bitmask.
 var rolePermissions = map[string]int64{
 	"superadmin": AllSysPermissions,
-	"compliance": SysViewAllChats | SysReadAllContent | SysViewAuditLog | SysExportData,
-	"admin":      SysManageUsers | SysManageInvites | SysManageContent,
+	"compliance": SysViewAllChats | SysReadAllContent | SysViewAuditLog | SysExportData | SysViewBotLogs,
+	"admin":      SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs,
 	"member":     0,
 }
 
