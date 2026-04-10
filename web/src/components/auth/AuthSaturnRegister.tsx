@@ -24,7 +24,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [isLoading, markIsLoading] = useFlag(false);
+  const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
   const canSubmit = inviteCode.length > 0
     && email.length > 0
@@ -58,11 +58,15 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
     setDisplayName(e.target.value);
   });
 
-  const handleSubmit = useLastCallback((e: React.FormEvent) => {
+  const handleSubmit = useLastCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     markIsLoading();
-    saturnRegister({ inviteCode, email, password, displayName });
+    try {
+      await saturnRegister({ inviteCode, email, password, displayName });
+    } finally {
+      unmarkIsLoading();
+    }
   });
 
   return (
