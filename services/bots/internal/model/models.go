@@ -25,20 +25,21 @@ var (
 
 // Bot represents a bot identity linked to a user account.
 type Bot struct {
-	ID               uuid.UUID `json:"id"`
-	UserID           uuid.UUID `json:"user_id"`
-	OwnerID          uuid.UUID `json:"owner_id"`
-	Username         string    `json:"username"`
-	DisplayName      string    `json:"display_name"`
-	AvatarURL        *string   `json:"avatar_url,omitempty"`
-	Description      *string   `json:"description,omitempty"`
-	ShortDescription *string   `json:"short_description,omitempty"`
-	IsSystem         bool      `json:"is_system"`
-	IsInline         bool      `json:"is_inline"`
-	WebhookURL       *string   `json:"webhook_url,omitempty"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                uuid.UUID `json:"id"`
+	UserID            uuid.UUID `json:"user_id"`
+	OwnerID           uuid.UUID `json:"owner_id"`
+	Username          string    `json:"username"`
+	DisplayName       string    `json:"display_name"`
+	AvatarURL         *string   `json:"avatar_url,omitempty"`
+	Description       *string   `json:"description,omitempty"`
+	ShortDescription  *string   `json:"short_description,omitempty"`
+	IsSystem          bool      `json:"is_system"`
+	IsInline          bool      `json:"is_inline"`
+	WebhookURL        *string   `json:"webhook_url,omitempty"`
+	WebhookSecretHash *string   `json:"-"`
+	IsActive          bool      `json:"is_active"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // BotToken exposes token metadata without the sensitive hash.

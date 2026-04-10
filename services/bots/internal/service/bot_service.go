@@ -344,6 +344,63 @@ func (s *BotService) ListChatBots(ctx context.Context, chatID uuid.UUID) ([]mode
 	return installations, nil
 }
 
+func (s *BotService) GetBotByUserID(ctx context.Context, userID uuid.UUID) (*model.Bot, error) {
+	bot, err := s.bots.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get bot by user id: %w", err)
+	}
+	if bot == nil {
+		return nil, apperror.NotFound("Bot not found")
+	}
+
+	return bot, nil
+}
+
+func (s *BotService) IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID) (bool, error) {
+	inst, err := s.installations.GetByBotAndChat(ctx, botID, chatID)
+	if err != nil {
+		return false, fmt.Errorf("get bot installation: %w", err)
+	}
+	if inst == nil {
+		return false, nil
+	}
+
+	return inst.IsActive, nil
+}
+
+func (s *BotService) SetWebhook(ctx context.Context, botID uuid.UUID, webhookURL, secretHash *string) (*model.Bot, error) {
+	bot, err := s.bots.GetByID(ctx, botID)
+	if err != nil {
+		return nil, fmt.Errorf("get bot for webhook update: %w", err)
+	}
+	if bot == nil {
+		return nil, apperror.NotFound("Bot not found")
+	}
+
+	bot.WebhookURL = webhookURL
+	bot.WebhookSecretHash = secretHash
+
+	if err := s.bots.Update(ctx, bot); err != nil {
+		if errors.Is(err, model.ErrBotNotFound) {
+			return nil, apperror.NotFound("Bot not found")
+		}
+		if errors.Is(err, model.ErrBotAlreadyExists) {
+			return nil, apperror.Conflict("Bot already exists")
+		}
+		return nil, fmt.Errorf("set bot webhook: %w", err)
+	}
+
+	updated, err := s.bots.GetByID(ctx, botID)
+	if err != nil {
+		return nil, fmt.Errorf("get bot after webhook update: %w", err)
+	}
+	if updated == nil {
+		return nil, apperror.NotFound("Bot not found")
+	}
+
+	return updated, nil
+}
+
 func canManageBot(actorID uuid.UUID, actorRole string, bot *model.Bot) bool {
 	if bot == nil {
 		return false

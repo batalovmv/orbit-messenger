@@ -15,6 +15,7 @@ import (
 const botSelectColumns = `
 	b.id, b.user_id, b.owner_id, u.username, u.display_name, u.avatar_url,
 	b.description, b.short_description, b.is_system, b.is_inline, b.webhook_url,
+	b.webhook_secret_hash,
 	b.is_active, b.created_at, b.updated_at
 `
 
@@ -54,6 +55,7 @@ func scanBot(scanner botScanner, bot *model.Bot) error {
 		&bot.IsSystem,
 		&bot.IsInline,
 		&bot.WebhookURL,
+		&bot.WebhookSecretHash,
 		&bot.IsActive,
 		&bot.CreatedAt,
 		&bot.UpdatedAt,
@@ -83,9 +85,9 @@ func (s *botStore) Create(ctx context.Context, bot *model.Bot) error {
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO bots (
 			user_id, owner_id, description, short_description, is_system,
-			is_inline, webhook_url, is_active
+			is_inline, webhook_url, webhook_secret_hash, is_active
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
 	`,
 		bot.UserID,
@@ -95,6 +97,7 @@ func (s *botStore) Create(ctx context.Context, bot *model.Bot) error {
 		bot.IsSystem,
 		bot.IsInline,
 		bot.WebhookURL,
+		bot.WebhookSecretHash,
 		bot.IsActive,
 	).Scan(&bot.ID, &bot.CreatedAt, &bot.UpdatedAt)
 	if err != nil {
@@ -244,10 +247,11 @@ func (s *botStore) Update(ctx context.Context, bot *model.Bot) error {
 		    is_system = $3,
 		    is_inline = $4,
 		    webhook_url = $5,
-		    is_active = $6,
+		    webhook_secret_hash = $6,
+		    is_active = $7,
 		    updated_at = NOW()
-		WHERE id = $7
-	`, bot.Description, bot.ShortDescription, bot.IsSystem, bot.IsInline, bot.WebhookURL, bot.IsActive, bot.ID)
+		WHERE id = $8
+	`, bot.Description, bot.ShortDescription, bot.IsSystem, bot.IsInline, bot.WebhookURL, bot.WebhookSecretHash, bot.IsActive, bot.ID)
 	if err != nil {
 		return fmt.Errorf("update bot: %w", err)
 	}

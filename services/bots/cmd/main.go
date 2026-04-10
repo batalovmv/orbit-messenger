@@ -15,6 +15,8 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/config"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/bots/internal/botapi"
+	"github.com/mst-corp/orbit/services/bots/internal/client"
 	"github.com/mst-corp/orbit/services/bots/internal/handler"
 	"github.com/mst-corp/orbit/services/bots/internal/service"
 	"github.com/mst-corp/orbit/services/bots/internal/store"
@@ -80,6 +82,8 @@ func main() {
 
 	botService := service.NewBotService(botStore, tokenStore, commandStore, installationStore, botTokenSecret)
 	botHandler := handler.NewBotHandler(botService, logger)
+	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
+	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, logger).WithRedis(rdb)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -91,6 +95,9 @@ func main() {
 
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	botHandler.Register(api)
+
+	botAPIGroup := app.Group("/bot/:token", botapi.TokenAuthMiddleware(botService))
+	botAPIHandler.Register(botAPIGroup)
 
 	go func() {
 		if err := app.Listen(":" + port); err != nil {

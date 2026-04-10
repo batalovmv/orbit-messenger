@@ -98,3 +98,37 @@ Files: services/bots/cmd/main.go, services/bots/go.mod, services/bots/go.sum
 Status: DONE
 Files: services/bots/cmd/main.go, services/bots/go.mod, services/bots/go.sum, services/bots/internal/service/bot_service.go, services/bots/internal/handler/bot_handler.go, services/bots/internal/handler/token_handler.go, services/bots/internal/handler/command_handler.go, services/bots/internal/handler/installation_handler.go
 Notes: services/bots go build/vet passed. Actual module resolution drifted from plan because local toolchain is go1.26.0 and replaced local pkg module declares go 1.25.0; go mod tidy resolved pgx/nats/redis/x/crypto to newer compatible versions.
+
+## TASK-23: Messaging client for inter-service calls
+Status: DONE
+Files: services/bots/internal/client/messaging_client.go
+
+## TASK-24: Bot API auth middleware
+Status: DONE
+Files: services/bots/internal/botapi/middleware.go
+
+## TASK-25: Bot API models
+Status: DONE
+Files: services/bots/internal/botapi/models.go, services/bots/internal/model/models.go
+
+## TASK-26: Bot API handler - getMe, sendMessage, editMessage, deleteMessage
+Status: DONE
+Files: services/bots/internal/botapi/handler.go, services/bots/internal/service/bot_service.go, services/bots/internal/store/installation_store.go, services/bots/internal/store/bot_store.go
+
+## TASK-27: Bot API callback handler
+Status: DONE
+Files: services/bots/internal/botapi/callback_handler.go
+
+## TASK-28: Bot API webhook handler
+Status: DONE
+Files: services/bots/internal/botapi/webhook_handler.go, services/bots/internal/service/bot_service.go, services/bots/internal/store/bot_store.go
+Notes: webhook secret is stored as SHA-256 digest per plan; downstream delivery will use the stored digest as the HMAC key because raw secret is not recoverable from the DB schema specified by the plan.
+
+## TASK-29: Bot API updates handler
+Status: DONE
+Files: services/bots/internal/botapi/updates_handler.go
+
+## TASK-30: CHECKPOINT
+Status: DONE
+Files: services/bots/cmd/main.go, services/bots/internal/client/messaging_client.go, services/bots/internal/botapi/middleware.go, services/bots/internal/botapi/models.go, services/bots/internal/botapi/handler.go, services/bots/internal/botapi/callback_handler.go, services/bots/internal/botapi/webhook_handler.go, services/bots/internal/botapi/updates_handler.go
+Notes: Bot API routes are registered under /bot/:token with token middleware, and services/bots go build/vet passed.
