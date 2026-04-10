@@ -190,17 +190,81 @@ func (h *KeyHandler) UploadOneTimePreKeys(c *fiber.Ctx) error {
 }
 
 func (h *KeyHandler) GetKeyBundle(c *fiber.Ctx) error {
-	return response.Error(c, apperror.Internal("key bundle endpoint not implemented"))
+	targetUserID, err := uuid.Parse(c.Params("userId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid user ID"))
+	}
+
+	bundle, err := h.keySvc.GetKeyBundle(c.Context(), targetUserID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	type bundleResponse struct {
+		IdentityKey           string `json:"identity_key"`
+		SignedPreKey          string `json:"signed_prekey"`
+		SignedPreKeySignature string `json:"signed_prekey_signature"`
+		SignedPreKeyID        int    `json:"signed_prekey_id"`
+		OneTimePreKey         string `json:"one_time_prekey,omitempty"`
+		OneTimePreKeyID       *int   `json:"one_time_prekey_id,omitempty"`
+		DeviceID              string `json:"device_id"`
+	}
+
+	resp := bundleResponse{
+		IdentityKey:           base64.RawURLEncoding.EncodeToString(bundle.IdentityKey),
+		SignedPreKey:          base64.RawURLEncoding.EncodeToString(bundle.SignedPreKey),
+		SignedPreKeySignature: base64.RawURLEncoding.EncodeToString(bundle.SignedPreKeySignature),
+		SignedPreKeyID:        bundle.SignedPreKeyID,
+		OneTimePreKeyID:       bundle.OneTimePreKeyID,
+		DeviceID:              bundle.DeviceID.String(),
+	}
+	if bundle.OneTimePreKey != nil {
+		resp.OneTimePreKey = base64.RawURLEncoding.EncodeToString(bundle.OneTimePreKey)
+	}
+
+	return response.JSON(c, fiber.StatusOK, resp)
 }
 
 func (h *KeyHandler) GetIdentityKey(c *fiber.Ctx) error {
-	return response.Error(c, apperror.Internal("identity key endpoint not implemented"))
+	userID, err := uuid.Parse(c.Params("userId"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid user ID"))
+	}
+
+	key, err := h.keySvc.GetIdentityKey(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"identity_key": base64.RawURLEncoding.EncodeToString(key),
+	})
 }
 
 func (h *KeyHandler) GetPreKeyCount(c *fiber.Ctx) error {
-	return response.Error(c, apperror.Internal("prekey count endpoint not implemented"))
+	userID, err := getKeyUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	count, err := h.keySvc.GetPreKeyCount(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"count": count})
 }
 
 func (h *KeyHandler) GetTransparencyLog(c *fiber.Ctx) error {
-	return response.Error(c, apperror.Internal("transparency log endpoint not implemented"))
+	userID, err := uuid.Parse(c.Query("user_id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid user ID"))
+	}
+
+	entries, err := h.keySvc.GetTransparencyLog(c.Context(), userID, c.QueryInt("limit", 50))
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"entries": entries})
 }
