@@ -174,6 +174,12 @@ func main() {
 		rdb,
 		logger,
 	)
+	cleanupStore, ok := messageStore.(service.CleanupStore)
+	if !ok {
+		slog.Error("message store does not implement cleanup store")
+		os.Exit(1)
+	}
+	cleanupSvc := service.NewCleanupService(cleanupStore, time.Minute)
 
 	// NATS subscriber: update user status + last_seen_at in DB
 	statusSub, subErr := nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
@@ -243,6 +249,7 @@ func main() {
 	cronCtx, cancelCron := context.WithCancel(context.Background())
 	defer cancelCron()
 	go runScheduledDeliveryCron(cronCtx, scheduledSvc, logger)
+	go cleanupSvc.Start(cronCtx)
 
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)

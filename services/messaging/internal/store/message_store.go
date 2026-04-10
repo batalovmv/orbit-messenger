@@ -146,6 +146,16 @@ func (s *messageStore) CreateEncrypted(ctx context.Context, msg *model.Message, 
 	return tx.Commit(ctx)
 }
 
+func (s *messageStore) DeleteExpired(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at < NOW()`,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete expired: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
 	msg := &model.Message{}
 	query := "SELECT " + messageSelectColumns + `
