@@ -18,6 +18,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/config"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/media/internal/handler"
+	"github.com/mst-corp/orbit/services/media/internal/middleware"
 	"github.com/mst-corp/orbit/services/media/internal/service"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
 	"github.com/mst-corp/orbit/services/media/internal/store"
@@ -148,6 +149,11 @@ func main() {
 	})
 
 	// Register routes
+	// Apply per-user rate limit (60 req/min) on upload endpoints before auth check.
+	// The rate limiter keys on X-User-ID; requests without it are passed through
+	// and rejected by requireInternalToken downstream.
+	uploadRateLimit := middleware.UserUploadRateLimit(rdb, 60)
+	app.Use("/media/upload", uploadRateLimit)
 	uploadHandler.Register(app)
 	mediaHandler.Register(app)
 
