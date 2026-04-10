@@ -16,6 +16,10 @@ var (
 	ErrMediaNotOwned                = errors.New("media file does not belong to the sender")
 )
 
+const (
+	MessageTypeEncrypted = "encrypted"
+)
+
 type User struct {
 	ID                uuid.UUID  `json:"id"`
 	Email             string     `json:"email"`
@@ -91,6 +95,7 @@ type Message struct {
 	SenderID       *uuid.UUID      `json:"sender_id,omitempty"`
 	Type           string          `json:"type"`
 	Content        *string         `json:"content,omitempty"`
+	EncryptedContent []byte        `json:"encrypted_content,omitempty"` // E2E ciphertext envelope (BYTEA)
 	Entities       json.RawMessage `json:"entities,omitempty"`
 	ReplyToID      *uuid.UUID      `json:"reply_to_id,omitempty"`
 	ReplyToSeqNum  *int64          `json:"reply_to_sequence_number,omitempty"`
@@ -104,6 +109,7 @@ type Message struct {
 	SequenceNumber int64           `json:"sequence_number"`
 	CreatedAt      time.Time       `json:"created_at"`
 	EditedAt       *time.Time      `json:"edited_at,omitempty"`
+	ExpiresAt      *time.Time      `json:"expires_at,omitempty"` // disappearing messages
 	ViewedAt       *time.Time      `json:"viewed_at,omitempty"`
 	ViewedBy       *uuid.UUID      `json:"viewed_by,omitempty"`
 	// Joined sender data
@@ -232,6 +238,17 @@ type PushSubscription struct {
 	Auth      string    `json:"auth"`
 	UserAgent *string   `json:"user_agent,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type EncryptedEnvelope struct {
+	Version        int                         `json:"v"`
+	SenderDeviceID string                      `json:"sender_device_id"`
+	Devices        map[string]DeviceCiphertext `json:"devices"`
+}
+
+type DeviceCiphertext struct {
+	Type int    `json:"type"` // 1=prekey, 2=message
+	Body string `json:"body"` // base64url encoded ciphertext
 }
 
 // SearchResult represents a unified search result item.
