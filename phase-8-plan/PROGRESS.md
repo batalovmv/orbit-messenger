@@ -40,3 +40,32 @@ Files: docker-compose.yml, .env.example
 Status: DONE
 Files: docker-compose.yml, .env.example
 Notes: docker compose config --quiet passed after supplying temporary dummy env values required by existing compose interpolation. YAML structure validated; only Docker warned that the top-level version field is obsolete.
+
+## TASK-09: Bots service go.mod
+Status: DONE
+Files: services/bots/go.mod, services/bots/go.sum
+
+## TASK-10: Bots model package
+Status: DONE
+Files: services/bots/internal/model/models.go, services/bots/go.sum
+
+## TASK-11: Bot store
+Status: DONE
+Files: services/bots/internal/store/bot_store.go, services/bots/go.mod, services/bots/go.sum
+
+## TASK-12: Token store
+Status: DONE
+Files: services/bots/internal/store/token_store.go
+
+## TASK-13: Command store
+Status: DONE
+Files: services/bots/internal/store/command_store.go
+
+## TASK-14: Installation store
+Status: DONE
+Files: services/bots/internal/store/installation_store.go
+
+## TASK-15: CHECKPOINT
+Status: DONE
+Files: services/bots/go.mod, services/bots/go.sum, services/bots/internal/model/models.go, services/bots/internal/store/bot_store.go, services/bots/internal/store/token_store.go, services/bots/internal/store/command_store.go, services/bots/internal/store/installation_store.go
+Notes: go build/vet passed for services/bots. Local toolchain and local pkg module force go.mod resolution to go 1.25.0 with pgx/v5 v5.9.1; attempts to pin this module to go 1.24 and pgx/v5 v5.7.2 caused build to require go mod tidy.
