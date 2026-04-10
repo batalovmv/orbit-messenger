@@ -22,37 +22,80 @@ type pushSender interface {
 	SendCallToUsers(userIDs []string, payload []byte) error
 }
 
+const (
+	// dedupCacheCapacity is the number of event IDs held in the dedup LRU.
+	// At 150 users × ~10 events/s peak the cache covers ~100 seconds of events.
+	dedupCacheCapacity = 1024
+
+	// durableName is the JetStream durable consumer name for the gateway WS fanout.
+	// A single durable covering orbit.> means one ordered stream of all events.
+	durableName = "gateway-ws"
+)
+
 // Subscriber listens for NATS events and routes them to WebSocket clients.
 type Subscriber struct {
 	hub                 *Hub
 	nc                  *nats.Conn
+	js                  nats.JetStreamContext // non-nil in production; nil in unit tests
 	subs                []*nats.Subscription
 	messagingServiceURL string
 	internalSecret      string
 	httpClient          *http.Client
 	pushDispatcher      pushSender
 	sem                 chan struct{} // semaphore to bound concurrent goroutines
+	dedup               *dedupCache  // deduplicates redelivered JetStream events
 }
 
+// NewSubscriber creates a Subscriber backed by a JetStream durable consumer.
+// When js is nil (unit tests) the subscriber falls back to core NATS nc.Subscribe.
 func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string, pushDispatchers ...pushSender) *Subscriber {
 	var pushDispatcher pushSender
 	if len(pushDispatchers) > 0 {
 		pushDispatcher = pushDispatchers[0]
 	}
 
+	var js nats.JetStreamContext
+	if nc != nil {
+		if ctx, err := nc.JetStream(); err == nil {
+			js = ctx
+		}
+	}
+
 	return &Subscriber{
 		hub:                 hub,
 		nc:                  nc,
+		js:                  js,
 		messagingServiceURL: messagingServiceURL,
 		internalSecret:      internalSecret,
 		httpClient:          &http.Client{Timeout: 5 * time.Second},
 		pushDispatcher:      pushDispatcher,
 		sem:                 make(chan struct{}, maxConcurrentFetches),
+		dedup:               newDedupCache(dedupCacheCapacity),
 	}
 }
 
-// Start subscribes to all relevant NATS subjects.
+// Start subscribes to all orbit.> events via a JetStream durable consumer.
+// Falls back to core nc.Subscribe when JetStream is unavailable (unit tests).
 func (s *Subscriber) Start() error {
+	if s.js != nil {
+		// Single durable subscription covering the entire orbit.> hierarchy.
+		// AckExplicit: we ack after successful fanout, nak on error so JetStream retries.
+		sub, err := s.js.Subscribe(
+			"orbit.>",
+			s.handleJSEvent,
+			nats.Durable(durableName),
+			nats.AckExplicit(),
+			nats.DeliverNew(),
+		)
+		if err != nil {
+			return fmt.Errorf("jetstream subscribe orbit.>: %w", err)
+		}
+		s.subs = append(s.subs, sub)
+		slog.Info("nats: JetStream durable subscriber started", "durable", durableName, "subject", "orbit.>")
+		return nil
+	}
+
+	// Fallback for unit tests (nc is nil or JetStream context unavailable).
 	subjects := []string{
 		"orbit.chat.*.message.new",
 		"orbit.chat.*.message.updated",
@@ -67,21 +110,18 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.member.*",
 		"orbit.user.*.mention",
 		"orbit.media.*.ready",
-		// Call events (Phase 6)
 		"orbit.call.*.lifecycle",
 		"orbit.call.*.participant",
 		"orbit.call.*.media",
 	}
-
 	for _, subj := range subjects {
 		sub, err := s.nc.Subscribe(subj, s.handleEvent)
 		if err != nil {
 			return err
 		}
 		s.subs = append(s.subs, sub)
-		slog.Info("nats: subscribed", "subject", subj)
+		slog.Info("nats: subscribed (core)", "subject", subj)
 	}
-
 	return nil
 }
 
@@ -89,6 +129,39 @@ func (s *Subscriber) Start() error {
 func (s *Subscriber) Stop() {
 	for _, sub := range s.subs {
 		sub.Unsubscribe()
+	}
+}
+
+// handleJSEvent wraps handleEvent for JetStream messages: deduplicates by
+// Nats-Msg-Id header, acks on success, naks on error so JetStream retries.
+func (s *Subscriber) handleJSEvent(msg *nats.Msg) {
+	// Dedup by Nats-Msg-Id header set by the publisher (Sub-commit 3).
+	// Fall back to sequence number when the header is absent (old publishers).
+	dedupKey := msg.Header.Get("Nats-Msg-Id")
+	if dedupKey == "" {
+		if meta, err := msg.Metadata(); err == nil {
+			dedupKey = fmt.Sprintf("%s:%d", msg.Subject, meta.Sequence.Stream)
+		} else {
+			dedupKey = fmt.Sprintf("%s:%d", msg.Subject, time.Now().UnixNano())
+		}
+	}
+
+	if s.dedup.seen(dedupKey) {
+		slog.Debug("nats: duplicate event skipped", "key", dedupKey, "subject", msg.Subject)
+		if err := msg.Ack(); err != nil {
+			slog.Warn("nats: ack failed on duplicate", "error", err)
+		}
+		return
+	}
+
+	// Fanout the event; handleEvent is side-effect only (no error return).
+	// We consider fanout successful if handleEvent does not panic — errors
+	// within (push dispatch, member fetch) are already logged and retried
+	// internally, not surfaced as NATS-level failures.
+	s.handleEvent(msg)
+
+	if err := msg.Ack(); err != nil {
+		slog.Warn("nats: ack failed after fanout", "error", err, "subject", msg.Subject)
 	}
 }
 

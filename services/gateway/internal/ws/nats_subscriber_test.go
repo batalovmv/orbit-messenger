@@ -619,6 +619,57 @@ func TestSubscriber_HandleEvent_CallIncomingSkipsPushWhenAllRecipientsOnline(t *
 	}
 }
 
+func TestSubscriber_HandleJSEvent_DedupSkipsDuplicateEventID(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+	eventID := uuid.New().String()
+
+	hub := NewHub()
+	deliveries := make(chan Envelope, 2) // buffer 2 to catch unexpected duplicates
+	hub.Register(newCapturingConn(userID, deliveries))
+
+	subscriber := NewSubscriber(hub, nil, "", "")
+
+	msgPayload := marshalTestNATSEvent(t, NATSEvent{
+		Event:     EventMessageUpdated,
+		Data:      json.RawMessage(`{"id":"abc"}`),
+		MemberIDs: []string{userID},
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	makeMsg := func() *nats.Msg {
+		msg := &nats.Msg{
+			Subject: fmt.Sprintf("orbit.chat.%s.message.updated", chatID),
+			Data:    msgPayload,
+			Header:  nats.Header{},
+		}
+		msg.Header.Set("Nats-Msg-Id", eventID)
+		return msg
+	}
+
+	// First delivery — should fan out.
+	subscriber.handleJSEvent(makeMsg())
+
+	select {
+	case env := <-deliveries:
+		if env.Type != EventMessageUpdated {
+			t.Fatalf("expected message_updated, got %q", env.Type)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first delivery")
+	}
+
+	// Second delivery of the same event ID — must be deduped, no fanout.
+	subscriber.handleJSEvent(makeMsg())
+
+	select {
+	case env := <-deliveries:
+		t.Fatalf("expected no second delivery, got %q", env.Type)
+	case <-time.After(100 * time.Millisecond):
+		// correct: no duplicate delivered
+	}
+}
+
 func jsonEqual(left, right []byte) bool {
 	var leftValue any
 	var rightValue any
