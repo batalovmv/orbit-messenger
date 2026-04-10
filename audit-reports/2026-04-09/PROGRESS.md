@@ -90,3 +90,6 @@ User-declared clean tree was incorrect: `audit-reports/2026-04-09/SUMMARY.md` ha
 
 ## 2026-04-10T07:09:52Z TASK-21 DONE 7f78011 (retroactive — previous session logged commit but missed PROGRESS entry)
 Search ACL filtering now uses one lightweight `GetUserChatIDs` query instead of up to 10 heavyweight chat-list reads. `go test ./internal/service` passed in `services/messaging`.
+
+## 2026-04-10T10:15:00Z TASK-16 DONE 55d0a7d (completed by operator — agent session 2 left changes uncommitted)
+GetPresignedURL, GetThumbnailURL, GetMediumURL now require userID + CanAccess check. Tests cover owner/non-owner/nil-user. `go build ./... && go test ./...` passed in `services/media`.
