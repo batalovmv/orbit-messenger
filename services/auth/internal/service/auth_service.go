@@ -522,11 +522,7 @@ func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, dev
 	}
 	refreshStr := hex.EncodeToString(refreshBytes)
 
-	// Store session in DB
-	if deviceID == nil {
-		did := uuid.New()
-		deviceID = &did
-	}
+	// Store session in DB — device_id stays NULL when no device is registered.
 	sess := &model.Session{
 		UserID:    userID,
 		DeviceID:  deviceID,
