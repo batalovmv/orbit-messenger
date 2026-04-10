@@ -1114,13 +1114,13 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ### Backend: Key Server Endpoints (7, расширение auth)
 
-- [ ] POST /keys/identity — загрузить Identity Key (раз при регистрации)
-- [ ] POST /keys/signed-prekey — загрузить Signed PreKey (ротация еженедельно)
-- [ ] POST /keys/one-time-prekeys — загрузить batch 100 One-Time PreKeys
-- [ ] GET /keys/:userId/bundle — получить key bundle для начала сессии
-- [ ] GET /keys/:userId/identity — получить Identity Key (для Safety Numbers)
-- [ ] GET /keys/count — сколько One-Time PreKeys осталось
-- [ ] GET /keys/transparency-log — публичный лог изменений ключей
+- [x] POST /keys/identity — загрузить Identity Key (раз при регистрации)
+- [x] POST /keys/signed-prekey — загрузить Signed PreKey (ротация еженедельно)
+- [x] POST /keys/one-time-prekeys — загрузить batch 100 One-Time PreKeys
+- [x] GET /keys/:userId/bundle — получить key bundle для начала сессии
+- [x] GET /keys/:userId/identity — получить Identity Key (для Safety Numbers)
+- [x] GET /keys/count — сколько One-Time PreKeys осталось
+- [x] GET /keys/transparency-log — публичный лог изменений ключей
 
 ### Encrypted Message Format
 
@@ -1137,16 +1137,16 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 ### Database (3 таблицы)
 
 **user_keys:**
-- [ ] user_id + device_id PK
-- [ ] identity_key BYTEA, signed_prekey BYTEA, signed_prekey_signature BYTEA
-- [ ] signed_prekey_id INT, uploaded_at TIMESTAMPTZ
+- [x] user_id + device_id PK
+- [x] identity_key BYTEA, signed_prekey BYTEA, signed_prekey_signature BYTEA
+- [x] signed_prekey_id INT, uploaded_at TIMESTAMPTZ
 
 **one_time_prekeys:**
-- [ ] id SERIAL, user_id, device_id, key_id INT
-- [ ] public_key BYTEA, used BOOLEAN DEFAULT false
+- [x] id SERIAL, user_id, device_id, key_id INT
+- [x] public_key BYTEA, used BOOLEAN DEFAULT false
 
 **key_transparency_log:**
-- [ ] id SERIAL, user_id, event_type TEXT, public_key_hash TEXT, created_at
+- [x] id SERIAL, user_id, event_type TEXT, public_key_hash TEXT, created_at
 
 ### Frontend: Saturn API методы (~15)
 
