@@ -55,3 +55,45 @@ type Invite struct {
 	IsActive  bool       `json:"is_active"`
 	CreatedAt time.Time  `json:"created_at"`
 }
+
+// E2E Key Management
+
+type UserDeviceKeys struct {
+	UserID                uuid.UUID `json:"user_id"`
+	DeviceID              uuid.UUID `json:"device_id"`
+	IdentityKey           []byte    `json:"identity_key"`             // Ed25519 public, 32 bytes
+	SignedPreKey          []byte    `json:"signed_prekey"`            // X25519 public, 32 bytes
+	SignedPreKeySignature []byte    `json:"signed_prekey_signature"`  // Ed25519 sig, 64 bytes
+	SignedPreKeyID        int       `json:"signed_prekey_id"`
+	UploadedAt            time.Time `json:"uploaded_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+type OneTimePreKey struct {
+	ID        int       `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	DeviceID  uuid.UUID `json:"device_id"`
+	KeyID     int       `json:"key_id"`
+	PublicKey []byte    `json:"public_key"` // X25519 public, 32 bytes
+	Used      bool      `json:"-"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type KeyBundle struct {
+	IdentityKey           []byte    `json:"identity_key"`
+	SignedPreKey          []byte    `json:"signed_prekey"`
+	SignedPreKeySignature []byte    `json:"signed_prekey_signature"`
+	SignedPreKeyID        int       `json:"signed_prekey_id"`
+	OneTimePreKey         []byte    `json:"one_time_prekey,omitempty"` // nil if exhausted
+	OneTimePreKeyID       *int      `json:"one_time_prekey_id,omitempty"`
+	DeviceID              uuid.UUID `json:"device_id"`
+}
+
+type KeyTransparencyEntry struct {
+	ID            int       `json:"id"`
+	UserID        uuid.UUID `json:"user_id"`
+	DeviceID      uuid.UUID `json:"device_id"`
+	EventType     string    `json:"event_type"`
+	PublicKeyHash string    `json:"public_key_hash"`
+	CreatedAt     time.Time `json:"created_at"`
+}
