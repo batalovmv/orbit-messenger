@@ -23,13 +23,20 @@ export default async function getFilesFromDataTransferItems(dataTransferItems: D
         });
       } else if (entry.isDirectory) {
         const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-        dirReader.readEntries((entries) => {
-          const entriesPromises = [];
-          for (let i = 0; i < entries.length; i++) {
-            entriesPromises.push(traverseFileTreePromise(entries[i], item));
-          }
-          resolve(Promise.all(entriesPromises));
-        });
+        const entriesPromises: Promise<unknown>[] = [];
+        const readAllEntries = () => {
+          dirReader.readEntries((batch) => {
+            if (batch.length === 0) {
+              resolve(Promise.all(entriesPromises));
+              return;
+            }
+            for (let i = 0; i < batch.length; i++) {
+              entriesPromises.push(traverseFileTreePromise(batch[i], item));
+            }
+            readAllEntries();
+          });
+        };
+        readAllEntries();
       }
     });
   }
