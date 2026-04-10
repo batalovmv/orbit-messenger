@@ -685,6 +685,7 @@ function normalizeUserHit(hit: SaturnUserSearchHit) {
     custom_status: hit.custom_status,
     custom_status_emoji: hit.custom_status_emoji,
     role: hit.role || 'member',
+    is_active: hit.is_active ?? true,
     totp_enabled: hit.totp_enabled,
     invited_by: hit.invited_by,
     last_seen_at: hit.last_seen_at,

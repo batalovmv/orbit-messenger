@@ -2071,12 +2071,7 @@ addActionHandler('addChatMembers', async (global, actions, payload): Promise<voi
 
   actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Loading, tabId });
   try {
-    const missingUsers = await callApi('addChatMembers', { chatId: chat.id, userIds: users.map((u) => u.id) });
-    if (missingUsers) {
-      global = getGlobal();
-      global = updateMissingInvitedUsers(global, chatId, missingUsers, tabId);
-      setGlobal(global);
-    }
+    await callApi('addChatMembers', { chatId: chat.id, userIds: users.map((u) => u.id) });
   } finally {
     actions.setNewChatMembersDialogState({ newChatMembersProgress: NewChatMembersProgress.Closed, tabId });
     global = getGlobal();

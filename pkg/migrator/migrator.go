@@ -82,15 +82,23 @@ func Run(ctx context.Context, pool *pgxpool.Pool, dir string) error {
 	var appliedCount int
 	for _, f := range files {
 		name := filepath.Base(f)
-		if _, ok := applied[name]; ok {
-			continue
-		}
+		storedChecksum, alreadyApplied := applied[name]
 
 		content, err := os.ReadFile(f)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 		checksum := sha256Hex(content)
+
+		if alreadyApplied {
+			if storedChecksum != checksum {
+				return fmt.Errorf(
+					"checksum mismatch for %s: stored=%s, current=%s — migration was edited after application; resolve manually",
+					name, storedChecksum, checksum,
+				)
+			}
+			continue
+		}
 
 		start := time.Now()
 		if err := applyOne(ctx, pool, name, string(content), checksum); err != nil {

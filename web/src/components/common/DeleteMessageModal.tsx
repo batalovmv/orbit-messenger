@@ -459,10 +459,10 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
                 ? lang('AreYouSureDeleteFewMessages') : lang('AreYouSureDeleteSingleMessage')}
             </p>
             {willDeleteForCurrentUserOnly && (
-              <p>{lang('DeleteForMeChatHint', { count: 1 }, { pluralValue: 1 })}</p>
+              <p>{lang('DeleteForMeChatHint', undefined, { pluralValue: 1 })}</p>
             )}
             {willDeleteForAll && (
-              <p>{lang('DeleteForEveryoneHint', { count: 1 }, { pluralValue: 1 })}</p>
+              <p>{lang('DeleteForEveryoneHint', undefined, { pluralValue: 1 })}</p>
             )}
           </>
         )}

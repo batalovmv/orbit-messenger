@@ -154,6 +154,7 @@ describe('downloadMedia', () => {
       avatar_url: dataUri,
       status: 'online',
       role: 'member',
+      is_active: true,
       created_at: '2026-04-03T10:00:00.000Z',
       updated_at: '2026-04-03T10:00:00.000Z',
     });

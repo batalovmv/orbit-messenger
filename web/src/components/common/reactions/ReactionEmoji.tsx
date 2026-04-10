@@ -3,7 +3,7 @@ import {
   memo, useEffect, useMemo, useRef,
 } from '../../../lib/teact/teact';
 
-import type { ApiAvailableReaction, ApiReactionWithPaid } from '../../../api/types';
+import type { ApiAvailableReaction, ApiReaction, ApiReactionWithPaid } from '../../../api/types';
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 
 import { EMOJI_SIZE_PICKER } from '../../../config';
@@ -123,7 +123,7 @@ const ReactionEmoji: FC<OwnProps> = ({
         />
       ) : shouldUseStaticReaction || !tgsUrl ? (
         <ReactionStaticEmoji
-          reaction={reaction}
+          reaction={reaction as ApiReaction}
           availableReaction={availableReaction}
           size={EMOJI_SIZE_PICKER}
         />

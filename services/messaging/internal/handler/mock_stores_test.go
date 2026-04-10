@@ -35,6 +35,7 @@ type mockChatStore struct {
 	updateMemberPrefsFn  func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	setSlowModeFn        func(ctx context.Context, chatID uuid.UUID, seconds int) error
 	setSignaturesFn      func(ctx context.Context, chatID uuid.UUID, enabled bool) error
+	getUserChatIDsFn     func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
 
 func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -193,6 +194,13 @@ func (m *mockChatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, ena
 		return m.setSignaturesFn(ctx, chatID, enabled)
 	}
 	return nil
+}
+
+func (m *mockChatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	if m.getUserChatIDsFn != nil {
+		return m.getUserChatIDsFn(ctx, userID)
+	}
+	return nil, nil
 }
 
 func (m *mockChatStore) ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error {

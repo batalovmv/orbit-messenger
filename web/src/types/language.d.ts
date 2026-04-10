@@ -216,6 +216,13 @@ export interface LangPair {
   'CallAccept': undefined;
   'CallDecline': undefined;
   'CallEndCall': undefined;
+  'CustomStatusDayOff': undefined;
+  'CustomStatusVacation': undefined;
+  'CustomStatusWorking': undefined;
+  'CustomStatusSick': undefined;
+  'CustomStatusUnavailable': undefined;
+  'CustomStatusClear': undefined;
+  'CustomStatusPresets': undefined;
   'CallRateLabel': undefined;
   'CallRateComment': undefined;
   'Send': undefined;

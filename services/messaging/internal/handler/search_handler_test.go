@@ -14,7 +14,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
-	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	searchpkg "github.com/mst-corp/orbit/services/messaging/internal/search"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
@@ -67,17 +66,11 @@ func TestSearch_AcceptsAliasFiltersAndPassesThemToMeilisearch(t *testing.T) {
 
 	client := &mockSearchClient{}
 	chats := &mockChatStore{
-		listByUserFn: func(_ context.Context, gotUserID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
+		getUserChatIDsFn: func(_ context.Context, gotUserID uuid.UUID) ([]uuid.UUID, error) {
 			if gotUserID != userID {
 				t.Fatalf("unexpected user id: %s", gotUserID)
 			}
-			if cursor != "" || limit != 200 {
-				t.Fatalf("unexpected paging arguments: cursor=%q limit=%d", cursor, limit)
-			}
-
-			return []model.ChatListItem{{
-				Chat: model.Chat{ID: chatID},
-			}}, "", false, nil
+			return []uuid.UUID{chatID}, nil
 		},
 	}
 

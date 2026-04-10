@@ -287,6 +287,7 @@ export interface SaturnUserSearchHit {
   custom_status?: string;
   custom_status_emoji?: string;
   role?: 'superadmin' | 'compliance' | 'admin' | 'member';
+  is_active?: boolean;
   totp_enabled?: boolean;
   invited_by?: string;
   last_seen_at?: string;
