@@ -47,6 +47,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Put("/chats/:id/permissions", h.UpdateDefaultPermissions)
 	app.Put("/chats/:id/members/:userId/permissions", h.UpdateMemberPermissions)
 	app.Post("/chats/:id/slow-mode", h.SetSlowMode)
+	app.Put("/chats/:id/disappearing", h.SetDisappearingTimer)
 	app.Put("/chats/:id/photo", h.UpdateChatPhoto)
 	app.Delete("/chats/:id/photo", h.DeleteChatPhoto)
 }
@@ -435,6 +436,32 @@ func (h *ChatHandler) SetSlowMode(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
+}
+
+func (h *ChatHandler) SetDisappearingTimer(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req struct {
+		Timer int `json:"timer"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	chat, err := h.svc.SetDisappearingTimer(c.Context(), chatID, uid, req.Timer)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, chat)
 }
 
 func (h *ChatHandler) GetChat(c *fiber.Ctx) error {

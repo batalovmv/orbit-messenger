@@ -50,6 +50,7 @@ type Chat struct {
 	MaxMembers         int        `json:"max_members"`
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`
+	DisappearingTimer  int        `json:"disappearing_timer"`
 	IsPinned           bool       `json:"is_pinned"`
 	IsMuted            bool       `json:"is_muted"`
 	IsArchived         bool       `json:"is_archived"`
@@ -90,28 +91,28 @@ type ChatMemberPreferences struct {
 }
 
 type Message struct {
-	ID             uuid.UUID       `json:"id"`
-	ChatID         uuid.UUID       `json:"chat_id"`
-	SenderID       *uuid.UUID      `json:"sender_id,omitempty"`
-	Type           string          `json:"type"`
-	Content        *string         `json:"content,omitempty"`
-	EncryptedContent []byte        `json:"encrypted_content,omitempty"` // E2E ciphertext envelope (BYTEA)
-	Entities       json.RawMessage `json:"entities,omitempty"`
-	ReplyToID      *uuid.UUID      `json:"reply_to_id,omitempty"`
-	ReplyToSeqNum  *int64          `json:"reply_to_sequence_number,omitempty"`
-	IsEdited       bool            `json:"is_edited"`
-	IsDeleted      bool            `json:"is_deleted"`
-	IsPinned       bool            `json:"is_pinned"`
-	IsForwarded    bool            `json:"is_forwarded"`
-	ForwardedFrom  *uuid.UUID      `json:"forwarded_from,omitempty"`
-	GroupedID      *string         `json:"grouped_id,omitempty"`
-	IsOneTime      bool            `json:"is_one_time"`
-	SequenceNumber int64           `json:"sequence_number"`
-	CreatedAt      time.Time       `json:"created_at"`
-	EditedAt       *time.Time      `json:"edited_at,omitempty"`
-	ExpiresAt      *time.Time      `json:"expires_at,omitempty"` // disappearing messages
-	ViewedAt       *time.Time      `json:"viewed_at,omitempty"`
-	ViewedBy       *uuid.UUID      `json:"viewed_by,omitempty"`
+	ID               uuid.UUID       `json:"id"`
+	ChatID           uuid.UUID       `json:"chat_id"`
+	SenderID         *uuid.UUID      `json:"sender_id,omitempty"`
+	Type             string          `json:"type"`
+	Content          *string         `json:"content,omitempty"`
+	EncryptedContent []byte          `json:"encrypted_content,omitempty"` // E2E ciphertext envelope (BYTEA)
+	Entities         json.RawMessage `json:"entities,omitempty"`
+	ReplyToID        *uuid.UUID      `json:"reply_to_id,omitempty"`
+	ReplyToSeqNum    *int64          `json:"reply_to_sequence_number,omitempty"`
+	IsEdited         bool            `json:"is_edited"`
+	IsDeleted        bool            `json:"is_deleted"`
+	IsPinned         bool            `json:"is_pinned"`
+	IsForwarded      bool            `json:"is_forwarded"`
+	ForwardedFrom    *uuid.UUID      `json:"forwarded_from,omitempty"`
+	GroupedID        *string         `json:"grouped_id,omitempty"`
+	IsOneTime        bool            `json:"is_one_time"`
+	SequenceNumber   int64           `json:"sequence_number"`
+	CreatedAt        time.Time       `json:"created_at"`
+	EditedAt         *time.Time      `json:"edited_at,omitempty"`
+	ExpiresAt        *time.Time      `json:"expires_at,omitempty"` // disappearing messages
+	ViewedAt         *time.Time      `json:"viewed_at,omitempty"`
+	ViewedBy         *uuid.UUID      `json:"viewed_by,omitempty"`
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`

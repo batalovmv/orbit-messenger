@@ -1,0 +1,4 @@
+ALTER TABLE chats
+ADD COLUMN IF NOT EXISTS disappearing_timer INT NOT NULL DEFAULT 0;
+
+-- 0 = off, 86400 = 24h, 604800 = 7d, 2592000 = 30d

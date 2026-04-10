@@ -225,6 +225,10 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		Entities:  entities,
 		ReplyToID: replyToID,
 	}
+	if chat.DisappearingTimer > 0 {
+		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
+		msg.ExpiresAt = &expiresAt
+	}
 	if err := s.messages.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("create message: %w", err)
 	}
@@ -337,6 +341,10 @@ func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, sende
 		SenderID:         &senderID,
 		Type:             model.MessageTypeEncrypted,
 		EncryptedContent: envelope,
+	}
+	if chat.DisappearingTimer > 0 {
+		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
+		msg.ExpiresAt = &expiresAt
 	}
 	if err := s.messages.CreateEncrypted(ctx, msg, envelope); err != nil {
 		return nil, fmt.Errorf("create encrypted message: %w", err)

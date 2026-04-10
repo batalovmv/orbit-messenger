@@ -34,6 +34,7 @@ type mockChatStore struct {
 	updateMemberPermsFn  func(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
 	updateMemberPrefsFn  func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	setSlowModeFn        func(ctx context.Context, chatID uuid.UUID, seconds int) error
+	setDisappearingFn    func(ctx context.Context, chatID uuid.UUID, timer int) error
 	setSignaturesFn      func(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	getUserChatIDsFn     func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
@@ -185,6 +186,13 @@ func (m *mockChatStore) UpdateMemberPreferences(ctx context.Context, chatID, use
 func (m *mockChatStore) SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error {
 	if m.setSlowModeFn != nil {
 		return m.setSlowModeFn(ctx, chatID, seconds)
+	}
+	return nil
+}
+
+func (m *mockChatStore) SetDisappearingTimer(ctx context.Context, chatID uuid.UUID, timer int) error {
+	if m.setDisappearingFn != nil {
+		return m.setDisappearingFn(ctx, chatID, timer)
 	}
 	return nil
 }
