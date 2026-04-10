@@ -392,7 +392,12 @@ func buildPushPayload(msg pushMessageData) ([]byte, error) {
 
 	payload := pushPayload{
 		Title: strings.TrimSpace(msg.SenderName),
-		Body:  buildMessagePreview(msg.Content, msg.Type),
+	}
+	// For E2E encrypted messages, don't include content preview.
+	if msg.Type == "encrypted" {
+		payload.Body = "Новое сообщение"
+	} else {
+		payload.Body = buildMessagePreview(msg.Content, msg.Type)
 	}
 	if payload.Title == "" {
 		payload.Title = "Новое сообщение"
