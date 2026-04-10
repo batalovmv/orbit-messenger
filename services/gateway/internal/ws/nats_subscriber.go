@@ -87,15 +87,17 @@ func (s *Subscriber) Start() error {
 			nats.AckExplicit(),
 			nats.DeliverNew(),
 		)
-		if err != nil {
-			return fmt.Errorf("jetstream subscribe orbit.>: %w", err)
+		if err == nil {
+			s.subs = append(s.subs, sub)
+			slog.Info("nats: JetStream durable subscriber started", "durable", durableName, "subject", "orbit.>")
+			return nil
 		}
-		s.subs = append(s.subs, sub)
-		slog.Info("nats: JetStream durable subscriber started", "durable", durableName, "subject", "orbit.>")
-		return nil
+		// JetStream subscribe failed (e.g. JS not enabled on server) — fall back to core NATS.
+		slog.Warn("nats: JetStream subscribe failed, falling back to core NATS", "error", err)
+		s.js = nil
 	}
 
-	// Fallback for unit tests (nc is nil or JetStream context unavailable).
+	// Fallback: core NATS (no at-least-once delivery).
 	subjects := []string{
 		"orbit.chat.*.message.new",
 		"orbit.chat.*.message.updated",
