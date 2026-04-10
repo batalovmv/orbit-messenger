@@ -24,6 +24,8 @@ import (
 
 var telegramStickerPackSourcePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,64}$`)
 
+const maxStickerBytes = 10 * 1024 * 1024
+
 // TelegramStickerClient fetches sticker pack metadata and files from Telegram Bot API.
 type TelegramStickerClient interface {
 	GetStickerSet(ctx context.Context, shortName string) (*TelegramStickerSet, error)
@@ -43,23 +45,23 @@ type UploadedStickerMedia struct {
 
 // TelegramStickerSet mirrors the subset of Telegram Bot API we need for imports.
 type TelegramStickerSet struct {
-	Name        string              `json:"name"`
-	Title       string              `json:"title"`
-	StickerType string              `json:"sticker_type"`
-	Stickers    []TelegramSticker   `json:"stickers"`
-	Thumbnail   *TelegramPhotoSize  `json:"thumbnail"`
+	Name        string             `json:"name"`
+	Title       string             `json:"title"`
+	StickerType string             `json:"sticker_type"`
+	Stickers    []TelegramSticker  `json:"stickers"`
+	Thumbnail   *TelegramPhotoSize `json:"thumbnail"`
 }
 
 // TelegramSticker mirrors the Telegram Bot API sticker payload.
 type TelegramSticker struct {
-	FileID      string             `json:"file_id"`
-	Emoji       string             `json:"emoji"`
-	Width       int                `json:"width"`
-	Height      int                `json:"height"`
-	IsAnimated  bool               `json:"is_animated"`
-	IsVideo     bool               `json:"is_video"`
-	SetName     string             `json:"set_name"`
-	Thumbnail   *TelegramPhotoSize `json:"thumbnail"`
+	FileID     string             `json:"file_id"`
+	Emoji      string             `json:"emoji"`
+	Width      int                `json:"width"`
+	Height     int                `json:"height"`
+	IsAnimated bool               `json:"is_animated"`
+	IsVideo    bool               `json:"is_video"`
+	SetName    string             `json:"set_name"`
+	Thumbnail  *TelegramPhotoSize `json:"thumbnail"`
 }
 
 // TelegramPhotoSize mirrors the Telegram Bot API file reference used by set thumbnails.
@@ -476,9 +478,13 @@ func (c *TelegramBotStickerClient) DownloadFile(ctx context.Context, filePath st
 		return nil, fmt.Errorf("telegram file download returned %d: %s", resp.StatusCode, strings.TrimSpace(string(rawBody)))
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxStickerBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read telegram sticker file: %w", err)
+	}
+	if len(data) > maxStickerBytes {
+		c.logger.Warn("telegram sticker file exceeds size limit", "file_path", cleanPath, "bytes", len(data), "limit", maxStickerBytes)
+		return nil, fmt.Errorf("telegram sticker file exceeds %d bytes", maxStickerBytes)
 	}
 
 	return data, nil
