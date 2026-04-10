@@ -65,7 +65,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		switch strings.ToLower(k) {
 		case "connection", "keep-alive", "transfer-encoding", "te",
 			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate",
-			"x-user-id", "x-user-role", "x-internal-token":
+			"x-user-id", "x-user-role", "x-device-id", "x-internal-token":
 			return
 		}
 		req.Header.SetBytesKV(key, value)
@@ -76,6 +76,10 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	}
 	if role := c.Get("X-User-Role"); role != "" {
 		req.Header.Set("X-User-Role", role)
+	}
+	// Temporary passthrough until device_id is embedded in JWT claims.
+	if deviceID := c.Get("X-Device-ID"); deviceID != "" {
+		req.Header.Set("X-Device-ID", deviceID)
 	}
 	// Sign the request so downstream services can verify it came from the gateway
 	if len(internalSecret) > 0 && internalSecret[0] != "" {
@@ -222,6 +226,10 @@ func PublicMediaProxy(mediaURL, frontendURL string) fiber.Handler {
 
 // SetupProxy configures reverse proxy routes.
 func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
+	authClient := &fasthttp.Client{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
 	msgClient := &fasthttp.Client{
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -286,6 +294,25 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 			slog.Error("calls proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Calls service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+
+	// E2E key management routes: proxied to auth service behind the main JWT middleware.
+	apiGroup.All("/keys/*", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.AuthServiceURL + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, authClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("keys proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
 			})
 		}
 		return nil
