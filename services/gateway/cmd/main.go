@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,6 +60,33 @@ func main() {
 	}
 	defer nc.Close()
 	slog.Info("NATS connected", "url", config.RedactURL(natsURL))
+
+	// JetStream: ensure the ORBIT stream exists covering all orbit.* subjects.
+	// The stream provides at-least-once delivery so gateway restarts do not
+	// silently drop in-flight events (required for corporate audit compliance).
+	js, err := nc.JetStream()
+	if err != nil {
+		slog.Error("failed to get JetStream context", "error", err)
+		os.Exit(1)
+	}
+	_, err = js.AddStream(&nats.StreamConfig{
+		Name:      "ORBIT",
+		Subjects:  []string{"orbit.>"},
+		Retention: nats.LimitsPolicy,
+		MaxAge:    24 * time.Hour,
+	})
+	if err != nil {
+		// nats.ErrStreamNameAlreadyInUse or a wrapped API error both mean the
+		// stream already exists — treat as idempotent success.
+		var apiErr *nats.APIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode != nats.JSErrCodeStreamNameInUse {
+			slog.Error("failed to ensure JetStream ORBIT stream", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("JetStream ORBIT stream already exists")
+	} else {
+		slog.Info("JetStream ORBIT stream created", "max_age", "24h")
+	}
 
 	// WebSocket Hub
 	hub := ws.NewHub()
