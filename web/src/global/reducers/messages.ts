@@ -184,6 +184,19 @@ function mergeApiMessages(existingMessage: ApiMessage | undefined, incomingMessa
     return incomingMessage;
   }
 
+  // Freshness guard: keep existing state when it is demonstrably newer than the
+  // incoming message (e.g. an older in-flight history fetch resolving late).
+  const existingEditTs = existingMessage.editDate ?? 0;
+  const incomingEditTs = incomingMessage.editDate ?? 0;
+  if (existingEditTs > incomingEditTs) {
+    // Existing has a more recent edit — do not overwrite content or edit fields.
+    return existingMessage;
+  }
+  // If existing is being deleted but incoming is not, keep deletion state.
+  if (existingMessage.isDeleting && !incomingMessage.isDeleting) {
+    return existingMessage;
+  }
+
   const mergedMessage = omitUndefined({
     ...existingMessage,
     ...incomingMessage,
