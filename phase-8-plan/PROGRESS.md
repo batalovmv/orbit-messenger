@@ -150,3 +150,17 @@ Files: services/bots/internal/service/update_queue.go
 Status: DONE
 Files: services/bots/cmd/main.go, services/bots/internal/service/nats_subscriber.go, services/bots/internal/service/webhook_worker.go, services/bots/internal/service/update_queue.go, services/bots/internal/botapi/handler.go
 Notes: services/bots go build/vet passed. cmd/main.go now wires Bot API update queue, webhook worker, and bot NATS subscriptions on startup.
+
+## TASK-35: Mock stores for bots tests
+Status: DONE
+Files: services/bots/internal/handler/mock_stores_test.go
+
+## TASK-36: Bot handler tests
+Status: DONE
+Files: services/bots/internal/handler/bot_handler_test.go
+Notes: go test ./internal/handler/... -v passed with 8 handler scenarios covering auth, permission, validation, read, and delete flows.
+
+## TASK-37: CHECKPOINT
+Status: DONE
+Files: services/bots/internal/handler/mock_stores_test.go, services/bots/internal/handler/bot_handler_test.go
+Notes: go test ./... -v passed for services/bots.
