@@ -32,8 +32,8 @@ func main() {
 	redisURL := config.MustEnv("REDIS_URL")
 	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
-	messagingServiceURL := config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082")
-	mediaServiceURL := config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083")
+	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
+	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
 	botTokenSecret := config.MustEnv("BOT_TOKEN_SECRET")
 
 	logger.Info("starting bots service",

@@ -29,7 +29,7 @@ func main() {
 	dbDSN := config.MustEnv("DATABASE_URL")
 	redisURL := config.MustEnv("REDIS_URL")
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
-	messagingServiceURL := config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082")
+	messagingServiceURL := config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "http://localhost:8082"))
 
 	logger.Info("starting integrations service",
 		"port", port,
