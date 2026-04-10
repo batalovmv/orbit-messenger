@@ -214,6 +214,48 @@ services:
       postgres: { condition: service_healthy }
       nats: { condition: service_healthy }
 
+  bots:
+    build:
+      context: .
+      dockerfile: services/bots/Dockerfile
+    ports:
+      - "127.0.0.1:8086:8086"
+    environment:
+      PORT: "8086"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MESSAGING_SERVICE_URL: http://messaging:8082
+      MEDIA_SERVICE_URL: http://media:8083
+      BOT_TOKEN_SECRET: ${BOT_TOKEN_SECRET}
+    depends_on:
+      - postgres
+      - redis
+      - nats
+      - messaging
+    restart: unless-stopped
+
+  integrations:
+    build:
+      context: .
+      dockerfile: services/integrations/Dockerfile
+    ports:
+      - "127.0.0.1:8087:8087"
+    environment:
+      PORT: "8087"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MESSAGING_SERVICE_URL: http://messaging:8082
+    depends_on:
+      - postgres
+      - redis
+      - nats
+      - messaging
+    restart: unless-stopped
+
   web:
     build:
       context: ./web

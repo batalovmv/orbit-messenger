@@ -31,3 +31,12 @@ Files: pkg/permissions/system.go
 Status: DONE
 Files: migrations/041_bot_accounts.sql, migrations/042_bots.sql, migrations/043_integrations.sql, migrations/044_message_bot_extensions.sql, pkg/permissions/system.go
 Notes: pkg go build/vet passed. Verified 4 phase-8 migration files exist and SQL was reviewed. Repo already also contains 041_feature_flags.sql and 042_e2e_keys.sql, so migration ordering now depends on lexicographic filenames.
+
+## TASK-07: Docker-compose and env - add bots + integrations services
+Status: DONE
+Files: docker-compose.yml, .env.example
+
+## TASK-08: CHECKPOINT
+Status: DONE
+Files: docker-compose.yml, .env.example
+Notes: docker compose config --quiet passed after supplying temporary dummy env values required by existing compose interpolation. YAML structure validated; only Docker warned that the top-level version field is obsolete.
