@@ -263,15 +263,20 @@ func (s *ScheduledMessageService) SendNow(ctx context.Context, msgID, userID uui
 		return nil, apperror.Forbidden("You can only send your own scheduled messages")
 	}
 	if msg.IsSent {
-		return nil, apperror.BadRequest("Scheduled message has already been sent")
+		return nil, nil
+	}
+
+	claimed, err := s.scheduled.ClaimScheduled(ctx, msgID)
+	if err != nil {
+		return nil, fmt.Errorf("claim scheduled message: %w", err)
+	}
+	if !claimed {
+		return nil, nil
 	}
 
 	delivered, err := s.deliver(ctx, *msg)
 	if err != nil {
 		return nil, err
-	}
-	if err := s.scheduled.MarkSent(ctx, msgID); err != nil {
-		return nil, fmt.Errorf("mark scheduled message sent: %w", err)
 	}
 
 	return delivered, nil

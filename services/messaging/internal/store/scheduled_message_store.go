@@ -24,6 +24,9 @@ type ScheduledMessageStore interface {
 	Update(ctx context.Context, id uuid.UUID, content *string, entities []byte, scheduledAt *time.Time) error
 	// Delete deletes a scheduled message. Only the sender can delete.
 	Delete(ctx context.Context, id, senderID uuid.UUID) error
+	// ClaimScheduled atomically marks a specific scheduled message as sent.
+	// Returns true when the claim succeeded, false when the message was already sent.
+	ClaimScheduled(ctx context.Context, id uuid.UUID) (bool, error)
 	// MarkSent marks a scheduled message as sent.
 	MarkSent(ctx context.Context, id uuid.UUID) error
 	// ClaimAndMarkPending atomically claims and marks as sent all scheduled messages
@@ -155,6 +158,24 @@ func (s *scheduledMessageStore) Delete(ctx context.Context, id, senderID uuid.UU
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+func (s *scheduledMessageStore) ClaimScheduled(ctx context.Context, id uuid.UUID) (bool, error) {
+	var claimedID uuid.UUID
+	err := s.pool.QueryRow(ctx,
+		`UPDATE scheduled_messages
+		 SET is_sent = true, sent_at = NOW(), updated_at = NOW()
+		 WHERE id = $1 AND is_sent = false
+		 RETURNING id`,
+		id,
+	).Scan(&claimedID)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("claim scheduled message: %w", err)
+	}
+	return true, nil
 }
 
 func (s *scheduledMessageStore) MarkSent(ctx context.Context, id uuid.UUID) error {

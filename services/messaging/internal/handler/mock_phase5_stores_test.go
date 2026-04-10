@@ -498,6 +498,7 @@ type mockScheduledMessageStore struct {
 	listByChatFn          func(ctx context.Context, chatID, senderID uuid.UUID) ([]model.ScheduledMessage, error)
 	updateFn              func(ctx context.Context, id uuid.UUID, content *string, entities []byte, scheduledAt *time.Time) error
 	deleteFn              func(ctx context.Context, id, senderID uuid.UUID) error
+	claimScheduledFn      func(ctx context.Context, id uuid.UUID) (bool, error)
 	markSentFn            func(ctx context.Context, id uuid.UUID) error
 	claimAndMarkPendingFn func(ctx context.Context, limit int) ([]model.ScheduledMessage, error)
 }
@@ -538,6 +539,13 @@ func (m *mockScheduledMessageStore) Delete(ctx context.Context, id, senderID uui
 		return m.deleteFn(ctx, id, senderID)
 	}
 	return nil
+}
+
+func (m *mockScheduledMessageStore) ClaimScheduled(ctx context.Context, id uuid.UUID) (bool, error) {
+	if m.claimScheduledFn != nil {
+		return m.claimScheduledFn(ctx, id)
+	}
+	return true, nil
 }
 
 func (m *mockScheduledMessageStore) MarkSent(ctx context.Context, id uuid.UUID) error {

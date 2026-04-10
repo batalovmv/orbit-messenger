@@ -104,3 +104,7 @@ Unexpected untracked file  docs/bots-integrations-audit-triage.md appeared befo
 ## 2026-04-10T07:28:34Z TASK-25 DONE 69cb028
 Access JWTs now carry session jti, ValidateAccessToken rejects deleted sessions immediately, and no schema migration was needed because sessions.id already exists. cd services/auth && go test ./... passed.
 
+
+## 2026-04-10T07:29:07Z TASK-26 DONE 1075bc2
+Compose now requires TURN_USER/TURN_PASSWORD for both coturn and calls, and .env.example warns against orbit:orbit. YAML parse gate passed via python/yaml.
+

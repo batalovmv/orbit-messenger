@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -267,8 +269,13 @@ func TestSendNow_AlreadySent(t *testing.T) {
 	rec := &RecordingPublisher{}
 	svc := newTestScheduledService(ss, &mockMessageStore{}, nil, &mockChatStore{}, rec)
 
-	_, err := svc.SendNow(context.Background(), msgID, userID)
-	schedAssertAppError(t, err, 400)
+	delivered, err := svc.SendNow(context.Background(), msgID, userID)
+	if err != nil {
+		t.Fatalf("expected idempotent success, got %v", err)
+	}
+	if delivered != nil {
+		t.Fatalf("expected nil delivery for already-sent message, got %+v", delivered)
+	}
 }
 
 func TestSendNow_NotOwner(t *testing.T) {
@@ -447,5 +454,194 @@ func TestSendNow_ScheduledPollCreatesPoll(t *testing.T) {
 	events := rec.FindByEvent("new_message")
 	if len(events) != 1 {
 		t.Fatalf("expected 1 new_message event, got %d", len(events))
+	}
+}
+
+func TestSendNow_DoubleCallDeliversExactlyOnce(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	scheduledID := uuid.New()
+	messageID := uuid.New()
+	content := "Ship it"
+
+	var claimCount atomic.Int32
+	var createCount atomic.Int32
+
+	ss := &mockScheduledMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.ScheduledMessage, error) {
+			return &model.ScheduledMessage{
+				ID:       scheduledID,
+				ChatID:   chatID,
+				SenderID: userID,
+				Content:  &content,
+				Type:     "text",
+			}, nil
+		},
+		claimScheduledFn: func(ctx context.Context, id uuid.UUID) (bool, error) {
+			return claimCount.Add(1) == 1, nil
+		},
+	}
+	ms := &mockMessageStore{
+		createFn: func(ctx context.Context, msg *model.Message) error {
+			createCount.Add(1)
+			msg.ID = messageID
+			msg.SequenceNumber = 1
+			return nil
+		},
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{
+				ID:             messageID,
+				ChatID:         chatID,
+				SenderID:       &userID,
+				Type:           "text",
+				Content:        &content,
+				SequenceNumber: 1,
+			}, nil
+		},
+	}
+	cs := &mockChatStore{
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
+		},
+		getMemberIDsFn: func(ctx context.Context, cID uuid.UUID) ([]string, error) {
+			return []string{userID.String()}, nil
+		},
+	}
+
+	rec := &RecordingPublisher{}
+	svc := newTestScheduledService(ss, ms, nil, cs, rec)
+
+	first, err := svc.SendNow(context.Background(), scheduledID, userID)
+	if err != nil {
+		t.Fatalf("first send now failed: %v", err)
+	}
+	if first == nil {
+		t.Fatal("expected first send to deliver a message")
+	}
+
+	second, err := svc.SendNow(context.Background(), scheduledID, userID)
+	if err != nil {
+		t.Fatalf("second send now failed: %v", err)
+	}
+	if second != nil {
+		t.Fatalf("expected second send to be idempotent nil, got %+v", second)
+	}
+
+	if got := createCount.Load(); got != 1 {
+		t.Fatalf("expected one delivered message, got %d", got)
+	}
+}
+
+func TestScheduledDelivery_SendNowAndCronDeliverExactlyOnce(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	scheduledID := uuid.New()
+	messageID := uuid.New()
+	content := "Race-free"
+
+	var (
+		mu      sync.Mutex
+		claimed bool
+	)
+	var createCount atomic.Int32
+
+	ss := &mockScheduledMessageStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.ScheduledMessage, error) {
+			mu.Lock()
+			defer mu.Unlock()
+
+			return &model.ScheduledMessage{
+				ID:       scheduledID,
+				ChatID:   chatID,
+				SenderID: userID,
+				Content:  &content,
+				Type:     "text",
+				IsSent:   claimed,
+			}, nil
+		},
+		claimScheduledFn: func(ctx context.Context, id uuid.UUID) (bool, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if claimed {
+				return false, nil
+			}
+			claimed = true
+			return true, nil
+		},
+		claimAndMarkPendingFn: func(ctx context.Context, limit int) ([]model.ScheduledMessage, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if claimed {
+				return nil, nil
+			}
+			claimed = true
+			return []model.ScheduledMessage{
+				{
+					ID:       scheduledID,
+					ChatID:   chatID,
+					SenderID: userID,
+					Content:  &content,
+					Type:     "text",
+					IsSent:   true,
+				},
+			}, nil
+		},
+	}
+	ms := &mockMessageStore{
+		createFn: func(ctx context.Context, msg *model.Message) error {
+			msg.ID = messageID
+			msg.SequenceNumber = int64(createCount.Add(1))
+			return nil
+		},
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Message, error) {
+			return &model.Message{
+				ID:             messageID,
+				ChatID:         chatID,
+				SenderID:       &userID,
+				Type:           "text",
+				Content:        &content,
+				SequenceNumber: 1,
+			}, nil
+		},
+	}
+	cs := &mockChatStore{
+		getByIDFn: func(ctx context.Context, cID uuid.UUID) (*model.Chat, error) {
+			return &model.Chat{ID: cID, Type: "group", DefaultPermissions: 1}, nil
+		},
+		getMemberFn: func(ctx context.Context, cID, uID uuid.UUID) (*model.ChatMember, error) {
+			return &model.ChatMember{UserID: uID, Role: "member", Permissions: -1}, nil
+		},
+		getMemberIDsFn: func(ctx context.Context, cID uuid.UUID) ([]string, error) {
+			return []string{userID.String()}, nil
+		},
+	}
+
+	rec := &RecordingPublisher{}
+	svc := newTestScheduledService(ss, ms, nil, cs, rec)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if _, err := svc.SendNow(context.Background(), scheduledID, userID); err != nil {
+			t.Errorf("send now failed: %v", err)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if _, err := svc.DeliverPending(context.Background()); err != nil {
+			t.Errorf("deliver pending failed: %v", err)
+		}
+	}()
+
+	wg.Wait()
+
+	if got := createCount.Load(); got != 1 {
+		t.Fatalf("expected exactly one delivered message, got %d", got)
 	}
 }
