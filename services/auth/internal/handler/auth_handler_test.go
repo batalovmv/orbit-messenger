@@ -15,6 +15,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pquerna/otp/totp"
@@ -261,6 +262,11 @@ func (m *mockInviteStore) UpdateUsedBy(_ context.Context, code string, userID uu
 // --- Test Setup ---
 
 func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStore) {
+	app, svc, userStore, _ := setupInspectableTestApp(t)
+	return app, svc, userStore
+}
+
+func setupInspectableTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStore, *mockSessionStore) {
 	t.Helper()
 
 	userStore := newMockUserStore()
@@ -288,7 +294,7 @@ func setupTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStor
 	})
 	handler.Register(app)
 
-	return app, svc, userStore
+	return app, svc, userStore, sessionStore
 }
 
 // testBootstrapSecret is the value every test uses to authorize /auth/bootstrap.
@@ -551,6 +557,57 @@ func TestGetMe_WithValidToken(t *testing.T) {
 	result := parseResponse(resp)
 	if result["email"] != "admin@orbit.test" {
 		t.Errorf("expected admin@orbit.test, got %v", result["email"])
+	}
+}
+
+func TestLogin_AccessTokenContainsSessionJTI(t *testing.T) {
+	app, _, _, sessionStore := setupInspectableTestApp(t)
+
+	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}, bootstrapHeaders())
+
+	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":    "admin@orbit.test",
+		"password": "securepassword123",
+	}, nil)
+	if loginResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(loginResp.Body)
+		t.Fatalf("expected 200, got %d: %s", loginResp.StatusCode, body)
+	}
+
+	loginResult := parseResponse(loginResp)
+	token, ok := loginResult["access_token"].(string)
+	if !ok || token == "" {
+		t.Fatal("expected access_token in response")
+	}
+
+	parsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		return []byte("test-jwt-secret-32-chars-minimum!!"), nil
+	})
+	if err != nil {
+		t.Fatalf("parse jwt: %v", err)
+	}
+
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok || !parsed.Valid {
+		t.Fatal("expected valid jwt claims")
+	}
+
+	jti, _ := claims["jti"].(string)
+	if jti == "" {
+		t.Fatal("expected jti claim in access token")
+	}
+
+	sessionID, err := uuid.Parse(jti)
+	if err != nil {
+		t.Fatalf("parse jti as uuid: %v", err)
+	}
+
+	if sessionStore.sessions[sessionID] == nil {
+		t.Fatalf("expected session %s referenced by jti to exist", sessionID)
 	}
 }
 
@@ -894,6 +951,64 @@ func TestRevokeSession_HappyPath(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestRevokeSession_InvalidatesExistingAccessTokenImmediately(t *testing.T) {
+	app, _, _, sessionStore := setupInspectableTestApp(t)
+
+	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}, bootstrapHeaders())
+
+	loginResp := doRequest(app, "POST", "/auth/login", map[string]string{
+		"email":    "admin@orbit.test",
+		"password": "securepassword123",
+	}, nil)
+	loginResult := parseResponse(loginResp)
+	token, ok := loginResult["access_token"].(string)
+	if !ok || token == "" {
+		t.Fatal("expected access_token in login response")
+	}
+
+	getMeResp := doRequest(app, "GET", "/auth/me", nil, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	if getMeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(getMeResp.Body)
+		t.Fatalf("expected initial get me 200, got %d: %s", getMeResp.StatusCode, body)
+	}
+
+	var sessionID uuid.UUID
+	for id := range sessionStore.sessions {
+		sessionID = id
+		break
+	}
+	if sessionID == uuid.Nil {
+		t.Fatal("expected session to exist after login")
+	}
+
+	revokeResp := doRequest(app, "DELETE", fmt.Sprintf("/auth/sessions/%s", sessionID), nil, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	if revokeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(revokeResp.Body)
+		t.Fatalf("expected revoke 200, got %d: %s", revokeResp.StatusCode, body)
+	}
+
+	getMeAfterRevoke := doRequest(app, "GET", "/auth/me", nil, map[string]string{
+		"Authorization": "Bearer " + token,
+	})
+	if getMeAfterRevoke.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(getMeAfterRevoke.Body)
+		t.Fatalf("expected get me after revoke 401, got %d: %s", getMeAfterRevoke.StatusCode, body)
+	}
+
+	body := parseResponse(getMeAfterRevoke)
+	if body["message"] != "Session revoked" {
+		t.Fatalf("expected session revoked message, got %v", body["message"])
 	}
 }
 

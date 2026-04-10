@@ -463,6 +463,24 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) 
 		return uuid.Nil, "", apperror.Unauthorized("Invalid token subject")
 	}
 
+	jti, _ := claims["jti"].(string)
+	if jti == "" {
+		return uuid.Nil, "", apperror.Unauthorized("Invalid token session")
+	}
+
+	sessionID, err := uuid.Parse(jti)
+	if err != nil {
+		return uuid.Nil, "", apperror.Unauthorized("Invalid token session")
+	}
+
+	sess, err := s.sessions.GetByID(ctx, sessionID)
+	if err != nil {
+		return uuid.Nil, "", fmt.Errorf("get session: %w", err)
+	}
+	if sess == nil || sess.UserID != userID {
+		return uuid.Nil, "", apperror.Unauthorized("Session revoked")
+	}
+
 	// Check per-user invalidation timestamp (set by ResetAdmin to revoke all access tokens).
 	// Fail-closed: Redis error = reject token.
 	invalidateKey := "user_tokens_invalid_before:" + userID.String()
@@ -488,28 +506,13 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) 
 // --- internal helpers ---
 
 func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, ip, userAgent string) (*TokenPair, error) {
-	// Create access token
 	now := time.Now()
-	accessClaims := jwt.MapClaims{
-		"sub":  userID.String(),
-		"role": "member",
-		"iat":  now.Unix(),
-		"exp":  now.Add(s.cfg.AccessTTL).Unix(),
-	}
-	// Fetch role for the token — fail if DB is unavailable or user deleted
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("fetch user role: %w", err)
 	}
 	if u == nil {
 		return nil, apperror.Unauthorized("User not found")
-	}
-	accessClaims["role"] = u.Role
-
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessStr, err := accessToken.SignedString([]byte(s.cfg.JWTSecret))
-	if err != nil {
-		return nil, fmt.Errorf("sign access token: %w", err)
 	}
 
 	// Create refresh token (random string)
@@ -529,6 +532,20 @@ func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, ip,
 	}
 	if err := s.sessions.Create(ctx, sess); err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	accessClaims := jwt.MapClaims{
+		"sub":  userID.String(),
+		"role": u.Role,
+		"iat":  now.Unix(),
+		"exp":  now.Add(s.cfg.AccessTTL).Unix(),
+		"jti":  sess.ID.String(),
+	}
+
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	accessStr, err := accessToken.SignedString([]byte(s.cfg.JWTSecret))
+	if err != nil {
+		return nil, fmt.Errorf("sign access token: %w", err)
 	}
 
 	return &TokenPair{

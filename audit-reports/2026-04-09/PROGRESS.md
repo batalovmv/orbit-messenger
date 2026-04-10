@@ -93,3 +93,10 @@ Search ACL filtering now uses one lightweight `GetUserChatIDs` query instead of 
 
 ## 2026-04-10T10:15:00Z TASK-16 DONE 55d0a7d (completed by operator — agent session 2 left changes uncommitted)
 GetPresignedURL, GetThumbnailURL, GetMediumURL now require userID + CanAccess check. Tests cover owner/non-owner/nil-user. `go build ./... && go test ./...` passed in `services/media`.
+
+## 2026-04-10T07:26:33Z TASK-24 DONE 8185c05
+WS fanout now uses per-connection send queues and disconnects slow consumers instead of blocking NATS delivery. go test ./internal/ws passed in services/gateway.
+
+## 2026-04-10T07:27:00Z TASK-00 DECISION
+Unexpected untracked file  docs/bots-integrations-audit-triage.md appeared before TASK-25. Stashing it to restore task preconditions; PROGRESS.md remains the active session log.
+
