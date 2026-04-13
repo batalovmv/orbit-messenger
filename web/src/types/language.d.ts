@@ -653,6 +653,7 @@ export interface LangPair {
   'ErrorIncorrectPassword': undefined;
   'ErrorPasswordFlood': undefined;
   'ErrorPhoneBanned': undefined;
+  'ErrorServerUnavailable': undefined;
   'ErrorUnexpected': undefined;
   'ErrorEmailUnconfirmed': undefined;
   'ErrorEmailHashExpired': undefined;
@@ -2058,6 +2059,9 @@ export interface LangPair {
   'AriaGiftPreviewPlay': undefined;
   'AriaGiftPreviewStop': undefined;
   'RegistrationJoinWith': undefined;
+  'RegistrationSignUp': undefined;
+  'InviteCode': undefined;
+  'DisplayName': undefined;
   'AdminCreateInvite': undefined;
   'AdminInviteCreated': undefined;
   'AdminInviteError': undefined;

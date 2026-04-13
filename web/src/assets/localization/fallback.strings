@@ -739,6 +739,7 @@
 "ErrorFloodTime" = "Too many attempts, please try again in {time}";
 "ErrorPasswordFresh" = "The password was modified recently, try again in {time}";
 "ErrorSessionFresh" = "For security reasons, please wait {time} or use an older session";
+"ErrorServerUnavailable" = "Server is unavailable, please try again later";
 "ErrorUnexpected" = "Unexpected error";
 "ErrorUnexpectedMessage" = "Unexpected error: {error}";
 "ErrorEmailUnconfirmed" = "Email not confirmed";
@@ -2828,6 +2829,9 @@
 "AriaGiftPreviewPlay" = "Play random previews";
 "AriaGiftPreviewStop" = "Pause random previews";
 "RegistrationJoinWith" = "Register with invite code";
+"RegistrationSignUp" = "Sign Up";
+"InviteCode" = "Invite Code";
+"DisplayName" = "Display Name";
 "AdminCreateInvite" = "Create Invite Code";
 "AdminInviteCreated" = "Invite code copied to clipboard";
 "AdminInviteError" = "Failed to create invite (admin only)";

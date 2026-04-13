@@ -115,13 +115,23 @@ export async function loginWithEmail({
         return undefined;
       }
 
-      const errorKey = e.status === 429
-        ? { key: 'FloodWait' as const }
-        : { key: 'ErrorIncorrectPassword' as const };
+      let errorKey: { key: 'FloodWait' | 'ErrorIncorrectPassword' | 'ErrorServerUnavailable' };
+      if (e.status === 429) {
+        errorKey = { key: 'FloodWait' };
+      } else if (e.status >= 500) {
+        errorKey = { key: 'ErrorServerUnavailable' };
+      } else {
+        errorKey = { key: 'ErrorIncorrectPassword' };
+      }
 
       sendApiUpdate({
         '@type': 'updateAuthorizationError',
         errorKey,
+      });
+    } else {
+      sendApiUpdate({
+        '@type': 'updateAuthorizationError',
+        errorKey: { key: 'ErrorServerUnavailable' as const },
       });
     }
     return undefined;
@@ -131,8 +141,16 @@ export async function loginWithEmail({
 export async function checkAuth() {
   const storedToken = client.getAccessToken();
 
-  // Try to refresh if no token
+  // Try to refresh if no token but user had a session before
   if (!storedToken) {
+    if (!client.hasSessionHint()) {
+      sendApiUpdate({
+        '@type': 'updateAuthorizationState',
+        authorizationState: 'authorizationStateWaitPhoneNumber',
+      });
+      return false;
+    }
+
     try {
       const result = await client.request<SaturnLoginResponse>(
         'POST', '/auth/refresh', undefined, { noAuth: true },

@@ -30,6 +30,7 @@ export default {
   "ErrorPhoneNumberInvalid": "Invalid phone number, please try again",
   "ErrorCodeInvalid": "Invalid code, please try again",
   "ErrorIncorrectPassword": "Invalid password, please try again",
+  "ErrorServerUnavailable": "Server is unavailable, please try again later",
   "ErrorPasswordFlood": "Too many attempts, please try again later",
   "ErrorPhoneBanned": "This phone number is banned",
   "ErrorFloodTime": "Too many attempts, please try again in {time}",
