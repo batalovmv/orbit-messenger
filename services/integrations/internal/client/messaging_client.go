@@ -65,7 +65,7 @@ func (c *MessagingClient) SendMessage(
 	}
 
 	var result MessageResponse
-	if err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/api/v1/chats/%s/messages", c.baseURL, chatID), botUserID, payload, &result); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/chats/%s/messages", c.baseURL, chatID), botUserID, payload, &result); err != nil {
 		return nil, err
 	}
 
@@ -86,7 +86,7 @@ func (c *MessagingClient) EditMessage(
 	}
 
 	var result MessageResponse
-	if err := c.doJSON(ctx, http.MethodPatch, fmt.Sprintf("%s/api/v1/messages/%s", c.baseURL, messageID), botUserID, payload, &result); err != nil {
+	if err := c.doJSON(ctx, http.MethodPatch, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, payload, &result); err != nil {
 		return nil, err
 	}
 
@@ -94,7 +94,7 @@ func (c *MessagingClient) EditMessage(
 }
 
 func (c *MessagingClient) DeleteMessage(ctx context.Context, botUserID, messageID uuid.UUID) error {
-	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/api/v1/messages/%s", c.baseURL, messageID), botUserID, nil, nil)
+	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, nil, nil)
 }
 
 func (c *MessagingClient) doJSON(ctx context.Context, method, url string, botUserID uuid.UUID, payload any, target any) error {
