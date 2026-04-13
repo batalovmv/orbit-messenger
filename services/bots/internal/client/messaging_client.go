@@ -59,7 +59,16 @@ func (c *MessagingClient) SendMessage(
 		"via_bot_id": botUserID.String(),
 	}
 	if len(replyMarkup) > 0 {
-		payload["reply_markup"] = json.RawMessage(replyMarkup)
+		// Bot API clients send reply_markup as a JSON-encoded string (Telegram convention).
+		// If it's a JSON string (starts with '"'), unwrap it so messaging stores a JSON object.
+		rm := json.RawMessage(replyMarkup)
+		if len(rm) > 0 && rm[0] == '"' {
+			var unwrapped string
+			if err := json.Unmarshal(rm, &unwrapped); err == nil {
+				rm = json.RawMessage(unwrapped)
+			}
+		}
+		payload["reply_markup"] = rm
 	}
 	if replyToID != nil {
 		payload["reply_to_id"] = replyToID.String()
@@ -83,7 +92,14 @@ func (c *MessagingClient) EditMessage(
 		"content": content,
 	}
 	if len(replyMarkup) > 0 {
-		payload["reply_markup"] = json.RawMessage(replyMarkup)
+		rm := json.RawMessage(replyMarkup)
+		if len(rm) > 0 && rm[0] == '"' {
+			var unwrapped string
+			if err := json.Unmarshal(rm, &unwrapped); err == nil {
+				rm = json.RawMessage(unwrapped)
+			}
+		}
+		payload["reply_markup"] = rm
 	}
 
 	var result MessageResponse
