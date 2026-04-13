@@ -202,6 +202,13 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
   const newState: GlobalState = {
     ...initialState,
     ...cached,
+    auth: {
+      ...initialState.auth,
+      ...cached?.auth,
+      // Never restore transient error/loading state from cache
+      errorKey: undefined,
+      isLoading: undefined,
+    },
     sharedState: {
       ...sharedState,
       ...cached?.sharedState, // Allow migration to override shared state
