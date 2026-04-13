@@ -1,4 +1,4 @@
-import { memo, useState } from '../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
@@ -25,6 +25,12 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
+
+  useEffect(() => {
+    if (auth.errorKey) {
+      unmarkIsLoading();
+    }
+  }, [auth.errorKey]);
 
   const canSubmit = inviteCode.length > 0
     && email.length > 0
