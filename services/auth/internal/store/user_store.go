@@ -45,15 +45,15 @@ func (s *userStore) Create(ctx context.Context, u *model.User) error {
 func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, phone, display_name, avatar_url, bio,
-		        status, custom_status, custom_status_emoji, role,
+		`SELECT id, email, password_hash, phone, username, display_name, avatar_url, bio,
+		        status, custom_status, custom_status_emoji, role, account_type,
 		        is_active, deactivated_at, deactivated_by,
 		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id,
 	).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.Bio,
-		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.TOTPSecret, &u.TOTPEnabled,
 		&u.InvitedBy, &u.InviteCode, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt,
@@ -67,15 +67,15 @@ func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, err
 func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, phone, display_name, avatar_url, bio,
-		        status, custom_status, custom_status_emoji, role,
+		`SELECT id, email, password_hash, phone, username, display_name, avatar_url, bio,
+		        status, custom_status, custom_status_emoji, role, account_type,
 		        is_active, deactivated_at, deactivated_by,
 		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email,
 	).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.DisplayName, &u.AvatarURL, &u.Bio,
-		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.TOTPSecret, &u.TOTPEnabled,
 		&u.InvitedBy, &u.InviteCode, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt,

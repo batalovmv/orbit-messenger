@@ -4,6 +4,7 @@ export interface SaturnUser {
   id: string;
   email?: string;
   phone?: string;
+  username?: string;
   display_name: string;
   avatar_url?: string;
   bio?: string;
@@ -11,6 +12,7 @@ export interface SaturnUser {
   custom_status?: string;
   custom_status_emoji?: string;
   role: 'superadmin' | 'compliance' | 'admin' | 'member';
+  account_type?: 'human' | 'bot' | 'system';
   is_active: boolean;
   deactivated_at?: string;
   totp_enabled?: boolean;
@@ -55,6 +57,16 @@ export interface SaturnMessageEntity {
   user_id?: string;
 }
 
+export interface SaturnInlineKeyboardButton {
+  text: string;
+  callback_data?: string;
+  url?: string;
+}
+
+export interface SaturnReplyMarkup {
+  inline_keyboard?: SaturnInlineKeyboardButton[][];
+}
+
 export interface SaturnMessage {
   id: string;
   chat_id: string;
@@ -81,6 +93,8 @@ export interface SaturnMessage {
   is_one_time?: boolean;
   viewed_at?: string;
   viewed_by?: string;
+  reply_markup?: SaturnReplyMarkup;
+  via_bot_id?: string;
 }
 
 export interface SaturnMediaAttachment {

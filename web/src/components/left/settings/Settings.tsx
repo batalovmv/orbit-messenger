@@ -31,6 +31,8 @@ import SettingsHeader from './SettingsHeader';
 import SettingsLanguage from './SettingsLanguage';
 import SettingsMain from './SettingsMain';
 import SettingsNotifications from './SettingsNotifications';
+import SettingsBotManagement from './SettingsBotManagement';
+import SettingsIntegrations from './SettingsIntegrations';
 import SettingsPasskeys from './SettingsPasskeys';
 import SettingsPerformance from './SettingsPerformance';
 import SettingsPrivacy from './SettingsPrivacy';
@@ -494,6 +496,19 @@ const Settings: FC<OwnProps> = ({
             isActive={isScreenActive}
             onReset={handleReset}
           />
+        );
+
+      case SettingsScreens.BotManagement:
+      case SettingsScreens.BotEdit:
+        return (
+          <SettingsBotManagement />
+        );
+
+      case SettingsScreens.Integrations:
+      case SettingsScreens.IntegrationEdit:
+      case SettingsScreens.IntegrationRoutes:
+        return (
+          <SettingsIntegrations />
         );
 
       default:

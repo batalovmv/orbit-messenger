@@ -49,3 +49,21 @@ export async function uninstallBot(botId: string, chatId: string) {
 export async function fetchChatBots(chatId: string) {
   return request<SaturnBotInstallation[]>('GET', `/chats/${chatId}/bots`);
 }
+
+export async function fetchBotByUserId(userId: string) {
+  return request<SaturnBot>('GET', `/bots/by-user/${userId}`);
+}
+
+export async function sendBotCallback(
+  messageId: string,
+  chatId: string,
+  viaBotId: string,
+  data: string,
+) {
+  return request<{ text?: string; show_alert?: boolean }>('POST', '/bots/callback', {
+    message_id: messageId,
+    chat_id: chatId,
+    via_bot_id: viaBotId,
+    data,
+  });
+}

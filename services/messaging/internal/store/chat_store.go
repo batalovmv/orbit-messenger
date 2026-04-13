@@ -121,7 +121,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		            (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id), 0
 		        )) as unread_count,
 		       cm.is_pinned, cm.is_muted, cm.is_archived,
-		       ou.id, ou.display_name, ou.avatar_url, ou.status, ou.last_seen_at
+		       ou.id, ou.display_name, ou.avatar_url, ou.status, ou.last_seen_at, ou.account_type, ou.username
 		FROM chat_members cm
 		JOIN chats c ON c.id = cm.chat_id
 		LEFT JOIN LATERAL (
@@ -130,7 +130,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		    ORDER BY sequence_number DESC LIMIT 1
 		) m ON true
 		LEFT JOIN LATERAL (
-		    SELECT u.id, u.display_name, u.avatar_url, u.status, u.last_seen_at
+		    SELECT u.id, u.display_name, u.avatar_url, u.status, u.last_seen_at, u.account_type, u.username
 		    FROM chat_members ocm
 		    JOIN users u ON u.id = ocm.user_id
 		    WHERE ocm.chat_id = c.id AND c.type = 'direct'
@@ -168,6 +168,8 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		var ouAvatarURL *string
 		var ouStatus *string
 		var ouLastSeenAt *time.Time
+		var ouAccountType *string
+		var ouUsername *string
 
 		err := rows.Scan(
 			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
@@ -181,7 +183,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&msgViewedAt, &msgViewedBy,
 			&item.MemberCount, &item.UnreadCount,
 			&item.Chat.IsPinned, &item.Chat.IsMuted, &item.Chat.IsArchived,
-			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt,
+			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt, &ouAccountType, &ouUsername,
 		)
 		if err != nil {
 			return nil, "", false, fmt.Errorf("scan chat: %w", err)
@@ -227,13 +229,20 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		}
 
 		if ouID != nil {
-			item.OtherUser = &model.User{
+			ou := &model.User{
 				ID:          *ouID,
 				DisplayName: *ouDisplayName,
 				AvatarURL:   ouAvatarURL,
 				Status:      *ouStatus,
 				LastSeenAt:  ouLastSeenAt,
 			}
+			if ouAccountType != nil {
+				ou.AccountType = *ouAccountType
+			}
+			if ouUsername != nil {
+				ou.Username = ouUsername
+			}
+			item.OtherUser = ou
 		}
 
 		items = append(items, item)

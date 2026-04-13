@@ -23,6 +23,7 @@ const (
 type User struct {
 	ID                uuid.UUID  `json:"id"`
 	Email             string     `json:"email"`
+	Username          *string    `json:"username,omitempty"`
 	DisplayName       string     `json:"display_name"`
 	AvatarURL         *string    `json:"avatar_url,omitempty"`
 	Bio               *string    `json:"bio,omitempty"`
@@ -31,6 +32,7 @@ type User struct {
 	CustomStatus      *string    `json:"custom_status,omitempty"`
 	CustomStatusEmoji *string    `json:"custom_status_emoji,omitempty"`
 	Role              string     `json:"role"`
+	AccountType       string     `json:"account_type"`
 	IsActive          bool       `json:"is_active"`
 	DeactivatedAt     *time.Time `json:"deactivated_at,omitempty"`
 	DeactivatedBy     *uuid.UUID `json:"deactivated_by,omitempty"`
@@ -113,6 +115,9 @@ type Message struct {
 	ExpiresAt        *time.Time      `json:"expires_at,omitempty"` // disappearing messages
 	ViewedAt         *time.Time      `json:"viewed_at,omitempty"`
 	ViewedBy         *uuid.UUID      `json:"viewed_by,omitempty"`
+	// Bot extensions (migration 044)
+	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
+	ViaBotID    *uuid.UUID      `json:"via_bot_id,omitempty"`
 	// Joined sender data
 	SenderName      string  `json:"sender_name,omitempty"`
 	SenderAvatarURL *string `json:"sender_avatar_url,omitempty"`

@@ -27,6 +27,7 @@ import { debounce } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/saturn';
+import { sendBotCallback } from '../../../api/saturn/methods/bots';
 import { getMainUsername } from '../../helpers';
 import {
   getWebAppKey,
@@ -514,13 +515,21 @@ addActionHandler('resetAllInlineBots', (global, actions, payload): ActionReturnT
 });
 
 addActionHandler('startBot', async (global, actions, payload): Promise<void> => {
-  const { botId, param } = payload;
+  const { botId, param, tabId = getCurrentTabId() } = payload;
 
   const bot = selectUser(global, botId);
   if (!bot) {
     return;
   }
 
+  // Saturn: send /start as a regular message in DM with bot
+  if (bot.type === 'userTypeBot') {
+    const startText = param ? `/start ${param}` : '/start';
+    actions.sendMessage({ text: startText, tabId });
+    return;
+  }
+
+  // Fallback: GramJS path
   let fullInfo = selectUserFullInfo(global, botId);
   if (!fullInfo) {
     const result = await callApi('fetchFullUser', { id: bot.id, accessHash: bot.accessHash });
@@ -1322,6 +1331,23 @@ async function answerCallbackButton<T extends GlobalState>(
     showDialog, showNotification, openUrl, openGame,
   } = actions;
 
+  // Saturn: use sendBotCallback if message has saturnId and viaBotId
+  const message = selectChatMessage(global, chat.id, messageId);
+  if (message?.saturnId && message?.viaBotId && data !== undefined) {
+    try {
+      const cbResult = await sendBotCallback(message.saturnId, chat.id, message.viaBotId, data);
+      if (cbResult?.show_alert && cbResult?.text) {
+        showDialog({ data: { message: cbResult.text }, tabId });
+      } else if (cbResult?.text) {
+        showNotification({ message: cbResult.text, tabId });
+      }
+    } catch (e) {
+      // Callback delivery failed silently — bot may be offline
+    }
+    return;
+  }
+
+  // Fallback: GramJS path for non-Saturn messages
   const result = await callApi('answerCallbackButton', {
     chatId: chat.id,
     accessHash: chat.accessHash,
@@ -1333,12 +1359,12 @@ async function answerCallbackButton<T extends GlobalState>(
   if (!result) {
     return;
   }
-  const { message, alert: isError, url } = result;
+  const { message: msg, alert: isError, url } = result;
 
   if (isError) {
-    showDialog({ data: { message: message || 'Error' }, tabId });
-  } else if (message) {
-    showNotification({ message, tabId });
+    showDialog({ data: { message: msg || 'Error' }, tabId });
+  } else if (msg) {
+    showNotification({ message: msg, tabId });
   } else if (url) {
     if (isGame) {
       openGame({

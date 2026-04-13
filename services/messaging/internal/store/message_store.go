@@ -24,6 +24,7 @@ const messageSelectColumns = `
 	m.expires_at, m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 	m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 	m.is_one_time, m.viewed_at, m.viewed_by,
+	m.reply_markup, m.via_bot_id,
 	COALESCE(u.display_name, '') AS sender_name, u.avatar_url AS sender_avatar_url,
 	(SELECT rm.sequence_number FROM messages rm WHERE rm.id = m.reply_to_id) AS reply_to_seq
 `
@@ -72,6 +73,7 @@ func scanMessage(scanner messageScanner, msg *model.Message) error {
 		&msg.ExpiresAt, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
 		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
 		&msg.IsOneTime, &msg.ViewedAt, &msg.ViewedBy,
+		&msg.ReplyMarkup, &msg.ViaBotID,
 		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum,
 	)
 }
@@ -95,11 +97,11 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 	}
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, expires_at, sequence_number)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, expires_at, sequence_number, reply_markup, via_bot_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
 		           sequence_number, created_at, expires_at, viewed_at, viewed_by`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.ExpiresAt, seq,
+		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.ExpiresAt, seq, msg.ReplyMarkup, msg.ViaBotID,
 	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
 		&msg.SequenceNumber, &msg.CreatedAt, &msg.ExpiresAt, &msg.ViewedAt, &msg.ViewedBy)
 	if err != nil {
@@ -300,9 +302,9 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 
 func (s *messageStore) Update(ctx context.Context, msg *model.Message) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE messages SET content = $1, entities = $2, is_edited = true, edited_at = now()
-		 WHERE id = $3`,
-		msg.Content, msg.Entities, msg.ID,
+		`UPDATE messages SET content = $1, entities = $2, reply_markup = $3, is_edited = true, edited_at = now()
+		 WHERE id = $4`,
+		msg.Content, msg.Entities, msg.ReplyMarkup, msg.ID,
 	)
 	return err
 }

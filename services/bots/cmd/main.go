@@ -86,7 +86,8 @@ func main() {
 	webhookWorker := service.NewWebhookWorker(rdb, encryptionKey, logger)
 
 	botService := service.NewBotService(botStore, tokenStore, commandStore, installationStore, botTokenSecret)
-	botHandler := handler.NewBotHandler(botService, logger)
+	botHandler := handler.NewBotHandler(botService, logger).
+		WithCallbackSupport(rdb, webhookWorker, updateQueue, installationStore, encryptionKey)
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
 	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
 	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
