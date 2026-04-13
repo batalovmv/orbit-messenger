@@ -2880,4 +2880,5 @@
 "DeleteRoute" = "Delete Route";
 "EventFilter" = "Event Filter";
 "MessageTemplate" = "Message Template";
+"AreYouSure" = "Are you sure?";
 "TargetChat" = "Target Chat"

@@ -547,7 +547,10 @@ func renderDeliveryMessage(connector *model.Connector, route model.Route, eventT
 		if len(matches) != 2 {
 			return token
 		}
-		if value, ok := values[matches[1]]; ok {
+		key := matches[1]
+		// Strip leading dot — templates use {{.data.message}} but keys are "data.message"
+		key = strings.TrimPrefix(key, ".")
+		if value, ok := values[key]; ok {
 			return value
 		}
 		return ""
