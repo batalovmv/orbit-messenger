@@ -33,6 +33,13 @@ addActionHandler('saturnGoToInvite', (global): ActionReturnType => {
   });
 });
 
+addActionHandler('saturnGoToLogin', (global): ActionReturnType => {
+  return updateAuth(global, {
+    state: 'authorizationStateWaitPhoneNumber',
+    errorKey: undefined,
+  });
+});
+
 addActionHandler('saturnValidateInvite', async (global, actions, payload): Promise<void> => {
   const { code } = payload;
 
@@ -64,9 +71,20 @@ addActionHandler('saturnRegister', async (global, actions, payload): Promise<voi
   });
   setGlobal(global);
 
-  const result = await callApi('registerWithInvite', {
-    inviteCode, email, password, displayName,
-  });
+  let result;
+  try {
+    result = await callApi('registerWithInvite', {
+      inviteCode, email, password, displayName,
+    });
+  } catch {
+    global = getGlobal();
+    global = updateAuth(global, {
+      isLoading: false,
+      errorKey: { key: 'ErrorServerUnavailable' },
+    });
+    setGlobal(global);
+    return;
+  }
 
   if (result) {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -75,5 +93,9 @@ addActionHandler('saturnRegister', async (global, actions, payload): Promise<voi
     if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
       actions.sync();
     }
+  } else {
+    global = getGlobal();
+    global = updateAuth(global, { isLoading: false });
+    setGlobal(global);
   }
 });

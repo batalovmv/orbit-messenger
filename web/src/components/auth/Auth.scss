@@ -6,7 +6,11 @@
   width: 100%;
   max-width: 25.5rem;
   margin: 0 auto;
-  padding: 6rem 1rem 1rem;
+  padding: 2rem 1rem 1rem;
+
+  @media (min-height: 700px) {
+    padding-top: 6rem;
+  }
 
   text-align: center;
 
@@ -34,7 +38,7 @@
   }
 
   #logo {
-    background: url("../../assets/telegram-logo.svg") center no-repeat;
+    background: url("../../assets/orbit-logo.svg") center no-repeat;
     background-size: 100%;
   }
 
