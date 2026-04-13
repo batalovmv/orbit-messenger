@@ -484,11 +484,25 @@ function buildInlineButton(btn: SaturnInlineKeyboardButton): ApiKeyboardButton {
   return { type: 'command', text: btn.text };
 }
 
-function buildReplyKeyboard(markup: SaturnReplyMarkup | undefined): ApiReplyKeyboard | undefined {
-  if (!markup?.inline_keyboard?.length) return undefined;
+function buildReplyKeyboard(markup: SaturnReplyMarkup | string | undefined): ApiReplyKeyboard | undefined {
+  if (!markup) return undefined;
+
+  // Backend may return reply_markup as a JSON string — parse it
+  let parsed: SaturnReplyMarkup;
+  if (typeof markup === 'string') {
+    try {
+      parsed = JSON.parse(markup);
+    } catch {
+      return undefined;
+    }
+  } else {
+    parsed = markup;
+  }
+
+  if (!parsed?.inline_keyboard?.length) return undefined;
 
   return {
-    inlineButtons: markup.inline_keyboard.map((row) => row.map(buildInlineButton)),
+    inlineButtons: parsed.inline_keyboard.map((row) => row.map(buildInlineButton)),
   };
 }
 
