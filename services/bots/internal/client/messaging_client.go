@@ -54,8 +54,9 @@ func (c *MessagingClient) SendMessage(
 	replyToID *uuid.UUID,
 ) (*MessageResponse, error) {
 	payload := map[string]any{
-		"content": content,
-		"type":    msgType,
+		"content":    content,
+		"type":       msgType,
+		"via_bot_id": botUserID.String(),
 	}
 	if len(replyMarkup) > 0 {
 		payload["reply_markup"] = json.RawMessage(replyMarkup)

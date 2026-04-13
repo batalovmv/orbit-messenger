@@ -1,33 +1,66 @@
 package handler
 
 import (
+	"context"
 	"crypto/subtle"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/pkg/validator"
+	"github.com/mst-corp/orbit/services/bots/internal/botapi"
 	"github.com/mst-corp/orbit/services/bots/internal/model"
 	"github.com/mst-corp/orbit/services/bots/internal/service"
+	"github.com/mst-corp/orbit/services/bots/internal/store"
 )
 
 var botUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 type BotHandler struct {
-	svc    *service.BotService
-	logger *slog.Logger
+	svc           *service.BotService
+	logger        *slog.Logger
+	redis         *redis.Client
+	webhookWorker *service.WebhookWorker
+	updateQueue   *service.UpdateQueue
+	installations store.InstallationStore
+	encryptionKey []byte
 }
 
 func NewBotHandler(svc *service.BotService, logger *slog.Logger) *BotHandler {
 	return &BotHandler{svc: svc, logger: logger}
 }
 
+// WithCallbackSupport adds callback delivery dependencies.
+func (h *BotHandler) WithCallbackSupport(
+	rdb *redis.Client,
+	webhookWorker *service.WebhookWorker,
+	updateQueue *service.UpdateQueue,
+	installations store.InstallationStore,
+	encryptionKey []byte,
+) *BotHandler {
+	h.redis = rdb
+	h.webhookWorker = webhookWorker
+	h.updateQueue = updateQueue
+	h.installations = installations
+	h.encryptionKey = encryptionKey
+	return h
+}
+
 func (h *BotHandler) Register(router fiber.Router) {
+	// Static paths before parameterized to avoid Fiber matching "by-user" or "callback" as :id
+	router.Post("/bots/callback", h.sendCallback)
+	router.Get("/bots/by-user/:userId", h.getBotByUserID)
+
 	router.Post("/bots", h.createBot)
 	router.Get("/bots", h.listBots)
 	router.Get("/bots/:id", h.getBot)
@@ -276,4 +309,140 @@ func validateBotUsername(username string) error {
 		return apperror.BadRequest("username must contain only letters, numbers, or underscores")
 	}
 	return nil
+}
+
+func (h *BotHandler) getBotByUserID(c *fiber.Ctx) error {
+	userID, err := parseUUIDParam(c, "userId", "user ID")
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	bot, err := h.svc.GetBotByUserID(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, bot)
+}
+
+func (h *BotHandler) sendCallback(c *fiber.Ctx) error {
+	if h.redis == nil || (h.webhookWorker == nil && h.updateQueue == nil) {
+		return response.Error(c, apperror.Internal("Callback delivery not configured"))
+	}
+
+	callerID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Missing user context"))
+	}
+
+	var req struct {
+		MessageID string `json:"message_id"`
+		ChatID    string `json:"chat_id"`
+		ViaBotID  string `json:"via_bot_id"`
+		Data      string `json:"data"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if req.MessageID == "" || req.ChatID == "" || req.ViaBotID == "" {
+		return response.Error(c, apperror.BadRequest("message_id, chat_id, and via_bot_id are required"))
+	}
+	if len(req.Data) > 256 {
+		return response.Error(c, apperror.BadRequest("callback data too long (max 256 bytes)"))
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	viaBotID, err := uuid.Parse(req.ViaBotID)
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid via_bot_id"))
+	}
+
+	// Get bot by user ID
+	bot, err := h.svc.GetBotByUserID(c.Context(), viaBotID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	// Security: verify this bot is installed in the specified chat
+	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	if !installed {
+		return response.Error(c, apperror.Forbidden("Bot is not installed in this chat"))
+	}
+
+	// Generate callback query ID
+	queryID := uuid.New().String()
+
+	// Build callback query update
+	update := botapi.Update{
+		UpdateID: time.Now().UnixMilli(),
+		CallbackQuery: &botapi.CallbackQuery{
+			ID:     queryID,
+			FromID: callerID.String(),
+			Message: &botapi.APIMessage{
+				MessageID: req.MessageID,
+				ChatID:    req.ChatID,
+			},
+			Data: req.Data,
+		},
+	}
+
+	// Deliver to bot via webhook or polling queue
+	if bot.WebhookURL != nil && *bot.WebhookURL != "" {
+		secretEnc := ""
+		if bot.WebhookSecretHash != nil {
+			secretEnc = *bot.WebhookSecretHash
+		}
+		if err := h.webhookWorker.Enqueue(bot.ID, *bot.WebhookURL, secretEnc, update); err != nil {
+			h.logger.Error("failed to enqueue callback webhook", "bot_id", bot.ID, "error", err)
+		}
+	} else {
+		if err := h.updateQueue.Push(bot.ID, update); err != nil {
+			h.logger.Error("failed to push callback to update queue", "bot_id", bot.ID, "error", err)
+		}
+	}
+
+	// Wait for bot's answerCallbackQuery response (max 30s)
+	result, err := h.waitForCallbackAnswer(c.Context(), queryID)
+	if err != nil {
+		// Timeout or error — still return success, bot just didn't answer
+		return response.JSON(c, fiber.StatusOK, fiber.Map{})
+	}
+
+	return response.JSON(c, fiber.StatusOK, result)
+}
+
+func (h *BotHandler) waitForCallbackAnswer(ctx context.Context, queryID string) (map[string]any, error) {
+	key := "callback_ack:" + queryID
+	deadline := time.After(30 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			return nil, fmt.Errorf("callback answer timeout")
+		case <-ticker.C:
+			val, err := h.redis.Get(ctx, key).Result()
+			if err != nil {
+				continue // Key not found yet
+			}
+			// Cleanup
+			h.redis.Del(ctx, key)
+
+			var result map[string]any
+			if err := json.Unmarshal([]byte(val), &result); err != nil {
+				return nil, fmt.Errorf("unmarshal callback answer: %w", err)
+			}
+			return result, nil
+		}
+	}
 }

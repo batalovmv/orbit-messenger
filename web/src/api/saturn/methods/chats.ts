@@ -11,6 +11,8 @@ import type {
   SaturnUser,
 } from '../types';
 
+import type { ApiBotCommand } from '../../types';
+
 import { ARCHIVED_FOLDER_ID } from '../../../config';
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll } from '../apiBuilders/messages';
@@ -206,6 +208,11 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
           if (fallbackTitle) {
             apiChat.title = fallbackTitle;
           }
+        }
+
+        // Load bot commands for DM chats with bots
+        if (apiUser.type === 'userTypeBot') {
+          loadBotCommandsForChat(saturnUser.id, apiChat);
         }
       } catch (err) {
         // Keep the chat reachable even if user hydration fails.
@@ -604,4 +611,33 @@ export async function searchMembers({ chatId, query, limit }: {
   );
   if (!result) return undefined;
   return { members: result.map(buildApiChatMember) };
+}
+
+async function loadBotCommandsForChat(botUserId: string, apiChat: ApiChat) {
+  try {
+    const bot = await client.request<{ id: string }>('GET', `/bots/by-user/${botUserId}`);
+    if (!bot?.id) return;
+
+    const commands = await client.request<Array<{ command: string; description: string }>>(
+      'GET', `/bots/${bot.id}/commands`,
+    );
+    if (!commands?.length) return;
+
+    const botCommands: ApiBotCommand[] = commands.map((cmd) => ({
+      botId: botUserId,
+      command: cmd.command,
+      description: cmd.description,
+    }));
+
+    apiChat.botCommands = botCommands;
+
+    sendApiUpdate({
+      '@type': 'updateChat',
+      id: apiChat.id,
+      chat: { botCommands },
+      noTopChatsRequest: true,
+    });
+  } catch {
+    // Bot commands loading is non-critical
+  }
 }

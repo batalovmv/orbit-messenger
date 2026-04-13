@@ -266,6 +266,11 @@ export enum SettingsScreens {
   DoNotTranslate,
   FoldersShare,
   Passkeys,
+  BotManagement,
+  BotEdit,
+  Integrations,
+  IntegrationEdit,
+  IntegrationRoutes,
 }
 
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (

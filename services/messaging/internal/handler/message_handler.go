@@ -41,6 +41,8 @@ type sendMessageRequest struct {
 	IsMultiple       bool            `json:"is_multiple"`
 	IsQuiz           bool            `json:"is_quiz"`
 	CorrectOption    *int            `json:"correct_option"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup"`
+	ViaBotID         *string         `json:"via_bot_id"`
 }
 
 type sendEncryptedRequest struct {
@@ -291,7 +293,19 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 		return response.JSON(c, fiber.StatusCreated, msg)
 	}
 
-	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type)
+	var sendOpts []service.SendMessageOption
+	if len(req.ReplyMarkup) > 0 {
+		sendOpts = append(sendOpts, service.WithReplyMarkup(req.ReplyMarkup))
+	}
+	if req.ViaBotID != nil && *req.ViaBotID != "" {
+		botID, parseErr := uuid.Parse(*req.ViaBotID)
+		if parseErr != nil {
+			return response.Error(c, apperror.BadRequest("Invalid via_bot_id"))
+		}
+		sendOpts = append(sendOpts, service.WithViaBotID(botID))
+	}
+
+	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type, sendOpts...)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -491,8 +505,9 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Content  string          `json:"content"`
-		Entities json.RawMessage `json:"entities"`
+		Content     string          `json:"content"`
+		Entities    json.RawMessage `json:"entities"`
+		ReplyMarkup json.RawMessage `json:"reply_markup"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -507,7 +522,7 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Entities too large (max 64KB)"))
 	}
 
-	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content, req.Entities)
+	msg, err := h.svc.EditMessage(c.Context(), msgID, uid, req.Content, req.Entities, req.ReplyMarkup)
 	if err != nil {
 		return response.Error(c, err)
 	}

@@ -130,7 +130,26 @@ func (s *MessageService) ViewOneTimeMessage(ctx context.Context, msgID, userID u
 	return msg, nil
 }
 
-func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string) (*model.Message, error) {
+// SendMessageOption allows passing optional bot-related fields to SendMessage.
+type SendMessageOption func(msg *model.Message)
+
+// WithReplyMarkup attaches inline keyboard markup to the message.
+func WithReplyMarkup(markup json.RawMessage) SendMessageOption {
+	return func(msg *model.Message) {
+		if len(markup) > 0 {
+			msg.ReplyMarkup = markup
+		}
+	}
+}
+
+// WithViaBotID marks the message as sent via a bot.
+func WithViaBotID(botID uuid.UUID) SendMessageOption {
+	return func(msg *model.Message) {
+		msg.ViaBotID = &botID
+	}
+}
+
+func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.UUID, content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string, opts ...SendMessageOption) (*model.Message, error) {
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("get chat: %w", err)
@@ -229,6 +248,9 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		Content:   &content,
 		Entities:  entities,
 		ReplyToID: replyToID,
+	}
+	for _, opt := range opts {
+		opt(msg)
 	}
 	if chat.DisappearingTimer > 0 {
 		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
@@ -364,7 +386,7 @@ func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, sende
 	return msg, nil
 }
 
-func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUID, content string, entities json.RawMessage) (*model.Message, error) {
+func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUID, content string, entities json.RawMessage, replyMarkup ...json.RawMessage) (*model.Message, error) {
 	msg, err := s.messages.GetByID(ctx, msgID)
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
@@ -388,6 +410,9 @@ func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUI
 
 	msg.Content = &content
 	msg.Entities = entities
+	if len(replyMarkup) > 0 && len(replyMarkup[0]) > 0 {
+		msg.ReplyMarkup = replyMarkup[0]
+	}
 	if err := s.messages.Update(ctx, msg); err != nil {
 		return nil, fmt.Errorf("update message: %w", err)
 	}

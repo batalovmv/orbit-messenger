@@ -179,6 +179,20 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           >
             {lang('AdminCreateInvite')}
           </ListItem>
+          <ListItem
+            icon="bots"
+            narrow
+            onClick={() => openSettingsScreen({ screen: SettingsScreens.BotManagement })}
+          >
+            {lang('BotManagement')}
+          </ListItem>
+          <ListItem
+            icon="channel"
+            narrow
+            onClick={() => openSettingsScreen({ screen: SettingsScreens.Integrations })}
+          >
+            {lang('Integrations')}
+          </ListItem>
         </div>
       )}
       <ConfirmDialog

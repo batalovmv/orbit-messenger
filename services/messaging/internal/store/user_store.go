@@ -35,15 +35,15 @@ func NewUserStore(pool *pgxpool.Pool) UserStore {
 	return &userStore{pool: pool}
 }
 
-const userSelectCols = `id, email, display_name, avatar_url, bio, phone,
-		status, custom_status, custom_status_emoji, role,
+const userSelectCols = `id, email, username, display_name, avatar_url, bio, phone,
+		status, custom_status, custom_status_emoji, role, account_type,
 		is_active, deactivated_at, deactivated_by,
 		last_seen_at, created_at, updated_at`
 
 func scanUser(row pgx.Row) (*model.User, error) {
 	u := &model.User{}
-	err := row.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
-		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+	err := row.Scan(&u.ID, &u.Email, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt)
 	if err == pgx.ErrNoRows {
@@ -56,8 +56,8 @@ func scanUsers(rows pgx.Rows) ([]model.User, error) {
 	var users []model.User
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
-			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role,
+		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio, &u.Phone,
+			&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 			&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 			&u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err

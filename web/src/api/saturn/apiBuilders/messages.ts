@@ -1,15 +1,19 @@
 import type {
+  ApiKeyboardButton,
   ApiMessage,
   ApiMessageEntity,
   ApiPhoto,
   ApiPoll,
+  ApiReplyKeyboard,
   ApiVideo,
 } from '../../types';
 import type {
+  SaturnInlineKeyboardButton,
   SaturnMediaAttachment,
   SaturnMessage,
   SaturnMessageEntity,
   SaturnPoll,
+  SaturnReplyMarkup,
   SaturnScheduledMessage,
   SaturnSticker,
 } from '../types';
@@ -470,6 +474,24 @@ function getScheduledPollOptionId(messageId: string, position: number) {
   return `scheduled-poll-option-${messageId}-${position}`;
 }
 
+function buildInlineButton(btn: SaturnInlineKeyboardButton): ApiKeyboardButton {
+  if (btn.url) {
+    return { type: 'url', text: btn.text, url: btn.url };
+  }
+  if (btn.callback_data !== undefined) {
+    return { type: 'callback', text: btn.text, data: btn.callback_data };
+  }
+  return { type: 'command', text: btn.text };
+}
+
+function buildReplyKeyboard(markup: SaturnReplyMarkup | undefined): ApiReplyKeyboard | undefined {
+  if (!markup?.inline_keyboard?.length) return undefined;
+
+  return {
+    inlineButtons: markup.inline_keyboard.map((row) => row.map(buildInlineButton)),
+  };
+}
+
 export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   registerMessageId(msg.chat_id, msg.id, msg.sequence_number);
 
@@ -514,6 +536,8 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
 
   const isInAlbum = isGroupedAlbumMessage(content, msg.grouped_id);
 
+  const replyMarkup = buildReplyKeyboard(msg.reply_markup);
+
   return {
     id: msg.sequence_number,
     chatId: msg.chat_id,
@@ -533,6 +557,8 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     areReactionsPossible: msg.is_deleted ? undefined : true,
     groupedId: msg.grouped_id,
     isInAlbum: isInAlbum || undefined,
+    inlineButtons: replyMarkup?.inlineButtons,
+    viaBotId: msg.via_bot_id,
   };
 }
 

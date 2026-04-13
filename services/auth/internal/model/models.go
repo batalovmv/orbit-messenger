@@ -11,6 +11,7 @@ type User struct {
 	Email             string     `json:"email"`
 	PasswordHash      string     `json:"-"`
 	Phone             *string    `json:"phone,omitempty"`
+	Username          *string    `json:"username,omitempty"`
 	DisplayName       string     `json:"display_name"`
 	AvatarURL         *string    `json:"avatar_url,omitempty"`
 	Bio               *string    `json:"bio,omitempty"`
@@ -18,6 +19,7 @@ type User struct {
 	CustomStatus      *string    `json:"custom_status,omitempty"`
 	CustomStatusEmoji *string    `json:"custom_status_emoji,omitempty"`
 	Role              string     `json:"role"`
+	AccountType       string     `json:"account_type"`
 	IsActive          bool       `json:"is_active"`
 	DeactivatedAt     *time.Time `json:"deactivated_at,omitempty"`
 	DeactivatedBy     *uuid.UUID `json:"deactivated_by,omitempty"`

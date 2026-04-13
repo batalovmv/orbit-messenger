@@ -58,11 +58,11 @@ func (s *messageStore) CreateWithMedia(ctx context.Context, msg *model.Message, 
 	msg.IsOneTime = isOneTime
 
 	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, grouped_id, sequence_number, is_one_time)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, grouped_id, sequence_number, is_one_time, reply_markup, via_bot_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
 		           sequence_number, created_at, viewed_at, viewed_by`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.GroupedID, seq, isOneTime,
+		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.GroupedID, seq, isOneTime, msg.ReplyMarkup, msg.ViaBotID,
 	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
 		&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 	if err != nil {

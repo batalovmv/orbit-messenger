@@ -8,16 +8,19 @@ export function buildApiUser(user: SaturnUser): ApiUser {
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || undefined;
 
+  const isBot = user.account_type === 'bot';
+  const usernameValue = user.username || user.email;
+
   return {
     id: user.id,
     isMin: false,
-    type: 'userTypeRegular',
+    type: isBot ? 'userTypeBot' : 'userTypeRegular',
     firstName,
     lastName,
     phoneNumber: user.phone || '',
     avatarPhotoId: getAvatarPhotoId(user.id, user.avatar_url),
-    hasUsername: Boolean(user.email),
-    usernames: user.email ? [{ username: user.email, isActive: true, isEditable: true }] : undefined,
+    hasUsername: Boolean(usernameValue),
+    usernames: usernameValue ? [{ username: usernameValue, isActive: true, isEditable: !isBot }] : undefined,
     customStatus: user.custom_status || undefined,
     customStatusEmoji: user.custom_status_emoji || undefined,
   };
