@@ -1180,26 +1180,32 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ## Phase 8: AI, Bots, Integrations & Production
 
+> **Статус: 8B Done, 8C Framework Done, 8A/8D Pending**
+> 8B (Bots) — полностью реализован и задеплоен: Bot API, admin UI, inline keyboards, callback delivery, commands autocomplete
+> 8C (Integrations) — framework готов и задеплоен: webhook connectors, routes, delivery log, HMAC validation. MST-специфичные интеграции pending.
+> 8A (AI) — стаб, реализация с нуля
+> 8D (Production Hardening) — pending
+
 **Цель:** Claude AI встроен, боты работают, MST-тулы подключены, мониторинг.
 
 ### Проработка (Шаг 0)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 8, `docs/TZ-ORBIT-MESSENGER.md` §11.8, §11.9
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 8, `docs/TZ-ORBIT-MESSENGER.md` §11.8, §11.9
 - [ ] **8A AI:** Изучить Anthropic Claude API — streaming (SSE), rate limits, pricing, context window
 - [ ] **8A AI:** Изучить Whisper API (OpenAI) — audio formats, language detection, speaker diarization options
 - [ ] **8A AI:** Спроектировать embedding pipeline для semantic search (какой model? pgvector vs Qdrant?)
-- [ ] **8B Bots:** Изучить Telegram Bot API spec — какие методы критичны для совместимости?
-- [ ] **8B Bots:** Спроектировать webhook delivery — retry strategy, dead letter queue, timeout handling
+- [x] **8B Bots:** Изучить Telegram Bot API spec — какие методы критичны для совместимости?
+- [x] **8B Bots:** Спроектировать webhook delivery — retry strategy, dead letter queue, timeout handling
 - [ ] **8C Integrations:** Изучить API InsightFlow, Keitaro, Saturn.ac — форматы webhook payload
-- [ ] **8C Integrations:** Спроектировать generic webhook framework — verification (HMAC), retry, logging
+- [x] **8C Integrations:** Спроектировать generic webhook framework — verification (HMAC), retry, logging
 - [ ] **8D ScyllaDB:** Спроектировать migration strategy — dual-write? Shadow read? Cut-over?
 - [ ] **8D ScyllaDB:** Спроектировать CQL schema — partition key (chat_id + day bucket), clustering (sequence_number DESC)
 - [ ] **8D NATS:** Спроектировать stream topology — MESSAGES, EVENTS, PUSH, WEBHOOKS
 - [ ] **8D Monitoring:** Выбрать: Prometheus+Grafana managed (Saturn?) или self-hosted?
 - [ ] **8D Security:** Составить OWASP checklist для аудита всех сервисов
 - [ ] Продумать: backup strategy — pg_dump schedule, WAL archiving, R2 cross-region
-- [ ] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
-- [ ] Составить порядок реализации и предложить пользователю
+- [x] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
+- [x] Составить порядок реализации и предложить пользователю
 
 ### 8A: AI сервис (порт 8085)
 
@@ -1220,63 +1226,111 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [ ] summarizeChat, translateMessages, suggestReply
 - [ ] transcribeVoice, semanticSearch, explainMessage, fetchAiUsage
 
-### 8B: Bots сервис (порт 8086)
+### 8B: Bots сервис (порт 8086) — DONE
 
 **Admin endpoints:**
-- [ ] POST /bots — создать бота (возврат token)
-- [ ] GET /bots — список моих ботов
-- [ ] PUT /bots/:id — редактировать
-- [ ] DELETE /bots/:id — удалить
-- [ ] POST /bots/:id/commands — установить /commands
-- [ ] POST /bots/:id/webhook — установить webhook URL
-- [ ] GET /bots/:id/webhook/logs — логи вызовов
+- [x] POST /bots — создать бота (возврат token)
+- [x] GET /bots — список ботов
+- [x] PATCH /bots/:id — редактировать
+- [x] DELETE /bots/:id — удалить
+- [x] PUT /bots/:id/commands — установить /commands
+- [x] GET /bots/:id/commands — получить команды
+- [x] POST /bots/:id/token/rotate — ротация токена
+- [x] POST /bots/:id/install — установить бота в чат
+- [x] DELETE /bots/:id/install — удалить из чата
+- [x] GET /chats/:chatId/bots — список ботов в чате
+- [x] GET /bots/by-user/:userId — найти бота по user ID
+- [x] POST /bots/callback — user-facing callback delivery (30s Redis polling)
 
 **TG-совместимый Bot API:**
-- [ ] getMe, sendMessage, editMessageText, deleteMessage
-- [ ] answerCallbackQuery, setWebhook, deleteWebhook, getUpdates
-- [ ] sendPhoto, sendDocument, sendVoice
+- [x] getMe, sendMessage, editMessageText, deleteMessage
+- [x] answerCallbackQuery, setWebhook, deleteWebhook, getUpdates
+- [ ] sendPhoto, sendDocument, sendVoice — deferred (media через Bot API)
 
-**Saturn методы (~10):**
-- [ ] fetchBotInfo, sendBotCommand, answerCallbackQuery
-- [ ] fetchInlineResults, sendInlineResult
-- [ ] requestBotWebView, closeBotWebView, loadAttachBot, toggleAttachBot
+**Saturn frontend методы:**
+- [x] fetchBots, fetchBot, createBot, updateBot, deleteBot, rotateToken
+- [x] setBotCommands, fetchBotCommands, installBot, uninstallBot, fetchChatBots
+- [x] fetchBotByUserId, sendBotCallback
+
+**Backend wiring:**
+- [x] account_type + username в auth User model и store (SELECT/Scan)
+- [x] reply_markup (JSONB) + via_bot_id (UUID) в messaging Message model, store, handler, service
+- [x] SendMessageOption pattern (WithReplyMarkup, WithViaBotID) в messaging service
+- [x] via_bot_id в bots messaging client payload
+- [x] reply_markup JSON string unwrap в bots messaging client (Telegram convention → JSON object)
+- [x] Callback query endpoint с security check (IsBotInstalled) и Redis-based answer waiting
+- [x] NATS subscriber → webhook/polling delivery с HMAC-SHA256 + SSRF protection
+- [x] Gateway proxy routes для /bots/* и /bot/:token/*
 
 **Фичи:**
-- [ ] Webhook delivery с retry (exponential backoff)
-- [ ] /commands автокомплит в ChatInput
-- [ ] Inline keyboards под сообщениями ботов
-- [ ] Inline mode (@botname query)
-- [ ] Bot management UI в настройках
+- [x] Webhook delivery с retry (exponential backoff, 3 attempts)
+- [x] /commands автокомплит в ChatInput (loadBotCommandsForChat)
+- [x] Inline keyboards под сообщениями ботов (buildReplyKeyboard → InlineButtons.tsx)
+- [x] Bot management UI в настройках (SettingsBotManagement — CRUD, rotate token)
+- [x] account_type → userTypeBot маппинг на фронтенде
+- [ ] Inline mode (@botname query) — deferred
+- [ ] Web Apps (requestWebView, loadAttachBot) — deferred
+- [ ] /start автоотправка при открытии DM — код есть, нужна проверка
 
-### 8C: Integrations сервис (порт 8087)
+### 8C: Integrations сервис (порт 8087) — DONE (framework)
 
-**Endpoints:**
-- [ ] POST /webhooks — создать webhook
-- [ ] GET /webhooks — список
-- [ ] PUT /webhooks/:id — редактировать
-- [ ] DELETE /webhooks/:id — удалить
-- [ ] GET /webhooks/:id/logs — логи
-- [ ] POST /webhooks/:id/test — тестовый вызов
+**Connector CRUD endpoints:**
+- [x] POST /integrations/connectors — создать коннектор (возврат secret)
+- [x] GET /integrations/connectors — список
+- [x] GET /integrations/connectors/:id — детали
+- [x] PATCH /integrations/connectors/:id — редактировать
+- [x] DELETE /integrations/connectors/:id — удалить
+- [x] POST /integrations/connectors/:id/rotate-secret — ротация секрета
 
-**MST интеграции:**
+**Route endpoints:**
+- [x] POST /integrations/connectors/:id/routes — создать route в чат
+- [x] GET /integrations/connectors/:id/routes — список routes
+- [x] DELETE /integrations/routes/:id — удалить route
+
+**Delivery endpoints:**
+- [x] GET /integrations/connectors/:id/deliveries — лог доставок (фильтр по статусу)
+- [x] GET /integrations/deliveries/:id — детали доставки
+- [x] POST /integrations/deliveries/:id/retry — повторить доставку
+
+**Public webhook:**
+- [x] POST /webhooks/in/:connectorId — приём вебхука (HMAC-SHA256 validation, timestamp replay protection)
+
+**MST интеграции (конкретные подключения — deferred):**
 - [ ] InsightFlow → #alerts канал
 - [ ] Keitaro postbacks → уведомления
 - [ ] Saturn.ac deploy status → #dev
 - [ ] HR-бот миграция из Telegram
 - [ ] ASA Analytics → campaign alerts
 
-**Saturn методы (~8):**
-- [ ] fetchWebhooks, createWebhook, editWebhook, deleteWebhook
-- [ ] fetchWebhookLogs, testWebhook, fetchIntegrations, toggleIntegration
+**Saturn frontend методы:**
+- [x] fetchConnectors, fetchConnector, createConnector, updateConnector, deleteConnector
+- [x] rotateConnectorSecret, fetchRoutes, createRoute, deleteRoute
+- [x] fetchDeliveries, retryDelivery
+
+**Frontend UI:**
+- [x] SettingsIntegrations — CRUD коннекторов, управление routes, delivery log с retry
+- [x] Admin-only доступ (role === 'admin' || role === 'superadmin')
+
+**Backend features:**
+- [x] HMAC-SHA256 webhook signature verification (constant-time compare)
+- [x] Timestamp replay protection (5 min window)
+- [x] Async delivery worker с exponential backoff retry
+- [x] Template rendering с dot-notation для nested JSON ({{.data.message}})
+- [x] Rate limiting webhook endpoint (60/min per connector)
+- [x] Gateway proxy routes для /integrations/* и /webhooks/in/*
+
+**Database:**
+- [x] integration_connectors — id, name (unique), display_name, type, bot_id, config JSONB, secret_hash, is_active, created_by
+- [x] integration_routes — id, connector_id, chat_id, event_filter, template, is_active, UNIQUE(connector_id, chat_id)
+- [x] integration_deliveries — id, connector_id, route_id, external_event_id, event_type, payload JSONB, status, orbit_message_id, attempt_count, max_attempts, last_error, next_retry_at
 
 **Database Phase 8B — bots:**
-- [ ] id UUID PK, owner_id, username TEXT UNIQUE, display_name, description
-- [ ] avatar_url, webhook_url, api_token TEXT UNIQUE, is_inline BOOLEAN
-- [ ] commands JSONB, is_active BOOLEAN DEFAULT true, created_at
-
-**Database Phase 8C — webhooks:**
-- [ ] id UUID PK, chat_id, name, webhook_url, incoming_webhook_token TEXT UNIQUE
-- [ ] events JSONB, config JSONB, is_active BOOLEAN, created_by, created_at
+- [x] bots — id, user_id, owner_id, username UNIQUE, display_name, description, webhook_url, is_active
+- [x] bot_tokens — id, bot_id, token_hash, created_at
+- [x] bot_commands — id, bot_id, command, description
+- [x] bot_installations — bot_id + chat_id PK, installed_by, scopes, is_active
+- [x] users.account_type TEXT ('human'|'bot'|'system'), users.username TEXT (migration 041)
+- [x] messages.reply_markup JSONB, messages.via_bot_id UUID (migration 044)
 
 ### 8D: Production Hardening
 
