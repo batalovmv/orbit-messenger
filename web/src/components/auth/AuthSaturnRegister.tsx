@@ -27,6 +27,11 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
   useEffect(() => {
+    // Clear stale errors on mount
+    if (auth.errorKey) clearAuthErrorKey();
+  }, []);
+
+  useEffect(() => {
     if (auth.errorKey) {
       unmarkIsLoading();
     }

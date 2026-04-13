@@ -50,6 +50,8 @@ const AuthEmailLogin = ({
       preloadFonts();
       void preloadImage(monkeyPath);
     }
+    // Clear stale errors on mount (e.g. from cache or Chrome credential auto-submit)
+    if (auth.errorKey) clearAuthErrorKey();
   }, []);
 
   useEffect(() => {
