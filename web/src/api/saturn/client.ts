@@ -9,6 +9,7 @@ const WS_RECONNECT_BASE_MS = 1000;
 const WS_RECONNECT_MAX_MS = 30 * 1000;
 const ACCESS_TOKEN_STORAGE_KEY = 'saturn_access_token';
 const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'saturn_access_token_expires_at';
+const HAS_SESSION_KEY = 'saturn_has_session';
 
 let baseUrl = '';
 let accessToken: string | undefined;
@@ -54,10 +55,15 @@ export function setAccessToken(token: string, expiresIn: number) {
   accessToken = token;
   tokenExpiresAt = Date.now() + expiresIn * 1000;
   persistAccessToken();
+  try { localStorage.setItem(HAS_SESSION_KEY, '1'); } catch { /* noop */ }
 }
 
 export function getAccessToken() {
   return accessToken;
+}
+
+export function hasSessionHint(): boolean {
+  try { return localStorage.getItem(HAS_SESSION_KEY) === '1'; } catch { return false; }
 }
 
 export async function ensureAuth(): Promise<string | undefined> {
@@ -72,6 +78,7 @@ export function clearAuth() {
   accessToken = undefined;
   tokenExpiresAt = 0;
   clearPersistedAccessToken();
+  try { localStorage.removeItem(HAS_SESSION_KEY); } catch { /* noop */ }
 }
 
 async function ensureToken() {

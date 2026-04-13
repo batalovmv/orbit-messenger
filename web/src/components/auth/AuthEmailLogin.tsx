@@ -42,7 +42,8 @@ const AuthEmailLogin = ({
   const [password, setPassword] = useState('');
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
-  const canSubmit = email.length > 3 && password.length >= 8 && !isLoading;
+  const isEmailValid = email.includes('@') && email.length > 3;
+  const canSubmit = isEmailValid && password.length >= 8 && !isLoading;
   useEffect(() => {
     if (!isPreloadInitiated) {
       isPreloadInitiated = true;
@@ -114,7 +115,7 @@ const AuthEmailLogin = ({
           </Button>
         </form>
         <Button isText className="auth-register-link" onClick={handleGoToInvite}>
-          {lang('RegistrationJoinWith' as any)}
+          {lang('RegistrationJoinWith')}
         </Button>
       </div>
     </div>

@@ -470,11 +470,15 @@ export function forceUpdateCache(noEncrypt = false) {
 function reduceGlobal<T extends GlobalState>(global: T) {
   const reducedGlobal: GlobalState = {
     ...INITIAL_GLOBAL_STATE,
+    auth: {
+      ...global.auth,
+      errorKey: undefined,
+      isLoading: undefined,
+    },
     ...pick(global, [
       'cacheVersion',
       'appConfig',
       'config',
-      'auth',
       'attachMenu',
       'currentUserId',
       'contactList',

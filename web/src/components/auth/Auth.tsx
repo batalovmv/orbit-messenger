@@ -28,7 +28,7 @@ const Auth = ({
   authState,
 }: StateProps) => {
   const {
-    returnToAuthPhoneNumber, goToAuthQrCode,
+    returnToAuthPhoneNumber, goToAuthQrCode, saturnGoToLogin,
   } = getActions();
 
   const isMobile = PLATFORM_ENV === 'iOS' || PLATFORM_ENV === 'Android';
@@ -45,6 +45,11 @@ const Auth = ({
     isActive: (!isMobile && authState === 'authorizationStateWaitPhoneNumber')
       || (isMobile && authState === 'authorizationStateWaitQrCode'),
     onBack: handleChangeAuthorizationMethod,
+  });
+
+  useHistoryBack({
+    isActive: authState === 'authorizationStateWaitRegistration',
+    onBack: saturnGoToLogin,
   });
 
   // For animation purposes

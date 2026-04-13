@@ -131,6 +131,7 @@ export interface ActionPayloads {
   setAuthPassword: { password: string };
   saturnLoginWithEmail: { email: string; password: string; totpCode?: string };
   saturnGoToInvite: undefined;
+  saturnGoToLogin: undefined;
   saturnValidateInvite: { code: string };
   saturnRegister: { inviteCode: string; email: string; password: string; displayName: string };
   signUp: {

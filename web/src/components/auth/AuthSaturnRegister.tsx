@@ -1,4 +1,4 @@
-import { memo, useState } from '../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
@@ -25,6 +25,12 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
+
+  useEffect(() => {
+    if (auth.errorKey) {
+      unmarkIsLoading();
+    }
+  }, [auth.errorKey]);
 
   const canSubmit = inviteCode.length > 0
     && email.length > 0
@@ -74,11 +80,11 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
       <div className="auth-form">
         <div id="logo" />
         <h1>Orbit Messenger</h1>
-        <p className="note">{lang('RegistrationJoinWith' as any) || 'Register with invite code'}</p>
+        <p className="note">{lang('RegistrationJoinWith') || 'Register with invite code'}</p>
         <form action="" onSubmit={handleSubmit}>
           <InputText
             id="register-invite-code"
-            label={lang('InviteCode' as any) || 'Invite Code'}
+            label={lang('InviteCode')}
             value={inviteCode}
             error={auth.errorKey ? lang.withRegular(auth.errorKey) : undefined}
             autoComplete="off"
@@ -94,7 +100,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
           />
           <InputText
             id="register-password"
-            label={lang('LoginPassword' as any) || 'Password'}
+            label={lang('LoginPassword')}
             type="password"
             value={password}
             autoComplete="new-password"
@@ -102,7 +108,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
           />
           <InputText
             id="register-display-name"
-            label={lang('LoginRegisterFirstNamePlaceholder') || 'Display Name'}
+            label={lang('DisplayName')}
             value={displayName}
             autoComplete="name"
             onChange={handleDisplayNameChange}
@@ -113,7 +119,7 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
             isLoading={isLoading}
             disabled={!canSubmit}
           >
-            {lang('RegistrationSignUp' as any) || 'Sign Up'}
+            {lang('RegistrationSignUp')}
           </Button>
         </form>
       </div>
