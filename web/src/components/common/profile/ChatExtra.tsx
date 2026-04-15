@@ -58,6 +58,7 @@ import useOldLang from '../../../hooks/useOldLang';
 import useDevicePixelRatio from '../../../hooks/window/useDevicePixelRatio';
 
 import Chat from '../../left/main/Chat';
+import SafetyNumbersModal from '../../right/SafetyNumbersModal';
 import Button from '../../ui/Button';
 import ListItem from '../../ui/ListItem';
 import Skeleton from '../../ui/placeholder/Skeleton';
@@ -67,6 +68,8 @@ import Icon from '../icons/Icon';
 import SafeLink from '../SafeLink';
 import BusinessHours from './BusinessHours';
 import UserBirthday from './UserBirthday';
+
+import useFlag from '../../../hooks/useFlag';
 
 import styles from './ChatExtra.module.scss';
 
@@ -161,6 +164,7 @@ const ChatExtra = ({
   } = userFullInfo || {};
   const oldLang = useOldLang();
   const lang = useLang();
+  const [isSafetyNumbersOpen, openSafetyNumbers, closeSafetyNumbers] = useFlag(false);
 
   const { startViewTransition } = useViewTransition();
   const { createVtnStyle } = useVtn();
@@ -405,6 +409,27 @@ const ChatExtra = ({
             className={styles.personalChannelItem}
           />
         </div>
+      )}
+      {chat?.isEncrypted && peerId && !isOwnProfile && (
+        <ListItem
+          icon="lock"
+          narrow
+          ripple
+          onClick={openSafetyNumbers}
+        >
+          <span className="title">Проверить ключи шифрования</span>
+          <span className="subtitle">
+            Сравните 60 цифр с собеседником чтобы убедиться в безопасности переписки
+          </span>
+        </ListItem>
+      )}
+      {chat?.isEncrypted && peerId && !isOwnProfile && (
+        <SafetyNumbersModal
+          isOpen={isSafetyNumbersOpen}
+          peerUserId={peerId}
+          peerDisplayName={user?.firstName || chat?.title}
+          onClose={closeSafetyNumbers}
+        />
       )}
       {Boolean(formattedNumber?.length) && (
         <ListItem
