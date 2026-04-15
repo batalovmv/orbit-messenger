@@ -785,6 +785,7 @@ export async function sendMessage({
           chatId,
           peerUserId,
           plaintext: text,
+          ownUserId: currentUserId,
         });
         trackPendingSend(result.messageId);
         sendApiUpdate({

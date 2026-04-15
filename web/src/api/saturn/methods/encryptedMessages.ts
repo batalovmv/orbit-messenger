@@ -1,4 +1,4 @@
-// Orchestration for encrypted DM send/receive (Phase 7 Step 4).
+// Orchestration for encrypted DM send/receive (Phase 7 Steps 4-5).
 //
 // Lives in the Saturn methods layer because it hops between three
 // subsystems:
@@ -11,7 +11,7 @@
 // users never pull the crypto chunk into their bundle, and so anything
 // outside this module only sees async promises.
 
-import type { MessageEnvelope } from '../../../lib/crypto/types';
+import type { MessageEnvelope, PreKeyBundle } from '../../../lib/crypto/types';
 
 // All crypto work goes through the singleton worker (currently a
 // main-thread shim — see docs/phase7-design.md §14.3).
@@ -30,32 +30,58 @@ async function loadKeysApi() {
 
 export type EncryptedSendResult = {
   messageId: string;
+  targetDeviceCount: number;
+};
+
+export type FanoutTarget = {
+  userId: string;
+  deviceId: string;
+  bundle: PreKeyBundle;
 };
 
 /**
- * Encrypt a plaintext message for a DM peer and ship the envelope.
+ * Collects the list of devices we need to encrypt for:
  *
- * Phase 7.0 scope: text-only, single-peer DMs. Multi-device fanout lands
- * in Step 5. Media encryption lands in Phase 7.1 (see design doc §14.1).
+ *   * All peer devices (so every device the peer owns can decrypt).
+ *   * All of our own devices other than this one, so message history
+ *     stays readable on our other sessions (per Signal multi-device
+ *     model, docs/SIGNAL_PROTOCOL.md §Device Model).
+ *
+ * Each entry gets its own fresh bundle fetch. `fetchKeyBundle` is the
+ * only way to atomically consume a one-time pre-key on the server —
+ * we never cache bundles between runs.
+ *
+ * **Backend limitation as of Phase 7.0 (Step 5):** the backend endpoint
+ * `GET /keys/:userId/bundle` always returns the primary (first)
+ * device row for that user, and does not accept a `?device_id=` query
+ * param. So in practice:
+ *
+ *   * Peer fanout is currently 1 target even if the peer has multiple
+ *     devices — whichever device is returned by the backend.
+ *   * Own-other-device fanout only works when the primary device
+ *     returned by the backend differs from this session's deviceId
+ *     (e.g. we are on a secondary browser and the primary device is
+ *     the one registered first).
+ *
+ * When the backend grows per-device bundle lookup the loop will
+ * naturally expand — the envelope already supports N entries.
  */
-export async function sendEncryptedTextMessage(params: {
-  chatId: string;
+export async function collectFanoutTargets(params: {
   peerUserId: string;
-  plaintext: string;
-}): Promise<EncryptedSendResult> {
-  const { chatId, peerUserId, plaintext } = params;
+  ownUserId: string;
+  ownDeviceId: string;
+}): Promise<FanoutTarget[]> {
+  const { peerUserId, ownUserId, ownDeviceId } = params;
+  const keysApi = await loadKeysApi();
 
-  const [crypto, keysApi] = await Promise.all([loadCryptoWorker(), loadKeysApi()]);
+  const targets: FanoutTarget[] = [];
+  const seen = new Set<string>();
 
-  // Ensure our own identity exists; non-enrolled devices cannot send.
-  const own = await crypto.getOrCreateIdentity();
-
-  // Fetch a fresh bundle — this call atomically consumes a one-time
-  // pre-key on the server when the peer has any available. Store layer
-  // decides whether to bootstrap a new session or reuse an existing one.
-  let bundle;
+  // 1. Peer target(s) — mandatory. Throw a typed error so the UI shows
+  //    the "peer not enrolled" message if the bundle fetch fails.
+  let peerBundle: PreKeyBundle;
   try {
-    bundle = await keysApi.fetchKeyBundle(peerUserId);
+    peerBundle = await keysApi.fetchKeyBundle(peerUserId);
   } catch (err) {
     throw new EncryptedSendError(
       'peer_not_enrolled',
@@ -63,18 +89,66 @@ export async function sendEncryptedTextMessage(params: {
       err,
     );
   }
+  targets.push({ userId: peerUserId, deviceId: peerBundle.deviceId, bundle: peerBundle });
+  seen.add(`${peerUserId}:${peerBundle.deviceId}`);
+
+  // 2. Own-other-device target(s) — optional. Failure to reach the
+  //    bundle for our own user is tolerated (we might be the only
+  //    device, or the server might have hiccupped).
+  try {
+    const ownBundle = await keysApi.fetchKeyBundle(ownUserId);
+    if (ownBundle.deviceId !== ownDeviceId) {
+      const key = `${ownUserId}:${ownBundle.deviceId}`;
+      if (!seen.has(key)) {
+        targets.push({ userId: ownUserId, deviceId: ownBundle.deviceId, bundle: ownBundle });
+        seen.add(key);
+      }
+    }
+  } catch {
+    // Silent: we just won't fan out to our other device. Messages
+    // will still land on peer devices.
+  }
+
+  return targets;
+}
+
+/**
+ * Encrypt a plaintext message for a DM peer and ship the envelope.
+ *
+ * Phase 7.0 scope: text-only, single-peer DMs; fan-out across both
+ * peer devices and our own other devices via `collectFanoutTargets`.
+ * Media encryption lands in Phase 7.1 (see design doc §14.1).
+ */
+export async function sendEncryptedTextMessage(params: {
+  chatId: string;
+  peerUserId: string;
+  plaintext: string;
+  ownUserId?: string;
+}): Promise<EncryptedSendResult> {
+  const { chatId, peerUserId, plaintext, ownUserId } = params;
+
+  const [crypto, keysApi] = await Promise.all([loadCryptoWorker(), loadKeysApi()]);
+
+  // Ensure our own identity exists; non-enrolled devices cannot send.
+  const own = await crypto.getOrCreateIdentity();
+
+  const targets = await collectFanoutTargets({
+    peerUserId,
+    // If caller did not supply `ownUserId` skip own-device fanout by
+    // pointing the lookup at the peer (guaranteed to dedupe out).
+    ownUserId: ownUserId ?? peerUserId,
+    ownDeviceId: own.deviceId,
+  });
 
   const envelope = await crypto.encryptForPeers(
     own.deviceId,
     own.identityKeyPair,
     new TextEncoder().encode(plaintext),
-    [
-      {
-        peerUserId,
-        peerDeviceId: bundle.deviceId,
-        bundle,
-      },
-    ],
+    targets.map((t) => ({
+      peerUserId: t.userId,
+      peerDeviceId: t.deviceId,
+      bundle: t.bundle,
+    })),
   );
 
   const result = await keysApi.sendEncryptedMessage({
@@ -82,7 +156,7 @@ export async function sendEncryptedTextMessage(params: {
     envelope,
     deviceId: own.deviceId,
   });
-  return { messageId: result.id };
+  return { messageId: result.id, targetDeviceCount: targets.length };
 }
 
 export class EncryptedSendError extends Error {
