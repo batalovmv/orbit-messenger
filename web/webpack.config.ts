@@ -78,7 +78,10 @@ export default function createConfig(
     target: 'web',
 
     devServer: {
-      port: 3000,
+      // Honour PORT env var so `preview_start` (which allocates a free
+      // port via autoPort) can point webpack at the port it picked.
+      // Falls back to 3000 for plain `npm run dev`.
+      port: Number(process.env.PORT) || 3000,
       host: '0.0.0.0',
       allowedHosts: 'all',
       hot: false,
