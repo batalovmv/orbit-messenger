@@ -18,6 +18,12 @@ export default {
     '\\.(jsx?|tsx?)$': 'babel-jest',
     '\\.txt$': '@glen/jest-raw-loader',
   },
+  // @noble/* packages ship as ESM and must be transformed by babel-jest.
+  // The default `node_modules` ignore has to be overridden so babel can
+  // see them.
+  transformIgnorePatterns: [
+    '/node_modules/(?!(@noble|idb)/)',
+  ],
   globals: {
     APP_REVISION: 'jest-test',
     APP_VERSION: '0.0.1',

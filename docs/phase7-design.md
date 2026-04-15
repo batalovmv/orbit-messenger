@@ -431,18 +431,40 @@ if (message.is_encrypted) {
 
 **Решение:** 7.0 = только 60-digit number (5 групп по 12 цифр) + кнопка "Copy". QR — отдельная задача если пользователи попросят.
 
-### 14.3 libsignal WASM bundle strategy — background async load после auth success
+### 14.3 Crypto library strategy — custom X3DH+Double Ratchet on `@noble/*` primitives
 
-**Критичный факт:** libsignal нужен **на auth success** для device enrollment (генерация identity key), НЕ при первом открытии E2E DM. Lazy-load только по открытию DM невозможен — enrollment не произойдёт, peer не найдёт ключей.
+**Ревизия от 2026-04-15 (session Phase 7 frontend):** оригинальное решение было использовать `@signalapp/libsignal-client` как "Rust→WASM". **Это оказалось ошибкой факта:** npm-пакет `@signalapp/libsignal-client` — это Node.js native addon через `node-gyp-build` (AGPL-3.0, 130 MB unpacked), а не wasm-сборка для браузера. Публичной wasm-версии в npm registry не существует — Signal Desktop собирает её из исходников собственным build pipeline.
 
-**Решение:**
-- Отдельный webpack chunk для `@signalapp/libsignal-client` (через dynamic import)
-- Background async load сразу после успешного auth — non-blocking, пользователь видит главный экран моментально
-- Web Worker wrapper — libsignal исполняется вне main thread
-- К моменту первого DM open (обычно несколько секунд после auth) — libsignal уже готов
-- Enrollment автоматически запускается как только chunk загрузился
+**Рассмотренные альтернативы:**
+1. `libsignal-protocol@1.3.15` — браузерный форк оригинального WhisperSystems/libsignal-protocol-javascript. Feb 2024 релиз, GPL-3.0, но тянет устаревший стек (`protobufjs@5.0.1`, `bytebuffer@3.5.5`, `long@3.1.0`, CommonJS).
+2. `@privacyresearch/libsignal-protocol-typescript@0.0.16` — TS-переписывание оригинала, May 2023, выглядит заброшенно.
+3. **Custom implementation на `@noble/*` primitives (выбрано).**
+
+**Решение: custom Signal Protocol implementation поверх `@noble/curves` + `@noble/hashes` + `@noble/ciphers`**
+
+- `@noble/curves` — Ed25519 + X25519 (нативно, нужные кривые), MIT, Paul Miller, audited, используется MetaMask/Ethers.js/Viem
+- `@noble/hashes` — SHA-256 + HKDF, MIT
+- `@noble/ciphers` — AES-256-GCM, MIT
+- `idb` — тонкая обёртка над IndexedDB для key store, ISC, ~1 KB
+
+Бэкенд envelope format opaque (BYTEA JSON), так что выбор конкретной библиотеки на клиенте не влияет на auth/messaging сервисы. Wire-совместимость с Signal protocol сохраняется через размеры ключей (Ed25519 32B pub / 64B priv, X25519 32B, Ed25519 signature 64B).
+
+**Что это значит на практике:**
+- Crypto layer — наш код, ~500 строк, audit-friendly (X3DH спек — 10 страниц, Double Ratchet спек — 25 страниц, оба публично доступны от Signal)
+- Зависимостей немного, все maintained и small
+- Bundle impact: ~50 KB gzipped для всех noble-пакетов, вместо 6.4 MB у libsignal-protocol
+- `@noble/*` уже доступны в браузерах нативно — не требует wasm, не требует специального webpack experiment flag
+- Round-trip + vector tests в CI обязательны как acceptance gate
+
+**Load strategy (без изменений от первоначального замысла):**
+- `@noble/*` импортируются лениво после auth success (dynamic `import()` → отдельный chunk)
+- Web Worker для offload тяжёлых операций (batch генерация 100 one-time prekeys, session init)
+- К моменту первого DM open — crypto layer готов
+- Enrollment запускается как только chunk загрузился
 
 Не на boot (экономим bandwidth на auth screen), не на первый E2E DM open (слишком поздно). **Между auth success и первым навигационным действием.**
+
+**Audit strategy:** round-trip unit tests (Alice↔Bob), X3DH test vectors из Signal spec, ratchet step tests, safety numbers determinism. Для 150-user корп-мессенджера этого достаточно; при росте до внешних клиентов — security review внешним аудитором.
 
 ### 14.4 "Отправить незашифрованно" fallback — НЕТ. Блокируем с понятным сообщением
 

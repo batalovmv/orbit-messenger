@@ -228,7 +228,7 @@ User B → Gateway (WS: call_accept) → SDP exchange via WS
 | Worker | Web Worker | — | API вызовы в отдельном потоке |
 | Animations | fasterdom + RAF | custom | 60fps DOM batching |
 | Stickers | rlottie | — | TGS animated stickers |
-| Crypto | libsignal-protocol-js | — | E2E шифрование на клиенте |
+| Crypto | `@noble/curves` + `@noble/hashes` + `@noble/ciphers` | — | X3DH + Double Ratchet поверх audited primitives (ревизия от 2026-04-15, см. `docs/phase7-design.md` §14.3) |
 | IndexedDB | — | — | Local message cache, key storage |
 
 ### 4.3 Desktop
