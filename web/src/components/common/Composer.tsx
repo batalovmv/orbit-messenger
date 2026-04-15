@@ -183,6 +183,7 @@ import DropArea, { DropAreaState } from '../middle/composer/DropArea.async';
 import EmojiTooltip from '../middle/composer/EmojiTooltip.async';
 import InlineBotTooltip from '../middle/composer/InlineBotTooltip.async';
 import MentionTooltip from '../middle/composer/MentionTooltip.async';
+import AiSuggestReplyBar from '../middle/composer/AiSuggestReplyBar';
 import MessageInput from '../middle/composer/MessageInput';
 import PollModal from '../middle/composer/PollModal.async';
 import SendAsMenu from '../middle/composer/SendAsMenu.async';
@@ -2257,6 +2258,13 @@ const Composer = ({
               inputCssSelector={editableInputCssSelector}
               idPrefix={type}
               forceDarkTheme={isInStoryViewer}
+            />
+          )}
+          {isInMessageList && !editingMessage && !isInStoryViewer && (
+            <AiSuggestReplyBar
+              chatId={chatId}
+              hasText={hasText}
+              onSuggestionClick={insertTextAndUpdateCursor}
             />
           )}
           <MessageInput

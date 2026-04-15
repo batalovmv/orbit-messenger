@@ -1197,7 +1197,7 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ## Phase 8: AI, Bots, Integrations & Production
 
-> **Статус: 8A Backend+Saturn Done (UI pending), 8B Done, 8C Done, 8D Pending**
+> **Статус: 8A Done (backend + Saturn + 4 UI компонента), 8B Done, 8C Done, 8D Pending**
 > 8A (AI) — **backend сервис с нуля**: Claude + Whisper clients, 6 endpoints (5 работающих + 1 deferred `/ai/search`), SSE streaming, rate limiting, usage tracking. Saturn methods + SSE reader готов. Деплоится с placeholder-ключами (сервис стартует, endpoints возвращают 503 до подстановки реальных ключей на Saturn.ac). **Frontend UI компоненты (AiMenu/AiStreamModal/SuggestReply) — следующий шаг.** Нужны: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
 > 8B (Bots) — полностью реализован и задеплоен: Bot API, admin UI, inline keyboards, callback delivery, commands autocomplete
 > 8C (Integrations) — **framework + presets для всех 5 MST-систем готовы**: webhook connectors, routes, delivery log, HMAC validation (header и query modes), Saturn.ac end-to-end ready, InsightFlow/Keitaro/ASA framework-only pending real credentials. HR-бот deferred (нет исходной системы). Документация: [docs/mst-integrations.md](docs/mst-integrations.md)
@@ -1224,7 +1224,7 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
 - [x] Составить порядок реализации и предложить пользователю
 
-### 8A: AI сервис (порт 8085) — Backend + Saturn Done, UI pending
+### 8A: AI сервис (порт 8085) — DONE (backend + Saturn + 4 UI компонента)
 
 > **Статус:** backend сервис полностью написан с нуля, Saturn методы готовы. Сервис стартует даже с `ANTHROPIC_API_KEY=placeholder` / `OPENAI_API_KEY=placeholder` — все endpoints возвращают `503 service_unavailable` до подстановки реальных ключей в Saturn.ac dashboard (без пересборки образа). Frontend UI компонент (AiMenu/AiStreamModal/AiTranscribeButton/SuggestReply) НЕ реализован — следующий шаг.
 
@@ -1266,10 +1266,10 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Frontend UI:**
 - [x] Chat header кнопка "💡 AI" ([web/src/components/middle/HeaderActions.tsx](web/src/components/middle/HeaderActions.tsx)) — `iconName="lamp"`, рядом с search, открывает AiSummaryModal
 - [x] `AiSummaryModal.tsx` ([web/src/components/middle/AiSummaryModal.tsx](web/src/components/middle/AiSummaryModal.tsx)) — time range chips (1h/6h/24h/7d), language RU/EN, Generate button, streaming text с прогресс-индикатором, error banner для 503 `ai_unavailable`, abort on close
-- [ ] Translate flow — требует message selection UX, отложено
-- [ ] AiTranscribeButton на voice messages — требует интеграции с voice message renderer, отложено
-- [ ] Suggest reply строка в composer — требует правки Composer.tsx (2742 строки), отложено для отдельного PR
-- [ ] AI usage панель в Settings (опционально)
+- [x] `AiTranscribeButton.tsx` ([web/src/components/middle/message/AiTranscribeButton.tsx](web/src/components/middle/message/AiTranscribeButton.tsx)) — кнопка "Transcribe" под voice message в [Message.tsx](web/src/components/middle/message/Message.tsx), module-level `Map<mediaId, text>` cache (не перевызывает API при re-render), states: trigger → loading → done (collapse для >500 chars) / error / 503 "AI не настроен"
+- [x] `AiSuggestReplyBar.tsx` ([web/src/components/middle/composer/AiSuggestReplyBar.tsx](web/src/components/middle/composer/AiSuggestReplyBar.tsx)) — строка "💡 Suggest reply" над `MessageInput` в [Composer.tsx](web/src/components/common/Composer.tsx) (одна строка интеграции), клик → 3 chip-кнопки, выбор → `insertTextAndUpdateCursor` (reuse existing handler). Скрывается при `hasText` (не перетирает ввод пользователя), сбрасывается при смене `chatId`. Только в message list, не показывается в editing/story viewer
+- [x] `AiTranslateModal.tsx` ([web/src/components/middle/AiTranslateModal.tsx](web/src/components/middle/AiTranslateModal.tsx)) — dropdown языков (EN/RU/ES/DE/FR), streaming перевод через `translateMessages`, фильтрация non-text сообщений в `withGlobal` (`selectChatMessage` → `content.text.text`), лимит 50 сообщений, кнопка "Copy all" после завершения. Вызывается из [MessageSelectToolbar.tsx](web/src/components/middle/MessageSelectToolbar.tsx) (кнопка `language` рядом с copy/delete в bulk actions)
+- [ ] AI usage панель в Settings (опционально, не блокирует релиз)
 
 ### 8B: Bots сервис (порт 8086) — DONE
 

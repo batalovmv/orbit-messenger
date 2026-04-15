@@ -189,6 +189,7 @@ import FactCheck from './FactCheck';
 import Game from './Game';
 import Giveaway from './Giveaway';
 import InlineButtons from './InlineButtons';
+import AiTranscribeButton from './AiTranscribeButton';
 import Invoice from './Invoice';
 import InvoiceMediaPreview from './InvoiceMediaPreview';
 import Location from './Location';
@@ -1316,6 +1317,9 @@ const Message = ({
             onHideTranscription={setTranscriptionHidden}
             canTranscribe={canTranscribeVoice && !hasTtl}
           />
+        )}
+        {voice && voice.id && !hasTtl && (
+          <AiTranscribeButton mediaId={voice.id} />
         )}
         {document && (
           <Document

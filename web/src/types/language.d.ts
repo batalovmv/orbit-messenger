@@ -2073,6 +2073,59 @@ export interface LangPair {
   'ChannelInfo': undefined;
   'OpenInNewTab': undefined;
   'PdfCannotPreview': undefined;
+  'BotManagement': undefined;
+  'Integrations': undefined;
+  'BotManagementTitle': undefined;
+  'IntegrationsTitle': undefined;
+  'BotUsername': undefined;
+  'BotDisplayName': undefined;
+  'BotDescription': undefined;
+  'BotWebhookUrl': undefined;
+  'BotToken': undefined;
+  'BotRotateToken': undefined;
+  'BotCommands': undefined;
+  'CreateBot': undefined;
+  'DeleteBot': undefined;
+  'BotCreated': undefined;
+  'BotDeleted': undefined;
+  'TokenRotated': undefined;
+  'ConnectorName': undefined;
+  'ConnectorDisplayName': undefined;
+  'ConnectorType': undefined;
+  'ConnectorWebhookUrl': undefined;
+  'ConnectorSecret': undefined;
+  'CreateConnector': undefined;
+  'DeleteConnector': undefined;
+  'ConnectorCreated': undefined;
+  'ConnectorDeleted': undefined;
+  'SecretRotated': undefined;
+  'DeliveryStatus': undefined;
+  'RetryDelivery': undefined;
+  'Routes': undefined;
+  'Deliveries': undefined;
+  'CreateRoute': undefined;
+  'DeleteRoute': undefined;
+  'EventFilter': undefined;
+  'MessageTemplate': undefined;
+  'AreYouSure': undefined;
+  'TargetChat': undefined;
+  'AiNotConfigured': undefined;
+  'AiTranscribeButton': undefined;
+  'AiTranscribing': undefined;
+  'AiTranscribeCollapse': undefined;
+  'AiTranscribeExpand': undefined;
+  'AiTranscribeRetry': undefined;
+  'AiTranscribeFailed': undefined;
+  'AiSuggestReply': undefined;
+  'AiSuggestLoading': undefined;
+  'AiSuggestFailed': undefined;
+  'AiTranslateTitle': undefined;
+  'AiTranslateLanguage': undefined;
+  'AiTranslateGenerate': undefined;
+  'AiTranslateStreaming': undefined;
+  'AiTranslateCopy': undefined;
+  'AiTranslateFailed': undefined;
+  'AiGeneratedDisclaimer': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3607,6 +3660,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'BotAuthSuccessText': {
     'url': V;
+  };
+  'AiTranslateSelectedCount': {
+    'count': V;
+  };
+  'AiTranslateSkipped': {
+    'count': V;
   };
 }
 

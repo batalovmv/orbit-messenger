@@ -30,6 +30,7 @@ import Icon from '../common/icons/Icon';
 import Button from '../ui/Button';
 import Checkbox from '../ui/Checkbox';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import AiTranslateModal from './AiTranslateModal';
 
 import './MessageSelectToolbar.scss';
 
@@ -86,6 +87,7 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
   useCopySelectedMessages(isActive);
 
   const [isFileIpDialogOpen, openFileIpDialog, closeFileIpDialog] = useFlag();
+  const [isTranslateModalOpen, openTranslateModal, closeTranslateModal] = useFlag();
   const [shouldNotWarnAboutFiles, setShouldNotWarnAboutFiles] = useState(false);
 
   const handleExitMessageSelectMode = useLastCallback(() => {
@@ -214,6 +216,7 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
               {!hasProtectedMessage && (
                 renderButton('copy', lang('lng_context_copy_selected_items'), handleCopy)
               )}
+              {renderButton('language', 'Translate with AI', openTranslateModal)}
               {canDeleteMessages && (
                 renderButton('delete', lang('EditAdminGroupDeleteMessages'), handleDelete, true)
               )}
@@ -234,6 +237,12 @@ const MessageSelectToolbar: FC<OwnProps & StateProps> = ({
           onCheck={setShouldNotWarnAboutFiles}
         />
       </ConfirmDialog>
+      <AiTranslateModal
+        isOpen={isTranslateModalOpen}
+        chatId={chat?.id}
+        messageIds={selectedMessageIds}
+        onClose={closeTranslateModal}
+      />
     </>
   );
 };
