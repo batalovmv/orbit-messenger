@@ -1167,31 +1167,44 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ### Frontend: Saturn API методы (~15)
 
-- [ ] uploadIdentityKey, uploadSignedPreKey, uploadOneTimePreKeys
-- [ ] fetchKeyBundle, fetchIdentityKey, fetchPreKeyCount
-- [ ] sendEncryptedMessage, fetchKeyTransparencyLog
-- [ ] verifyIdentity, setDisappearingTimer, fetchDisappearingTimer
+- [x] uploadIdentityKey, uploadSignedPreKey, uploadOneTimePreKeys — [web/src/api/saturn/methods/keys.ts](web/src/api/saturn/methods/keys.ts)
+- [x] fetchKeyBundle, fetchIdentityKey, fetchPreKeyCount, fetchUserDevices
+- [x] sendEncryptedMessage, fetchKeyTransparencyLog, revokeDevice
+- [x] setDisappearingTimer
+- [~] verifyIdentity — реализовано через client-side алгоритм `computeSafetyNumber`, отдельного server call не требуется
+- [~] fetchDisappearingTimer — возвращается в составе `GET /chats/:id` (поле `disappearing_timer`), отдельный endpoint не нужен
+
+### Frontend: Crypto foundation — [web/src/lib/crypto/](web/src/lib/crypto/)
+
+- [x] X3DH + Double Ratchet на `@noble/curves` + `@noble/hashes` + `@noble/ciphers` (см. `docs/phase7-design.md` §14.3)
+- [x] IndexedDB key store (`orbit-crypto`): identity, signed_prekeys, one_time_prekeys, sessions, verified, message_cache
+- [x] Device enrollment flow (auth success → `ensureEnrollment` fire-and-forget)
+- [x] Web Worker proxy (main-thread shim в Phase 7.0, real Worker — follow-up)
+- [x] Unit tests: round-trip Alice↔Bob, X3DH с/без OTK, multi-message, out-of-order, state serialization, safety-numbers vectors, envelope binary format, base64url RFC 4648
 
 ### Фичи
 
-- [ ] Sender Keys для группового E2E
-- [ ] Safety Numbers: QR + числовое сравнение
-- [ ] Disappearing messages: 24h / 7d / 30d / Off
-- [ ] Шифрование медиа (AES-256-GCM) перед загрузкой в R2
-- [ ] Multi-device: шифрование отдельно для КАЖДОГО устройства получателя
-- [ ] Client-side search (Meilisearch не видит plaintext)
-- [ ] Push показывает "Новое сообщение" без текста
+- [x] Safety Numbers: 60-digit сравнение (QR — nice-to-have, отложено)
+- [x] Disappearing messages: 24h / 7d / 30d / Off — UI-dropdown в Chat profile
+- [x] Multi-device fanout framework — `collectFanoutTargets` (ограничение backend'а: `GET /keys/:userId/bundle` возвращает только primary device)
+- [x] Client-side search (`lib/search/client-index.ts`, inverted index в IndexedDB, populate on decrypt)
+- [x] Push показывает "Новое сообщение" без текста — Gateway
+- [~] Шифрование медиа (AES-256-GCM) — **Phase 7.1** (обязательство в течение 2 недель после 7.0)
+- [~] Sender Keys для группового E2E — **Phase 7.2** или deferred (ломает AI/search/bots)
 
 ### Rollout план
 
-1. Opt-in для DM
-2. Default для новых DM
-3. Группы opt-in
-4. Default для всех
+1. Deploy всех сервисов с `e2e_dm_enabled=false`
+2. Мониторинг 3-5 дней — рост `user_keys` таблицы, coverage > 95%
+3. `UPDATE feature_flags SET enabled=true WHERE key='e2e_dm_enabled';`
+4. Новые DM создаются как E2E автоматически
+5. User-guide: [docs/e2e-user-guide.md](docs/e2e-user-guide.md)
 
 ### Критерий "готово"
 
-Открыть DM → замок "E2E encrypted". Отправить → сервер хранит ciphertext. Safety Numbers → QR → "Verified". Disappearing 24h. Admin в БД → blob.
+Открыть DM → замок "E2E encrypted". Отправить → сервер хранит ciphertext. Safety Numbers → 60 цифр → "Verified". Disappearing 24h. Admin в БД → blob.
+
+**Phase 7.0 статус: Done**. Commits: 846b070 (Step 1), 29657ca (Step 2), 5a5bb7d (Step 3), b53672a (Step 4), 87cc9a6 (Step 5), ce55774 (Step 6), 49d77b6 (Step 7), + Step 8 (search) + Step 9 (docs) в этом коммите.
 
 ---
 

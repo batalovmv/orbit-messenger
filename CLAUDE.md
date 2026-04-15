@@ -24,7 +24,8 @@
 | Phase 3: Media & Files | Done | Media service, R2 pipeline, Saturn upload/download wiring, MediaViewer/shared media foundation |
 | Phase 4: Search, Notifications & Settings | Done | Meilisearch, push/VAPID, privacy/settings, in-app banners, in-chat search wiring |
 | Phase 5: Rich Messaging | **In Progress** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring; идёт стабилизация фронтенда |
-| Phase 6–8 | Pending | Calls, E2E, AI, Bots |
+| Phase 7: E2E Encryption | **Done (7.0)** | X3DH + Double Ratchet на `@noble/*`, device enrollment, send/receive, Safety Numbers UI, disappearing messages UI, client-side search, fanout framework. Phase 7.1 (медиа) — обязательство на 2 недели. |
+| Phase 6, 8 | Pending | Calls, AI, Bots |
 
 Подробный план: `PHASES.md` (1169 строк — читай секцию текущей фазы с offset)
 Полное ТЗ: `docs/TZ-ORBIT-MESSENGER.md`
