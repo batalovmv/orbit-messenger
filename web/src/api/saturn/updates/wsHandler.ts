@@ -1,4 +1,4 @@
-import type { ApiGroupCall } from '../../types';
+import type { ApiGroupCall, ApiMessage } from '../../types';
 import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
@@ -234,6 +234,51 @@ function dispatchNewMessage(data: SaturnMessage) {
     message: apiMsg,
     poll: buildApiPoll(data.poll),
   });
+
+  if (data.type === 'encrypted' && data.encrypted_content && data.sender_id) {
+    void decryptAndPatchEncryptedMessage(data);
+  }
+}
+
+async function decryptAndPatchEncryptedMessage(data: SaturnMessage) {
+  if (!data.encrypted_content || !data.sender_id) return;
+  try {
+    const { decodeEncryptedContentField, decryptIncomingEnvelope } = await import('../methods/encryptedMessages');
+    const envelope = decodeEncryptedContentField(data.encrypted_content);
+    const decrypted = await decryptIncomingEnvelope({
+      senderUserId: data.sender_id,
+      envelope,
+    });
+    const plaintextText = decrypted
+      ? decrypted.plaintext
+      : '🔒 [зашифровано: не для этого устройства]';
+
+    sendApiUpdate({
+      '@type': 'updateMessage',
+      chatId: data.chat_id,
+      id: data.sequence_number,
+      isFull: false,
+      message: {
+        content: {
+          text: { text: plaintextText, entities: [] },
+        },
+      } as Partial<ApiMessage>,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[crypto] failed to decrypt incoming E2E message', err);
+    sendApiUpdate({
+      '@type': 'updateMessage',
+      chatId: data.chat_id,
+      id: data.sequence_number,
+      isFull: false,
+      message: {
+        content: {
+          text: { text: '🔒 [не удалось расшифровать]', entities: [] },
+        },
+      } as Partial<ApiMessage>,
+    });
+  }
 }
 
 function handleMessageUpdated(data: SaturnMessage) {

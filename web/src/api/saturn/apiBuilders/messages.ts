@@ -509,9 +509,15 @@ function buildReplyKeyboard(markup: SaturnReplyMarkup | string | undefined): Api
 export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   registerMessageId(msg.chat_id, msg.id, msg.sequence_number);
 
+  const isEncryptedType = msg.type === 'encrypted';
   const richContent = parseRichMessageContent(msg.content);
   const content: ApiMessage['content'] = {
-    text: msg.content && !richContent && msg.type !== 'poll' ? {
+    text: isEncryptedType ? {
+      // Placeholder — overwritten by the async decrypt side-effect in
+      // dispatchNewMessage / sync handlers. See wsHandler `decryptAndPatchEncryptedMessage`.
+      text: '🔒',
+      entities: [],
+    } : msg.content && !richContent && msg.type !== 'poll' ? {
       text: msg.content,
       entities: msg.entities?.map(buildApiEntity) || [],
     } : undefined,
@@ -573,6 +579,8 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     isInAlbum: isInAlbum || undefined,
     inlineButtons: replyMarkup?.inlineButtons,
     viaBotId: msg.via_bot_id,
+    isEncrypted: isEncryptedType || undefined,
+    encryptedContent: isEncryptedType ? msg.encrypted_content : undefined,
   };
 }
 

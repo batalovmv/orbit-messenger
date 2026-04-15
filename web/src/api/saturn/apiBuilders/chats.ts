@@ -83,6 +83,14 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     apiChat.peerUserId = chat.other_user.id;
   }
 
+  if (chat.is_encrypted) {
+    apiChat.isEncrypted = true;
+  }
+  const disappearingTimer = (chat as { disappearing_timer?: number }).disappearing_timer;
+  if (typeof disappearingTimer === 'number' && disappearingTimer > 0) {
+    apiChat.disappearingTimer = disappearingTimer;
+  }
+
   return apiChat;
 }
 

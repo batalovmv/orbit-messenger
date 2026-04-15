@@ -744,6 +744,84 @@ export async function sendMessage({
     return undefined;
   }
 
+  // Phase 7: E2E branch — DMs marked `isEncrypted` run through the
+  // Signal-Protocol pipeline. Text-only messages are supported today;
+  // media/stickers/gifs/polls are rejected with a user-friendly error
+  // per design doc §14.1 (media encryption is Phase 7.1).
+  if ((chat as { isEncrypted?: boolean }).isEncrypted) {
+    const peerUserId = (chat as { peerUserId?: string }).peerUserId;
+    if (!peerUserId) {
+      sendApiUpdate({
+        '@type': 'updateMessageSendFailed',
+        chatId,
+        localId,
+        error: 'E2E is currently available only for direct messages',
+      });
+      return undefined;
+    }
+    if (attachment || sticker || gif || poll || (mediaIds && mediaIds.length > 0)) {
+      sendApiUpdate({
+        '@type': 'updateMessageSendFailed',
+        chatId,
+        localId,
+        error: 'Вложения в зашифрованных чатах пока не поддерживаются',
+      });
+      return undefined;
+    }
+    if (!text) {
+      sendApiUpdate({
+        '@type': 'updateMessageSendFailed',
+        chatId,
+        localId,
+        error: 'Пустое сообщение',
+      });
+      return undefined;
+    }
+
+    try {
+      const { sendEncryptedTextMessage, EncryptedSendError } = await import('./encryptedMessages');
+      try {
+        const result = await sendEncryptedTextMessage({
+          chatId,
+          peerUserId,
+          plaintext: text,
+        });
+        trackPendingSend(result.messageId);
+        sendApiUpdate({
+          '@type': 'updateMessageSendSucceeded',
+          chatId,
+          localId,
+          message: {
+            ...localMessage,
+            saturnId: result.messageId,
+            sendingState: undefined,
+            content: { text: { text, entities: entities ?? [] } },
+          },
+        });
+        return { ...localMessage, saturnId: result.messageId, isOutgoing: true };
+      } catch (err) {
+        const reason = err instanceof EncryptedSendError ? err.message
+          : err instanceof Error ? err.message
+            : 'Failed to send encrypted message';
+        sendApiUpdate({
+          '@type': 'updateMessageSendFailed',
+          chatId,
+          localId,
+          error: reason,
+        });
+        return undefined;
+      }
+    } catch {
+      sendApiUpdate({
+        '@type': 'updateMessageSendFailed',
+        chatId,
+        localId,
+        error: 'Не удалось загрузить слой шифрования',
+      });
+      return undefined;
+    }
+  }
+
   let uploadedMediaIds = mediaIds || [];
   if (attachment) {
     try {

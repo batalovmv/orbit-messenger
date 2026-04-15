@@ -777,6 +777,18 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
 
       let cleanedMessage = omitLocalMedia(message);
       cleanedMessage = omitLocalPaidReactions(cleanedMessage);
+      // Phase 7: E2E plaintext must never touch the persisted global
+      // state. Replace the decrypted text with a placeholder — the WS
+      // receive path re-decrypts from `encryptedContent` on reload.
+      if (cleanedMessage.isEncrypted) {
+        cleanedMessage = {
+          ...cleanedMessage,
+          content: {
+            ...cleanedMessage.content,
+            text: { text: '__E2E_ENCRYPTED__', entities: [] },
+          },
+        };
+      }
       acc[message.id] = cleanedMessage;
 
       if (message.content.pollId) {

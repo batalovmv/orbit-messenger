@@ -705,6 +705,13 @@ export interface ApiMessage {
   searchSnippet?: ApiMessageSearchSnippet;
 
   isTypingDraft?: boolean; // Local field
+
+  // Phase 7: E2E fields. `isEncrypted` marks messages whose content was
+  // delivered via the Signal Protocol envelope. `encryptedContent` is the
+  // raw (standard-base64) envelope JSON from the server — present only on
+  // incoming E2E messages so the receive path can decrypt them.
+  isEncrypted?: true;
+  encryptedContent?: string;
 }
 
 export interface ApiMessageSearchSnippet {

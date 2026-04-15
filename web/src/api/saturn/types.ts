@@ -30,6 +30,8 @@ export interface SaturnChat {
   avatar_url?: string;
   created_by?: string;
   is_encrypted: boolean;
+  // Phase 7: disappearing-messages TTL in seconds (0 = off).
+  disappearing_timer?: number;
   max_members: number;
   created_at: string;
   updated_at: string;
@@ -73,6 +75,10 @@ export interface SaturnMessage {
   sender_id?: string;
   type: string;
   content?: string;
+  // Phase 7: standard-base64 (RFC 4648 §4, not url-safe) JSON envelope
+  // emitted by Go `[]byte` default encoding. Present only when
+  // `type === 'encrypted'`. Opaque to the server.
+  encrypted_content?: string;
   entities?: SaturnMessageEntity[];
   reply_to_id?: string;
   reply_to_sequence_number?: number;
