@@ -1210,8 +1210,8 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ## Phase 8: AI, Bots, Integrations & Production
 
-> **Статус: 8A Done (backend + Saturn + 4 UI компонента), 8B Done, 8C Done, 8D Pending**
-> 8A (AI) — **backend сервис с нуля**: Claude + Whisper clients, 6 endpoints (5 работающих + 1 deferred `/ai/search`), SSE streaming, rate limiting, usage tracking. Saturn methods + SSE reader готов. Деплоится с placeholder-ключами (сервис стартует, endpoints возвращают 503 до подстановки реальных ключей на Saturn.ac). **Frontend UI компоненты (AiMenu/AiStreamModal/SuggestReply) — следующий шаг.** Нужны: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
+> **Статус: 8A Done (backend + Saturn + UI), 8B Done, 8C Done, 8D Pending**
+> 8A (AI) — **backend сервис с нуля**: Claude + Whisper clients, 6 endpoints (5 работающих + 1 deferred `/ai/search`), SSE streaming, rate limiting, usage tracking. Saturn methods + SSE reader готов. Frontend UI полностью подключён: [AiSummaryModal](web/src/components/middle/AiSummaryModal.tsx) в HeaderActions, [AiTranslateModal](web/src/components/middle/AiTranslateModal.tsx) в MessageSelectToolbar, [AiSuggestReplyBar](web/src/components/middle/composer/AiSuggestReplyBar.tsx) в Composer, [AiTranscribeButton](web/src/components/middle/message/AiTranscribeButton.tsx) на voice-сообщениях. Деплоится с placeholder-ключами (сервис стартует, endpoints возвращают 503 до подстановки реальных ключей на Saturn.ac без пересборки образа). Нужны: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
 > 8B (Bots) — полностью реализован и задеплоен: Bot API, admin UI, inline keyboards, callback delivery, commands autocomplete
 > 8C (Integrations) — **framework + presets для всех 5 MST-систем готовы**: webhook connectors, routes, delivery log, HMAC validation (header и query modes), Saturn.ac end-to-end ready, InsightFlow/Keitaro/ASA framework-only pending real credentials. HR-бот deferred (нет исходной системы). Документация: [docs/mst-integrations.md](docs/mst-integrations.md)
 > 8D (Production Hardening) — pending
@@ -1221,9 +1221,9 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 ### Проработка (Шаг 0)
 
 - [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 8, `docs/TZ-ORBIT-MESSENGER.md` §11.8, §11.9
-- [ ] **8A AI:** Изучить Anthropic Claude API — streaming (SSE), rate limits, pricing, context window
-- [ ] **8A AI:** Изучить Whisper API (OpenAI) — audio formats, language detection, speaker diarization options
-- [ ] **8A AI:** Спроектировать embedding pipeline для semantic search (какой model? pgvector vs Qdrant?)
+- [x] **8A AI:** Изучить Anthropic Claude API — streaming (SSE), rate limits, pricing, context window — реализовано в [anthropic_client.go](services/ai/internal/client/anthropic_client.go)
+- [x] **8A AI:** Изучить Whisper API (OpenAI) — audio formats, language detection, speaker diarization options — реализовано в [whisper_client.go](services/ai/internal/client/whisper_client.go)
+- [~] **8A AI:** Спроектировать embedding pipeline для semantic search (какой model? pgvector vs Qdrant?) — отложено на Phase 8A.2, сейчас `/ai/search` возвращает 501
 - [x] **8B Bots:** Изучить Telegram Bot API spec — какие методы критичны для совместимости?
 - [x] **8B Bots:** Спроектировать webhook delivery — retry strategy, dead letter queue, timeout handling
 - [ ] **8C Integrations:** Изучить API InsightFlow, Keitaro, Saturn.ac — форматы webhook payload
@@ -1237,9 +1237,9 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
 - [x] Составить порядок реализации и предложить пользователю
 
-### 8A: AI сервис (порт 8085) — DONE (backend + Saturn + 4 UI компонента)
+### 8A: AI сервис (порт 8085) — DONE (backend + Saturn + UI)
 
-> **Статус:** backend сервис полностью написан с нуля, Saturn методы готовы. Сервис стартует даже с `ANTHROPIC_API_KEY=placeholder` / `OPENAI_API_KEY=placeholder` — все endpoints возвращают `503 service_unavailable` до подстановки реальных ключей в Saturn.ac dashboard (без пересборки образа). Frontend UI компонент (AiMenu/AiStreamModal/AiTranscribeButton/SuggestReply) НЕ реализован — следующий шаг.
+> **Статус:** backend сервис полностью написан с нуля, Saturn методы готовы, frontend UI подключён (см. список компонентов в header Phase 8). Сервис стартует даже с `ANTHROPIC_API_KEY=placeholder` / `OPENAI_API_KEY=placeholder` — все endpoints возвращают `503 service_unavailable` до подстановки реальных ключей в Saturn.ac dashboard (без пересборки образа).
 
 **Endpoints (6):**
 - [x] POST /ai/summarize — Claude SSE streaming ([services/ai/internal/handler/ai_handler.go](services/ai/internal/handler/ai_handler.go))
