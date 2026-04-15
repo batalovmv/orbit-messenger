@@ -1072,6 +1072,7 @@ export {
   deleteExportedChatInvite, fetchChatInviteInfo,
   joinChat, toggleSlowMode, fetchChatInviteImporters, hideChatJoinRequest,
   archiveChat, unarchiveChat, toggleChatPinned, toggleSavedDialogPinned, setChatMuted,
+  toggleIsProtected,
   fetchMembers, searchMembers,
 } from './chats';
 

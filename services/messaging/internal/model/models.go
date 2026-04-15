@@ -50,6 +50,7 @@ type Chat struct {
 	AvatarURL          *string    `json:"avatar_url,omitempty"`
 	CreatedBy          *uuid.UUID `json:"created_by,omitempty"`
 	IsEncrypted        bool       `json:"is_encrypted"`
+	IsProtected        bool       `json:"is_protected"`
 	MaxMembers         int        `json:"max_members"`
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`

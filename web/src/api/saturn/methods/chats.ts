@@ -610,6 +610,29 @@ export async function setChatMuted({
   });
 }
 
+// Phase 7 follow-up: toggle the chat's "protected content" flag. The
+// backend stores `is_protected` and re-emits a chat_updated NATS event;
+// the frontend uses the flag to disable forwarding/copying/saving of
+// messages from the chat.
+export async function toggleIsProtected({
+  chat,
+  isProtected,
+}: {
+  chat: ApiChat;
+  isProtected: boolean;
+}) {
+  await client.request<unknown>(
+    'PUT',
+    `/chats/${chat.id}/protected`,
+    { is_protected: isProtected },
+  );
+  sendApiUpdate({
+    '@type': 'updateChat',
+    id: chat.id,
+    chat: { isProtected } as any,
+  });
+}
+
 export async function fetchMembers({ chat, type, offset, limit }: {
   chat: { id: string }; type?: string; offset?: number; limit?: number;
 }) {

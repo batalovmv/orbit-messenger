@@ -86,6 +86,9 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
   if (chat.is_encrypted) {
     apiChat.isEncrypted = true;
   }
+  if ((chat as { is_protected?: boolean }).is_protected) {
+    apiChat.isProtected = true;
+  }
   const disappearingTimer = (chat as { disappearing_timer?: number }).disappearing_timer;
   if (typeof disappearingTimer === 'number' && disappearingTimer > 0) {
     apiChat.disappearingTimer = disappearingTimer;

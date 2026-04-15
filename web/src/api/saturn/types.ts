@@ -30,6 +30,9 @@ export interface SaturnChat {
   avatar_url?: string;
   created_by?: string;
   is_encrypted: boolean;
+  // Phase 7 follow-up: chat-level "protected content" flag. Frontend
+  // uses it to disable forward/copy/save UI for all messages in the chat.
+  is_protected?: boolean;
   // Phase 7: disappearing-messages TTL in seconds (0 = off).
   disappearing_timer?: number;
   max_members: number;

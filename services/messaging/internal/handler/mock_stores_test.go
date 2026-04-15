@@ -212,6 +212,10 @@ func (m *mockChatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, ena
 	return nil
 }
 
+func (m *mockChatStore) SetIsProtected(ctx context.Context, chatID uuid.UUID, enabled bool) error {
+	return nil
+}
+
 func (m *mockChatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	if m.getUserChatIDsFn != nil {
 		return m.getUserChatIDsFn(ctx, userID)

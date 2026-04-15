@@ -734,6 +734,53 @@ func (s *ChatService) SetDisappearingTimer(ctx context.Context, chatID, userID u
 	return chat, nil
 }
 
+func (s *ChatService) SetIsProtected(ctx context.Context, chatID, userID uuid.UUID, enabled bool) (*model.Chat, error) {
+	member, err := s.chats.GetMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get member: %w", err)
+	}
+	if member == nil {
+		return nil, apperror.Forbidden("Not a member of this chat")
+	}
+
+	chat, err := s.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get chat: %w", err)
+	}
+	if chat == nil {
+		return nil, apperror.NotFound("Chat not found")
+	}
+
+	// Groups require the change-info permission. Direct chats are always
+	// toggleable by either participant.
+	if chat.Type != "direct" && !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanChangeInfo) {
+		return nil, apperror.Forbidden("No permission to change chat protection")
+	}
+
+	if err := s.chats.SetIsProtected(ctx, chatID, enabled); err != nil {
+		return nil, fmt.Errorf("set is_protected: %w", err)
+	}
+
+	chat, err = s.chats.GetByID(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("get updated chat: %w", err)
+	}
+
+	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+	if mErr != nil {
+		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
+	}
+	s.nats.Publish(
+		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
+		"chat_updated",
+		chat,
+		memberIDs,
+		userID.String(),
+	)
+
+	return chat, nil
+}
+
 func (s *ChatService) GetAdmins(ctx context.Context, chatID, userID uuid.UUID) ([]model.ChatMember, error) {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {

@@ -196,6 +196,10 @@ func (m *mockChatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, ena
 	return nil
 }
 
+func (m *mockChatStore) SetIsProtected(ctx context.Context, chatID uuid.UUID, enabled bool) error {
+	return nil
+}
+
 func (m *mockChatStore) ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error {
 	return nil
 }

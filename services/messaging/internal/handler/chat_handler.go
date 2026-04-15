@@ -48,6 +48,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Put("/chats/:id/members/:userId/permissions", h.UpdateMemberPermissions)
 	app.Post("/chats/:id/slow-mode", h.SetSlowMode)
 	app.Put("/chats/:id/disappearing", h.SetDisappearingTimer)
+	app.Put("/chats/:id/protected", h.SetIsProtected)
 	app.Put("/chats/:id/photo", h.UpdateChatPhoto)
 	app.Delete("/chats/:id/photo", h.DeleteChatPhoto)
 }
@@ -458,6 +459,37 @@ func (h *ChatHandler) SetDisappearingTimer(c *fiber.Ctx) error {
 	}
 
 	chat, err := h.svc.SetDisappearingTimer(c.Context(), chatID, uid, req.Timer)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, chat)
+}
+
+// SetIsProtected toggles the chat's "protected content" flag. When true,
+// the frontend disables message forwarding, selection, copy and save for
+// everyone in the chat. Enforcement is currently cooperative — the
+// backend just stores the bit and echoes it via chat responses + the
+// `chat_updated` NATS event.
+func (h *ChatHandler) SetIsProtected(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+
+	var req struct {
+		IsProtected bool `json:"is_protected"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	chat, err := h.svc.SetIsProtected(c.Context(), chatID, uid, req.IsProtected)
 	if err != nil {
 		return response.Error(c, err)
 	}
