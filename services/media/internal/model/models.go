@@ -69,6 +69,7 @@ type Media struct {
 	DurationSeconds  *float64  `json:"duration_seconds,omitempty"`
 	WaveformData     []byte    `json:"waveform_data,omitempty"`
 	IsOneTime        bool      `json:"is_one_time"`
+	IsEncrypted      bool      `json:"is_encrypted"`
 	ProcessingStatus string    `json:"processing_status"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
@@ -88,6 +89,7 @@ type MediaResponse struct {
 	Height           *int     `json:"height,omitempty"`
 	DurationSeconds  *float64 `json:"duration_seconds,omitempty"`
 	WaveformData     []int    `json:"waveform_data,omitempty"`
+	IsEncrypted      bool     `json:"is_encrypted,omitempty"`
 	ProcessingStatus string   `json:"processing_status"`
 }
 

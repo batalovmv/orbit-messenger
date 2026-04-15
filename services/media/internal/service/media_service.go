@@ -66,6 +66,69 @@ func (s *MediaService) ensureUserStorageAvailable(ctx context.Context, userID uu
 	return nil
 }
 
+// UploadEncrypted stores an opaque ciphertext blob for Phase 7.1 E2E media.
+// The server never sees plaintext: no MIME sniff, no processing pipeline, no
+// thumbnail generation. The client is expected to AES-256-GCM-encrypt the file
+// and ship the ciphertext plus the declared media type (so the UI can render
+// the right placeholder) and the original filename/size (for display only —
+// both values are also carried inside the encrypted envelope that the
+// recipient decrypts).
+//
+// Size limit is enforced by the declared media type. Quota accounting uses the
+// ciphertext length (which is what actually consumes R2 storage).
+func (s *MediaService) UploadEncrypted(ctx context.Context, uploaderID uuid.UUID, ciphertext []byte, declaredType, declaredFilename string, isOneTime bool) (*model.Media, error) {
+	if declaredType == "" {
+		return nil, apperror.BadRequest("media type is required for encrypted upload")
+	}
+	switch declaredType {
+	case model.MediaTypePhoto, model.MediaTypeVideo, model.MediaTypeFile,
+		model.MediaTypeVoice, model.MediaTypeVideoNote, model.MediaTypeGIF:
+		// valid
+	default:
+		return nil, apperror.BadRequest("unknown media type for encrypted upload")
+	}
+	if len(ciphertext) == 0 {
+		return nil, apperror.BadRequest("empty ciphertext")
+	}
+	// Allow ciphertext overhead (AES-256-GCM adds 16-byte tag, envelope up to
+	// ~128 bytes of framing) on top of the plaintext size limit.
+	maxSize := model.SizeLimit(declaredType) + 512
+	if int64(len(ciphertext)) > maxSize {
+		return nil, model.ErrFileTooLarge
+	}
+	if err := s.ensureUserStorageAvailable(ctx, uploaderID, int64(len(ciphertext))); err != nil {
+		return nil, err
+	}
+
+	mediaID := uuid.New()
+	r2Key := fmt.Sprintf("encrypted/%s/blob.bin", mediaID.String())
+
+	if err := s.r2.Upload(ctx, r2Key, bytes.NewReader(ciphertext), "application/octet-stream", int64(len(ciphertext))); err != nil {
+		return nil, fmt.Errorf("upload encrypted to R2: %w", err)
+	}
+
+	m := &model.Media{
+		ID:               mediaID,
+		UploaderID:       uploaderID,
+		Type:             declaredType,
+		MimeType:         "application/octet-stream",
+		OriginalFilename: strPtr(declaredFilename),
+		SizeBytes:        int64(len(ciphertext)),
+		R2Key:            r2Key,
+		IsOneTime:        isOneTime,
+		IsEncrypted:      true,
+		ProcessingStatus: model.ProcessingReady,
+	}
+
+	if err := s.store.Create(ctx, m); err != nil {
+		if delErr := s.r2.Delete(ctx, r2Key); delErr != nil {
+			slog.Warn("cleanup encrypted R2 key after DB failure", "key", r2Key, "error", delErr)
+		}
+		return nil, fmt.Errorf("create encrypted media record: %w", err)
+	}
+	return m, nil
+}
+
 // Upload handles a simple (non-chunked) file upload.
 func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileData []byte, filename, mimeType, mediaType string, isOneTime bool) (*model.Media, error) {
 	if mediaType == "" {
@@ -970,6 +1033,7 @@ func (s *MediaService) BuildMediaResponse(ctx context.Context, m *model.Media) *
 		Height:           m.Height,
 		DurationSeconds:  m.DurationSeconds,
 		WaveformData:     bytesToInts(m.WaveformData),
+		IsEncrypted:      m.IsEncrypted,
 		ProcessingStatus: m.ProcessingStatus,
 	}
 	if m.OriginalFilename != nil {

@@ -32,6 +32,7 @@ const messageSelectColumns = `
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
 	CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error
+	CreateEncryptedWithMedia(ctx context.Context, msg *model.Message, envelope []byte, mediaIDs []uuid.UUID) error
 	CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error)

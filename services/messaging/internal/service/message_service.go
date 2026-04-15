@@ -307,7 +307,7 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	return full, nil
 }
 
-func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, senderID uuid.UUID, envelope []byte, senderDeviceID string) (*model.Message, error) {
+func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, senderID uuid.UUID, envelope []byte, mediaIDs []uuid.UUID, senderDeviceID string) (*model.Message, error) {
 	chat, err := s.chats.GetByID(ctx, chatID)
 	if err != nil {
 		return nil, fmt.Errorf("get chat: %w", err)
@@ -373,7 +373,20 @@ func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, sende
 		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
 		msg.ExpiresAt = &expiresAt
 	}
-	if err := s.messages.CreateEncrypted(ctx, msg, envelope); err != nil {
+	if len(mediaIDs) > 0 {
+		// Phase 7.1: encrypted media attachments. The store validates that each
+		// media row is uploader-owned AND has is_encrypted=true, so the server
+		// never accidentally stores a plaintext attachment against an E2E chat.
+		if err := s.messages.CreateEncryptedWithMedia(ctx, msg, envelope, mediaIDs); err != nil {
+			if errors.Is(err, model.ErrMediaNotOwned) {
+				return nil, apperror.Forbidden("You can only attach media files that you uploaded")
+			}
+			if errors.Is(err, model.ErrMediaNotEncrypted) {
+				return nil, apperror.BadRequest("All attachments in an E2E chat must be encrypted")
+			}
+			return nil, fmt.Errorf("create encrypted message with media: %w", err)
+		}
+	} else if err := s.messages.CreateEncrypted(ctx, msg, envelope); err != nil {
 		return nil, fmt.Errorf("create encrypted message: %w", err)
 	}
 
@@ -807,8 +820,12 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	if chat == nil {
 		return nil, apperror.NotFound("Chat not found")
 	}
+	// Phase 7.1: plaintext SendMediaMessage is now forbidden in E2E chats.
+	// Encrypted attachments must go through SendEncryptedMessage with media_ids;
+	// the store additionally rejects any media row with is_encrypted=true on this
+	// code path, which gives us defense in depth against a broken guard here.
 	if chat.IsEncrypted {
-		return nil, apperror.BadRequest("Cannot send plaintext media to an E2E encrypted chat")
+		return nil, apperror.BadRequest("Cannot send plaintext media to an E2E encrypted chat — use /messages/encrypted with encrypted media uploads")
 	}
 
 	member, err := s.chats.GetMember(ctx, chatID, senderID)

@@ -47,10 +47,50 @@ func (h *UploadHandler) requireInternalToken(c *fiber.Ctx) error {
 func (h *UploadHandler) Register(app *fiber.App) {
 	upload := app.Group("", h.requireInternalToken)
 	upload.Post("/media/upload", h.Upload)
+	upload.Post("/media/upload/encrypted", h.UploadEncrypted)
 	upload.Post("/media/upload/chunked/init", h.ChunkedInit)
 	upload.Post("/media/upload/chunked/:uploadId", h.ChunkedUploadPart)
 	upload.Post("/media/upload/chunked/:uploadId/complete", h.ChunkedComplete)
 	upload.Delete("/media/upload/chunked/:uploadId", h.ChunkedAbort)
+}
+
+// UploadEncrypted accepts opaque AES-256-GCM ciphertext (Phase 7.1 E2E media).
+// Body: raw bytes; the client must NOT send multipart/form-data because the
+// entire payload is opaque ciphertext. Media type, original filename and
+// one-time flag come from headers so they don't need to be part of the
+// ciphertext envelope.
+func (h *UploadHandler) UploadEncrypted(c *fiber.Ctx) error {
+	uid, err := uuid.Parse(c.Get("X-User-ID"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+
+	declaredType := c.Get("X-Media-Type")
+	if declaredType == "" {
+		return response.Error(c, apperror.BadRequest("X-Media-Type header required"))
+	}
+	declaredFilename := c.Get("X-Media-Filename")
+	isOneTime := c.Get("X-Is-One-Time") == "true"
+
+	ciphertext := c.Body()
+	if len(ciphertext) == 0 {
+		return response.Error(c, apperror.BadRequest("Empty ciphertext"))
+	}
+	if int64(len(ciphertext)) > model.SimpleUploadLimit {
+		return response.Error(c, apperror.BadRequest("Ciphertext too large for simple upload"))
+	}
+
+	// Copy body because fasthttp reuses the buffer after handler returns.
+	payload := make([]byte, len(ciphertext))
+	copy(payload, ciphertext)
+
+	media, err := h.svc.UploadEncrypted(c.Context(), uid, payload, declaredType, declaredFilename, isOneTime)
+	if err != nil {
+		return h.mapChunkedError(c, err, "upload encrypted")
+	}
+
+	resp := h.svc.BuildMediaResponse(c.Context(), media)
+	return response.JSON(c, fiber.StatusCreated, resp)
 }
 
 // Upload handles simple file upload via multipart/form-data.

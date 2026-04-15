@@ -285,6 +285,14 @@ func (m *mockMessageStore) CreateEncrypted(ctx context.Context, msg *model.Messa
 	return nil
 }
 
+func (m *mockMessageStore) CreateEncryptedWithMedia(ctx context.Context, msg *model.Message, envelope []byte, mediaIDs []uuid.UUID) error {
+	msg.ID = uuid.New()
+	msg.CreatedAt = time.Now()
+	msg.Type = model.MessageTypeEncrypted
+	msg.EncryptedContent = envelope
+	return nil
+}
+
 func (m *mockMessageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error) {
 	if m.getByIDFn == nil {
 		return nil, nil

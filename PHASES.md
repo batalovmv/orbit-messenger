@@ -1189,8 +1189,25 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Multi-device fanout framework — `collectFanoutTargets` (ограничение backend'а: `GET /keys/:userId/bundle` возвращает только primary device)
 - [x] Client-side search (`lib/search/client-index.ts`, inverted index в IndexedDB, populate on decrypt)
 - [x] Push показывает "Новое сообщение" без текста — Gateway
-- [~] Шифрование медиа (AES-256-GCM) — **Phase 7.1** (обязательство в течение 2 недель после 7.0)
+- [~] Шифрование медиа (AES-256-GCM) — **Phase 7.1 backend + crypto helper готовы**; UI wiring в Composer/MediaViewer — следующая сессия
 - [~] Sender Keys для группового E2E — **Phase 7.2** или deferred (ломает AI/search/bots)
+
+### Phase 7.1 — Media encryption (in progress)
+
+- [x] [migrations/050_phase7_media_encryption.sql](migrations/050_phase7_media_encryption.sql) — `media.is_encrypted BOOLEAN DEFAULT false` + partial index
+- [x] Media model + store: `IsEncrypted` field, SELECT/INSERT обновлены, `MessageMediaRow.IsEncrypted`, `MediaResponse.is_encrypted`
+- [x] `MediaService.UploadEncrypted` — opaque ciphertext → R2 `encrypted/{id}/blob.bin`, skip processing pipeline, MIME forced to `application/octet-stream`, size limit = plaintext limit + 512B GCM overhead
+- [x] `POST /media/upload/encrypted` handler — raw body + headers (`X-Media-Type`, `X-Media-Filename`, `X-Is-One-Time`), internal-token gated как обычный upload
+- [x] Messaging store: `CreateEncryptedWithMedia` — транзакционно валидирует ownership + `is_encrypted=true` для всех media; sentinel `ErrMediaNotEncrypted`
+- [x] Messaging store: `CreateWithMedia` отклоняет encrypted media в plaintext пути (defense-in-depth)
+- [x] Messaging service: `SendEncryptedMessage` принимает опциональный `mediaIDs`, при наличии → `CreateEncryptedWithMedia`
+- [x] `GetMediaByMessageIDs` пробрасывает `is_encrypted` в `MediaAttachment` → фронтенд знает что отрисовать
+- [x] Saturn: [uploadEncryptedMedia](web/src/api/saturn/methods/media.ts) — fetch с `application/octet-stream` body
+- [x] Saturn: [sendEncryptedMessage](web/src/api/saturn/methods/keys.ts) обновлён — опциональный `mediaIds`
+- [x] Frontend crypto helper: [web/src/lib/crypto/media-crypto.ts](web/src/lib/crypto/media-crypto.ts) — `generateMediaKey`, `encryptMediaBlob`, `decryptMediaBlob`, `encryptFileForUpload` — тонкие обёртки над существующими `aes256GcmEncrypt/Decrypt` + `randomBytes`
+- [ ] UI wiring в Composer: при `chat.isEncrypted` pick file → `encryptFileForUpload` → `uploadEncryptedMedia` → envelope содержит `media_id + key + nonce + declared metadata` → `sendEncryptedMessage` с `mediaIds`
+- [ ] UI wiring в MediaViewer/Message: при `attachment.is_encrypted` fetch ciphertext из `/media/{id}` → `decryptMediaBlob` → Blob URL для `<img>`/`<video>`/download
+- [ ] Thumbnail strategy: клиент генерирует маленький preview (canvas 320×240), шифрует отдельным ключом, ссылается как вторая media в envelope — опционально, можно отложить
 
 ### Rollout план
 

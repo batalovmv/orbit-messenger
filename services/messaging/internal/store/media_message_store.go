@@ -12,6 +12,89 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
 
+// CreateEncryptedWithMedia creates an E2E-encrypted message that references
+// one or more media files, in a single transaction. Validates that every
+// media row is uploader-owned AND has is_encrypted=true, so the server can
+// never accidentally link a plaintext attachment into an E2E chat.
+func (s *messageStore) CreateEncryptedWithMedia(ctx context.Context, msg *model.Message, envelope []byte, mediaIDs []uuid.UUID) error {
+	if len(mediaIDs) == 0 {
+		return fmt.Errorf("CreateEncryptedWithMedia requires at least one media id")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var seq int64
+	err = tx.QueryRow(ctx,
+		`UPDATE chats SET next_sequence_number = next_sequence_number + 1
+		 WHERE id = $1
+		 RETURNING next_sequence_number - 1`,
+		msg.ChatID,
+	).Scan(&seq)
+	if err != nil {
+		return fmt.Errorf("get sequence: %w", err)
+	}
+
+	// Ownership AND encrypted-flag check in a single query: count rows that
+	// satisfy BOTH constraints; anything else is rejected.
+	var ownedEncryptedCount int
+	err = tx.QueryRow(ctx,
+		`SELECT COUNT(*) FROM media
+		 WHERE id = ANY($1) AND uploader_id = $2 AND is_encrypted = true`,
+		mediaIDs, msg.SenderID,
+	).Scan(&ownedEncryptedCount)
+	if err != nil {
+		return fmt.Errorf("check encrypted media ownership: %w", err)
+	}
+	if ownedEncryptedCount != len(mediaIDs) {
+		// Distinguish: if the sender owns all of them, the failure reason is
+		// not-encrypted; otherwise it's ownership. Cheap second query.
+		var ownedAnyCount int
+		if countErr := tx.QueryRow(ctx,
+			`SELECT COUNT(*) FROM media WHERE id = ANY($1) AND uploader_id = $2`,
+			mediaIDs, msg.SenderID,
+		).Scan(&ownedAnyCount); countErr != nil {
+			return fmt.Errorf("check media ownership: %w", countErr)
+		}
+		if ownedAnyCount != len(mediaIDs) {
+			return fmt.Errorf("media ownership check failed: %w", model.ErrMediaNotOwned)
+		}
+		return fmt.Errorf("media encryption check failed: %w", model.ErrMediaNotEncrypted)
+	}
+
+	err = tx.QueryRow(ctx,
+		`INSERT INTO messages (chat_id, sender_id, type, content, encrypted_content, expires_at, sequence_number)
+		 VALUES ($1, $2, 'encrypted', NULL, $3, $4, $5)
+		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
+		           sequence_number, created_at, expires_at, viewed_at, viewed_by`,
+		msg.ChatID, msg.SenderID, envelope, msg.ExpiresAt, seq,
+	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
+		&msg.SequenceNumber, &msg.CreatedAt, &msg.ExpiresAt, &msg.ViewedAt, &msg.ViewedBy)
+	if err != nil {
+		return fmt.Errorf("insert encrypted message: %w", err)
+	}
+
+	msg.Type = model.MessageTypeEncrypted
+	msg.Content = nil
+	msg.EncryptedContent = envelope
+
+	for i, mediaID := range mediaIDs {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO message_media (message_id, media_id, position, is_spoiler)
+			 VALUES ($1, $2, $3, false)`,
+			msg.ID, mediaID, i,
+		)
+		if err != nil {
+			return fmt.Errorf("link encrypted media %s to message: %w", mediaID, err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 // CreateWithMedia creates a message and links media via message_media in one transaction.
 func (s *messageStore) CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error {
 	tx, err := s.pool.Begin(ctx)
@@ -33,16 +116,24 @@ func (s *messageStore) CreateWithMedia(ctx context.Context, msg *model.Message, 
 	}
 
 	// S2 fix: verify all media files were uploaded by the sender (prevent IDOR)
-	var ownedCount int
+	// and reject encrypted media — those must go through CreateEncryptedWithMedia
+	// (Phase 7.1 guard: plaintext message path never references is_encrypted=true).
+	var ownedCount, encryptedCount int
 	err = tx.QueryRow(ctx,
-		`SELECT COUNT(*) FROM media WHERE id = ANY($1) AND uploader_id = $2`,
+		`SELECT
+			COUNT(*) FILTER (WHERE uploader_id = $2),
+			COUNT(*) FILTER (WHERE is_encrypted = true)
+		 FROM media WHERE id = ANY($1)`,
 		mediaIDs, msg.SenderID,
-	).Scan(&ownedCount)
+	).Scan(&ownedCount, &encryptedCount)
 	if err != nil {
 		return fmt.Errorf("check media ownership: %w", err)
 	}
 	if ownedCount != len(mediaIDs) {
 		return fmt.Errorf("media ownership check failed: %w", model.ErrMediaNotOwned)
+	}
+	if encryptedCount > 0 {
+		return fmt.Errorf("plaintext message cannot reference encrypted media: %w", model.ErrMediaNotEncrypted)
 	}
 
 	var isOneTime bool
@@ -99,7 +190,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			m.id, m.type, m.mime_type, m.original_filename,
 			m.size_bytes, m.r2_key, m.thumbnail_r2_key, m.medium_r2_key,
 			m.width, m.height, m.duration_seconds, m.waveform_data,
-			m.is_one_time, m.processing_status
+			m.is_one_time, m.is_encrypted, m.processing_status
 		FROM message_media mm
 		JOIN media m ON m.id = mm.media_id
 		WHERE mm.message_id = ANY($1)
@@ -130,6 +221,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			duration    *float64
 			waveform    []byte
 			isOneTime   bool
+			isEncrypted bool
 			procStatus  string
 		)
 		if err := rows.Scan(
@@ -137,7 +229,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			&mediaID, &mediaType, &mimeType, &filename,
 			&sizeBytes, &r2Key, &thumbKey, &mediumKey,
 			&width, &height, &duration, &waveform,
-			&isOneTime, &procStatus,
+			&isOneTime, &isEncrypted, &procStatus,
 		); err != nil {
 			return nil, fmt.Errorf("scan media attachment: %w", err)
 		}
@@ -155,6 +247,7 @@ func (s *messageStore) GetMediaByMessageIDs(ctx context.Context, messageIDs []uu
 			Position:         position,
 			IsSpoiler:        isSpoiler,
 			IsOneTime:        isOneTime,
+			IsEncrypted:      isEncrypted,
 			ProcessingStatus: procStatus,
 			URL:              "/media/" + mediaIDStr,
 		}

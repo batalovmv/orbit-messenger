@@ -46,7 +46,8 @@ type sendMessageRequest struct {
 }
 
 type sendEncryptedRequest struct {
-	Envelope json.RawMessage `json:"envelope"` // E2E envelope JSON
+	Envelope json.RawMessage `json:"envelope"`             // E2E envelope JSON
+	MediaIDs []string        `json:"media_ids,omitempty"`  // Phase 7.1: encrypted media attachments
 }
 
 func NewMessageHandler(
@@ -332,7 +333,19 @@ func (h *MessageHandler) SendEncryptedMessage(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("envelope is required"))
 	}
 
-	msg, err := h.svc.SendEncryptedMessage(c.Context(), chatID, uid, req.Envelope, c.Get("X-Device-ID"))
+	var mediaUUIDs []uuid.UUID
+	if len(req.MediaIDs) > 0 {
+		mediaUUIDs = make([]uuid.UUID, 0, len(req.MediaIDs))
+		for _, id := range req.MediaIDs {
+			parsed, err := uuid.Parse(id)
+			if err != nil {
+				return response.Error(c, apperror.BadRequest("Invalid media_id"))
+			}
+			mediaUUIDs = append(mediaUUIDs, parsed)
+		}
+	}
+
+	msg, err := h.svc.SendEncryptedMessage(c.Context(), chatID, uid, req.Envelope, mediaUUIDs, c.Get("X-Device-ID"))
 	if err != nil {
 		return response.Error(c, err)
 	}

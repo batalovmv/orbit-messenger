@@ -250,15 +250,21 @@ export async function sendEncryptedMessage({
   chatId,
   envelope,
   deviceId,
+  mediaIds,
 }: {
   chatId: string;
   envelope: MessageEnvelope;
   deviceId: string;
+  mediaIds?: string[];
 }): Promise<{ id: string }> {
+  const body: Record<string, unknown> = { envelope };
+  if (mediaIds && mediaIds.length > 0) {
+    body.media_ids = mediaIds;
+  }
   return request<{ id: string }>(
     'POST',
     `/chats/${chatId}/messages/encrypted`,
-    { envelope },
+    body,
     { headers: deviceHeaders(deviceId) },
   );
 }

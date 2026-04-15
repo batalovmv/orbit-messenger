@@ -14,6 +14,7 @@ import (
 var (
 	ErrPushSubscriptionLimitReached = errors.New("maximum of 10 push subscriptions per user")
 	ErrMediaNotOwned                = errors.New("media file does not belong to the sender")
+	ErrMediaNotEncrypted            = errors.New("media file is not encrypted (required for E2E chat)")
 )
 
 const (
@@ -144,6 +145,7 @@ type MediaAttachment struct {
 	Position         int      `json:"position"`
 	IsSpoiler        bool     `json:"is_spoiler"`
 	IsOneTime        bool     `json:"is_one_time"`
+	IsEncrypted      bool     `json:"is_encrypted,omitempty"`
 	ProcessingStatus string   `json:"processing_status"`
 }
 

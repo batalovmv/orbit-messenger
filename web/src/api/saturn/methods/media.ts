@@ -124,6 +124,58 @@ function uploadSimpleMedia(
   });
 }
 
+/**
+ * Phase 7.1: upload an AES-256-GCM ciphertext blob to the media service.
+ *
+ * The server stores the bytes as-is (no processing, no thumbnail), so the
+ * caller must encrypt the plaintext client-side and pass the raw ciphertext
+ * here. The declared media type is only used by the UI to pick a placeholder;
+ * the backend treats the blob as `application/octet-stream`.
+ *
+ * Filename is optional and carried in a header so it never leaks via query
+ * params. The encryption key/nonce stay inside the E2E envelope, not here.
+ */
+export function uploadEncryptedMedia(
+  ciphertext: Uint8Array,
+  declaredType: string,
+  declaredFilename = '',
+  isOneTime = false,
+  signal?: AbortSignal,
+): Promise<MediaUploadResponse> {
+  if (ciphertext.byteLength === 0) {
+    return Promise.reject(new Error('uploadEncryptedMedia: empty ciphertext'));
+  }
+  if (ciphertext.byteLength > SIMPLE_UPLOAD_LIMIT) {
+    return Promise.reject(new Error('uploadEncryptedMedia: ciphertext exceeds simple upload limit'));
+  }
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/octet-stream',
+    'X-Media-Type': declaredType,
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  if (declaredFilename) {
+    headers['X-Media-Filename'] = declaredFilename;
+  }
+  if (isOneTime) {
+    headers['X-Is-One-Time'] = 'true';
+  }
+  return fetch(`${getBaseUrl()}/media/upload/encrypted`, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: new Blob([ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer], { type: 'application/octet-stream' }),
+    signal,
+  }).then((resp) => {
+    if (!resp.ok) {
+      throw new Error(`Encrypted upload failed: ${resp.status}`);
+    }
+    return resp.json();
+  });
+}
+
 // Start a chunked upload for large files.
 export function initChunkedUpload(
   filename: string,
