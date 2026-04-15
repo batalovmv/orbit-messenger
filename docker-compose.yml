@@ -146,6 +146,7 @@ services:
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
       TOTP_ISSUER: ${TOTP_ISSUER:-Orbit}
       ORBIT_ADMIN_RESET_KEY: ${ORBIT_ADMIN_RESET_KEY}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       MIGRATIONS_DIR: /migrations
@@ -169,6 +170,7 @@ services:
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       MEILISEARCH_URL: http://meilisearch:7700
       MEILISEARCH_KEY: ${MEILISEARCH_KEY}
+      ORBIT_AI_BOT_USER_ID: ${ORBIT_AI_BOT_USER_ID:-}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

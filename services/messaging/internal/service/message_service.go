@@ -394,7 +394,7 @@ func extractOrbitAIPrompt(content string) string {
 
 func isOrbitAIBoundary(b byte) bool {
 	switch b {
-	case ' ', '\t', '\n', '\r', ',', '.', '!', '?', ':', ';', '-':
+	case ' ', '\t', '\n', '\r', ',', '!', '?', ':', ';':
 		return true
 	}
 	return b > 127 // non-ASCII byte (e.g. Cyrillic, em-dash) — treat as word boundary
