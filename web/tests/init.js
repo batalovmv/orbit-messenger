@@ -44,6 +44,18 @@ if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle 
   globalThis.crypto = webcrypto;
 }
 
+// jsdom does not ship structuredClone by default on older versions.
+// fake-indexeddb needs it for deep-cloning stored records.
+if (typeof globalThis.structuredClone === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  const util = require('node:util');
+  if (typeof util.structuredClone === 'function') {
+    globalThis.structuredClone = util.structuredClone;
+  } else {
+    globalThis.structuredClone = (value) => JSON.parse(JSON.stringify(value));
+  }
+}
+
 if (typeof globalThis.BroadcastChannel === 'undefined') {
   globalThis.BroadcastChannel = class BroadcastChannel {
     constructor() {}

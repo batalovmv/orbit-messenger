@@ -264,6 +264,18 @@ async function decryptAndPatchEncryptedMessage(data: SaturnMessage) {
         },
       } as Partial<ApiMessage>,
     });
+
+    // Populate the client-side search index so E2E messages become
+    // searchable locally (server-side Meilisearch skips E2E traffic).
+    if (decrypted) {
+      try {
+        const { addToIndex } = await import('../../../lib/search/client-index');
+        await addToIndex(data.chat_id, data.sequence_number, decrypted.plaintext);
+      } catch {
+        // Non-fatal: the message is already visible; search-index
+        // failure just means this message is not searchable.
+      }
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[crypto] failed to decrypt incoming E2E message', err);
