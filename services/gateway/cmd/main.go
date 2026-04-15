@@ -220,7 +220,10 @@ func main() {
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
 	app.All("/api/v1/bot/:token", handler.PublicBotAPIProxy(botsURL, frontendURL))
 	app.All("/api/v1/bot/:token/*", handler.PublicBotAPIProxy(botsURL, frontendURL))
-	app.Post("/api/v1/webhooks/in/:connectorId", handler.PublicIntegrationWebhookProxy(integrationsURL, frontendURL))
+	// Accept both POST (default Orbit-native, InsightFlow/ASA presets) and
+	// GET (Keitaro postbacks, HMAC in query params). Backend integrations
+	// service enforces method-vs-preset matching and rejects the wrong method.
+	app.All("/api/v1/webhooks/in/:connectorId", handler.PublicIntegrationWebhookProxy(integrationsURL, frontendURL))
 
 	// API group with JWT + rate limiting
 	// Note: media GET routes are handled by apiGroup.All("/media/*") in SetupProxy,
