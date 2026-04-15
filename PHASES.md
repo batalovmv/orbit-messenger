@@ -433,7 +433,7 @@ Killer-фичи: `docs/TZ-KILLER-FEATURES.md`
 - [x] fetchMembers, searchMembers (member search for @mentions)
 - [x] updateChatMemberBannedRights, updateChatAdmin
 - [x] updateChatDefaultBannedRights
-- [ ] toggleChatIsProtected → Phase 7 (E2E)
+- [x] toggleChatIsProtected → shipped as Saturn method + messaging backend handler (migration 051 + `SetIsProtected` store/service/handler)
 - [ ] toggleJoinToSend, toggleJoinRequest → covered by requires_approval on invite link
 - [x] exportChatInviteLink, editExportedChatInvite, deleteExportedChatInvite, joinChat, fetchChatInviteInfo
 - [x] toggleSlowMode
@@ -681,7 +681,9 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 ---
 
-## Phase 5: Rich Messaging (текущая)
+## Phase 5: Rich Messaging (done)
+
+> **Статус:** Done. Reactions/stickers/GIF/polls/scheduled messages работают в проде, frontend стабилизирован, premium gates унесены за `selectIsCurrentUserPremium`.
 
 **Цель:** Реакции, стикеры, GIF, опросы, scheduled messages. Всё бесплатно.
 **Сервисы:** messaging (расширить), gateway (WS)
@@ -1189,7 +1191,7 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Multi-device fanout framework — `collectFanoutTargets` (ограничение backend'а: `GET /keys/:userId/bundle` возвращает только primary device)
 - [x] Client-side search (`lib/search/client-index.ts`, inverted index в IndexedDB, populate on decrypt)
 - [x] Push показывает "Новое сообщение" без текста — Gateway
-- [~] Шифрование медиа (AES-256-GCM) — **Phase 7.1 backend + crypto helper готовы**; UI wiring в Composer/MediaViewer — следующая сессия
+- [x] Шифрование медиа (AES-256-GCM) — **Phase 7.1 Done**: backend + crypto helper + Composer routing + wsHandler payload patch + downloadMedia intercept для прозрачной client-side декрипции
 - [~] Sender Keys для группового E2E — **Phase 7.2** или deferred (ломает AI/search/bots)
 
 ### Phase 7.1 — Media encryption (in progress)
@@ -1205,9 +1207,16 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Saturn: [uploadEncryptedMedia](web/src/api/saturn/methods/media.ts) — fetch с `application/octet-stream` body
 - [x] Saturn: [sendEncryptedMessage](web/src/api/saturn/methods/keys.ts) обновлён — опциональный `mediaIds`
 - [x] Frontend crypto helper: [web/src/lib/crypto/media-crypto.ts](web/src/lib/crypto/media-crypto.ts) — `generateMediaKey`, `encryptMediaBlob`, `decryptMediaBlob`, `encryptFileForUpload` — тонкие обёртки над существующими `aes256GcmEncrypt/Decrypt` + `randomBytes`
-- [ ] UI wiring в Composer: при `chat.isEncrypted` pick file → `encryptFileForUpload` → `uploadEncryptedMedia` → envelope содержит `media_id + key + nonce + declared metadata` → `sendEncryptedMessage` с `mediaIds`
-- [ ] UI wiring в MediaViewer/Message: при `attachment.is_encrypted` fetch ciphertext из `/media/{id}` → `decryptMediaBlob` → Blob URL для `<img>`/`<video>`/download
-- [ ] Thumbnail strategy: клиент генерирует маленький preview (canvas 320×240), шифрует отдельным ключом, ссылается как вторая media в envelope — опционально, можно отложить
+- [x] Structured payload [media-payload.ts](web/src/lib/crypto/media-payload.ts) — `{v: 1, text, media: [{id, key, nonce, mime, size, w, h, duration, type}]}`. Backward-compat с Phase 7.0 raw-text через byte-level fall-through
+- [x] In-memory LRU key store [media-key-store.ts](web/src/lib/crypto/media-key-store.ts) — per-media `{key, nonce, mime, ...}`, 512 entries max, не персистируется
+- [x] Send: `sendEncryptedMediaMessage` в [encryptedMessages.ts](web/src/api/saturn/methods/encryptedMessages.ts) — параллельный upload всех вложений + serialize payload + fanout
+- [x] Receive: `decryptIncomingEnvelopePayload` парсит payload или падает на raw text
+- [x] UI wiring в Composer: Saturn [messages.ts](web/src/api/saturn/methods/messages.ts) `sendMessage` больше не reject'ит attachments в encrypted DM, роутит через `sendEncryptedMediaMessage`
+- [x] UI wiring в wsHandler: `decryptAndPatchEncryptedMessage` регистрирует per-media ключи и патчит message content реальными `ApiPhoto/ApiVideo/ApiVoice/ApiDocument` объектами
+- [x] UI wiring в history: `fetchMessages` гоняет encrypted rows через `decryptAndPatchEncryptedMessage` (экспортирован из wsHandler) — нет 🔒-заглушек после reload
+- [x] UI wiring в MediaViewer/Message через [saturn/methods/index.ts](web/src/api/saturn/methods/index.ts) `downloadMedia` — short-circuit для `photo/video/document` asset refs с известным ключом: fetch `/media/{id}` → `decryptMediaBlob` → Blob с реальным mime. Сохранён discriminated union для progressive/mediaLoader narrowing
+- [x] `toggleIsProtected` — backend migration 051 + `SetIsProtected` store/service/handler, Saturn `toggleIsProtected` exported, UI action handler теперь работает
+- [~] Thumbnail strategy — отложено. Композер сейчас переиспользует декодированный full-size blob как preview; отдельный зашифрованный thumbnail — nice-to-have на случай мобильных клиентов с лимитом на bandwidth
 
 ### Rollout план
 
@@ -1222,6 +1231,8 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 Открыть DM → замок "E2E encrypted". Отправить → сервер хранит ciphertext. Safety Numbers → 60 цифр → "Verified". Disappearing 24h. Admin в БД → blob.
 
 **Phase 7.0 статус: Done**. Commits: 846b070 (Step 1), 29657ca (Step 2), 5a5bb7d (Step 3), b53672a (Step 4), 87cc9a6 (Step 5), ce55774 (Step 6), 49d77b6 (Step 7), + Step 8 (search) + Step 9 (docs) в этом коммите.
+
+**Phase 7.1 статус: Done**. Commits: 86c383e (backend + crypto helper), f427d52 (UI wiring: structured payload, sendEncryptedMediaMessage, wsHandler patch, history decrypt, downloadMedia intercept), c9cba1f (toggleIsProtected).
 
 ---
 
@@ -1269,7 +1280,7 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Rate limit:** [x] 20 req/min/user per endpoint через Lua-script в Redis (`ratelimit:ai:{userID}:{endpoint}`), fail-closed для write, fail-open для /ai/usage.
 
 **@orbit-ai бот** (Nice to Have):
-- [ ] Диалог с AI в любом чате через @orbit-ai mention — не реализовано
+- [x] Диалог с AI в любом чате через `@orbit-ai` mention — shipped: новый `POST /ai/ask` endpoint + mention detection в `MessageService.SendMessage` → async `/ai/ask` call → reply постится как обычное сообщение от bot user. Feature dormant пока не задан `ORBIT_AI_BOT_USER_ID` env
 
 **Saturn методы:**
 - [x] summarizeChat, translateMessages (AsyncGenerator через fetch + ReadableStream SSE parser)

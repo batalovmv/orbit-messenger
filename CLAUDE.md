@@ -14,7 +14,7 @@
 
 ## Текущее состояние
 
-> **Активная фаза: Phase 5 — Rich Messaging (rich messaging frontend/stabilization, reactions/stickers/GIF/polls/scheduled)**
+> **Активная фаза: Phase 8D — Production Hardening (ScyllaDB, NATS topology, monitoring, OWASP, backups)**
 
 | Фаза | Статус | Что сделано |
 |------|--------|-------------|
@@ -23,9 +23,13 @@
 | Phase 2: Groups | Done | Группы, роли, permissions, invite links |
 | Phase 3: Media & Files | Done | Media service, R2 pipeline, Saturn upload/download wiring, MediaViewer/shared media foundation |
 | Phase 4: Search, Notifications & Settings | Done | Meilisearch, push/VAPID, privacy/settings, in-app banners, in-chat search wiring |
-| Phase 5: Rich Messaging | **In Progress** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring; идёт стабилизация фронтенда |
-| Phase 7: E2E Encryption | **Done (7.0)** | X3DH + Double Ratchet на `@noble/*`, device enrollment, send/receive, Safety Numbers UI, disappearing messages UI, client-side search, fanout framework. Phase 7.1 (медиа) — обязательство на 2 недели. |
-| Phase 6, 8 | Pending | Calls, AI, Bots |
+| Phase 5: Rich Messaging | **Done** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring, frontend стабилизирован |
+| Phase 7: E2E Encryption | **Done (7.0 + 7.1)** | X3DH + Double Ratchet, device enrollment, send/receive, Safety Numbers UI, disappearing messages, client-side search, multi-device fanout, **медиа-шифрование (Phase 7.1): AES-GCM через structured payload внутри ratchet, Composer/MediaViewer wiring через downloadMedia intercept, toggleIsProtected**. Phase 7.2 (Sender Keys для групп) — сознательно deferred (ломает AI/search/bots) |
+| Phase 6: Calls | Pending | Pion SFU signalling, coturn |
+| Phase 8A: AI | **Done** | Claude SSE summarize/translate/reply-suggest, Whisper transcribe, `@orbit-ai` chat mention bot. `/ai/search` отложен на 8A.2 (pgvector) |
+| Phase 8B: Bots | **Done** | Bot API, admin UI, inline keyboards, webhooks |
+| Phase 8C: Integrations | **Done** | MST webhook framework + presets, Saturn.ac E2E. InsightFlow/Keitaro/ASA ждут реальных кредов |
+| Phase 8D: Production Hardening | Pending | ScyllaDB migration, NATS topology, Prometheus+Grafana, OWASP audit, backup strategy |
 
 Подробный план: `PHASES.md` (1169 строк — читай секцию текущей фазы с offset)
 Полное ТЗ: `docs/TZ-ORBIT-MESSENGER.md`
