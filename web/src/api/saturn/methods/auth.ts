@@ -1,8 +1,16 @@
 import type { SaturnLoginResponse, SaturnUser } from '../types';
 
+import { ensureEnrollment } from '../../../lib/crypto/enrollment';
 import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBuilders/users';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+
+// Fire-and-forget wrapper — enrollment failure must never surface as a
+// rejected promise in the auth flow. `ensureEnrollment` already catches
+// and warns internally; this is belt-and-braces for unexpected throws.
+function triggerEnrollment(): void {
+  ensureEnrollment().catch(() => { /* already logged by enrollment */ });
+}
 
 export async function validateInviteCode({ code }: { code: string }) {
   const result = await client.request<{ valid: boolean; email?: string; role: string }>(
@@ -96,6 +104,7 @@ export async function loginWithEmail({
 
     // Connect WebSocket after auth
     client.connectWs();
+    triggerEnrollment();
 
     return { user: apiUser };
   } catch (e) {
@@ -174,6 +183,7 @@ export async function checkAuth() {
       });
 
       client.connectWs();
+      triggerEnrollment();
       return true;
     } catch {
       sendApiUpdate({
@@ -203,6 +213,7 @@ export async function checkAuth() {
     });
 
     client.connectWs();
+    triggerEnrollment();
     return true;
   } catch {
     // Token expired, try refresh
@@ -236,6 +247,7 @@ export async function checkAuth() {
       });
 
       client.connectWs();
+      triggerEnrollment();
       return true;
     } catch {
       client.clearAuth();
