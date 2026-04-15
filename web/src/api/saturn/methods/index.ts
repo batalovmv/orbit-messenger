@@ -35,11 +35,27 @@ import {
 import { fetchMessageLink } from './messages';
 import * as botsApi from './bots';
 import * as integrationsApi from './integrations';
+import * as keysApi from './keys';
 
 export {
   destroy, disconnect, init, setCurrentUser,
 } from './client';
-export { botsApi, integrationsApi };
+export { botsApi, integrationsApi, keysApi };
+
+// Phase 7: E2E key management + encrypted transport
+export {
+  uploadIdentityKey,
+  uploadSignedPreKey,
+  uploadOneTimePreKeys,
+  fetchKeyBundle,
+  fetchIdentityKey,
+  fetchUserDevices,
+  fetchPreKeyCount,
+  fetchKeyTransparencyLog,
+  revokeDevice,
+  sendEncryptedMessage,
+  setDisappearingTimer,
+} from './keys';
 
 // Phase 6: Call methods
 export {

@@ -121,7 +121,12 @@ export async function request<T>(
   method: string,
   path: string,
   body?: Record<string, unknown>,
-  options?: { noAuth?: boolean; signal?: AbortSignal; skipAuthReady?: boolean },
+  options?: {
+    noAuth?: boolean;
+    signal?: AbortSignal;
+    skipAuthReady?: boolean;
+    headers?: Record<string, string>;
+  },
 ): Promise<T> {
   if (options?.signal?.aborted) {
     throw createAbortError();
@@ -145,6 +150,11 @@ export async function request<T>(
   };
   if (accessToken && !options?.noAuth) {
     headers.Authorization = `Bearer ${accessToken}`;
+  }
+  if (options?.headers) {
+    for (const [k, v] of Object.entries(options.headers)) {
+      headers[k] = v;
+    }
   }
 
   const effectiveBase = baseUrl || `${window.location.origin}/api/v1`;
