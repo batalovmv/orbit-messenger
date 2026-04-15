@@ -148,6 +148,13 @@ func main() {
 	// Services
 	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)
 	msgSvc := service.NewMessageService(messageStore, chatStore, blockedStore, natsPublisher, rdb, auditStore)
+	// Phase 8A: @orbit-ai chat mention. Disabled unless the bot user has
+	// been provisioned AND the AI service is reachable.
+	msgSvc.ConfigureOrbitAIBot(
+		config.EnvOr("ORBIT_AI_BOT_USER_ID", ""),
+		config.EnvOr("AI_SERVICE_URL", "http://localhost:8085"),
+		internalSecret,
+	)
 	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc).WithPublisher(natsPublisher)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)

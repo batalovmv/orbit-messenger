@@ -402,6 +402,68 @@ func (s *AIService) SuggestReply(
 	return suggestions, nil
 }
 
+// Ask powers the @orbit-ai chat mention. The messaging service calls
+// this with the text that followed the mention and the chat_id; we
+// pull a short transcript for context, ask Claude, and return one
+// reply string that messaging will post back as a new message.
+func (s *AIService) Ask(
+	ctx context.Context,
+	userID string,
+	req model.AskRequest,
+) (string, error) {
+	if !s.anthropic.Configured() {
+		return "", apperror.ServiceUnavailable("AI provider not configured")
+	}
+	if err := s.enforceRateLimit(ctx, userID, "ask"); err != nil {
+		return "", err
+	}
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		return "", apperror.BadRequest("prompt is required")
+	}
+	if len(prompt) > 4096 {
+		return "", apperror.BadRequest("prompt is too long")
+	}
+
+	var transcript string
+	if strings.TrimSpace(req.ChatID) != "" {
+		messages, err := s.messaging.FetchRecentMessages(ctx, userID, req.ChatID, 10)
+		if err == nil && len(messages) > 0 {
+			transcript = renderTranscript(messages)
+		}
+	}
+
+	systemPrompt := "Ты — @orbit-ai, AI-ассистент внутри корпоративного мессенджера Orbit. " +
+		"Пользователь упомянул тебя в чате и задал вопрос. Отвечай кратко, по делу, " +
+		"на том же языке, что и вопрос. Если в контексте переписки есть релевантная " +
+		"информация — используй её; если нет — отвечай из общих знаний. " +
+		"Не используй Markdown-форматирование, отвечай обычным текстом."
+
+	userContent := prompt
+	if transcript != "" {
+		userContent = "Контекст чата:\n\n" + transcript + "\n\nВопрос: " + prompt
+	}
+
+	claudeMessages := []client.AnthropicMessage{
+		{Role: "user", Content: userContent},
+	}
+	result, err := s.anthropic.CreateMessage(ctx, systemPrompt, claudeMessages, 1024)
+	if err != nil {
+		if errors.Is(err, model.ErrAIUnavailable) {
+			return "", apperror.ServiceUnavailable("AI provider not configured")
+		}
+		return "", fmt.Errorf("anthropic create message: %w", err)
+	}
+	s.recordUsageAsync(userID, "ask", s.anthropic.Model(),
+		result.InputTokens, result.OutputTokens)
+
+	reply := strings.TrimSpace(result.Text)
+	if reply == "" {
+		return "", apperror.Internal("AI returned empty reply")
+	}
+	return reply, nil
+}
+
 func splitSuggestions(raw string) []string {
 	lines := strings.Split(strings.TrimSpace(raw), "\n")
 	out := make([]string, 0, 3)

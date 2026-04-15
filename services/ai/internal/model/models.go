@@ -67,6 +67,19 @@ type SearchRequest struct {
 	ChatID string `json:"chat_id,omitempty"`
 }
 
+// AskRequest is used by the @orbit-ai mention bot: messaging service
+// calls /ai/ask with the text that followed the mention plus a short
+// slice of chat context, and gets back one reply string to post as a
+// new message in the chat.
+type AskRequest struct {
+	ChatID string `json:"chat_id"`
+	Prompt string `json:"prompt"`
+}
+
+type AskResponse struct {
+	Reply string `json:"reply"`
+}
+
 // UsageStats is what GET /ai/usage returns for the current user. Totals are
 // capped at the configured lookback window (default 30 days) to keep the
 // query cheap.

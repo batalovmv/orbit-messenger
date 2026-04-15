@@ -1,11 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +28,14 @@ type MessageService struct {
 	audit        store.AuditStore
 	nats         Publisher
 	redis        *redis.Client
+
+	// @orbit-ai mention bot — populated from env at startup. When
+	// either field is empty the feature is dormant: mention detection
+	// still runs but the async AI call is skipped.
+	aiBotUserID      *uuid.UUID
+	aiServiceURL     string
+	aiInternalToken  string
+	aiHTTPClient     *http.Client
 }
 
 func NewMessageService(messages store.MessageStore, chats store.ChatStore, blockedStore store.BlockedUsersStore, nats Publisher, rdb *redis.Client, audit ...store.AuditStore) *MessageService {
@@ -32,6 +44,31 @@ func NewMessageService(messages store.MessageStore, chats store.ChatStore, block
 		svc.audit = audit[0]
 	}
 	return svc
+}
+
+// ConfigureOrbitAIBot wires the @orbit-ai mention handler. Called from
+// main.go at startup with values pulled from env:
+//   ORBIT_AI_BOT_USER_ID  — UUID of the seeded bot user
+//   AI_SERVICE_URL        — base URL of the ai microservice (http://ai:8085)
+//   INTERNAL_SECRET       — shared gateway token for service-to-service
+// Any empty value leaves the feature disabled.
+func (s *MessageService) ConfigureOrbitAIBot(botUserID, aiServiceURL, internalToken string) {
+	botUserID = strings.TrimSpace(botUserID)
+	aiServiceURL = strings.TrimRight(strings.TrimSpace(aiServiceURL), "/")
+	internalToken = strings.TrimSpace(internalToken)
+	if botUserID == "" || aiServiceURL == "" || internalToken == "" {
+		return
+	}
+	parsed, err := uuid.Parse(botUserID)
+	if err != nil {
+		slog.Warn("orbit-ai bot disabled: invalid ORBIT_AI_BOT_USER_ID", "value", botUserID)
+		return
+	}
+	s.aiBotUserID = &parsed
+	s.aiServiceURL = aiServiceURL
+	s.aiInternalToken = internalToken
+	s.aiHTTPClient = &http.Client{Timeout: 60 * time.Second}
+	slog.Info("orbit-ai mention bot enabled", "bot_user_id", parsed.String())
 }
 
 // checkChatAccess verifies membership or privileged access. Returns true if access is granted.
@@ -304,7 +341,126 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		}
 	}
 
+	// @orbit-ai literal mention: when enabled, forward the prompt to the
+	// AI service and post the reply as a new message from the bot
+	// account. Runs in a goroutine so the caller's send path is not
+	// blocked by a Claude round-trip.
+	s.maybeHandleOrbitAIMention(chatID, senderID, content)
+
 	return full, nil
+}
+
+// maybeHandleOrbitAIMention fires off a background call to the AI
+// service when the outgoing message contains `@orbit-ai` and the bot
+// is configured. Never called for bot-authored messages (would loop),
+// never called for encrypted chats (bot cannot encrypt).
+func (s *MessageService) maybeHandleOrbitAIMention(chatID, senderID uuid.UUID, content string) {
+	if s.aiBotUserID == nil || s.aiHTTPClient == nil {
+		return
+	}
+	if senderID == *s.aiBotUserID {
+		return
+	}
+	prompt := extractOrbitAIPrompt(content)
+	if prompt == "" {
+		return
+	}
+	go s.runOrbitAIMention(chatID, prompt)
+}
+
+// extractOrbitAIPrompt finds the first `@orbit-ai` literal mention in
+// the message (case-insensitive, delimited by start-of-string /
+// whitespace) and returns everything that follows it as the user's
+// question. Empty string = no mention or empty prompt.
+func extractOrbitAIPrompt(content string) string {
+	lower := strings.ToLower(content)
+	idx := strings.Index(lower, "@orbit-ai")
+	if idx == -1 {
+		return ""
+	}
+	// Require that the mention is not embedded inside a longer word
+	// like `@orbit-ai-bot-foo` — must be followed by whitespace, end
+	// of string, or punctuation.
+	after := idx + len("@orbit-ai")
+	if after < len(content) {
+		next := content[after]
+		if !isOrbitAIBoundary(next) {
+			return ""
+		}
+	}
+	prompt := strings.TrimSpace(content[after:])
+	return prompt
+}
+
+func isOrbitAIBoundary(b byte) bool {
+	switch b {
+	case ' ', '\t', '\n', '\r', ',', '.', '!', '?', ':', ';', '-':
+		return true
+	}
+	return b > 127 // non-ASCII byte (e.g. Cyrillic, em-dash) — treat as word boundary
+}
+
+func (s *MessageService) runOrbitAIMention(chatID uuid.UUID, prompt string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("orbit-ai goroutine panic recovered", "panic", r)
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	body, err := json.Marshal(map[string]string{
+		"chat_id": chatID.String(),
+		"prompt":  prompt,
+	})
+	if err != nil {
+		slog.Error("orbit-ai marshal failed", "error", err)
+		return
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiServiceURL+"/ai/ask", bytes.NewReader(body))
+	if err != nil {
+		slog.Error("orbit-ai request build failed", "error", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", s.aiInternalToken)
+	// The AI service derives per-user rate limiting from X-User-ID —
+	// charge the bot itself so mentions don't burn the caller's quota.
+	req.Header.Set("X-User-ID", s.aiBotUserID.String())
+
+	resp, err := s.aiHTTPClient.Do(req)
+	if err != nil {
+		slog.Warn("orbit-ai ask call failed", "error", err, "chat_id", chatID.String())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(resp.Body)
+		slog.Warn("orbit-ai ask non-200", "status", resp.StatusCode, "body", string(payload))
+		return
+	}
+
+	var parsed struct {
+		Reply string `json:"reply"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		slog.Warn("orbit-ai ask decode failed", "error", err)
+		return
+	}
+	reply := strings.TrimSpace(parsed.Reply)
+	if reply == "" {
+		return
+	}
+
+	// Send the reply back into the same chat as a normal message from
+	// the bot user. Reuses the full SendMessage path so permission /
+	// slow-mode / NATS fanout all work without duplication.
+	if _, err := s.SendMessage(ctx, chatID, *s.aiBotUserID, reply, nil, nil, "text"); err != nil {
+		slog.Warn("orbit-ai reply post failed", "error", err, "chat_id", chatID.String())
+	}
 }
 
 func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, senderID uuid.UUID, envelope []byte, mediaIDs []uuid.UUID, senderDeviceID string) (*model.Message, error) {

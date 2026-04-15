@@ -32,7 +32,29 @@ func (h *AIHandler) Register(router fiber.Router) {
 	router.Post("/ai/reply-suggest", h.suggestReply)
 	router.Post("/ai/transcribe", h.transcribe)
 	router.Post("/ai/search", h.search)
+	router.Post("/ai/ask", h.ask)
 	router.Get("/ai/usage", h.usage)
+}
+
+// POST /ai/ask — single-turn Claude call used by the @orbit-ai mention
+// bot in messaging. Request body: {chat_id, prompt}; response:
+// {reply}.
+func (h *AIHandler) ask(c *fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	var req model.AskRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	reply, err := h.svc.Ask(c.Context(), userID.String(), req)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, model.AskResponse{Reply: reply})
 }
 
 // POST /ai/summarize — SSE stream of text chunks
