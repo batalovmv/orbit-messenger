@@ -59,6 +59,7 @@ import useDevicePixelRatio from '../../../hooks/window/useDevicePixelRatio';
 
 import Chat from '../../left/main/Chat';
 import SafetyNumbersModal from '../../right/SafetyNumbersModal';
+import DisappearingTimerListItem from './DisappearingTimerListItem';
 import Button from '../../ui/Button';
 import ListItem from '../../ui/ListItem';
 import Skeleton from '../../ui/placeholder/Skeleton';
@@ -430,6 +431,9 @@ const ChatExtra = ({
           peerDisplayName={user?.firstName || chat?.title}
           onClose={closeSafetyNumbers}
         />
+      )}
+      {chat?.isEncrypted && !isOwnProfile && (
+        <DisappearingTimerListItem chat={chat} />
       )}
       {Boolean(formattedNumber?.length) && (
         <ListItem
