@@ -320,6 +320,20 @@ function handleMessageDeleted(data: Record<string, unknown>) {
     ids: [seqNum],
     chatId,
   });
+
+  // Phase 7 Step 10 security fix: drop the deleted message from the
+  // client-side E2E search index so disappearing-message contents stop
+  // being recoverable via local word search after the ciphertext is
+  // gone. Fire-and-forget — index hygiene must never block the delete
+  // from propagating to the UI.
+  void (async () => {
+    try {
+      const { removeFromIndex } = await import('../../../lib/search/client-index');
+      await removeFromIndex(chatId, seqNum);
+    } catch {
+      // Non-fatal — search index will rebuild on next decrypt populate.
+    }
+  })();
 }
 
 function handleMessagePinChanged(data: Record<string, unknown>) {

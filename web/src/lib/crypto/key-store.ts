@@ -40,7 +40,16 @@ export type IdentityRecord = {
 export type VerifiedRecord = {
   peerUserId: string;
   identityHash: string;
+  // `verifiedAt = 0` means the record was auto-pinned on first contact
+  // (Trust On First Use). A non-zero timestamp means the user clicked
+  // "Mark as verified" in the Safety Numbers modal after comparing the
+  // 60-digit number out-of-band.
   verifiedAt: number;
+  // `source` disambiguates TOFU pins from explicit user verification.
+  // Records written before this field was added (pre-Phase 7 Step 10
+  // security fixes) implicitly behave as 'user' to preserve backward
+  // compatibility — `putVerified` keeps writing records that way.
+  source?: 'tofu' | 'user';
 };
 
 export type MessageCacheRecord = {
@@ -200,6 +209,34 @@ export async function deleteVerified(peerUserId: string): Promise<void> {
   await db.delete(STORE_VERIFIED, peerUserId);
 }
 
+/**
+ * Pin a peer's identity hash on Trust-On-First-Use.
+ *
+ * No-op if a record for `peerUserId` already exists — whether that
+ * record is TOFU or user-verified. The caller is responsible for
+ * having already compared the claimed identity against any existing
+ * pin (via `getVerified`) and rejected mismatches before reaching
+ * here, so this helper never overwrites a prior pin.
+ *
+ * Used by the E2E receive and send paths to establish long-term
+ * identity bindings the first time we talk to a peer.
+ */
+export async function pinIdentityTofu(
+  peerUserId: string,
+  identityHash: string,
+): Promise<void> {
+  const db = await getDB();
+  const existing = (await db.get(STORE_VERIFIED, peerUserId)) as VerifiedRecord | undefined;
+  if (existing) return;
+  const record: VerifiedRecord = {
+    peerUserId,
+    identityHash,
+    verifiedAt: 0,
+    source: 'tofu',
+  };
+  await db.put(STORE_VERIFIED, record, peerUserId);
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Runtime message cache (never persisted beyond logout)
 // ────────────────────────────────────────────────────────────────────────────
@@ -247,4 +284,15 @@ export async function clearAllCryptoState(): Promise<void> {
     tx.objectStore(STORE_MESSAGE_CACHE).clear(),
   ]);
   await tx.done;
+
+  // Phase 7 Step 10 (security fix): the client-side search index lives in
+  // a sibling `orbit-client-search` database, not in `orbit-crypto`. Wipe
+  // it here so E2E plaintext tokens never survive logout / reset. Dynamic
+  // import avoids coupling the crypto layer to the search module.
+  try {
+    const { clearAllClientSearchIndex } = await import('../search/client-index');
+    await clearAllClientSearchIndex();
+  } catch {
+    // Non-fatal — crypto state was already cleared above.
+  }
 }

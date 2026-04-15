@@ -24,6 +24,88 @@ async function loadKeysApi() {
   return import('./keys');
 }
 
+async function loadKeyStore() {
+  return import('../../../lib/crypto/key-store');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Identity pinning — Phase 7 Step 10 security fix
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Without a per-peer identity pin, a compromised server can substitute
+// arbitrary identity keys in either the X3DH bundle (send side) or the
+// bootstrap header of an incoming message (receive side), and make the
+// client encrypt-to-attacker or accept-from-attacker without any visible
+// signal. `verifyAndPinPeerIdentity` closes that gap:
+//
+//   1. If we already have a pinned identity for this user, compare the
+//      claimed key against the pin. Mismatch → throw — caller surfaces a
+//      Russian "ключи изменились" error in the UI.
+//   2. Otherwise, fetch `GET /keys/:userId/identity` (independent of the
+//      bundle call), compare the claimed key against the server's
+//      published identity. Mismatch → throw. Match → pin (TOFU).
+//
+// Hashes are hex SHA-256 of the raw key bytes; comparisons are
+// constant-time at the string level.
+
+async function hashIdentityHex(key: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', key as unknown as BufferSource);
+  const bytes = new Uint8Array(digest);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+  return hex;
+}
+
+function constantTimeStringEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+export async function verifyAndPinPeerIdentity(
+  peerUserId: string,
+  claimedIdentityKey: Uint8Array,
+): Promise<void> {
+  const claimedHash = await hashIdentityHex(claimedIdentityKey);
+  const keyStore = await loadKeyStore();
+  const pinned = await keyStore.getVerified(peerUserId);
+
+  if (pinned) {
+    if (!constantTimeStringEquals(pinned.identityHash, claimedHash)) {
+      throw new EncryptedSendError(
+        'identity_mismatch',
+        'Ключи безопасности собеседника изменились. Откройте профиль и заново проверьте личность перед отправкой сообщения.',
+      );
+    }
+    return;
+  }
+
+  // First contact — cross-check against the server's published identity
+  // for this user. If the two sources disagree, the bundle/envelope
+  // header is being tampered with.
+  const keysApi = await loadKeysApi();
+  let serverKey: Uint8Array;
+  try {
+    serverKey = await keysApi.fetchIdentityKey(peerUserId);
+  } catch (err) {
+    throw new EncryptedSendError(
+      'peer_not_enrolled',
+      'Получатель ещё не настроил ключи шифрования. Попросите его открыть приложение — после первого входа сообщение можно будет отправить.',
+      err,
+    );
+  }
+  const serverHash = await hashIdentityHex(serverKey);
+  if (!constantTimeStringEquals(claimedHash, serverHash)) {
+    throw new EncryptedSendError(
+      'identity_mismatch',
+      'Заявленный ключ отправителя не совпадает с ключом, опубликованным на сервере. Сообщение отклонено.',
+    );
+  }
+
+  await keyStore.pinIdentityTofu(peerUserId, serverHash);
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // SEND
 // ────────────────────────────────────────────────────────────────────────────
@@ -70,8 +152,11 @@ export async function collectFanoutTargets(params: {
   peerUserId: string;
   ownUserId: string;
   ownDeviceId: string;
+  ownIdentityPublic?: Uint8Array;
 }): Promise<FanoutTarget[]> {
-  const { peerUserId, ownUserId, ownDeviceId } = params;
+  const {
+    peerUserId, ownUserId, ownDeviceId, ownIdentityPublic,
+  } = params;
   const keysApi = await loadKeysApi();
 
   const targets: FanoutTarget[] = [];
@@ -89,6 +174,13 @@ export async function collectFanoutTargets(params: {
       err,
     );
   }
+
+  // Phase 7 Step 10 security fix: before trusting the bundle, verify the
+  // returned identity key against either the local pin (if any) or the
+  // server's published identity endpoint. Catches bundle substitution by
+  // a compromised key server.
+  await verifyAndPinPeerIdentity(peerUserId, peerBundle.identityKey);
+
   targets.push({ userId: peerUserId, deviceId: peerBundle.deviceId, bundle: peerBundle });
   seen.add(`${peerUserId}:${peerBundle.deviceId}`);
 
@@ -98,10 +190,20 @@ export async function collectFanoutTargets(params: {
   try {
     const ownBundle = await keysApi.fetchKeyBundle(ownUserId);
     if (ownBundle.deviceId !== ownDeviceId) {
-      const key = `${ownUserId}:${ownBundle.deviceId}`;
-      if (!seen.has(key)) {
-        targets.push({ userId: ownUserId, deviceId: ownBundle.deviceId, bundle: ownBundle });
-        seen.add(key);
+      // When fanning out to our OWN other device, the identity key on
+      // the bundle must match our own long-term identity — otherwise
+      // the server is trying to get us to encrypt to an attacker and
+      // label it as ourselves. Skip silently (without throwing) if the
+      // check fails: peer delivery still succeeds.
+      const identityMatches = ownIdentityPublic
+        ? constantTimeBytesEquals(ownBundle.identityKey, ownIdentityPublic)
+        : false;
+      if (identityMatches) {
+        const key = `${ownUserId}:${ownBundle.deviceId}`;
+        if (!seen.has(key)) {
+          targets.push({ userId: ownUserId, deviceId: ownBundle.deviceId, bundle: ownBundle });
+          seen.add(key);
+        }
       }
     }
   } catch {
@@ -110,6 +212,13 @@ export async function collectFanoutTargets(params: {
   }
 
   return targets;
+}
+
+function constantTimeBytesEquals(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
 }
 
 /**
@@ -138,6 +247,7 @@ export async function sendEncryptedTextMessage(params: {
     // pointing the lookup at the peer (guaranteed to dedupe out).
     ownUserId: ownUserId ?? peerUserId,
     ownDeviceId: own.deviceId,
+    ownIdentityPublic: own.identityKeyPair.publicKey,
   });
 
   const envelope = await crypto.encryptForPeers(
@@ -159,10 +269,15 @@ export async function sendEncryptedTextMessage(params: {
   return { messageId: result.id, targetDeviceCount: targets.length };
 }
 
-export class EncryptedSendError extends Error {
-  readonly code: 'peer_not_enrolled' | 'internal';
+export type EncryptedSendErrorCode =
+  | 'peer_not_enrolled'
+  | 'identity_mismatch'
+  | 'internal';
 
-  constructor(code: 'peer_not_enrolled' | 'internal', message: string, cause?: unknown) {
+export class EncryptedSendError extends Error {
+  readonly code: EncryptedSendErrorCode;
+
+  constructor(code: EncryptedSendErrorCode, message: string, cause?: unknown) {
     super(message);
     this.name = 'EncryptedSendError';
     this.code = code;
@@ -211,6 +326,35 @@ export async function decryptIncomingEnvelope(params: {
   const { senderUserId, envelope } = params;
   const crypto = await loadCryptoWorker();
   const own = await crypto.getOrCreateIdentity();
+
+  const entry = envelope.devices[own.deviceId];
+  if (!entry) return undefined;
+
+  // Phase 7 Step 10 security fix: if this entry carries a bootstrap
+  // header (first message / session restart), verify the claimed
+  // sender identity BEFORE any crypto work. Without this check a
+  // compromised server could forge a PreKey message claiming to be
+  // `senderUserId` with an attacker-controlled identity key, and
+  // `bootstrapSessionAsBob` would happily derive a session with it
+  // and render the attacker's plaintext as if it came from the real
+  // user.
+  try {
+    const { decodeEntry } = await import('../../../lib/crypto/envelope');
+    const ratchetMsg = decodeEntry(entry);
+    if (ratchetMsg.header.bootstrap) {
+      await verifyAndPinPeerIdentity(
+        senderUserId,
+        ratchetMsg.header.bootstrap.aliceIdentityKey,
+      );
+    }
+  } catch (err) {
+    if (err instanceof EncryptedSendError) {
+      // Propagate the typed error so wsHandler can render the Russian
+      // mismatch message instead of a generic "failed to decrypt".
+      throw err;
+    }
+    throw err;
+  }
 
   const result = await crypto.decryptIncoming(
     own.deviceId,

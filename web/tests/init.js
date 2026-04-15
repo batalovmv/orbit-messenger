@@ -37,11 +37,26 @@ if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextDecoder = TextDecoder;
 }
 
-// jsdom older versions ship without crypto.subtle. Use Node's webcrypto.
-if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.subtle === 'undefined') {
+// jsdom ships `globalThis.crypto` with `getRandomValues` but no
+// `subtle`. Some jsdom builds also make the `crypto` property a
+// non-writable getter, so blanket reassignment via `globalThis.crypto =`
+// silently fails — patch `subtle` directly instead.
+{
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { webcrypto } = require('crypto');
-  globalThis.crypto = webcrypto;
+  if (typeof globalThis.crypto === 'undefined') {
+    globalThis.crypto = webcrypto;
+  } else if (typeof globalThis.crypto.subtle === 'undefined') {
+    try {
+      Object.defineProperty(globalThis.crypto, 'subtle', {
+        value: webcrypto.subtle,
+        configurable: true,
+        writable: true,
+      });
+    } catch {
+      globalThis.crypto.subtle = webcrypto.subtle;
+    }
+  }
 }
 
 // jsdom does not ship structuredClone by default on older versions.

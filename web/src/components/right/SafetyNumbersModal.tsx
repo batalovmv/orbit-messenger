@@ -41,6 +41,7 @@ const SafetyNumbersModal = ({
   const [status, setStatus] = useState<Status>('loading');
   const [safetyNumber, setSafetyNumber] = useState<string | undefined>(undefined);
   const [isVerified, setIsVerified] = useState(false);
+  const [isTofuPinned, setIsTofuPinned] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -86,11 +87,18 @@ const SafetyNumbersModal = ({
 
         const verified = await keyStore.getVerified(peerUserId);
         const expectedHash = await hashIdentity(peerKey);
-        const isStillVerified = !!verified && verified.identityHash === expectedHash;
+        const hashMatches = !!verified && verified.identityHash === expectedHash;
+        // User-verified = explicit confirmation via this modal.
+        // TOFU-pinned = auto-pinned on first contact by the send/receive
+        // pipeline (Phase 7 Step 10 security fix). Both require the hash
+        // to match the current server key.
+        const isStillUserVerified = hashMatches && verified?.source !== 'tofu' && verified!.verifiedAt > 0;
+        const isStillTofuPinned = hashMatches && !isStillUserVerified;
 
         if (cancelled) return;
         setSafetyNumber(number);
-        setIsVerified(isStillVerified);
+        setIsVerified(isStillUserVerified);
+        setIsTofuPinned(isStillTofuPinned);
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
@@ -115,8 +123,18 @@ const SafetyNumbersModal = ({
       const keysApi = await import('../../api/saturn/methods/keys');
       const keyStore = await import('../../lib/crypto/key-store');
       if (isVerified) {
-        await keyStore.deleteVerified(peerUserId);
+        // Downgrade to a fresh TOFU pin rather than full delete, so we
+        // keep catching subsequent identity rotations.
+        const peerKey = await keysApi.fetchIdentityKey(peerUserId);
+        const identityHash = await hashIdentity(peerKey);
+        await keyStore.putVerified({
+          peerUserId,
+          identityHash,
+          verifiedAt: 0,
+          source: 'tofu',
+        });
         setIsVerified(false);
+        setIsTofuPinned(true);
         return;
       }
       const peerKey = await keysApi.fetchIdentityKey(peerUserId);
@@ -125,8 +143,10 @@ const SafetyNumbersModal = ({
         peerUserId,
         identityHash,
         verifiedAt: Date.now(),
+        source: 'user',
       });
       setIsVerified(true);
+      setIsTofuPinned(false);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[crypto] failed to toggle verified state', err);
@@ -173,6 +193,13 @@ const SafetyNumbersModal = ({
             {isVerified && (
               <p style="margin-top: 0.75rem; color: var(--color-text-secondary);">
                 ✓ Ключи собеседника отмечены как проверенные на этом устройстве.
+              </p>
+            )}
+            {!isVerified && isTofuPinned && (
+              <p style="margin-top: 0.75rem; color: var(--color-text-secondary);">
+                Ключи зафиксированы автоматически при первом контакте и до сих
+                пор совпадают, но вы не подтверждали их личным сравнением. Если
+                сравните цифры с собеседником — отметьте как проверенные.
               </p>
             )}
           </>
