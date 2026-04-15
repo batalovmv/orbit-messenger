@@ -120,6 +120,9 @@ export interface SaturnMediaAttachment {
   position: number;
   is_spoiler: boolean;
   is_one_time: boolean;
+  // Phase 7.1: true when the bytes at `/media/{id}` are opaque AES-GCM
+  // ciphertext that must be decrypted client-side before rendering.
+  is_encrypted?: boolean;
   processing_status: string;
 }
 

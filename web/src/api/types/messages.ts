@@ -45,6 +45,9 @@ export interface ApiPhoto {
   videoSizes?: ApiVideoSize[];
   blobUrl?: string;
   isSpoiler?: boolean;
+  // Phase 7.1: server-side bytes are AES-GCM ciphertext; downloadMedia
+  // transparently decrypts using the key from the E2E envelope.
+  isEncrypted?: boolean;
 }
 
 export interface ApiSticker {
@@ -128,6 +131,8 @@ export interface ApiVideo {
   timestamp?: number;
   altVideos?: ApiVideo[];
   storyboardInfo?: StoryboardInfo;
+  // Phase 7.1
+  isEncrypted?: boolean;
 }
 
 export interface ApiAudio {
@@ -148,6 +153,8 @@ export interface ApiVoice {
   duration: number;
   waveform?: number[];
   size: number;
+  // Phase 7.1
+  isEncrypted?: boolean;
 }
 
 export interface ApiDocument {
@@ -164,6 +171,8 @@ export interface ApiDocument {
   pageCount?: number;
   innerMediaType?: 'photo' | 'video';
   mediaSize?: ApiDimensions & { fromDocumentAttribute?: boolean; fromPreload?: true };
+  // Phase 7.1
+  isEncrypted?: boolean;
 }
 
 export interface ApiContact {

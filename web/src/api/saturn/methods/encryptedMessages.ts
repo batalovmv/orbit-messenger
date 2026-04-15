@@ -12,6 +12,7 @@
 // outside this module only sees async promises.
 
 import type { MessageEnvelope, PreKeyBundle } from '../../../lib/crypto/types';
+import type { EncryptedMediaKind, EncryptedMediaRef } from '../../../lib/crypto/media-payload';
 
 // All crypto work goes through the singleton worker (currently a
 // main-thread shim — see docs/phase7-design.md §14.3).
@@ -26,6 +27,18 @@ async function loadKeysApi() {
 
 async function loadKeyStore() {
   return import('../../../lib/crypto/key-store');
+}
+
+async function loadMediaCrypto() {
+  return import('../../../lib/crypto/media-crypto');
+}
+
+async function loadMediaPayload() {
+  return import('../../../lib/crypto/media-payload');
+}
+
+async function loadMediaApi() {
+  return import('./media');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -269,6 +282,129 @@ export async function sendEncryptedTextMessage(params: {
   return { messageId: result.id, targetDeviceCount: targets.length };
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// SEND — media (Phase 7.1)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type EncryptedMediaInput = {
+  blob: Blob;
+  type: EncryptedMediaKind;
+  mime: string;
+  filename?: string;
+  size: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  isOneTime?: boolean;
+};
+
+/**
+ * Encrypt + upload one attachment for a DM peer, then ship the envelope
+ * that references it. The envelope plaintext is a structured payload
+ * (`media-payload.ts`) carrying the caption text (if any) plus the AES
+ * key/nonce for each media item.
+ *
+ * The media bytes travel as an opaque ciphertext blob to the media
+ * service; the per-file keys stay inside the ratchet ciphertext so the
+ * server never sees them.
+ */
+export async function sendEncryptedMediaMessage(params: {
+  chatId: string;
+  peerUserId: string;
+  attachments: EncryptedMediaInput[];
+  text?: string;
+  ownUserId?: string;
+}): Promise<EncryptedSendResult> {
+  const { chatId, peerUserId, attachments, text, ownUserId } = params;
+
+  if (attachments.length === 0) {
+    throw new EncryptedSendError('internal', 'Нет вложений для отправки');
+  }
+
+  const [crypto, keysApi, mediaCrypto, mediaApi, mediaPayload] = await Promise.all([
+    loadCryptoWorker(),
+    loadKeysApi(),
+    loadMediaCrypto(),
+    loadMediaApi(),
+    loadMediaPayload(),
+  ]);
+
+  const own = await crypto.getOrCreateIdentity();
+
+  const targets = await collectFanoutTargets({
+    peerUserId,
+    ownUserId: ownUserId ?? peerUserId,
+    ownDeviceId: own.deviceId,
+    ownIdentityPublic: own.identityKeyPair.publicKey,
+  });
+
+  // Upload every ciphertext in parallel — each gets its own fresh key.
+  const uploaded: EncryptedMediaRef[] = await Promise.all(
+    attachments.map(async (att): Promise<EncryptedMediaRef> => {
+      const { ciphertext, material } = await mediaCrypto.encryptFileForUpload(att.blob);
+      const resp = await mediaApi.uploadEncryptedMedia(
+        ciphertext,
+        att.type,
+        att.filename,
+        att.isOneTime,
+      );
+      return {
+        id: resp.id,
+        key: material.key,
+        nonce: material.nonce,
+        mime: att.mime,
+        filename: att.filename,
+        size: att.size,
+        width: att.width,
+        height: att.height,
+        duration: att.duration,
+        type: att.type,
+      };
+    }),
+  );
+
+  const payloadBytes = mediaPayload.serializeEncryptedPayload({
+    text,
+    media: uploaded,
+  });
+
+  const envelope = await crypto.encryptForPeers(
+    own.deviceId,
+    own.identityKeyPair,
+    payloadBytes,
+    targets.map((t) => ({
+      peerUserId: t.userId,
+      peerDeviceId: t.deviceId,
+      bundle: t.bundle,
+    })),
+  );
+
+  const result = await keysApi.sendEncryptedMessage({
+    chatId,
+    envelope,
+    deviceId: own.deviceId,
+    mediaIds: uploaded.map((m) => m.id),
+  });
+
+  // Pre-register keys locally so the sender's own render path can decrypt
+  // immediately without waiting for the WS echo.
+  const keyStoreModule = await import('../../../lib/crypto/media-key-store');
+  for (const m of uploaded) {
+    keyStoreModule.registerEncryptedMedia(m.id, {
+      key: m.key,
+      nonce: m.nonce,
+      mime: m.mime,
+      filename: m.filename,
+      size: m.size,
+      width: m.width,
+      height: m.height,
+      duration: m.duration,
+    });
+  }
+
+  return { messageId: result.id, targetDeviceCount: targets.length };
+}
+
 export type EncryptedSendErrorCode =
   | 'peer_not_enrolled'
   | 'identity_mismatch'
@@ -366,6 +502,70 @@ export async function decryptIncomingEnvelope(params: {
 
   return {
     plaintext: new TextDecoder().decode(result.plaintext),
+    senderDeviceId: result.senderDeviceId,
+  };
+}
+
+export type DecryptedIncomingPayload = {
+  text?: string;
+  media: EncryptedMediaRef[];
+  senderDeviceId: string;
+};
+
+/**
+ * Payload-aware decrypt used by the Phase 7.1 receive path. Wraps
+ * `decryptIncomingEnvelope` and tries to parse the bytes as a structured
+ * media payload. Phase 7.0 raw-text messages fall through with `text` set
+ * and an empty `media` list.
+ */
+export async function decryptIncomingEnvelopePayload(params: {
+  senderUserId: string;
+  envelope: MessageEnvelope;
+}): Promise<DecryptedIncomingPayload | undefined> {
+  const { senderUserId, envelope } = params;
+  const crypto = await loadCryptoWorker();
+  const own = await crypto.getOrCreateIdentity();
+
+  const entry = envelope.devices[own.deviceId];
+  if (!entry) return undefined;
+
+  // Same identity-pinning guard as the text path.
+  try {
+    const { decodeEntry } = await import('../../../lib/crypto/envelope');
+    const ratchetMsg = decodeEntry(entry);
+    if (ratchetMsg.header.bootstrap) {
+      await verifyAndPinPeerIdentity(
+        senderUserId,
+        ratchetMsg.header.bootstrap.aliceIdentityKey,
+      );
+    }
+  } catch (err) {
+    if (err instanceof EncryptedSendError) throw err;
+    throw err;
+  }
+
+  const result = await crypto.decryptIncoming(
+    own.deviceId,
+    own.identityKeyPair,
+    senderUserId,
+    envelope,
+  );
+  if (!result) return undefined;
+
+  const mediaPayload = await loadMediaPayload();
+  const parsed = mediaPayload.tryParseEncryptedPayload(result.plaintext);
+  if (parsed) {
+    return {
+      text: parsed.text,
+      media: parsed.media,
+      senderDeviceId: result.senderDeviceId,
+    };
+  }
+
+  // Phase 7.0 fall-through: the bytes are a raw UTF-8 caption.
+  return {
+    text: new TextDecoder().decode(result.plaintext),
+    media: [],
     senderDeviceId: result.senderDeviceId,
   };
 }
