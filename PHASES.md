@@ -717,7 +717,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 
 - [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 5, `docs/TZ-ORBIT-MESSENGER.md` §11.5
 - [x] Изучить TG Web A sticker rendering — TGS (Lottie), WebP, WebM. Какие библиотеки (rlottie)?
-- [ ] Изучить Tenor API — rate limits, API key, response format, caching strategy
+- [x] Изучить Tenor API — rate limits, API key, response format, caching strategy → [docs/tenor-integration.md](docs/tenor-integration.md)
 - [ ] Спроектировать sticker import из Telegram — как работает TG Bot API fetchStickerSet? Легальность?
 - [x] Спроектировать scheduled messages — Go cron job (interval?), timezone handling, delivery guarantee
 - [x] Продумать: isPremium removal — grep все проверки в TG Web A, составить список файлов для изменения
@@ -807,7 +807,7 @@ Drag фото → thumbnail → полное по клику → gallery swipe. 
 **Other:**
 - [x] fetchCommonChats — GET /users/:id/common-chats, Saturn wiring + sendApiUpdate для чатов в Profile
 - [x] fetchSavedMessages — GET /users/me/saved-chat (lazy creation), migration 033, Saturn fetchSavedChats
-- [ ] toggleSavedDialogPinned — Saturn wiring не подключён (только GramJS path)
+- [x] toggleSavedDialogPinned — Saturn no-op stub ([web/src/api/saturn/methods/chats.ts](web/src/api/saturn/methods/chats.ts)); Orbit не имеет sub-dialog threads внутри Saved Messages (один flat chat через `GetOrCreateSavedChat`), action архитектурно неприменим, stub убирает `[Saturn] Method not implemented` warning. Pin самого Saved Messages chat работает через `toggleChatPinned`.
 
 ### No Premium — всё бесплатно
 
@@ -1087,21 +1087,20 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Цель:** Zero-Knowledge — сервер не может прочитать DM. Криптографическая гарантия.
 **Сервисы:** auth (key server), messaging (encrypt/decrypt), shared/crypto (новый)
 
-### Проработка (Шаг 0)
+### Проработка (Шаг 0) — закрыта в [docs/phase7-design.md](docs/phase7-design.md)
 
-- [ ] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 7, `docs/TZ-ORBIT-MESSENGER.md` §9, §10, §11.7, `docs/SIGNAL_PROTOCOL.md` (если есть)
-- [ ] Изучить libsignal-protocol-js — API, key generation, session management, message encrypt/decrypt
-- [ ] Изучить Signal Protocol Go implementations — какая библиотека для key server?
-- [ ] **Критический вопрос:** как совместить E2E с Super Access (Killer Feature #1)? Escrow Key design
-- [ ] Спроектировать: key management lifecycle (registration → key upload → session creation → ratchet → key rotation)
-- [ ] Спроектировать: multi-device — как шифровать для N устройств получателя?
-- [ ] Спроектировать: Sender Keys для групп — key distribution, rotation при leave/join
-- [ ] Продумать: impact на Meilisearch (Phase 4) — client-side search architecture
-- [ ] Продумать: impact на push notifications — "Новое сообщение" без plaintext
-- [ ] Продумать: impact на media — AES-256-GCM перед R2 upload, как передать ключ получателю?
-- [ ] Продумать: миграция — существующие plaintext сообщения в БД, что с ними?
-- [ ] Оценить: Sealed Sender — реалистично ли для нашей архитектуры?
-- [ ] Составить rollout план (opt-in → default) и предложить пользователю
+- [x] Прочитать `docs/TZ-PHASES-V2-DESIGN.md` секция Phase 7, `docs/TZ-ORBIT-MESSENGER.md` §9, §10, §11.7, `docs/SIGNAL_PROTOCOL.md`
+- [x] Выбрать library: `@signalapp/libsignal-client` (official Signal Foundation, Rust→WASM, audited)
+- [x] **Критический вопрос Escrow Key:** deferred per [SIGNAL_PROTOCOL.md:6](docs/SIGNAL_PROTOCOL.md). `compliance_keys` таблица существует но flow не реализуется в Phase 7. Снимает блокер.
+- [x] Key management lifecycle: device enrollment → signed prekey rotation 7d → one-time prekey replenish < 20 → X3DH session init → Double Ratchet
+- [x] Multi-device model: device_id per browser instance, fanout encrypt для всех devices peer'а + своих других, envelope format из SIGNAL_PROTOCOL.md:47
+- [~] Sender Keys для групп — **deferred** (Phase 7.2 или никогда — E2E в группах ломает AI/search/bots/webhooks)
+- [x] Client-side search fallback — IndexedDB inverted index, substring match RU+EN, persistent
+- [x] Push preview "Новое сообщение" без plaintext
+- [~] Media encryption — **deferred** на Phase 7.1 (первая версия Phase 7.0 — только текст)
+- [x] Миграция: **retroactive не делаем**, старые DM остаются plaintext, E2E только для новых после flip флага
+- [x] Sealed Sender — **не реализуем**, sender_id в метаданных compliance-приемлемо
+- [x] Rollout план: глобальный флаг (не per-DM opt-in), deploy → background enrollment → wait 3-5 days → flip `e2e_dm_enabled=true` → новые DM автоматически E2E
 
 ### Signal Protocol Flow
 
@@ -1116,11 +1115,29 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 - [x] POST /keys/identity — загрузить Identity Key (раз при регистрации)
 - [x] POST /keys/signed-prekey — загрузить Signed PreKey (ротация еженедельно)
-- [x] POST /keys/one-time-prekeys — загрузить batch 100 One-Time PreKeys
-- [x] GET /keys/:userId/bundle — получить key bundle для начала сессии
+- [x] POST /keys/one-time-prekeys — загрузить batch 100 One-Time PreKeys (cap 100)
+- [x] GET /keys/:userId/bundle — получить key bundle для начала сессии (атомарный one-time prekey consume через `FOR UPDATE SKIP LOCKED`)
 - [x] GET /keys/:userId/identity — получить Identity Key (для Safety Numbers)
+- [x] GET /keys/:userId/devices — список устройств пользователя
 - [x] GET /keys/count — сколько One-Time PreKeys осталось
 - [x] GET /keys/transparency-log — публичный лог изменений ключей
+- [x] DELETE /keys/device — отозвать устройство
+- [x] **Key validation:** Ed25519 32B identity, X25519 32B signed prekey, 64B signature, 32B one-time prekeys — все проверки в [key_service.go](services/auth/internal/service/key_service.go)
+- [x] **14 handler tests PASS** — register, rotate, upload batch (including too-many/empty validation), get bundle, identity, count, missing headers, invalid key size
+
+### Phase 7 Backend аудит — 100% готов (2026-04-15)
+
+> **Открытие при аудите:** backend для Phase 7 реализован полностью, не только key server. Осталась чистая frontend задача.
+
+- [x] `POST /chats/:id/messages/encrypted` endpoint ([message_handler.go:78](services/messaging/internal/handler/message_handler.go))
+- [x] `MessageService.SendEncryptedMessage` — создание с `Type=MessageTypeEncrypted`, `EncryptedContent=envelope`, NATS fanout по member_ids, strips plaintext перед publish
+- [x] `MessageStore.CreateEncrypted` — отдельный path для E2E
+- [x] `CleanupService` disappearing messages worker — goroutine ticker interval 1 мин, `go cleanupSvc.Start(cronCtx)` в [messaging/cmd/main.go:252](services/messaging/cmd/main.go)
+- [x] Auto `expires_at` в обоих send path'ах (plaintext + encrypted) когда `chat.DisappearingTimer > 0`
+- [x] **Push preview suppression** — [gateway ws/nats_subscriber.go:399-401](services/gateway/internal/ws/nats_subscriber.go) — `body = "Новое сообщение"` для `type=encrypted`
+- [x] **Media guard** — `SendMediaMessage` rejects с "Cannot send plaintext media to an E2E encrypted chat" — enforces Phase 7.0 text-only contract
+- [x] **Meilisearch indexer skip** — [indexer.go:122-123](services/messaging/internal/search/indexer.go) — skip `type=encrypted` messages
+- [x] `X-Device-ID` header propagation через gateway → messaging → auth
 
 ### Encrypted Message Format
 
@@ -1180,10 +1197,10 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 ## Phase 8: AI, Bots, Integrations & Production
 
-> **Статус: 8B Done, 8C Framework Done, 8A/8D Pending**
+> **Статус: 8A Backend+Saturn Done (UI pending), 8B Done, 8C Done, 8D Pending**
+> 8A (AI) — **backend сервис с нуля**: Claude + Whisper clients, 6 endpoints (5 работающих + 1 deferred `/ai/search`), SSE streaming, rate limiting, usage tracking. Saturn methods + SSE reader готов. Деплоится с placeholder-ключами (сервис стартует, endpoints возвращают 503 до подстановки реальных ключей на Saturn.ac). **Frontend UI компоненты (AiMenu/AiStreamModal/SuggestReply) — следующий шаг.** Нужны: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
 > 8B (Bots) — полностью реализован и задеплоен: Bot API, admin UI, inline keyboards, callback delivery, commands autocomplete
-> 8C (Integrations) — framework готов и задеплоен: webhook connectors, routes, delivery log, HMAC validation. MST-специфичные интеграции pending.
-> 8A (AI) — стаб, реализация с нуля
+> 8C (Integrations) — **framework + presets для всех 5 MST-систем готовы**: webhook connectors, routes, delivery log, HMAC validation (header и query modes), Saturn.ac end-to-end ready, InsightFlow/Keitaro/ASA framework-only pending real credentials. HR-бот deferred (нет исходной системы). Документация: [docs/mst-integrations.md](docs/mst-integrations.md)
 > 8D (Production Hardening) — pending
 
 **Цель:** Claude AI встроен, боты работают, MST-тулы подключены, мониторинг.
@@ -1207,24 +1224,52 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] Это самая большая фаза — разбить на подфазы (8A→8B→8C→8D) с отдельными PR
 - [x] Составить порядок реализации и предложить пользователю
 
-### 8A: AI сервис (порт 8085)
+### 8A: AI сервис (порт 8085) — Backend + Saturn Done, UI pending
+
+> **Статус:** backend сервис полностью написан с нуля, Saturn методы готовы. Сервис стартует даже с `ANTHROPIC_API_KEY=placeholder` / `OPENAI_API_KEY=placeholder` — все endpoints возвращают `503 service_unavailable` до подстановки реальных ключей в Saturn.ac dashboard (без пересборки образа). Frontend UI компонент (AiMenu/AiStreamModal/AiTranscribeButton/SuggestReply) НЕ реализован — следующий шаг.
 
 **Endpoints (6):**
-- [ ] POST /ai/summarize — суммаризация чата (Claude API, SSE streaming)
-- [ ] POST /ai/translate — перевод N сообщений (SSE streaming)
-- [ ] POST /ai/reply-suggest — 3 варианта ответа
-- [ ] POST /ai/transcribe — транскрипция голосовых (Whisper API)
-- [ ] POST /ai/search — семантический поиск (embeddings)
-- [ ] GET /ai/usage — статистика использования AI
+- [x] POST /ai/summarize — Claude SSE streaming ([services/ai/internal/handler/ai_handler.go](services/ai/internal/handler/ai_handler.go))
+- [x] POST /ai/translate — Claude SSE streaming
+- [x] POST /ai/reply-suggest — non-streaming, 3 варианта
+- [x] POST /ai/transcribe — OpenAI Whisper, fetch audio из media service
+- [~] POST /ai/search — stub возвращает `501 not_implemented`, отложено на Phase 8A.2 (требует embeddings + pgvector)
+- [x] GET /ai/usage — per-user 30-day stats из `ai_usage` таблицы
 
-**Rate limit:** 20 AI-запросов/мин/юзер. Бесплатно для всех.
+**Rate limit:** [x] 20 req/min/user per endpoint через Lua-script в Redis (`ratelimit:ai:{userID}:{endpoint}`), fail-closed для write, fail-open для /ai/usage.
 
 **@orbit-ai бот** (Nice to Have):
-- [ ] Диалог с AI в любом чате через @orbit-ai mention
+- [ ] Диалог с AI в любом чате через @orbit-ai mention — не реализовано
 
-**Saturn методы (~10):**
-- [ ] summarizeChat, translateMessages, suggestReply
-- [ ] transcribeVoice, semanticSearch, explainMessage, fetchAiUsage
+**Saturn методы:**
+- [x] summarizeChat, translateMessages (AsyncGenerator через fetch + ReadableStream SSE parser)
+- [x] suggestReply, transcribeVoice, fetchAiUsage (регулярный JSON)
+- [x] semanticSearch — stub возвращает `[]` пока backend 501
+- [ ] explainMessage — не запланировано в ТЗ, пропущено
+
+**Backend components (new):**
+- [x] `services/ai/internal/client/anthropic_client.go` — чистый HTTP клиент Claude (Create + CreateMessageStream с SSE), **не используем anthropic-sdk-go** ради аудитабильности
+- [x] `services/ai/internal/client/whisper_client.go` — OpenAI Whisper через multipart POST, max 25MB
+- [x] `services/ai/internal/client/messaging_client.go` — fetch сообщений из messaging service с X-User-ID
+- [x] `services/ai/internal/service/ai_service.go` — оркестрация клиентов, rate limit, async usage tracking, cost estimation
+- [x] `services/ai/internal/handler/stream_utils.go` — SSE helper через `fasthttp.StreamWriter` (в проекте SSE раньше не было)
+- [x] `services/ai/internal/store/usage_store.go` — pgx запись + агрегация `ai_usage`
+- [x] `services/ai/cmd/main.go` — полноценный Fiber setup с graceful shutdown, Degraded-mode startup (работает с placeholder ключами)
+- [x] [migrations/049_ai_usage.sql](migrations/049_ai_usage.sql) — таблица `ai_usage`
+- [x] `pkg/apperror` — добавлены `NotImplemented` (501) и `ServiceUnavailable` (503) factory functions
+
+**Gateway proxy:**
+- [x] `AiServiceURL` в `ProxyConfig`, `aiClient` fasthttp клиент с `StreamResponseBody: true` + 180s timeouts (SSE + длинные summary)
+- [x] `/api/v1/ai/*` route в gateway [proxy.go](services/gateway/internal/handler/proxy.go) перед catch-all
+- [x] `AI_SERVICE_URL` env в docker-compose + .env.example, `ai` в `depends_on` gateway
+
+**Frontend UI:**
+- [x] Chat header кнопка "💡 AI" ([web/src/components/middle/HeaderActions.tsx](web/src/components/middle/HeaderActions.tsx)) — `iconName="lamp"`, рядом с search, открывает AiSummaryModal
+- [x] `AiSummaryModal.tsx` ([web/src/components/middle/AiSummaryModal.tsx](web/src/components/middle/AiSummaryModal.tsx)) — time range chips (1h/6h/24h/7d), language RU/EN, Generate button, streaming text с прогресс-индикатором, error banner для 503 `ai_unavailable`, abort on close
+- [ ] Translate flow — требует message selection UX, отложено
+- [ ] AiTranscribeButton на voice messages — требует интеграции с voice message renderer, отложено
+- [ ] Suggest reply строка в composer — требует правки Composer.tsx (2742 строки), отложено для отдельного PR
+- [ ] AI usage панель в Settings (опционально)
 
 ### 8B: Bots сервис (порт 8086) — DONE
 
@@ -1270,7 +1315,7 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 - [x] account_type → userTypeBot маппинг на фронтенде
 - [ ] Inline mode (@botname query) — deferred
 - [ ] Web Apps (requestWebView, loadAttachBot) — deferred
-- [ ] /start автоотправка при открытии DM — код есть, нужна проверка
+- [x] /start при открытии DM — flow полностью собран end-to-end (UI кнопка в HeaderActions/HeaderMenu/MiddleColumn → `startBot` action → `sendMessage('/start')` → NATS `orbit.chat.*.message.new` → `BotNATSSubscriber` → webhook delivery). Документация: [docs/bot-start-flow.md](docs/bot-start-flow.md). Беззвучная автоотправка отвергнута как анти-паттерн — пользователь кликает явно, как в TG.
 
 ### 8C: Integrations сервис (порт 8087) — DONE (framework)
 
@@ -1294,13 +1339,16 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 
 **Public webhook:**
 - [x] POST /webhooks/in/:connectorId — приём вебхука (HMAC-SHA256 validation, timestamp replay protection)
+- [x] GET /webhooks/in/:connectorId — Keitaro-style postbacks (HMAC и timestamp в query params, canonical JSON payload из query, method mismatch rejection). Тесты: `TestReceiveWebhook_QueryKeitaro`, `TestReceiveWebhook_MethodMismatch`
+- [x] ConnectorConfig (typed JSONB view) — `signature_location`, `signature_param_name`, `timestamp_param_name`, `http_method`, `preset_id` ([services/integrations/internal/model/models.go](services/integrations/internal/model/models.go)). Default = POST + X-Orbit-Signature header (backwards compat)
 
-**MST интеграции (конкретные подключения — deferred):**
-- [ ] InsightFlow → #alerts канал
-- [ ] Keitaro postbacks → уведомления
-- [ ] Saturn.ac deploy status → #dev
-- [ ] HR-бот миграция из Telegram
-- [ ] ASA Analytics → campaign alerts
+**MST интеграции (preset'ы через generic framework):**
+- [x] **Saturn.ac deploy status → #dev** (preset `saturn_deploy`, статус **ready** — end-to-end проверяемо) — [docs/mst-integrations.md](docs/mst-integrations.md#saturnac--deploy-status-статус-ready)
+- [x] **InsightFlow → #alerts канал** (preset `insightflow`, статус **framework-only** — template + custom header `X-InsightFlow-Signature`, pending live test) — [docs/mst-integrations.md](docs/mst-integrations.md#insightflow--conversions-статус-framework-only)
+- [x] **Keitaro postbacks → уведомления** (preset `keitaro`, статус **framework-only** — GET handler + canonical query JSON + HMAC в query) — [docs/mst-integrations.md](docs/mst-integrations.md#keitaro--postbacks-статус-framework-only)
+- [x] **ASA Analytics → campaign alerts** (preset `asa_analytics`, статус **framework-only** — template + custom header `X-ASA-Signature`) — [docs/mst-integrations.md](docs/mst-integrations.md#asa-analytics--campaign-alerts-статус-framework-only)
+- [~] HR-бот миграция из Telegram — **deferred — no source system to migrate from** (у MST нет исходного бота)
+- [x] Generic webhook preset (fallback для любых других провайдеров, Orbit-native HMAC) — [docs/mst-integrations.md](docs/mst-integrations.md#generic-webhook-статус-ready)
 
 **Saturn frontend методы:**
 - [x] fetchConnectors, fetchConnector, createConnector, updateConnector, deleteConnector
@@ -1310,6 +1358,8 @@ nats_subscriber_test.go; web: pushNotification.ts, setupServiceWorker.ts).
 **Frontend UI:**
 - [x] SettingsIntegrations — CRUD коннекторов, управление routes, delivery log с retry
 - [x] Admin-only доступ (role === 'admin' || role === 'superadmin')
+- [x] Preset dropdown при создании коннектора ([web/src/api/saturn/presets/integrations.ts](web/src/api/saturn/presets/integrations.ts)) — авто-заполнение display_name, default template в route form, admin-instructions под dropdown, preset badge в edit view
+- [x] Follow-up `updateConnector` вызов для сохранения preset config (create endpoint не принимает config, только PATCH)
 
 **Backend features:**
 - [x] HMAC-SHA256 webhook signature verification (constant-time compare)

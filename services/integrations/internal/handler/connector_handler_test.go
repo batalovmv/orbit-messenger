@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -217,6 +218,169 @@ func TestReceiveWebhook_InvalidSignature(t *testing.T) {
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// TestReceiveWebhook_CustomHeaderName covers the InsightFlow/ASA preset case:
+// connector.config overrides the signature/timestamp header names while still
+// using POST+header-based HMAC delivery.
+func TestReceiveWebhook_CustomHeaderName(t *testing.T) {
+	connectorID := uuid.New()
+	rawSecret := "insightflow-secret"
+	testKey := make([]byte, 32)
+	encryptedSecret, err := orchidCrypto.Encrypt(rawSecret, testKey)
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
+	payload := []byte(`{"event":"conversion.sale","external_event_id":"evt-42"}`)
+
+	connectorStore := &mockConnectorStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Connector, error) {
+			return &model.Connector{
+				ID:        connectorID,
+				Name:      "insightflow-hook",
+				IsActive:  true,
+				CreatedBy: uuid.New(),
+				Config: model.JSONB([]byte(`{
+					"preset_id":"insightflow",
+					"http_method":"POST",
+					"signature_location":"header",
+					"signature_param_name":"X-InsightFlow-Signature",
+					"timestamp_param_name":"X-InsightFlow-Timestamp"
+				}`)),
+			}, nil
+		},
+		getSecretHashFn: func(ctx context.Context, id uuid.UUID) (string, error) {
+			return encryptedSecret, nil
+		},
+	}
+	routeStore := &mockRouteStore{
+		findMatchingRoutesFn: func(ctx context.Context, connectorID uuid.UUID, eventType string) ([]model.Route, error) {
+			return []model.Route{}, nil
+		},
+	}
+	deliveryStore := &mockDeliveryStore{
+		findByExternalIDFn: func(ctx context.Context, connectorID uuid.UUID, externalEventID string) (*model.Delivery, error) {
+			return nil, nil
+		},
+	}
+
+	app := newIntegrationHandlerTestApp(t, connectorStore, routeStore, deliveryStore)
+	ts := time.Now().UTC().Format(time.RFC3339)
+	resp := doIntegrationRawRequest(t, app, http.MethodPost, "/webhooks/in/"+connectorID.String(), payload, map[string]string{
+		"Content-Type":            "application/json",
+		"X-InsightFlow-Signature": signIntegrationPayload(rawSecret, payload, ts),
+		"X-InsightFlow-Timestamp": ts,
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for custom header preset, got %d", resp.StatusCode)
+	}
+}
+
+// TestReceiveWebhook_QueryKeitaro covers the Keitaro preset case: GET request
+// with signature and timestamp in query params, canonical JSON payload built
+// from the remaining params.
+func TestReceiveWebhook_QueryKeitaro(t *testing.T) {
+	connectorID := uuid.New()
+	rawSecret := "keitaro-secret"
+	testKey := make([]byte, 32)
+	encryptedSecret, err := orchidCrypto.Encrypt(rawSecret, testKey)
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
+
+	// The payload the handler will build from query string — must include
+	// the "event" key (firstStringField requirement) and must match what the
+	// test-side HMAC is computed over. Keys sorted alphabetically by Go's
+	// json.Marshal for map[string]string.
+	expectedPayload := []byte(`{"campaign":"test-camp","event":"postback.approved","payout":"10","status":"sale"}`)
+
+	connectorStore := &mockConnectorStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Connector, error) {
+			return &model.Connector{
+				ID:        connectorID,
+				Name:      "keitaro-hook",
+				IsActive:  true,
+				CreatedBy: uuid.New(),
+				Config: model.JSONB([]byte(`{
+					"preset_id":"keitaro",
+					"http_method":"GET",
+					"signature_location":"query",
+					"signature_param_name":"sign",
+					"timestamp_param_name":"ts"
+				}`)),
+			}, nil
+		},
+		getSecretHashFn: func(ctx context.Context, id uuid.UUID) (string, error) {
+			return encryptedSecret, nil
+		},
+	}
+	routeStore := &mockRouteStore{
+		findMatchingRoutesFn: func(ctx context.Context, connectorID uuid.UUID, eventType string) ([]model.Route, error) {
+			return []model.Route{}, nil
+		},
+	}
+	deliveryStore := &mockDeliveryStore{
+		findByExternalIDFn: func(ctx context.Context, connectorID uuid.UUID, externalEventID string) (*model.Delivery, error) {
+			return nil, nil
+		},
+	}
+
+	app := newIntegrationHandlerTestApp(t, connectorStore, routeStore, deliveryStore)
+	ts := fmt.Sprintf("%d", time.Now().UTC().Unix())
+	sig := signIntegrationPayload(rawSecret, expectedPayload, ts)
+
+	// Query order in the URL doesn't matter — the handler sorts keys before
+	// marshaling. We include an alphabetical order here just for readability.
+	path := "/webhooks/in/" + connectorID.String() +
+		"?campaign=test-camp" +
+		"&event=postback.approved" +
+		"&payout=10" +
+		"&status=sale" +
+		"&ts=" + ts +
+		"&sign=" + sig
+
+	resp := doIntegrationRawRequest(t, app, http.MethodGet, path, nil, map[string]string{})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for keitaro GET preset, got %d", resp.StatusCode)
+	}
+}
+
+// TestReceiveWebhook_MethodMismatch ensures a POST-configured connector
+// rejects GET, and vice-versa — prevents downgrade replay attacks where an
+// attacker tries to deliver a signed payload via the "wrong" HTTP method.
+func TestReceiveWebhook_MethodMismatch(t *testing.T) {
+	connectorID := uuid.New()
+	testKey := make([]byte, 32)
+	encryptedSecret, err := orchidCrypto.Encrypt("secret", testKey)
+	if err != nil {
+		t.Fatalf("encrypt secret: %v", err)
+	}
+
+	connectorStore := &mockConnectorStore{
+		getByIDFn: func(ctx context.Context, id uuid.UUID) (*model.Connector, error) {
+			return &model.Connector{
+				ID:        connectorID,
+				Name:      "keitaro-hook",
+				IsActive:  true,
+				CreatedBy: uuid.New(),
+				Config: model.JSONB([]byte(`{"http_method":"GET","signature_location":"query","signature_param_name":"sign","timestamp_param_name":"ts"}`)),
+			}, nil
+		},
+		getSecretHashFn: func(ctx context.Context, id uuid.UUID) (string, error) {
+			return encryptedSecret, nil
+		},
+	}
+
+	app := newIntegrationHandlerTestApp(t, connectorStore, &mockRouteStore{}, &mockDeliveryStore{})
+	resp := doIntegrationRawRequest(t, app, http.MethodPost, "/webhooks/in/"+connectorID.String(), []byte(`{"event":"x"}`), map[string]string{
+		"Content-Type": "application/json",
+	})
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for method mismatch, got %d", resp.StatusCode)
 	}
 }
 

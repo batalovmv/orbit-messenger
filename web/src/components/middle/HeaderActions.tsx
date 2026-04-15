@@ -48,6 +48,7 @@ import DropdownMenu from '../ui/DropdownMenu';
 import Link from '../ui/Link';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
+import AiSummaryModal from './AiSummaryModal';
 import HeaderMenuContainer from './HeaderMenuContainer.async';
 
 interface OwnProps {
@@ -144,6 +145,14 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<IAnchorPosition | undefined>(undefined);
+  const [isAiSummaryOpen, setIsAiSummaryOpen] = useState(false);
+
+  const handleAiSummaryOpen = useLastCallback(() => {
+    setIsAiSummaryOpen(true);
+  });
+  const handleAiSummaryClose = useLastCallback(() => {
+    setIsAiSummaryOpen(false);
+  });
 
   const handleHeaderMenuOpen = useLastCallback(() => {
     setIsMenuOpen(true);
@@ -399,6 +408,24 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
               iconName="search"
             />
           )}
+          {/* Phase 8A — AI summary button. Uses the lamp icon (classic
+              "AI suggestions" idiom). Hidden in select mode and on bot
+              chats to avoid cluttering the header in contexts where
+              summarisation is not useful. */}
+          <Button
+            round
+            ripple={isRightColumnShown}
+            color="translucent"
+            size="smaller"
+            onClick={handleAiSummaryOpen}
+            ariaLabel="AI Summary"
+            iconName="lamp"
+          />
+          <AiSummaryModal
+            isOpen={isAiSummaryOpen}
+            chatId={chatId}
+            onClose={handleAiSummaryClose}
+          />
           {canCall && (
             <Button
               round

@@ -37,6 +37,7 @@ func main() {
 	callsServiceURL := config.EnvOr("CALLS_URL", config.EnvOr("CALLS_SERVICE_URL", "http://localhost:8084"))
 	botsURL := config.EnvOr("BOTS_URL", config.EnvOr("BOTS_SERVICE_URL", "http://localhost:8086"))
 	integrationsURL := config.EnvOr("INTEGRATIONS_URL", config.EnvOr("INTEGRATIONS_SERVICE_URL", "http://localhost:8087"))
+	aiURL := config.EnvOr("AI_URL", config.EnvOr("AI_SERVICE_URL", "http://localhost:8085"))
 	frontendURL := config.EnvOr("FRONTEND_URL", config.EnvOr("WEB_URL", "http://localhost:3000"))
 	vapidPublicKey := config.EnvOr("VAPID_PUBLIC_KEY", "")
 	vapidPrivateKey := config.EnvOr("VAPID_PRIVATE_KEY", "")
@@ -234,6 +235,7 @@ func main() {
 		CallsServiceURL:     callsServiceURL,
 		BotsServiceURL:      botsURL,
 		IntegrationsServiceURL: integrationsURL,
+		AiServiceURL:        aiURL,
 		FrontendURL:         frontendURL,
 		InternalSecret:      internalSecret,
 	})

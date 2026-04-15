@@ -115,6 +115,7 @@ services:
       CALLS_SERVICE_URL: http://calls:8084
       BOTS_SERVICE_URL: http://bots:8086
       INTEGRATIONS_SERVICE_URL: http://integrations:8087
+      AI_SERVICE_URL: http://ai:8085
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
@@ -128,6 +129,7 @@ services:
       messaging: { condition: service_started }
       media: { condition: service_started }
       calls: { condition: service_started }
+      ai: { condition: service_started }
 
   auth:
     build:
@@ -256,6 +258,33 @@ services:
       - redis
       - nats
       - messaging
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/ai/Dockerfile
+    ports:
+      - "127.0.0.1:8085:8085"
+    environment:
+      PORT: "8085"
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      INTERNAL_SECRET: ${INTERNAL_SECRET}
+      MESSAGING_SERVICE_URL: http://messaging:8082
+      MEDIA_SERVICE_URL: http://media:8083
+      # AI provider keys — placeholder by default so the service starts and
+      # returns 503 ai_unavailable from every endpoint until real keys are
+      # dropped into Saturn.ac dashboard. No rebuild needed to swap them in.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-placeholder}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-placeholder}
+      WHISPER_MODEL: ${WHISPER_MODEL:-whisper-1}
+    depends_on:
+      - postgres
+      - redis
+      - messaging
+      - media
     restart: unless-stopped
 
   web:

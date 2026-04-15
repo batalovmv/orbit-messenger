@@ -19,6 +19,7 @@ import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
 import Modal from '../../ui/Modal';
+import Select from '../../ui/Select';
 import Spinner from '../../ui/Spinner';
 
 import {
@@ -31,7 +32,13 @@ import {
   fetchRoutes,
   retryDelivery,
   rotateConnectorSecret,
+  updateConnector,
 } from '../../../api/saturn/methods/integrations';
+import {
+  findPresetById,
+  getDefaultPreset,
+  INTEGRATION_PRESETS,
+} from '../../../api/saturn/presets/integrations';
 
 type ViewMode = 'list' | 'edit' | 'routes';
 
@@ -53,6 +60,7 @@ const SettingsIntegrations = () => {
   const [deletingId, setDeletingId] = useState<string | undefined>();
   const [newName, setNewName] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
+  const [newPresetId, setNewPresetId] = useState<string>(getDefaultPreset().id);
 
   // Route form
   const [isRouteCreateOpen, openRouteCreate, closeRouteCreate] = useFlag(false);
@@ -78,25 +86,48 @@ const SettingsIntegrations = () => {
 
   const handleCreate = useLastCallback(async () => {
     if (!newName.trim() || !newDisplayName.trim()) return;
+    const preset = findPresetById(newPresetId) ?? getDefaultPreset();
     try {
       const result = await createConnector({
         name: newName.trim(),
         display_name: newDisplayName.trim(),
-        type: 'inbound_webhook',
+        type: preset.type,
       }) as SaturnConnectorCreateResponse;
 
-      if (result?.connector) {
-        setSelectedConnector(result.connector);
-        setConnectorSecret(result.secret);
-        setViewMode('edit');
-        showNotification({ message: lang('ConnectorCreated') });
-        closeCreate();
-        setNewName('');
-        setNewDisplayName('');
-        loadConnectors();
+      if (!result?.connector) return;
+
+      // Persist preset config via follow-up PATCH — createConnector endpoint
+      // does not accept config, but updateConnector does.
+      let connectorWithConfig = result.connector;
+      try {
+        const updated = await updateConnector(result.connector.id, {
+          config: preset.config as unknown as Record<string, unknown>,
+        });
+        if (updated) connectorWithConfig = updated;
+      } catch {
+        // Non-fatal — connector is usable without preset config, admin can edit later.
       }
+
+      setSelectedConnector(connectorWithConfig);
+      setConnectorSecret(result.secret);
+      setViewMode('edit');
+      showNotification({ message: lang('ConnectorCreated') });
+      closeCreate();
+      setNewName('');
+      setNewDisplayName('');
+      setNewPresetId(getDefaultPreset().id);
+      loadConnectors();
     } catch (e) {
       showNotification({ message: String(e) });
+    }
+  });
+
+  const handlePresetChange = useLastCallback((e: { target: HTMLSelectElement }) => {
+    const presetId = e.target.value;
+    setNewPresetId(presetId);
+    const preset = findPresetById(presetId);
+    if (preset && !newDisplayName.trim()) {
+      setNewDisplayName(preset.defaultConnectorDisplayName);
     }
   });
 
@@ -138,11 +169,24 @@ const SettingsIntegrations = () => {
         fetchRoutes(connector.id),
         fetchDeliveries(connector.id),
       ]);
-      setRoutes(routesResult?.data || []);
+      setRoutes(routesResult || []);
       setDeliveries(deliveriesResult?.data || []);
     } catch {
       // Non-critical
     }
+  });
+
+  const handleOpenRouteCreate = useLastCallback(() => {
+    // Pre-fill template + event_filter from the connector's preset (if any).
+    const presetId = (selectedConnector?.config as { preset_id?: string } | undefined)?.preset_id;
+    const preset = findPresetById(presetId);
+    if (preset) {
+      if (!newRouteTemplate) setNewRouteTemplate(preset.defaultTemplate);
+      if (!newRouteEventFilter && preset.defaultEventFilter) {
+        setNewRouteEventFilter(preset.defaultEventFilter);
+      }
+    }
+    openRouteCreate();
   });
 
   const handleCreateRoute = useLastCallback(async () => {
@@ -204,12 +248,20 @@ const SettingsIntegrations = () => {
 
   // Edit view
   if (viewMode === 'edit' && selectedConnector) {
+    const editedPresetId = (selectedConnector.config as { preset_id?: string } | undefined)?.preset_id;
+    const editedPreset = findPresetById(editedPresetId);
     return (
       <div className="settings-content custom-scroll">
         <div className="settings-item">
           <h4>{selectedConnector.display_name}</h4>
           <p className="settings-item-description">{lang('ConnectorName')}: {selectedConnector.name}</p>
           <p className="settings-item-description">{lang('ConnectorType')}: {selectedConnector.type}</p>
+          {editedPreset && (
+            <p className="settings-item-description">
+              Preset: {editedPreset.displayName}
+              {editedPreset.status === 'framework-only' ? ' — framework only, pending live testing' : ''}
+            </p>
+          )}
           {connectorSecret && (
             <div className="settings-item">
               <p className="settings-item-description">{lang('ConnectorSecret')}</p>
@@ -244,7 +296,7 @@ const SettingsIntegrations = () => {
       <div className="settings-content custom-scroll">
         <div className="settings-item">
           <h4>{selectedConnector.display_name} — {lang('Routes')}</h4>
-          <Button onClick={openRouteCreate} color="primary" size="smaller">
+          <Button onClick={handleOpenRouteCreate} color="primary" size="smaller">
             {lang('CreateRoute')}
           </Button>
         </div>
@@ -359,6 +411,31 @@ const SettingsIntegrations = () => {
 
       <Modal isOpen={isCreateOpen} onClose={closeCreate} title={lang('CreateConnector')}>
         <div className="settings-item">
+          <Select
+            id="integration-preset"
+            label="Тип интеграции"
+            value={newPresetId}
+            onChange={handlePresetChange}
+            hasArrow
+          >
+            {INTEGRATION_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.displayName}
+                {preset.status === 'framework-only' ? ' (framework only)' : ''}
+              </option>
+            ))}
+          </Select>
+          {(() => {
+            const preset = findPresetById(newPresetId);
+            if (!preset) return undefined;
+            return (
+              <p className="settings-item-description" style="white-space: pre-wrap">
+                {preset.description}
+                {'\n\n'}
+                {preset.adminInstructions}
+              </p>
+            );
+          })()}
           <InputText
             label={lang('ConnectorName')}
             value={newName}

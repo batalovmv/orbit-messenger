@@ -32,6 +32,7 @@ func sanitizeProxyPath(rawPath string) string {
 }
 
 type ProxyConfig struct {
+	AiServiceURL        string
 	AuthServiceURL      string
 	MessagingServiceURL string
 	MediaServiceURL     string
@@ -331,6 +332,16 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
+	// AI client: longer timeouts for long-running Claude responses (summaries
+	// of large chats take ~30-60s, transcription of 3-minute voice ~20s) and
+	// StreamResponseBody so SSE chunks are flushed through instead of being
+	// buffered into a single big response.
+	aiClient := &fasthttp.Client{
+		ReadTimeout:         180 * time.Second,
+		WriteTimeout:        180 * time.Second,
+		StreamResponseBody:  true,
+		MaxResponseBodySize: 16 * 1024 * 1024,
+	}
 	apiGroup.All("/calls/*", func(c *fiber.Ctx) error {
 		proxyPath := sanitizeProxyPath(c.Path())
 		if proxyPath == "" {
@@ -421,6 +432,28 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 			slog.Error("bots proxy error", "error", err, "url", url)
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 				"error": "service_unavailable", "message": "Bots service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
+
+	// AI routes live under /api/v1 on the ai service (Phase 8A). These
+	// include SSE streaming endpoints (summarize, translate) — the aiClient
+	// above is configured with StreamResponseBody so chunks flush through
+	// instead of being buffered.
+	apiGroup.All("/ai/*", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.AiServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, aiClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("ai proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "AI service unavailable", "status": 502,
 			})
 		}
 		return nil

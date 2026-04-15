@@ -1047,9 +1047,19 @@ export {
   exportChatInviteLink, fetchExportedChatInvites, editExportedChatInvite,
   deleteExportedChatInvite, fetchChatInviteInfo,
   joinChat, toggleSlowMode, fetchChatInviteImporters, hideChatJoinRequest,
-  archiveChat, unarchiveChat, toggleChatPinned, setChatMuted,
+  archiveChat, unarchiveChat, toggleChatPinned, toggleSavedDialogPinned, setChatMuted,
   fetchMembers, searchMembers,
 } from './chats';
+
+// Phase 8A AI integration — Claude + Whisper
+export {
+  summarizeChat,
+  translateMessages,
+  suggestReply,
+  transcribeVoice,
+  fetchAiUsage,
+  semanticSearch,
+} from './ai';
 
 export {
   deleteHistory, deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
