@@ -21,7 +21,6 @@ describe('fetchChats', () => {
         id: 'chat-1',
         type: 'group',
         name: 'Release',
-        is_encrypted: false,
         max_members: 100,
         created_at: '2026-04-03T10:00:00.000Z',
         updated_at: '2026-04-03T10:00:00.000Z',

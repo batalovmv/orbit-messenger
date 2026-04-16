@@ -707,7 +707,6 @@ function normalizeChatHit(hit: SaturnChatSearchHit) {
     description: hit.description,
     avatar_url: hit.avatar_url,
     created_by: hit.created_by,
-    is_encrypted: hit.is_encrypted || false,
     max_members: hit.max_members || 0,
     created_at: createdAt,
     updated_at: hit.updated_at || createdAt,

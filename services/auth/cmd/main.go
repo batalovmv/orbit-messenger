@@ -120,11 +120,6 @@ func main() {
 	sessionStore := store.NewSessionStore(pool)
 	inviteStore := store.NewInviteStore(pool)
 	authSvc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, svcCfg)
-	// E2E Key Management
-	keyStore := store.NewKeyStore(pool)
-	preKeyStore := store.NewPreKeyStore(pool)
-	transparencyStore := store.NewTransparencyStore(pool)
-	keySvc := service.NewKeyService(keyStore, preKeyStore, transparencyStore)
 	internalSecret := config.EnvOr("INTERNAL_SECRET", "")
 	// BOOTSTRAP_SECRET gates the /auth/bootstrap endpoint. When empty, the
 	// endpoint is hard-disabled. Set this only during initial provisioning,
@@ -134,7 +129,6 @@ func main() {
 		slog.Warn("BOOTSTRAP_SECRET not set — /auth/bootstrap endpoint is disabled")
 	}
 	authHandler := handler.NewAuthHandler(authSvc, logger, internalSecret, bootstrapSecret)
-	keyHandler := handler.NewKeyHandler(keySvc, logger, internalSecret)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -146,7 +140,6 @@ func main() {
 	})
 
 	authHandler.Register(app)
-	keyHandler.Register(app)
 
 	// Graceful shutdown
 	go func() {

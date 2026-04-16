@@ -116,7 +116,6 @@ func (s *MediaService) UploadEncrypted(ctx context.Context, uploaderID uuid.UUID
 		SizeBytes:        int64(len(ciphertext)),
 		R2Key:            r2Key,
 		IsOneTime:        isOneTime,
-		IsEncrypted:      true,
 		ProcessingStatus: model.ProcessingReady,
 	}
 
@@ -1033,7 +1032,6 @@ func (s *MediaService) BuildMediaResponse(ctx context.Context, m *model.Media) *
 		Height:           m.Height,
 		DurationSeconds:  m.DurationSeconds,
 		WaveformData:     bytesToInts(m.WaveformData),
-		IsEncrypted:      m.IsEncrypted,
 		ProcessingStatus: m.ProcessingStatus,
 	}
 	if m.OriginalFilename != nil {

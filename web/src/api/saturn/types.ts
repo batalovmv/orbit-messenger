@@ -29,12 +29,7 @@ export interface SaturnChat {
   description?: string;
   avatar_url?: string;
   created_by?: string;
-  is_encrypted: boolean;
-  // Phase 7 follow-up: chat-level "protected content" flag. Frontend
-  // uses it to disable forward/copy/save UI for all messages in the chat.
   is_protected?: boolean;
-  // Phase 7: disappearing-messages TTL in seconds (0 = off).
-  disappearing_timer?: number;
   max_members: number;
   created_at: string;
   updated_at: string;
@@ -80,8 +75,6 @@ export interface SaturnMessage {
   content?: string;
   // Phase 7: standard-base64 (RFC 4648 §4, not url-safe) JSON envelope
   // emitted by Go `[]byte` default encoding. Present only when
-  // `type === 'encrypted'`. Opaque to the server.
-  encrypted_content?: string;
   entities?: SaturnMessageEntity[];
   reply_to_id?: string;
   reply_to_sequence_number?: number;
@@ -124,8 +117,6 @@ export interface SaturnMediaAttachment {
   is_spoiler: boolean;
   is_one_time: boolean;
   // Phase 7.1: true when the bytes at `/media/{id}` are opaque AES-GCM
-  // ciphertext that must be decrypted client-side before rendering.
-  is_encrypted?: boolean;
   processing_status: string;
 }
 
@@ -328,7 +319,6 @@ export interface SaturnChatSearchHit {
   description?: string;
   avatar_url?: string;
   created_by?: string;
-  is_encrypted?: boolean;
   max_members?: number;
   created_at?: string;
   updated_at?: string;

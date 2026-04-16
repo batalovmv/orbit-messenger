@@ -47,15 +47,15 @@ func (s *MediaStore) Create(ctx context.Context, m *model.Media) error {
 		INSERT INTO media (id, uploader_id, type, mime_type, original_filename,
 			size_bytes, r2_key, thumbnail_r2_key, medium_r2_key,
 			width, height, duration_seconds, waveform_data,
-			is_one_time, is_encrypted, processing_status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			is_one_time, processing_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING created_at, updated_at`
 
 	return s.pool.QueryRow(ctx, query,
 		m.ID, m.UploaderID, m.Type, m.MimeType, m.OriginalFilename,
 		m.SizeBytes, m.R2Key, m.ThumbnailR2Key, m.MediumR2Key,
 		m.Width, m.Height, m.DurationSeconds, m.WaveformData,
-		m.IsOneTime, m.IsEncrypted, m.ProcessingStatus,
+		m.IsOneTime, m.ProcessingStatus,
 	).Scan(&m.CreatedAt, &m.UpdatedAt)
 }
 
@@ -65,7 +65,7 @@ func (s *MediaStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Media, e
 		SELECT id, uploader_id, type, mime_type, original_filename,
 			size_bytes, r2_key, thumbnail_r2_key, medium_r2_key,
 			width, height, duration_seconds, waveform_data,
-			is_one_time, is_encrypted, processing_status, created_at, updated_at
+			is_one_time, processing_status, created_at, updated_at
 		FROM media WHERE id = $1`
 
 	m := &model.Media{}
@@ -73,7 +73,7 @@ func (s *MediaStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Media, e
 		&m.ID, &m.UploaderID, &m.Type, &m.MimeType, &m.OriginalFilename,
 		&m.SizeBytes, &m.R2Key, &m.ThumbnailR2Key, &m.MediumR2Key,
 		&m.Width, &m.Height, &m.DurationSeconds, &m.WaveformData,
-		&m.IsOneTime, &m.IsEncrypted, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
+		&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -94,7 +94,7 @@ func (s *MediaStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Me
 		SELECT id, uploader_id, type, mime_type, original_filename,
 			size_bytes, r2_key, thumbnail_r2_key, medium_r2_key,
 			width, height, duration_seconds, waveform_data,
-			is_one_time, is_encrypted, processing_status, created_at, updated_at
+			is_one_time, processing_status, created_at, updated_at
 		FROM media WHERE id = ANY($1)`
 
 	rows, err := s.pool.Query(ctx, query, ids)
@@ -110,7 +110,7 @@ func (s *MediaStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*model.Me
 			&m.ID, &m.UploaderID, &m.Type, &m.MimeType, &m.OriginalFilename,
 			&m.SizeBytes, &m.R2Key, &m.ThumbnailR2Key, &m.MediumR2Key,
 			&m.Width, &m.Height, &m.DurationSeconds, &m.WaveformData,
-			&m.IsOneTime, &m.IsEncrypted, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
+			&m.IsOneTime, &m.ProcessingStatus, &m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan media: %w", err)
 		}
@@ -205,7 +205,7 @@ func (s *MediaStore) GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID
 			m.id, m.type, m.mime_type, m.original_filename,
 			m.size_bytes, m.r2_key, m.thumbnail_r2_key, m.medium_r2_key,
 			m.width, m.height, m.duration_seconds, m.waveform_data,
-			m.is_one_time, m.is_encrypted, m.processing_status
+			m.is_one_time, m.processing_status
 		FROM message_media mm
 		JOIN media m ON m.id = mm.media_id
 		WHERE mm.message_id = ANY($1)
@@ -225,7 +225,7 @@ func (s *MediaStore) GetByMessageIDs(ctx context.Context, messageIDs []uuid.UUID
 			&r.MediaID, &r.Type, &r.MimeType, &r.OriginalFilename,
 			&r.SizeBytes, &r.R2Key, &r.ThumbnailR2Key, &r.MediumR2Key,
 			&r.Width, &r.Height, &r.DurationSeconds, &r.WaveformData,
-			&r.IsOneTime, &r.IsEncrypted, &r.ProcessingStatus,
+			&r.IsOneTime, &r.ProcessingStatus,
 		); err != nil {
 			return nil, fmt.Errorf("scan message media: %w", err)
 		}
@@ -334,6 +334,5 @@ type MessageMediaRow struct {
 	DurationSeconds  *float64
 	WaveformData     []byte
 	IsOneTime        bool
-	IsEncrypted      bool
 	ProcessingStatus string
 }
