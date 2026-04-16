@@ -17,7 +17,7 @@ export async function createBot(data: { username: string; display_name: string; 
 
 export async function updateBot(
   botId: string,
-  data: Partial<{ display_name: string; description: string; short_description: string }>,
+  data: Partial<{ display_name: string; description: string; short_description: string; webhook_url: string }>,
 ) {
   return request<SaturnBot>('PATCH', `/bots/${botId}`, data);
 }
