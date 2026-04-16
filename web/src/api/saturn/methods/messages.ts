@@ -680,8 +680,13 @@ export async function sendMessage({
   scheduledAt?: number;
   scheduleRepeatPeriod?: number;
 }, progressCallback?: SendProgressCallback) {
+  // eslint-disable-next-line no-console
+  console.error('[SEND DEBUG] Saturn sendMessage ENTERED', { chatId: chat?.id, text: text?.substring(0, 20) });
+  try {
   const chatId = chat.id;
   if (!text && (!mediaIds || mediaIds.length === 0) && !attachment && !sticker && !gif && !poll) {
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] ABORTED: no content');
     return undefined;
   }
 
@@ -798,7 +803,11 @@ export async function sendMessage({
       return apiMessage;
     }
 
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] About to POST /messages', { chatId });
     const message = await client.request<SaturnMessage>('POST', `/chats/${chatId}/messages`, body);
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] POST succeeded', { id: message.id });
     trackPendingSend(message.id);
 
     const apiMessage = buildApiMessage(message);
@@ -814,6 +823,8 @@ export async function sendMessage({
 
     return apiMessage;
   } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] POST failed', error);
     sendApiUpdate({
       '@type': 'updateMessageSendFailed',
       chatId,
@@ -822,6 +833,8 @@ export async function sendMessage({
     });
     return undefined;
   }
+  // eslint-disable-next-line no-console
+  } catch (outerError) { console.error('[SEND DEBUG] OUTER ERROR', outerError); return undefined; }
 }
 
 function isAbortError(error: unknown) {
