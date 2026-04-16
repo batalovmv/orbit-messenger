@@ -2863,6 +2863,8 @@
 "BotCreated" = "Bot created successfully";
 "BotDeleted" = "Bot deleted successfully";
 "TokenRotated" = "Token rotated successfully";
+"BotAddToGroup" = "Add to Group";
+"BotAddedToGroup" = "Bot installed to group";
 "ConnectorName" = "Connector Name";
 "ConnectorDisplayName" = "Display Name";
 "ConnectorType" = "Type";

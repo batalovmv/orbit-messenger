@@ -14,11 +14,13 @@ import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
 import Modal from '../../ui/Modal';
+import RecipientPicker from '../../common/RecipientPicker';
 import Spinner from '../../ui/Spinner';
 
 import {
-  createBot, deleteBot, fetchBots, rotateToken, updateBot,
+  createBot, deleteBot, fetchBots, installBot, rotateToken, updateBot,
 } from '../../../api/saturn/methods/bots';
+import { addChatMembers } from '../../../api/saturn/methods/chats';
 
 type BotWithToken = SaturnBot & { token?: string };
 
@@ -32,6 +34,8 @@ const SettingsBotManagement = () => {
   const [isDeleteOpen, openDelete, closeDelete] = useFlag(false);
   const [editingBot, setEditingBot] = useState<BotWithToken | undefined>();
   const [deletingBotId, setDeletingBotId] = useState<string | undefined>();
+
+  const [isGroupPickerOpen, openGroupPicker, closeGroupPicker] = useFlag(false);
 
   // Create form
   const [newUsername, setNewUsername] = useState('');
@@ -110,6 +114,18 @@ const SettingsBotManagement = () => {
     showNotification({ message: lang('ExactTextCopied', token.substring(0, 20) + '...') });
   });
 
+  const handleInstallToGroup = useLastCallback(async (chatId: string) => {
+    if (!editingBot) return;
+    closeGroupPicker();
+    try {
+      await installBot(editingBot.id, chatId, 15);
+      await addChatMembers({ chatId, userIds: [editingBot.user_id] });
+      showNotification({ message: lang('BotAddedToGroup') });
+    } catch (e) {
+      showNotification({ message: String(e) });
+    }
+  });
+
   const handleSaveBot = useLastCallback(async () => {
     if (!editingBot) return;
     try {
@@ -182,6 +198,9 @@ const SettingsBotManagement = () => {
           )}
           <div className="settings-item-footer">
             <Button onClick={handleSaveBot}>{lang('Save')}</Button>
+            <Button onClick={openGroupPicker} color="translucent">
+              {lang('BotAddToGroup')}
+            </Button>
             <Button onClick={() => handleRotateToken(editingBot.id)} color="translucent">
               {lang('BotRotateToken')}
             </Button>
@@ -193,6 +212,13 @@ const SettingsBotManagement = () => {
             </Button>
           </div>
         </div>
+        <RecipientPicker
+          isOpen={isGroupPickerOpen}
+          searchPlaceholder={lang('Search')}
+          filter={['groups', 'chats']}
+          onSelectRecipient={handleInstallToGroup}
+          onClose={closeGroupPicker}
+        />
       </div>
     );
   }
