@@ -364,13 +364,20 @@ addActionHandler('loadMessagesById', async (global, actions, payload): Promise<v
 });
 
 addActionHandler('sendMessage', async (global, actions, payload): Promise<void> => {
+  // eslint-disable-next-line no-console
+  console.error('[SEND DEBUG] ACTION HANDLER entered', { hasPayload: !!payload, hasMsgList: !!payload?.messageList });
+  try {
   const { messageList, tabId = getCurrentTabId() } = payload;
 
   if (!messageList) {
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] ACTION HANDLER: no messageList');
     return;
   }
 
   const { chatId, threadId, type } = messageList;
+  // eslint-disable-next-line no-console
+  console.error('[SEND DEBUG] ACTION HANDLER chatId=', chatId, 'type=', type);
 
   payload = omit(payload, ['tabId']);
 
@@ -580,6 +587,8 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
     }
   }
   if (localMessages?.length) sendMessagesWithNotification(global, localMessages);
+  // eslint-disable-next-line no-console
+  } catch (e) { console.error('[SEND DEBUG] ACTION HANDLER ERROR', e); }
 });
 
 addActionHandler('sendInviteMessages', async (global, actions, payload): Promise<void> => {
