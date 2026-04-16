@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -88,15 +89,18 @@ func (s *messageStore) encryptContent(p *string) (*string, error) {
 }
 
 // decryptContent reverses encryptContent. If the column is NULL, nothing
-// to do. Ciphertext that fails to decrypt is returned as an error so we
-// surface corruption loud and early rather than silently losing data.
+// to do. Messages stored before at-rest encryption was introduced are
+// plain text — if decryption fails we return the content as-is so legacy
+// rows remain readable instead of causing 500 errors.
 func (s *messageStore) decryptContent(ct *string) error {
 	if ct == nil || *ct == "" {
 		return nil
 	}
 	pt, err := crypto.Decrypt(*ct, s.atRest)
 	if err != nil {
-		return fmt.Errorf("decrypt content: %w", err)
+		// Content is likely plain text from before at-rest encryption was enabled.
+		slog.Debug("decrypt content fallback to plain text", "error", err)
+		return nil
 	}
 	*ct = pt
 	return nil
