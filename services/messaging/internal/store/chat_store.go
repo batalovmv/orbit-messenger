@@ -20,7 +20,7 @@ type ChatStore interface {
 	GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
 	Create(ctx context.Context, chat *model.Chat) error
 	GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
-	CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error)
+	CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
 	GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
 	SearchMembers(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
 	GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
@@ -39,9 +39,8 @@ type ChatStore interface {
 	UpdateMemberPermissions(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
 	UpdateMemberPreferences(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds int) error
-	SetDisappearingTimer(ctx context.Context, chatID uuid.UUID, timer int) error
-	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	SetIsProtected(ctx context.Context, chatID uuid.UUID, enabled bool) error
+	SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	ClearChatPhoto(ctx context.Context, chatID uuid.UUID) error
 	ListAll(ctx context.Context, limit int) ([]model.Chat, error)
 	ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error)
@@ -109,10 +108,10 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 
 	query := `
 		SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
-		       c.is_encrypted, c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds, c.disappearing_timer,
+		       c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds,
 		       c.created_at, c.updated_at,
 		       m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
-		       m.expires_at, m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
+		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 		       m.grouped_id, m.is_one_time, m.sequence_number, m.created_at, m.edited_at,
 		       m.viewed_at, m.viewed_by,
 		       (SELECT COUNT(*) FROM chat_members cm2 WHERE cm2.chat_id = c.id) as member_count,
@@ -161,7 +160,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		var msgID, msgChatID, msgSenderID, msgReplyToID, msgForwardedFrom *uuid.UUID
 		var msgType, msgContent, msgGroupedID *string
 		var msgSeq *int64
-		var msgCreatedAt, msgEditedAt, msgExpiresAt, msgViewedAt *time.Time
+		var msgCreatedAt, msgEditedAt, msgViewedAt *time.Time
 		var msgViewedBy *uuid.UUID
 		var msgIsEdited, msgIsDeleted, msgIsPinned, msgIsForwarded, msgIsOneTime *bool
 		var ouID *uuid.UUID
@@ -174,11 +173,10 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 
 		err := rows.Scan(
 			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
-			&item.Chat.AvatarURL, &item.Chat.CreatedBy, &item.Chat.IsEncrypted, &item.Chat.IsProtected,
-			&item.Chat.MaxMembers, &item.Chat.DefaultPermissions, &item.Chat.SlowModeSeconds, &item.Chat.DisappearingTimer,
+			&item.Chat.AvatarURL, &item.Chat.CreatedBy,
+			&item.Chat.IsProtected, &item.Chat.MaxMembers, &item.Chat.DefaultPermissions, &item.Chat.SlowModeSeconds,
 			&item.Chat.CreatedAt, &item.Chat.UpdatedAt,
 			&msgID, &msgChatID, &msgSenderID, &msgType, &msgContent, &msgReplyToID,
-			&msgExpiresAt,
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
 			&msgGroupedID, &msgIsOneTime, &msgSeq, &msgCreatedAt, &msgEditedAt,
 			&msgViewedAt, &msgViewedBy,
@@ -199,7 +197,6 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			}
 			msg.Content = msgContent
 			msg.ReplyToID = msgReplyToID
-			msg.ExpiresAt = msgExpiresAt
 			if msgIsEdited != nil {
 				msg.IsEdited = *msgIsEdited
 			}
@@ -274,11 +271,11 @@ func (s *chatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat,
 	c := &model.Chat{}
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
-		        is_encrypted, is_protected, max_members, default_permissions, slow_mode_seconds, disappearing_timer,
+		        is_protected, max_members, default_permissions, slow_mode_seconds,
 		        created_at, updated_at
 		 FROM chats WHERE id = $1`, chatID,
 	).Scan(&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
-		&c.IsEncrypted, &c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds, &c.DisappearingTimer,
+		&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
 		&c.CreatedAt, &c.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -290,11 +287,11 @@ func (s *chatStore) Create(ctx context.Context, chat *model.Chat) error {
 	return s.pool.QueryRow(ctx,
 		`INSERT INTO chats (type, name, description, created_by, default_permissions)
 		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, is_encrypted, is_protected, max_members, default_permissions, slow_mode_seconds, disappearing_timer,
+		 RETURNING id, is_protected, max_members, default_permissions, slow_mode_seconds,
 		           created_at, updated_at`,
 		chat.Type, chat.Name, chat.Description, chat.CreatedBy, chat.DefaultPermissions,
-	).Scan(&chat.ID, &chat.IsEncrypted, &chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions,
-		&chat.SlowModeSeconds, &chat.DisappearingTimer, &chat.CreatedAt, &chat.UpdatedAt)
+	).Scan(&chat.ID, &chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions,
+		&chat.SlowModeSeconds, &chat.CreatedAt, &chat.UpdatedAt)
 }
 
 func (s *chatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error) {
@@ -313,7 +310,7 @@ func (s *chatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUID) (
 	return &chatID, nil
 }
 
-func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error) {
+func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -322,14 +319,13 @@ func (s *chatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID
 
 	chat := &model.Chat{
 		Type:               "direct",
-		IsEncrypted:        isEncrypted,
 		DefaultPermissions: permissions.DefaultDirectPermissions,
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO chats (type, is_encrypted, default_permissions) VALUES ('direct', $1, $2)
-		 RETURNING id, type, is_encrypted, is_protected, max_members, default_permissions, disappearing_timer, created_at, updated_at`,
-		isEncrypted, permissions.DefaultDirectPermissions,
-	).Scan(&chat.ID, &chat.Type, &chat.IsEncrypted, &chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions, &chat.DisappearingTimer, &chat.CreatedAt, &chat.UpdatedAt)
+		`INSERT INTO chats (type, default_permissions) VALUES ('direct', $1)
+		 RETURNING id, type, is_protected, max_members, default_permissions, created_at, updated_at`,
+		permissions.DefaultDirectPermissions,
+	).Scan(&chat.ID, &chat.Type, &chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions, &chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -720,10 +716,10 @@ func (s *chatStore) SetSlowMode(ctx context.Context, chatID uuid.UUID, seconds i
 	return err
 }
 
-func (s *chatStore) SetDisappearingTimer(ctx context.Context, chatID uuid.UUID, timer int) error {
+func (s *chatStore) SetIsProtected(ctx context.Context, chatID uuid.UUID, enabled bool) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE chats SET disappearing_timer = $2, updated_at = NOW() WHERE id = $1`,
-		chatID, timer,
+		`UPDATE chats SET is_protected = $2, updated_at = NOW() WHERE id = $1`,
+		chatID, enabled,
 	)
 	return err
 }
@@ -736,21 +732,13 @@ func (s *chatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, enabled
 	return err
 }
 
-func (s *chatStore) SetIsProtected(ctx context.Context, chatID uuid.UUID, enabled bool) error {
-	_, err := s.pool.Exec(ctx,
-		`UPDATE chats SET is_protected = $2, updated_at = NOW() WHERE id = $1`,
-		chatID, enabled,
-	)
-	return err
-}
-
 func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error) {
 	if limit <= 0 {
 		limit = 10000
 	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
-		        is_encrypted, is_protected, max_members, default_permissions, slow_mode_seconds, disappearing_timer,
+		        is_protected, max_members, default_permissions, slow_mode_seconds,
 		        created_at, updated_at
 		 FROM chats
 		 ORDER BY created_at
@@ -766,7 +754,7 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 		var c model.Chat
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
-			&c.IsEncrypted, &c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds, &c.DisappearingTimer,
+			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -785,7 +773,7 @@ func (s *chatStore) ListAllPaginated(ctx context.Context, cursor string, limit i
 	var err error
 
 	selectCols := `id, type, name, description, avatar_url, created_by,
-		is_encrypted, is_protected, max_members, default_permissions, slow_mode_seconds, disappearing_timer,
+		is_protected, max_members, default_permissions, slow_mode_seconds,
 		created_at, updated_at`
 
 	if cursor != "" {
@@ -817,7 +805,7 @@ func (s *chatStore) ListAllPaginated(ctx context.Context, cursor string, limit i
 		var c model.Chat
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
-			&c.IsEncrypted, &c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds, &c.DisappearingTimer,
+			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, "", false, err
@@ -847,7 +835,7 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 	}
 	rows, err := s.pool.Query(ctx,
 		`SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
-		        c.is_encrypted, c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds, c.disappearing_timer,
+		        c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds,
 		        c.created_at, c.updated_at
 		 FROM chats c
 		 JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = $1
@@ -867,7 +855,7 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 		var c model.Chat
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
-			&c.IsEncrypted, &c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds, &c.DisappearingTimer,
+			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -903,11 +891,11 @@ func (s *chatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) 
 		`INSERT INTO chats (type, name, created_by)
 		 VALUES ('direct', $1, $2)
 		 RETURNING id, type, name, description, avatar_url, created_by,
-		           is_encrypted, is_protected, max_members, default_permissions, slow_mode_seconds, disappearing_timer,
+		           is_protected, max_members, default_permissions, slow_mode_seconds,
 		           created_at, updated_at`,
 		name, userID,
 	).Scan(&chat.ID, &chat.Type, &chat.Name, &chat.Description, &chat.AvatarURL, &chat.CreatedBy,
-		&chat.IsEncrypted, &chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions, &chat.SlowModeSeconds, &chat.DisappearingTimer,
+		&chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions, &chat.SlowModeSeconds,
 		&chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create saved chat: %w", err)

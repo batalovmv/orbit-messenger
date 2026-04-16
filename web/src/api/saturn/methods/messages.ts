@@ -37,7 +37,7 @@ import {
 } from '../apiBuilders/symbols';
 import * as client from '../client';
 import { sendApiUpdate, sendImmediateApiUpdate } from '../updates/apiUpdateEmitter';
-import { decryptAndPatchEncryptedMessage, trackPendingSend } from '../updates/wsHandler';
+import { trackPendingSend } from '../updates/wsHandler';
 import { uploadMedia } from './media';
 
 let currentUserId: string | undefined;
@@ -578,16 +578,6 @@ export async function fetchMessages({
       return apiMessage;
     });
 
-    // Phase 7.1: kick off decryption for every encrypted message in the
-    // batch. Each call patches its own row in global state via
-    // `updateMessage`, matching the WS receive path. Text placeholders
-    // and media content fall into place as soon as the ratchet resolves.
-    for (const message of result.data || []) {
-      if (message.type === 'encrypted' && message.encrypted_content && message.sender_id) {
-        void decryptAndPatchEncryptedMessage(message);
-      }
-    }
-
     return {
       messages,
       polls: extractApiPolls(result.data || []),
@@ -752,119 +742,6 @@ export async function sendMessage({
 
   if (!getGlobalMessage(chatId, localId)) {
     return undefined;
-  }
-
-  // Phase 7: E2E branch — DMs marked `isEncrypted` run through the
-  // Signal-Protocol pipeline. Phase 7.0 shipped text-only; Phase 7.1 adds
-  // media via a per-file AES-GCM key wrapped inside the ratchet payload
-  // (design doc §14.1). Stickers/gifs/polls still go through the
-  // plaintext path and must be rejected for E2E chats.
-  if ((chat as { isEncrypted?: boolean }).isEncrypted) {
-    const peerUserId = (chat as { peerUserId?: string }).peerUserId;
-    if (!peerUserId) {
-      sendApiUpdate({
-        '@type': 'updateMessageSendFailed',
-        chatId,
-        localId,
-        error: 'E2E is currently available only for direct messages',
-      });
-      return undefined;
-    }
-    if (sticker || gif || poll || (mediaIds && mediaIds.length > 0)) {
-      sendApiUpdate({
-        '@type': 'updateMessageSendFailed',
-        chatId,
-        localId,
-        error: 'Стикеры, GIF и опросы в зашифрованных чатах пока не поддерживаются',
-      });
-      return undefined;
-    }
-    if (!text && !attachment) {
-      sendApiUpdate({
-        '@type': 'updateMessageSendFailed',
-        chatId,
-        localId,
-        error: 'Пустое сообщение',
-      });
-      return undefined;
-    }
-
-    try {
-      const { sendEncryptedTextMessage, sendEncryptedMediaMessage, EncryptedSendError } = await import('./encryptedMessages');
-      try {
-        if (attachment) {
-          const kind = detectEncryptedMediaKind(attachment);
-          const result = await sendEncryptedMediaMessage({
-            chatId,
-            peerUserId,
-            text,
-            ownUserId: currentUserId,
-            attachments: [{
-              blob: attachment.blob,
-              type: kind,
-              mime: attachment.mimeType || 'application/octet-stream',
-              filename: attachment.filename,
-              size: attachment.size,
-              width: attachment.quick?.width,
-              height: attachment.quick?.height,
-              duration: attachment.quick?.duration ?? attachment.voice?.duration,
-              isOneTime: attachment.ttlSeconds !== undefined && attachment.ttlSeconds > 0,
-            }],
-          });
-          trackPendingSend(result.messageId);
-          sendApiUpdate({
-            '@type': 'updateMessageSendSucceeded',
-            chatId,
-            localId,
-            message: {
-              ...localMessage,
-              saturnId: result.messageId,
-              sendingState: undefined,
-            },
-          });
-          return { ...localMessage, saturnId: result.messageId, isOutgoing: true };
-        }
-
-        const result = await sendEncryptedTextMessage({
-          chatId,
-          peerUserId,
-          plaintext: text!,
-          ownUserId: currentUserId,
-        });
-        trackPendingSend(result.messageId);
-        sendApiUpdate({
-          '@type': 'updateMessageSendSucceeded',
-          chatId,
-          localId,
-          message: {
-            ...localMessage,
-            saturnId: result.messageId,
-            sendingState: undefined,
-            content: { text: { text: text!, entities: entities ?? [] } },
-          },
-        });
-        return { ...localMessage, saturnId: result.messageId, isOutgoing: true };
-      } catch (err) {
-        const reason = err instanceof EncryptedSendError ? err.message
-          : err instanceof Error ? err.message
-            : 'Failed to send encrypted message';
-        sendApiUpdate({
-          '@type': 'updateMessageSendFailed',
-          chatId,
-          localId,
-          error: reason,
-        });
-        return undefined;
-      }
-    } catch {
-      sendApiUpdate({
-        '@type': 'updateMessageSendFailed',
-        chatId,
-        localId,
-        error: 'Не удалось загрузить слой шифрования',
-      });
-      return undefined;
-    }
   }
 
   let uploadedMediaIds = mediaIds || [];
@@ -1645,17 +1522,5 @@ function detectMediaType(attachment: ApiAttachment) {
   if (mime.startsWith('image/')) return 'photo';
   if (mime.startsWith('video/')) return 'video';
   if (mime.startsWith('audio/')) return 'voice';
-  return 'file';
-}
-
-// Phase 7.1: narrow an ApiAttachment to the discriminated kind used by
-// the encrypted-media payload wrapper. Mirrors `detectMediaType` but
-// drops the `sticker`/`videonote`/etc. buckets that never travel through
-// the E2E composer path today.
-function detectEncryptedMediaKind(attachment: ApiAttachment): 'photo' | 'video' | 'voice' | 'file' | 'gif' {
-  const raw = detectMediaType(attachment);
-  if (raw === 'photo' || raw === 'video' || raw === 'voice' || raw === 'gif' || raw === 'file') {
-    return raw;
-  }
   return 'file';
 }

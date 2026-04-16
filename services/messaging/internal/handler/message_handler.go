@@ -45,11 +45,6 @@ type sendMessageRequest struct {
 	ViaBotID         *string         `json:"via_bot_id"`
 }
 
-type sendEncryptedRequest struct {
-	Envelope json.RawMessage `json:"envelope"`             // E2E envelope JSON
-	MediaIDs []string        `json:"media_ids,omitempty"`  // Phase 7.1: encrypted media attachments
-}
-
 func NewMessageHandler(
 	svc *service.MessageService,
 	pollSvc *service.PollService,
@@ -76,7 +71,6 @@ func (h *MessageHandler) Register(app fiber.Router) {
 	app.Get("/chats/:id/messages", h.ListMessages)
 	app.Get("/chats/:id/history", h.FindByDate)
 	app.Post("/chats/:id/messages", h.SendMessage)
-	app.Post("/chats/:id/messages/encrypted", h.SendEncryptedMessage)
 	app.Get("/messages/:id", h.GetMessage)
 
 	// Pin endpoints
@@ -307,45 +301,6 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	msg, err := h.svc.SendMessage(c.Context(), chatID, uid, req.Content, req.Entities, replyTo, req.Type, sendOpts...)
-	if err != nil {
-		return response.Error(c, err)
-	}
-
-	return response.JSON(c, fiber.StatusCreated, msg)
-}
-
-func (h *MessageHandler) SendEncryptedMessage(c *fiber.Ctx) error {
-	uid, err := getUserID(c)
-	if err != nil {
-		return response.Error(c, err)
-	}
-
-	chatID, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
-	}
-
-	var req sendEncryptedRequest
-	if err := c.BodyParser(&req); err != nil {
-		return response.Error(c, apperror.BadRequest("Invalid request body"))
-	}
-	if len(req.Envelope) == 0 {
-		return response.Error(c, apperror.BadRequest("envelope is required"))
-	}
-
-	var mediaUUIDs []uuid.UUID
-	if len(req.MediaIDs) > 0 {
-		mediaUUIDs = make([]uuid.UUID, 0, len(req.MediaIDs))
-		for _, id := range req.MediaIDs {
-			parsed, err := uuid.Parse(id)
-			if err != nil {
-				return response.Error(c, apperror.BadRequest("Invalid media_id"))
-			}
-			mediaUUIDs = append(mediaUUIDs, parsed)
-		}
-	}
-
-	msg, err := h.svc.SendEncryptedMessage(c.Context(), chatID, uid, req.Envelope, mediaUUIDs, c.Get("X-Device-ID"))
 	if err != nil {
 		return response.Error(c, err)
 	}

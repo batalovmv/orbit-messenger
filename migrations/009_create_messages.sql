@@ -6,7 +6,6 @@ CREATE TABLE messages (
     sender_id           UUID REFERENCES users(id),
     type                TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text', 'photo', 'video', 'file', 'voice', 'videonote', 'sticker', 'poll', 'system')),
     content             TEXT,
-    encrypted_content   BYTEA,
     reply_to_id         UUID REFERENCES messages(id),
     is_edited           BOOLEAN NOT NULL DEFAULT false,
     is_deleted          BOOLEAN NOT NULL DEFAULT false,
@@ -14,7 +13,6 @@ CREATE TABLE messages (
     is_forwarded        BOOLEAN NOT NULL DEFAULT false,
     forwarded_from      UUID REFERENCES users(id),
     thread_id           UUID,
-    expires_at          TIMESTAMPTZ,
     sequence_number     BIGINT NOT NULL DEFAULT nextval('messages_seq'),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     edited_at           TIMESTAMPTZ

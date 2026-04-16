@@ -35,27 +35,11 @@ import {
 import { fetchMessageLink } from './messages';
 import * as botsApi from './bots';
 import * as integrationsApi from './integrations';
-import * as keysApi from './keys';
 
 export {
   destroy, disconnect, init, setCurrentUser,
 } from './client';
-export { botsApi, integrationsApi, keysApi };
-
-// Phase 7: E2E key management + encrypted transport
-export {
-  uploadIdentityKey,
-  uploadSignedPreKey,
-  uploadOneTimePreKeys,
-  fetchKeyBundle,
-  fetchIdentityKey,
-  fetchUserDevices,
-  fetchPreKeyCount,
-  fetchKeyTransparencyLog,
-  revokeDevice,
-  sendEncryptedMessage,
-  setDisappearingTimer,
-} from './keys';
+export { botsApi, integrationsApi };
 
 // Phase 6: Call methods
 export {
@@ -94,14 +78,6 @@ export async function downloadMedia(
   const sizeMatch = url.match(/[?&]size=(\w)/);
   const size = sizeMatch ? sizeMatch[1] : 'y';
   const isPreview = size === 'm' || size === 's' || size === 'a';
-
-  // Phase 7.1: if the asset id is a known encrypted media, ALWAYS bypass
-  // the thumbnail/preview URLs (the media service strips them) and fetch
-  // the full ciphertext + decrypt it client-side.
-  if (assetRef.kind === 'photo' || assetRef.kind === 'document' || assetRef.kind === 'video') {
-    const encrypted = await tryFetchEncryptedMedia(assetRef.id, onProgress);
-    if (encrypted) return encrypted;
-  }
 
   try {
     let asset = resolveRegisteredAsset(assetRef.kind, assetRef.id, isPreview);
@@ -1179,48 +1155,6 @@ export {
   searchMessagesGlobal, searchMessagesInChatWithFilters, searchUsersGlobal, searchChatsGlobal,
   searchPublicPosts,
 } from './search';
-
-// Phase 7.1: fetch an encrypted blob by id (full ciphertext, no size
-// query) and decrypt it using the key material stashed in the E2E media
-// key store at receive-time. Returns `undefined` when we don't have a
-// key — callers then fall back to the normal fetch path.
-async function tryFetchEncryptedMedia(
-  mediaId: string,
-  onProgress?: (progress: number) => void,
-) {
-  if (!/^[0-9a-f-]{36}$/i.test(mediaId)) return undefined;
-  const keyStore = await import('../../../lib/crypto/media-key-store');
-  const material = keyStore.getEncryptedMedia(mediaId);
-  if (!material) return undefined;
-
-  const token = await ensureAuth();
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(`${getBaseUrl()}/media/${mediaId}`, { headers, redirect: 'follow' });
-  if (!response.ok) return undefined;
-
-  const ciphertext = new Uint8Array(await response.arrayBuffer());
-  if (onProgress) onProgress(1);
-
-  try {
-    const { decryptMediaBlob } = await import('../../../lib/crypto/media-crypto');
-    const plaintext = decryptMediaBlob(ciphertext, { key: material.key, nonce: material.nonce });
-    const buffer = plaintext.buffer.slice(plaintext.byteOffset, plaintext.byteOffset + plaintext.byteLength);
-    const dataBlob = new Blob([buffer as ArrayBuffer], { type: material.mime });
-    // Preserve the two-variant discriminated union that downstream
-    // consumers (mediaLoader, progressiveLoader) rely on — the
-    // Progressive path needs `arrayBuffer`/`fullSize` slots to exist as
-    // `undefined` so the union narrows correctly.
-    return {
-      dataBlob,
-      mimeType: material.mime,
-      arrayBuffer: undefined as ArrayBuffer | undefined,
-      fullSize: undefined as number | undefined,
-    };
-  } catch {
-    return undefined;
-  }
-}
 
 function parseAssetRef(url: string) {
   const normalizedUrl = url.replace(/^\.\//, '');

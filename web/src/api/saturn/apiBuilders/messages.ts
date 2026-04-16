@@ -240,11 +240,9 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
   );
   if (albumAttachments.length > 1) {
     content.albumMedia = albumAttachments.map((attachment) => {
-      const built = getEffectiveAttachmentType(attachment) === 'photo'
+      return getEffectiveAttachmentType(attachment) === 'photo'
         ? buildSaturnPhoto(attachment)
         : buildSaturnVideo(attachment);
-      if (attachment.is_encrypted) (built as { isEncrypted?: boolean }).isEncrypted = true;
-      return built;
     });
 
     if (effectiveFirstType === 'photo') {
@@ -258,12 +256,10 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
   switch (effectiveFirstType) {
     case 'photo':
       content.photo = buildSaturnPhoto(first);
-      if (first.is_encrypted) content.photo.isEncrypted = true;
       break;
     case 'video':
     case 'videonote':
       content.video = buildSaturnVideo(first);
-      if (first.is_encrypted) content.video.isEncrypted = true;
       break;
     case 'voice':
       content.voice = {
@@ -272,7 +268,6 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         duration: first.duration_seconds || 0,
         waveform: first.waveform_data || [],
         size: first.size_bytes,
-        isEncrypted: first.is_encrypted || undefined,
       };
       break;
     case 'gif':
@@ -322,7 +317,6 @@ function buildMediaContent(content: ApiMessage['content'], attachments: SaturnMe
         fileName: first.original_filename || 'file',
         pageCount: first.page_count || undefined,
         size: first.size_bytes,
-        isEncrypted: first.is_encrypted || undefined,
       };
       break;
   }
@@ -515,28 +509,17 @@ function buildReplyKeyboard(markup: SaturnReplyMarkup | string | undefined): Api
 export function buildApiMessage(msg: SaturnMessage): ApiMessage {
   registerMessageId(msg.chat_id, msg.id, msg.sequence_number);
 
-  const isEncryptedType = msg.type === 'encrypted';
   const richContent = parseRichMessageContent(msg.content);
   const content: ApiMessage['content'] = {
-    text: isEncryptedType ? {
-      // Placeholder — overwritten by the async decrypt side-effect in
-      // dispatchNewMessage / sync handlers. See wsHandler `decryptAndPatchEncryptedMessage`.
-      text: '🔒',
-      entities: [],
-    } : msg.content && !richContent && msg.type !== 'poll' ? {
+    text: msg.content && !richContent && msg.type !== 'poll' ? {
       text: msg.content,
       entities: msg.entities?.map(buildApiEntity) || [],
     } : undefined,
   };
 
-  if (msg.media_attachments?.length && !isEncryptedType) {
-    // Plaintext messages: server supplies full metadata.
+  if (msg.media_attachments?.length) {
     buildMediaContent(content, msg.media_attachments);
   }
-  // For encrypted messages, `decryptAndPatchEncryptedMessage` in
-  // wsHandler will populate content.photo/video/document/voice after it
-  // parses the envelope payload — the server only sees opaque blobs
-  // here, so there is nothing useful to build from `media_attachments`.
 
   // One-time media: set ttlSeconds so TG Web A renders blur/one-time overlay
   if (msg.is_one_time && !msg.viewed_at) {
@@ -590,8 +573,6 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     isInAlbum: isInAlbum || undefined,
     inlineButtons: replyMarkup?.inlineButtons,
     viaBotId: msg.via_bot_id,
-    isEncrypted: isEncryptedType || undefined,
-    encryptedContent: isEncryptedType ? msg.encrypted_content : undefined,
   };
 }
 

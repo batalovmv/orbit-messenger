@@ -18,7 +18,7 @@ type mockChatStore struct {
 	getByIDFn            func(ctx context.Context, chatID uuid.UUID) (*model.Chat, error)
 	createFn             func(ctx context.Context, chat *model.Chat) error
 	getDirectChatFn      func(ctx context.Context, user1, user2 uuid.UUID) (*uuid.UUID, error)
-	createDirectFn       func(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error)
+	createDirectFn       func(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error)
 	getMembersFn         func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
 	searchMembersFn      func(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
 	getMemberIDsFn       func(ctx context.Context, chatID uuid.UUID) ([]string, error)
@@ -35,7 +35,6 @@ type mockChatStore struct {
 	updateMemberPermsFn  func(ctx context.Context, chatID, userID uuid.UUID, perms int64) error
 	updateMemberPrefsFn  func(ctx context.Context, chatID, userID uuid.UUID, prefs model.ChatMemberPreferences) (*model.ChatMember, error)
 	setSlowModeFn        func(ctx context.Context, chatID uuid.UUID, seconds int) error
-	setDisappearingFn    func(ctx context.Context, chatID uuid.UUID, timer int) error
 	setSignaturesFn      func(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	getUserChatIDsFn     func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 }
@@ -78,12 +77,12 @@ func (m *mockChatStore) GetDirectChat(ctx context.Context, user1, user2 uuid.UUI
 	return nil, nil
 }
 
-func (m *mockChatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID, isEncrypted bool) (*model.Chat, error) {
+func (m *mockChatStore) CreateDirectChat(ctx context.Context, user1, user2 uuid.UUID) (*model.Chat, error) {
 	if m.createDirectFn != nil {
-		return m.createDirectFn(ctx, user1, user2, isEncrypted)
+		return m.createDirectFn(ctx, user1, user2)
 	}
 	id := uuid.New()
-	return &model.Chat{ID: id, Type: "direct", IsEncrypted: isEncrypted, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+	return &model.Chat{ID: id, Type: "direct", CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 }
 
 func (m *mockChatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error) {
@@ -198,13 +197,6 @@ func (m *mockChatStore) SetSlowMode(ctx context.Context, chatID uuid.UUID, secon
 	return nil
 }
 
-func (m *mockChatStore) SetDisappearingTimer(ctx context.Context, chatID uuid.UUID, timer int) error {
-	if m.setDisappearingFn != nil {
-		return m.setDisappearingFn(ctx, chatID, timer)
-	}
-	return nil
-}
-
 func (m *mockChatStore) SetSignatures(ctx context.Context, chatID uuid.UUID, enabled bool) error {
 	if m.setSignaturesFn != nil {
 		return m.setSignaturesFn(ctx, chatID, enabled)
@@ -253,7 +245,6 @@ func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UU
 
 type mockMessageStore struct {
 	createFn               func(ctx context.Context, msg *model.Message) error
-	createEncryptedFn      func(ctx context.Context, msg *model.Message, envelope []byte) error
 	getByIDFn              func(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	listByChatFn           func(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.Message, string, bool, error)
 	findByChatAndDateFn    func(ctx context.Context, chatID uuid.UUID, date time.Time, limit int) ([]model.Message, string, bool, error)
@@ -275,25 +266,6 @@ func (m *mockMessageStore) Create(ctx context.Context, msg *model.Message) error
 	}
 	msg.ID = uuid.New()
 	msg.CreatedAt = time.Now()
-	return nil
-}
-
-func (m *mockMessageStore) CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error {
-	if m.createEncryptedFn != nil {
-		return m.createEncryptedFn(ctx, msg, envelope)
-	}
-	msg.ID = uuid.New()
-	msg.CreatedAt = time.Now()
-	msg.Type = model.MessageTypeEncrypted
-	msg.EncryptedContent = envelope
-	return nil
-}
-
-func (m *mockMessageStore) CreateEncryptedWithMedia(ctx context.Context, msg *model.Message, envelope []byte, mediaIDs []uuid.UUID) error {
-	msg.ID = uuid.New()
-	msg.CreatedAt = time.Now()
-	msg.Type = model.MessageTypeEncrypted
-	msg.EncryptedContent = envelope
 	return nil
 }
 

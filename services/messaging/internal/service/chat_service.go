@@ -150,7 +150,7 @@ func (s *ChatService) GetChat(ctx context.Context, chatID, userID uuid.UUID) (*m
 	return chat, nil
 }
 
-func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID, isEncrypted bool) (*model.Chat, error) {
+func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID uuid.UUID) (*model.Chat, error) {
 	// Self-DM → redirect to Saved Messages (direct_chat_lookup requires user1 < user2).
 	if userID == otherUserID {
 		return s.GetOrCreateSavedChat(ctx, userID)
@@ -165,22 +165,10 @@ func (s *ChatService) CreateDirectChat(ctx context.Context, userID, otherUserID 
 		if err != nil {
 			return nil, fmt.Errorf("get existing chat: %w", err)
 		}
-		// Prevent encryption mode mismatch: upgrading plaintext→E2E or
-		// downgrading E2E→plaintext are both unsupported for existing DMs.
-		if isEncrypted && !chat.IsEncrypted {
-			return nil, apperror.Conflict("a non-encrypted DM already exists with this user")
-		}
-		if !isEncrypted && chat.IsEncrypted {
-			return nil, apperror.Conflict("an E2E encrypted DM already exists with this user")
-		}
 		return chat, nil
 	}
 
-	if isEncrypted && !s.isFeatureEnabled(ctx, "e2e_dm_enabled") {
-		return nil, apperror.BadRequest("E2E encryption is not enabled")
-	}
-
-	chat, err := s.chats.CreateDirectChat(ctx, userID, otherUserID, isEncrypted)
+	chat, err := s.chats.CreateDirectChat(ctx, userID, otherUserID)
 	if err != nil {
 		return nil, fmt.Errorf("create DM: %w", err)
 	}
@@ -681,59 +669,6 @@ func (s *ChatService) SetSlowMode(ctx context.Context, chatID, userID uuid.UUID,
 	return nil
 }
 
-func (s *ChatService) SetDisappearingTimer(ctx context.Context, chatID, userID uuid.UUID, timer int) (*model.Chat, error) {
-	switch timer {
-	case 0, 86400, 604800, 2592000:
-	default:
-		return nil, apperror.BadRequest("Timer must be 0, 86400, 604800, or 2592000")
-	}
-
-	member, err := s.chats.GetMember(ctx, chatID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("get member: %w", err)
-	}
-	if member == nil {
-		return nil, apperror.Forbidden("Not a member of this chat")
-	}
-
-	chat, err := s.chats.GetByID(ctx, chatID)
-	if err != nil {
-		return nil, fmt.Errorf("get chat: %w", err)
-	}
-	if chat == nil {
-		return nil, apperror.NotFound("Chat not found")
-	}
-
-	if chat.Type != "direct" && !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanChangeInfo) {
-		return nil, apperror.Forbidden("No permission to change disappearing timer")
-	}
-
-	if err := s.chats.SetDisappearingTimer(ctx, chatID, timer); err != nil {
-		return nil, fmt.Errorf("set disappearing timer: %w", err)
-	}
-
-	chat, err = s.chats.GetByID(ctx, chatID)
-	if err != nil {
-		return nil, fmt.Errorf("get updated chat: %w", err)
-	}
-
-	memberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
-	if mErr != nil {
-		slog.WarnContext(ctx, "failed to get member IDs for NATS publish", "chat_id", chatID, "error", mErr)
-	}
-	s.nats.Publish(
-		fmt.Sprintf("orbit.chat.%s.lifecycle", chatID),
-		"chat_updated",
-		chat,
-		memberIDs,
-		userID.String(),
-	)
-
-	s.indexChat(chat)
-
-	return chat, nil
-}
-
 func (s *ChatService) SetIsProtected(ctx context.Context, chatID, userID uuid.UUID, enabled bool) (*model.Chat, error) {
 	member, err := s.chats.GetMember(ctx, chatID, userID)
 	if err != nil {
@@ -751,8 +686,6 @@ func (s *ChatService) SetIsProtected(ctx context.Context, chatID, userID uuid.UU
 		return nil, apperror.NotFound("Chat not found")
 	}
 
-	// Groups require the change-info permission. Direct chats are always
-	// toggleable by either participant.
 	if chat.Type != "direct" && !permissions.CanPerform(member.Role, chat.Type, member.Permissions, chat.DefaultPermissions, permissions.CanChangeInfo) {
 		return nil, apperror.Forbidden("No permission to change chat protection")
 	}

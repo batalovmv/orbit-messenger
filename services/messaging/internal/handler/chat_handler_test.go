@@ -81,39 +81,30 @@ func TestCreateChat_WithMembers(t *testing.T) {
 	}
 }
 
-func TestCreateDirectChat_WithEncryptionFlag(t *testing.T) {
+func TestCreateDirectChat_Success(t *testing.T) {
 	userID := uuid.New()
 	otherUserID := uuid.New()
 	chatID := uuid.New()
-	createdEncrypted := false
+	created := false
 
 	cs := &mockChatStore{
-		isFeatureEnabledFn: func(_ context.Context, key string) (bool, error) {
-			if key != "e2e_dm_enabled" {
-				t.Fatalf("unexpected feature flag key: %s", key)
-			}
-			return true, nil
-		},
 		getDirectChatFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*uuid.UUID, error) {
 			if gotUserID != userID || gotOtherUserID != otherUserID {
 				t.Fatalf("unexpected direct chat lookup args: %s %s", gotUserID, gotOtherUserID)
 			}
 			return nil, nil
 		},
-		createDirectFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID, isEncrypted bool) (*model.Chat, error) {
+		createDirectFn: func(_ context.Context, gotUserID, gotOtherUserID uuid.UUID) (*model.Chat, error) {
 			if gotUserID != userID || gotOtherUserID != otherUserID {
 				t.Fatalf("unexpected create direct args: %s %s", gotUserID, gotOtherUserID)
 			}
-			if !isEncrypted {
-				t.Fatal("expected encrypted direct chat creation")
-			}
-			createdEncrypted = true
-			return &model.Chat{ID: chatID, Type: "direct", IsEncrypted: true}, nil
+			created = true
+			return &model.Chat{ID: chatID, Type: "direct"}, nil
 		},
 	}
 
 	app := newChatApp(cs)
-	body := fmt.Sprintf(`{"user_id":"%s","is_encrypted":true}`, otherUserID)
+	body := fmt.Sprintf(`{"user_id":"%s"}`, otherUserID)
 	req, _ := http.NewRequest(http.MethodPost, "/chats/direct", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-ID", userID.String())
@@ -126,13 +117,8 @@ func TestCreateDirectChat_WithEncryptionFlag(t *testing.T) {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 201, got %d: %s", resp.StatusCode, raw)
 	}
-	if !createdEncrypted {
-		t.Fatal("expected encrypted direct chat to be created")
-	}
-
-	bodyMap := readBody(t, resp)
-	if bodyMap["is_encrypted"] != true {
-		t.Fatalf("expected is_encrypted=true, got %#v", bodyMap["is_encrypted"])
+	if !created {
+		t.Fatal("expected direct chat to be created")
 	}
 }
 

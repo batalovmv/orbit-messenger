@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/messaging/internal/handler"
 	"github.com/mst-corp/orbit/services/messaging/internal/search"
@@ -127,9 +128,16 @@ func main() {
 		slog.Warn("meilisearch not configured, search will return empty results")
 	}
 
+	// At-rest content encryption key. The master key comes from env as a
+	// secret string; DeriveKey hashes it to 32 bytes (AES-256). A stolen
+	// Postgres dump without this env var reveals only ciphertext. Admin
+	// reads through the service layer stay transparent — the store layer
+	// wraps/unwraps on every write/read.
+	atRestKey := crypto.DeriveKey(config.MustEnv("ORBIT_MESSAGE_ENCRYPTION_KEY"))
+
 	// Stores
 	chatStore := store.NewChatStore(pool)
-	messageStore := store.NewMessageStore(pool)
+	messageStore := store.NewMessageStore(pool, atRestKey)
 	userStore := store.NewUserStore(pool)
 	inviteStore := store.NewInviteStore(pool)
 	privacyStore := store.NewPrivacySettingsStore(pool)
@@ -181,13 +189,6 @@ func main() {
 		rdb,
 		logger,
 	)
-	cleanupStore, ok := messageStore.(service.CleanupStore)
-	if !ok {
-		slog.Error("message store does not implement cleanup store")
-		os.Exit(1)
-	}
-	cleanupSvc := service.NewCleanupService(cleanupStore, time.Minute)
-
 	// NATS subscriber: update user status + last_seen_at in DB
 	statusSub, subErr := nc.Subscribe("orbit.user.*.status", func(msg *nats.Msg) {
 		var event struct {
@@ -256,7 +257,6 @@ func main() {
 	cronCtx, cancelCron := context.WithCancel(context.Background())
 	defer cancelCron()
 	go runScheduledDeliveryCron(cronCtx, scheduledSvc, logger)
-	go cleanupSvc.Start(cronCtx)
 
 	// Handlers
 	chatHandler := handler.NewChatHandler(chatSvc, logger, internalSecret)

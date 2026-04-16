@@ -14,11 +14,6 @@ import (
 var (
 	ErrPushSubscriptionLimitReached = errors.New("maximum of 10 push subscriptions per user")
 	ErrMediaNotOwned                = errors.New("media file does not belong to the sender")
-	ErrMediaNotEncrypted            = errors.New("media file is not encrypted (required for E2E chat)")
-)
-
-const (
-	MessageTypeEncrypted = "encrypted"
 )
 
 type User struct {
@@ -49,12 +44,10 @@ type Chat struct {
 	Description        *string    `json:"description,omitempty"`
 	AvatarURL          *string    `json:"avatar_url,omitempty"`
 	CreatedBy          *uuid.UUID `json:"created_by,omitempty"`
-	IsEncrypted        bool       `json:"is_encrypted"`
 	IsProtected        bool       `json:"is_protected"`
 	MaxMembers         int        `json:"max_members"`
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`
-	DisappearingTimer  int        `json:"disappearing_timer"`
 	IsPinned           bool       `json:"is_pinned"`
 	IsMuted            bool       `json:"is_muted"`
 	IsArchived         bool       `json:"is_archived"`
@@ -100,7 +93,6 @@ type Message struct {
 	SenderID         *uuid.UUID      `json:"sender_id,omitempty"`
 	Type             string          `json:"type"`
 	Content          *string         `json:"content,omitempty"`
-	EncryptedContent []byte          `json:"encrypted_content,omitempty"` // E2E ciphertext envelope (BYTEA)
 	Entities         json.RawMessage `json:"entities,omitempty"`
 	ReplyToID        *uuid.UUID      `json:"reply_to_id,omitempty"`
 	ReplyToSeqNum    *int64          `json:"reply_to_sequence_number,omitempty"`
@@ -114,7 +106,6 @@ type Message struct {
 	SequenceNumber   int64           `json:"sequence_number"`
 	CreatedAt        time.Time       `json:"created_at"`
 	EditedAt         *time.Time      `json:"edited_at,omitempty"`
-	ExpiresAt        *time.Time      `json:"expires_at,omitempty"` // disappearing messages
 	ViewedAt         *time.Time      `json:"viewed_at,omitempty"`
 	ViewedBy         *uuid.UUID      `json:"viewed_by,omitempty"`
 	// Bot extensions (migration 044)
@@ -146,7 +137,6 @@ type MediaAttachment struct {
 	Position         int      `json:"position"`
 	IsSpoiler        bool     `json:"is_spoiler"`
 	IsOneTime        bool     `json:"is_one_time"`
-	IsEncrypted      bool     `json:"is_encrypted,omitempty"`
 	ProcessingStatus string   `json:"processing_status"`
 }
 

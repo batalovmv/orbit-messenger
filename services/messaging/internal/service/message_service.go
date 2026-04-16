@@ -195,11 +195,6 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		return nil, apperror.NotFound("Chat not found")
 	}
 
-	// Prevent plaintext messages in E2E encrypted chats
-	if chat.IsEncrypted {
-		return nil, apperror.BadRequest("Cannot send plaintext messages to an E2E encrypted chat")
-	}
-
 	member, err := s.chats.GetMember(ctx, chatID, senderID)
 	if err != nil {
 		return nil, fmt.Errorf("get member: %w", err)
@@ -288,10 +283,6 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	}
 	for _, opt := range opts {
 		opt(msg)
-	}
-	if chat.DisappearingTimer > 0 {
-		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
-		msg.ExpiresAt = &expiresAt
 	}
 	if err := s.messages.Create(ctx, msg); err != nil {
 		return nil, fmt.Errorf("create message: %w", err)
@@ -463,98 +454,6 @@ func (s *MessageService) runOrbitAIMention(chatID uuid.UUID, prompt string) {
 	}
 }
 
-func (s *MessageService) SendEncryptedMessage(ctx context.Context, chatID, senderID uuid.UUID, envelope []byte, mediaIDs []uuid.UUID, senderDeviceID string) (*model.Message, error) {
-	chat, err := s.chats.GetByID(ctx, chatID)
-	if err != nil {
-		return nil, fmt.Errorf("get chat: %w", err)
-	}
-	if chat == nil {
-		return nil, apperror.NotFound("chat not found")
-	}
-	if chat.Type != "direct" {
-		return nil, apperror.BadRequest("E2E is supported only for direct chats")
-	}
-	if !chat.IsEncrypted {
-		return nil, apperror.BadRequest("chat is not E2E encrypted")
-	}
-
-	isMember, _, err := s.chats.IsMember(ctx, chatID, senderID)
-	if err != nil {
-		return nil, fmt.Errorf("check membership: %w", err)
-	}
-	if !isMember {
-		return nil, apperror.Forbidden("not a member")
-	}
-
-	if len(envelope) == 0 {
-		return nil, apperror.BadRequest("envelope is required")
-	}
-	if len(envelope) > 256*1024 {
-		return nil, apperror.BadRequest("envelope too large")
-	}
-
-	if s.blockedStore != nil {
-		members, _, _, err := s.chats.GetMembers(ctx, chatID, "", 2)
-		if err != nil {
-			return nil, fmt.Errorf("get dm members: %w", err)
-		}
-		for _, m := range members {
-			if m.UserID == senderID {
-				continue
-			}
-			blocked, err := s.blockedStore.IsBlocked(ctx, m.UserID, senderID)
-			if err != nil {
-				return nil, fmt.Errorf("check blocked: %w", err)
-			}
-			if blocked {
-				return nil, apperror.Forbidden("You cannot send messages to this user")
-			}
-			blocked, err = s.blockedStore.IsBlocked(ctx, senderID, m.UserID)
-			if err != nil {
-				return nil, fmt.Errorf("check blocked: %w", err)
-			}
-			if blocked {
-				return nil, apperror.Forbidden("You have blocked this user")
-			}
-		}
-	}
-
-	msg := &model.Message{
-		ChatID:           chatID,
-		SenderID:         &senderID,
-		Type:             model.MessageTypeEncrypted,
-		EncryptedContent: envelope,
-	}
-	if chat.DisappearingTimer > 0 {
-		expiresAt := time.Now().Add(time.Duration(chat.DisappearingTimer) * time.Second)
-		msg.ExpiresAt = &expiresAt
-	}
-	if len(mediaIDs) > 0 {
-		// Phase 7.1: encrypted media attachments. The store validates that each
-		// media row is uploader-owned AND has is_encrypted=true, so the server
-		// never accidentally stores a plaintext attachment against an E2E chat.
-		if err := s.messages.CreateEncryptedWithMedia(ctx, msg, envelope, mediaIDs); err != nil {
-			if errors.Is(err, model.ErrMediaNotOwned) {
-				return nil, apperror.Forbidden("You can only attach media files that you uploaded")
-			}
-			if errors.Is(err, model.ErrMediaNotEncrypted) {
-				return nil, apperror.BadRequest("All attachments in an E2E chat must be encrypted")
-			}
-			return nil, fmt.Errorf("create encrypted message with media: %w", err)
-		}
-	} else if err := s.messages.CreateEncrypted(ctx, msg, envelope); err != nil {
-		return nil, fmt.Errorf("create encrypted message: %w", err)
-	}
-
-	full, err := s.messages.GetByID(ctx, msg.ID)
-	if err == nil && full != nil {
-		msg = full
-	}
-
-	s.publishEncryptedMessageSent(ctx, chatID, msg, envelope, senderID, senderDeviceID)
-	return msg, nil
-}
-
 func (s *MessageService) EditMessage(ctx context.Context, msgID, userID uuid.UUID, content string, entities json.RawMessage, replyMarkup ...json.RawMessage) (*model.Message, error) {
 	msg, err := s.messages.GetByID(ctx, msgID)
 	if err != nil {
@@ -651,9 +550,6 @@ func (s *MessageService) ForwardMessages(ctx context.Context, messageIDs []uuid.
 	}
 	if chat == nil {
 		return nil, apperror.NotFound("Target chat not found")
-	}
-	if chat.IsEncrypted {
-		return nil, apperror.BadRequest("Cannot forward plaintext messages to an E2E encrypted chat")
 	}
 
 	member, err := s.chats.GetMember(ctx, toChatID, senderID)
@@ -941,29 +837,6 @@ func (s *MessageService) publishMessageUpdated(ctx context.Context, msg *model.M
 	s.nats.Publish(subject, "message_updated", msg, memberIDs)
 }
 
-func (s *MessageService) publishEncryptedMessageSent(ctx context.Context, chatID uuid.UUID, msg *model.Message, envelope []byte, senderID uuid.UUID, senderDeviceID string) {
-	if msg == nil {
-		return
-	}
-	if msg.Content != nil {
-		msg.Content = nil
-	}
-	if len(msg.EncryptedContent) == 0 {
-		msg.EncryptedContent = envelope
-	}
-	if senderDeviceID != "" {
-		slog.Debug("publishing encrypted message event", "chat_id", chatID, "message_id", msg.ID, "sender_device_id", senderDeviceID)
-	}
-
-	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
-	if err != nil {
-		slog.Error("failed to get member IDs for encrypted NATS publish", "chat_id", chatID, "error", err)
-	}
-
-	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
-	s.nats.Publish(subject, "new_message", msg, memberIDs, senderID.String())
-}
-
 // SendMediaMessage creates a message with media attachments.
 func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID uuid.UUID,
 	content string, entities json.RawMessage, replyToID *uuid.UUID, msgType string,
@@ -975,13 +848,6 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 	}
 	if chat == nil {
 		return nil, apperror.NotFound("Chat not found")
-	}
-	// Phase 7.1: plaintext SendMediaMessage is now forbidden in E2E chats.
-	// Encrypted attachments must go through SendEncryptedMessage with media_ids;
-	// the store additionally rejects any media row with is_encrypted=true on this
-	// code path, which gives us defense in depth against a broken guard here.
-	if chat.IsEncrypted {
-		return nil, apperror.BadRequest("Cannot send plaintext media to an E2E encrypted chat — use /messages/encrypted with encrypted media uploads")
 	}
 
 	member, err := s.chats.GetMember(ctx, chatID, senderID)

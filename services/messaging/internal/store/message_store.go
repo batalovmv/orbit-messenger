@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
 
@@ -20,8 +21,8 @@ var (
 )
 
 const messageSelectColumns = `
-	m.id, m.chat_id, m.sender_id, m.type, m.content, m.encrypted_content, m.entities, m.reply_to_id,
-	m.expires_at, m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
+	m.id, m.chat_id, m.sender_id, m.type, m.content, m.entities, m.reply_to_id,
+	m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
 	m.grouped_id, m.sequence_number, m.created_at, m.edited_at,
 	m.is_one_time, m.viewed_at, m.viewed_by,
 	m.reply_markup, m.via_bot_id,
@@ -31,8 +32,6 @@ const messageSelectColumns = `
 
 type MessageStore interface {
 	Create(ctx context.Context, msg *model.Message) error
-	CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error
-	CreateEncryptedWithMedia(ctx context.Context, msg *model.Message, envelope []byte, mediaIDs []uuid.UUID) error
 	CreateWithMedia(ctx context.Context, msg *model.Message, mediaIDs []uuid.UUID, isSpoiler bool) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.Message, error)
@@ -57,26 +56,64 @@ type MessageStore interface {
 }
 
 type messageStore struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	atRest  []byte // master key for server-side AES-256-GCM content encryption
 }
 
 type messageScanner interface {
 	Scan(dest ...any) error
 }
 
-func NewMessageStore(pool *pgxpool.Pool) MessageStore {
-	return &messageStore{pool: pool}
+// NewMessageStore creates a MessageStore. `atRestKey` MUST be a 32-byte key
+// used for AES-256-GCM encryption of plaintext message content. The server
+// wraps `messages.content` on every write and unwraps it on every read, so
+// a stolen Postgres dump leaks nothing readable — while admin/compliance
+// reads through the service layer stay fully transparent.
+func NewMessageStore(pool *pgxpool.Pool, atRestKey []byte) MessageStore {
+	return &messageStore{pool: pool, atRest: atRestKey}
 }
 
-func scanMessage(scanner messageScanner, msg *model.Message) error {
-	return scanner.Scan(
-		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.EncryptedContent, &msg.Entities, &msg.ReplyToID,
-		&msg.ExpiresAt, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
+// encryptContent wraps nullable plaintext with AES-256-GCM. Returns the
+// same *nil* pointer when the input is nil so INSERTs/UPDATEs preserve
+// NULLs for rows that never had plaintext (media-only, stickers, polls).
+func (s *messageStore) encryptContent(p *string) (*string, error) {
+	if p == nil {
+		return nil, nil
+	}
+	ct, err := crypto.Encrypt(*p, s.atRest)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt content: %w", err)
+	}
+	return &ct, nil
+}
+
+// decryptContent reverses encryptContent. If the column is NULL, nothing
+// to do. Ciphertext that fails to decrypt is returned as an error so we
+// surface corruption loud and early rather than silently losing data.
+func (s *messageStore) decryptContent(ct *string) error {
+	if ct == nil || *ct == "" {
+		return nil
+	}
+	pt, err := crypto.Decrypt(*ct, s.atRest)
+	if err != nil {
+		return fmt.Errorf("decrypt content: %w", err)
+	}
+	*ct = pt
+	return nil
+}
+
+func (s *messageStore) scanMessage(scanner messageScanner, msg *model.Message) error {
+	if err := scanner.Scan(
+		&msg.ID, &msg.ChatID, &msg.SenderID, &msg.Type, &msg.Content, &msg.Entities, &msg.ReplyToID,
+		&msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.ForwardedFrom,
 		&msg.GroupedID, &msg.SequenceNumber, &msg.CreatedAt, &msg.EditedAt,
 		&msg.IsOneTime, &msg.ViewedAt, &msg.ViewedBy,
 		&msg.ReplyMarkup, &msg.ViaBotID,
 		&msg.SenderName, &msg.SenderAvatarURL, &msg.ReplyToSeqNum,
-	)
+	); err != nil {
+		return err
+	}
+	return s.decryptContent(msg.Content)
 }
 
 func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
@@ -97,66 +134,24 @@ func (s *messageStore) Create(ctx context.Context, msg *model.Message) error {
 		return fmt.Errorf("get sequence: %w", err)
 	}
 
+	ctContent, err := s.encryptContent(msg.Content)
+	if err != nil {
+		return err
+	}
+
 	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, expires_at, sequence_number, reply_markup, via_bot_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`INSERT INTO messages (chat_id, sender_id, type, content, entities, reply_to_id, sequence_number, reply_markup, via_bot_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
-		           sequence_number, created_at, expires_at, viewed_at, viewed_by`,
-		msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ReplyToID, msg.ExpiresAt, seq, msg.ReplyMarkup, msg.ViaBotID,
+		           sequence_number, created_at, viewed_at, viewed_by`,
+		msg.ChatID, msg.SenderID, msg.Type, ctContent, msg.Entities, msg.ReplyToID, seq, msg.ReplyMarkup, msg.ViaBotID,
 	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
-		&msg.SequenceNumber, &msg.CreatedAt, &msg.ExpiresAt, &msg.ViewedAt, &msg.ViewedBy)
+		&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
 
 	return tx.Commit(ctx)
-}
-
-func (s *messageStore) CreateEncrypted(ctx context.Context, msg *model.Message, envelope []byte) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	var seq int64
-	err = tx.QueryRow(ctx,
-		`UPDATE chats SET next_sequence_number = next_sequence_number + 1
-		 WHERE id = $1
-		 RETURNING next_sequence_number - 1`,
-		msg.ChatID,
-	).Scan(&seq)
-	if err != nil {
-		return fmt.Errorf("get sequence: %w", err)
-	}
-
-	err = tx.QueryRow(ctx,
-		`INSERT INTO messages (chat_id, sender_id, type, content, encrypted_content, expires_at, sequence_number)
-		 VALUES ($1, $2, 'encrypted', NULL, $3, $4, $5)
-		 RETURNING id, is_edited, is_deleted, is_pinned, is_forwarded, is_one_time,
-		           sequence_number, created_at, expires_at, viewed_at, viewed_by`,
-		msg.ChatID, msg.SenderID, envelope, msg.ExpiresAt, seq,
-	).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsForwarded, &msg.IsOneTime,
-		&msg.SequenceNumber, &msg.CreatedAt, &msg.ExpiresAt, &msg.ViewedAt, &msg.ViewedBy)
-	if err != nil {
-		return fmt.Errorf("insert encrypted message: %w", err)
-	}
-
-	msg.Type = model.MessageTypeEncrypted
-	msg.Content = nil
-	msg.EncryptedContent = envelope
-
-	return tx.Commit(ctx)
-}
-
-func (s *messageStore) DeleteExpired(ctx context.Context) (int64, error) {
-	tag, err := s.pool.Exec(ctx,
-		`DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at < NOW()`,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("delete expired: %w", err)
-	}
-	return tag.RowsAffected(), nil
 }
 
 func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Message, error) {
@@ -165,7 +160,7 @@ func (s *messageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.Messag
 		FROM messages m
 		LEFT JOIN users u ON u.id = m.sender_id
 		WHERE m.id = $1`
-	err := scanMessage(s.pool.QueryRow(ctx, query, id), msg)
+	err := s.scanMessage(s.pool.QueryRow(ctx, query, id), msg)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -194,7 +189,7 @@ func (s *messageStore) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]model.M
 	var messages []model.Message
 	for rows.Next() {
 		var msg model.Message
-		if err := scanMessage(rows, &msg); err != nil {
+		if err := s.scanMessage(rows, &msg); err != nil {
 			return nil, err
 		}
 		messages = append(messages, msg)
@@ -236,7 +231,7 @@ func (s *messageStore) ListByChat(ctx context.Context, chatID uuid.UUID, cursor 
 	var messages []model.Message
 	for rows.Next() {
 		var msg model.Message
-		if err := scanMessage(rows, &msg); err != nil {
+		if err := s.scanMessage(rows, &msg); err != nil {
 			return nil, "", false, err
 		}
 		messages = append(messages, msg)
@@ -279,7 +274,7 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 	var messages []model.Message
 	for rows.Next() {
 		var msg model.Message
-		if err := scanMessage(rows, &msg); err != nil {
+		if err := s.scanMessage(rows, &msg); err != nil {
 			return nil, "", false, err
 		}
 		messages = append(messages, msg)
@@ -302,17 +297,21 @@ func (s *messageStore) FindByChatAndDate(ctx context.Context, chatID uuid.UUID, 
 }
 
 func (s *messageStore) Update(ctx context.Context, msg *model.Message) error {
-	_, err := s.pool.Exec(ctx,
+	ctContent, err := s.encryptContent(msg.Content)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx,
 		`UPDATE messages SET content = $1, entities = $2, reply_markup = $3, is_edited = true, edited_at = now()
 		 WHERE id = $4`,
-		msg.Content, msg.Entities, msg.ReplyMarkup, msg.ID,
+		ctContent, msg.Entities, msg.ReplyMarkup, msg.ID,
 	)
 	return err
 }
 
 func (s *messageStore) SoftDelete(ctx context.Context, id uuid.UUID) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE messages SET is_deleted = true, content = NULL, encrypted_content = NULL, entities = NULL WHERE id = $1`, id,
+		`UPDATE messages SET is_deleted = true, content = NULL, entities = NULL WHERE id = $1`, id,
 	)
 	return err
 }
@@ -379,7 +378,7 @@ func (s *messageStore) SoftDeleteAuthorized(ctx context.Context, msgID, userID u
 	var chatID uuid.UUID
 	var seqNum int
 	err := s.pool.QueryRow(ctx,
-		`UPDATE messages m SET is_deleted = true, content = NULL, encrypted_content = NULL, entities = NULL
+		`UPDATE messages m SET is_deleted = true, content = NULL, entities = NULL
 		 WHERE m.id = $1 AND m.is_deleted = false
 		 AND (
 		     m.sender_id = $2
@@ -428,7 +427,7 @@ func (s *messageStore) ListPinned(ctx context.Context, chatID uuid.UUID) ([]mode
 	var messages []model.Message
 	for rows.Next() {
 		var msg model.Message
-		if err := scanMessage(rows, &msg); err != nil {
+		if err := s.scanMessage(rows, &msg); err != nil {
 			return nil, err
 		}
 		messages = append(messages, msg)
@@ -499,12 +498,16 @@ func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message
 			return nil, fmt.Errorf("get sequence for forwarded: %w", err)
 		}
 
+		ctContent, err := s.encryptContent(msg.Content)
+		if err != nil {
+			return nil, err
+		}
 		err = tx.QueryRow(ctx,
 			`INSERT INTO messages (chat_id, sender_id, type, content, entities, is_forwarded, forwarded_from, sequence_number)
 			 VALUES ($1, $2, $3, $4, $5, true, $6, $7)
 			 RETURNING id, is_edited, is_deleted, is_pinned, is_one_time,
 			           sequence_number, created_at, viewed_at, viewed_by`,
-			msg.ChatID, msg.SenderID, msg.Type, msg.Content, msg.Entities, msg.ForwardedFrom, seq,
+			msg.ChatID, msg.SenderID, msg.Type, ctContent, msg.Entities, msg.ForwardedFrom, seq,
 		).Scan(&msg.ID, &msg.IsEdited, &msg.IsDeleted, &msg.IsPinned, &msg.IsOneTime,
 			&msg.SequenceNumber, &msg.CreatedAt, &msg.ViewedAt, &msg.ViewedBy)
 		if err != nil {

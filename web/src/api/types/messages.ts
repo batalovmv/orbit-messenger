@@ -45,9 +45,6 @@ export interface ApiPhoto {
   videoSizes?: ApiVideoSize[];
   blobUrl?: string;
   isSpoiler?: boolean;
-  // Phase 7.1: server-side bytes are AES-GCM ciphertext; downloadMedia
-  // transparently decrypts using the key from the E2E envelope.
-  isEncrypted?: boolean;
 }
 
 export interface ApiSticker {
@@ -131,8 +128,6 @@ export interface ApiVideo {
   timestamp?: number;
   altVideos?: ApiVideo[];
   storyboardInfo?: StoryboardInfo;
-  // Phase 7.1
-  isEncrypted?: boolean;
 }
 
 export interface ApiAudio {
@@ -153,8 +148,6 @@ export interface ApiVoice {
   duration: number;
   waveform?: number[];
   size: number;
-  // Phase 7.1
-  isEncrypted?: boolean;
 }
 
 export interface ApiDocument {
@@ -171,8 +164,6 @@ export interface ApiDocument {
   pageCount?: number;
   innerMediaType?: 'photo' | 'video';
   mediaSize?: ApiDimensions & { fromDocumentAttribute?: boolean; fromPreload?: true };
-  // Phase 7.1
-  isEncrypted?: boolean;
 }
 
 export interface ApiContact {
@@ -714,13 +705,6 @@ export interface ApiMessage {
   searchSnippet?: ApiMessageSearchSnippet;
 
   isTypingDraft?: boolean; // Local field
-
-  // Phase 7: E2E fields. `isEncrypted` marks messages whose content was
-  // delivered via the Signal Protocol envelope. `encryptedContent` is the
-  // raw (standard-base64) envelope JSON from the server — present only on
-  // incoming E2E messages so the receive path can decrypt them.
-  isEncrypted?: true;
-  encryptedContent?: string;
 }
 
 export interface ApiMessageSearchSnippet {

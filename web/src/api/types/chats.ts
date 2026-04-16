@@ -107,13 +107,6 @@ export interface ApiChat {
   detectedLanguage?: string;
 
   paidMessagesStars?: number;
-
-  // Phase 7: E2E — true when every message in this chat uses the Signal
-  // Protocol envelope (see docs/phase7-design.md). Currently set only for
-  // DMs. Groups/channels remain plaintext by design.
-  isEncrypted?: boolean;
-  // Disappearing messages timer in seconds; 0 or undefined means off.
-  disappearingTimer?: number;
 }
 
 export interface ApiTypingStatus {
