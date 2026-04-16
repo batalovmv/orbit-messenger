@@ -17,6 +17,7 @@ type mockConnectorStore struct {
 	deleteFn        func(ctx context.Context, id uuid.UUID) error
 	getSecretHashFn func(ctx context.Context, id uuid.UUID) (string, error)
 	setSecretHashFn func(ctx context.Context, id uuid.UUID, hash string) error
+	getBotUserIDFn  func(ctx context.Context, botID uuid.UUID) (uuid.UUID, error)
 }
 
 func (m *mockConnectorStore) Create(ctx context.Context, c *model.Connector) error {
@@ -76,6 +77,13 @@ func (m *mockConnectorStore) SetSecretHash(ctx context.Context, id uuid.UUID, ha
 		return m.setSecretHashFn(ctx, id, hash)
 	}
 	return nil
+}
+
+func (m *mockConnectorStore) GetBotUserID(ctx context.Context, botID uuid.UUID) (uuid.UUID, error) {
+	if m.getBotUserIDFn != nil {
+		return m.getBotUserIDFn(ctx, botID)
+	}
+	return uuid.Nil, nil
 }
 
 type mockRouteStore struct {

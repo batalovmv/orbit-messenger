@@ -24,6 +24,7 @@ type BotStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Bot, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) (*model.Bot, error)
 	GetByUsername(ctx context.Context, username string) (*model.Bot, error)
+	GetBotUserIDByUsername(ctx context.Context, username string) (uuid.UUID, error)
 	List(ctx context.Context, ownerID *uuid.UUID, limit int, offset int) ([]model.Bot, int, error)
 	Update(ctx context.Context, bot *model.Bot) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -60,6 +61,20 @@ func scanBot(scanner botScanner, bot *model.Bot) error {
 		&bot.CreatedAt,
 		&bot.UpdatedAt,
 	)
+}
+
+func (s *botStore) GetBotUserIDByUsername(ctx context.Context, username string) (uuid.UUID, error) {
+	var userID uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		SELECT id FROM users WHERE username = $1 AND account_type = 'bot'
+	`, username).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, model.ErrBotNotFound
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("get bot user by username: %w", err)
+	}
+	return userID, nil
 }
 
 func (s *botStore) CreateBotUser(ctx context.Context, username, displayName string) (uuid.UUID, error) {

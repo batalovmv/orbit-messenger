@@ -14,6 +14,7 @@ import (
 type TokenStore interface {
 	Create(ctx context.Context, botID uuid.UUID, tokenHash, tokenPrefix string) (*model.BotToken, error)
 	GetByHash(ctx context.Context, tokenHash string) (*model.BotToken, error)
+	ListByBot(ctx context.Context, botID uuid.UUID) ([]model.BotToken, error)
 	RevokeAllForBot(ctx context.Context, botID uuid.UUID) error
 	UpdateLastUsed(ctx context.Context, tokenID uuid.UUID) error
 }
@@ -87,6 +88,29 @@ func (s *tokenStore) GetByHash(ctx context.Context, tokenHash string) (*model.Bo
 	}
 
 	return token, nil
+}
+
+func (s *tokenStore) ListByBot(ctx context.Context, botID uuid.UUID) ([]model.BotToken, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, bot_id, token_prefix, is_active, last_used_at, created_at
+		FROM bot_tokens
+		WHERE bot_id = $1 AND is_active = true
+		ORDER BY created_at DESC
+	`, botID)
+	if err != nil {
+		return nil, fmt.Errorf("list tokens by bot: %w", err)
+	}
+	defer rows.Close()
+
+	var tokens []model.BotToken
+	for rows.Next() {
+		var t model.BotToken
+		if err := rows.Scan(&t.ID, &t.BotID, &t.TokenPrefix, &t.IsActive, &t.LastUsedAt, &t.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan bot token: %w", err)
+		}
+		tokens = append(tokens, t)
+	}
+	return tokens, rows.Err()
 }
 
 func (s *tokenStore) RevokeAllForBot(ctx context.Context, botID uuid.UUID) error {

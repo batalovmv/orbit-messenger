@@ -420,12 +420,18 @@ func normalizeNullableString(value string) *string {
 	return &trimmed
 }
 
-func tokenPrefix(raw string) string {
+// TokenSecret returns the secret used for token hashing.
+func (s *BotService) TokenSecret() string { return s.tokenSecret }
+
+// TokenPrefix returns the first 20 chars of a raw token (for display).
+func TokenPrefix(raw string) string {
 	if len(raw) <= 20 {
 		return raw
 	}
 	return raw[:20]
 }
+
+func tokenPrefix(raw string) string { return TokenPrefix(raw) }
 
 func hashToken(raw, secret string) string {
 	if secret == "" {
@@ -436,6 +442,11 @@ func hashToken(raw, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(raw))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// GenerateToken creates a new bot token and its HMAC hash.
+func GenerateToken(botID uuid.UUID, secret string) (string, string, error) {
+	return generateToken(botID, secret)
 }
 
 func generateToken(botID uuid.UUID, secret string) (string, string, error) {

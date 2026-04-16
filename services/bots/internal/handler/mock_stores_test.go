@@ -10,14 +10,15 @@ import (
 )
 
 type mockBotStore struct {
-	createFn        func(ctx context.Context, bot *model.Bot) error
-	getByIDFn       func(ctx context.Context, id uuid.UUID) (*model.Bot, error)
-	getByUserIDFn   func(ctx context.Context, userID uuid.UUID) (*model.Bot, error)
-	getByUsernameFn func(ctx context.Context, username string) (*model.Bot, error)
-	listFn          func(ctx context.Context, ownerID *uuid.UUID, limit int, offset int) ([]model.Bot, int, error)
-	updateFn        func(ctx context.Context, bot *model.Bot) error
-	deleteFn        func(ctx context.Context, id uuid.UUID) error
-	createBotUserFn func(ctx context.Context, username, displayName string) (uuid.UUID, error)
+	createFn                func(ctx context.Context, bot *model.Bot) error
+	getByIDFn               func(ctx context.Context, id uuid.UUID) (*model.Bot, error)
+	getByUserIDFn           func(ctx context.Context, userID uuid.UUID) (*model.Bot, error)
+	getByUsernameFn         func(ctx context.Context, username string) (*model.Bot, error)
+	getBotUserIDByUsernameFn func(ctx context.Context, username string) (uuid.UUID, error)
+	listFn                  func(ctx context.Context, ownerID *uuid.UUID, limit int, offset int) ([]model.Bot, int, error)
+	updateFn                func(ctx context.Context, bot *model.Bot) error
+	deleteFn                func(ctx context.Context, id uuid.UUID) error
+	createBotUserFn         func(ctx context.Context, username, displayName string) (uuid.UUID, error)
 }
 
 func (m *mockBotStore) Create(ctx context.Context, bot *model.Bot) error {
@@ -51,6 +52,13 @@ func (m *mockBotStore) GetByUsername(ctx context.Context, username string) (*mod
 	return nil, nil
 }
 
+func (m *mockBotStore) GetBotUserIDByUsername(ctx context.Context, username string) (uuid.UUID, error) {
+	if m.getBotUserIDByUsernameFn != nil {
+		return m.getBotUserIDByUsernameFn(ctx, username)
+	}
+	return uuid.Nil, nil
+}
+
 func (m *mockBotStore) List(ctx context.Context, ownerID *uuid.UUID, limit int, offset int) ([]model.Bot, int, error) {
 	if m.listFn != nil {
 		return m.listFn(ctx, ownerID, limit, offset)
@@ -82,6 +90,7 @@ func (m *mockBotStore) CreateBotUser(ctx context.Context, username, displayName 
 type mockTokenStore struct {
 	createFn          func(ctx context.Context, botID uuid.UUID, tokenHash, tokenPrefix string) (*model.BotToken, error)
 	getByHashFn       func(ctx context.Context, tokenHash string) (*model.BotToken, error)
+	listByBotFn       func(ctx context.Context, botID uuid.UUID) ([]model.BotToken, error)
 	revokeAllForBotFn func(ctx context.Context, botID uuid.UUID) error
 	updateLastUsedFn  func(ctx context.Context, tokenID uuid.UUID) error
 }
@@ -102,6 +111,13 @@ func (m *mockTokenStore) Create(ctx context.Context, botID uuid.UUID, tokenHash,
 func (m *mockTokenStore) GetByHash(ctx context.Context, tokenHash string) (*model.BotToken, error) {
 	if m.getByHashFn != nil {
 		return m.getByHashFn(ctx, tokenHash)
+	}
+	return nil, nil
+}
+
+func (m *mockTokenStore) ListByBot(ctx context.Context, botID uuid.UUID) ([]model.BotToken, error) {
+	if m.listByBotFn != nil {
+		return m.listByBotFn(ctx, botID)
 	}
 	return nil, nil
 }

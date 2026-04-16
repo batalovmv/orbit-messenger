@@ -17,6 +17,7 @@ import (
 	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/bots/internal/botapi"
+	"github.com/mst-corp/orbit/services/bots/internal/botfather"
 	"github.com/mst-corp/orbit/services/bots/internal/client"
 	"github.com/mst-corp/orbit/services/bots/internal/handler"
 	"github.com/mst-corp/orbit/services/bots/internal/service"
@@ -36,10 +37,13 @@ func main() {
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
 	botTokenSecret := config.MustEnv("BOT_TOKEN_SECRET")
 
+	integrationsServiceURL := config.EnvOr("INTEGRATIONS_URL", config.EnvOr("INTEGRATIONS_SERVICE_URL", "http://localhost:8087"))
+
 	logger.Info("starting bots service",
 		"port", port,
 		"messaging_service_url", messagingServiceURL,
 		"media_service_url", mediaServiceURL,
+		"integrations_service_url", integrationsServiceURL,
 	)
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
@@ -91,6 +95,18 @@ func main() {
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
 	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
 	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
+
+	// Provision BotFather system bot
+	intClient := client.NewIntegrationsClient(integrationsServiceURL, internalSecret)
+	stateStore := botfather.NewRedisStateStore(rdb)
+	bf, err := botfather.Provision(ctx, botService, botStore, tokenStore, commandStore, msgClient, intClient, stateStore, logger)
+	if err != nil {
+		logger.Error("failed to provision botfather", "error", err)
+		os.Exit(1)
+	}
+	natsSubscriber.SetBotFather(bf)
+	botHandler.SetBotFather(bf)
+
 	if err := natsSubscriber.Start(); err != nil {
 		logger.Error("failed to start bot nats subscriber", "error", err)
 		os.Exit(1)

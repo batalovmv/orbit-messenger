@@ -409,7 +409,17 @@ func (s *IntegrationService) ProcessInboundWebhook(
 		return nil
 	}
 
+	// Use bot's user ID as sender if a bot is linked, otherwise fall back to connector creator.
 	senderID := connector.CreatedBy
+	if connector.BotID != nil {
+		botUserID, err := s.connectors.GetBotUserID(ctx, *connector.BotID)
+		if err != nil {
+			s.logger.Warn("failed to resolve bot user_id, falling back to connector creator",
+				"bot_id", *connector.BotID, "error", err)
+		} else {
+			senderID = botUserID
+		}
+	}
 	for _, route := range routes {
 		msgPayload, err := buildDeliveryMessagePayload(connector, route, eventType, payloadBytes, senderID)
 		if err != nil {

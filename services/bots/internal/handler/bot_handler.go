@@ -26,6 +26,12 @@ import (
 
 var botUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
+// BotFatherCallbackHandler handles inline keyboard callbacks for the BotFather system bot.
+type BotFatherCallbackHandler interface {
+	HandleCallback(ctx context.Context, callerID uuid.UUID, chatID uuid.UUID, queryID string, data string) map[string]any
+	UserID() uuid.UUID
+}
+
 type BotHandler struct {
 	svc           *service.BotService
 	logger        *slog.Logger
@@ -34,6 +40,7 @@ type BotHandler struct {
 	updateQueue   *service.UpdateQueue
 	installations store.InstallationStore
 	encryptionKey []byte
+	botFather     BotFatherCallbackHandler
 }
 
 func NewBotHandler(svc *service.BotService, logger *slog.Logger) *BotHandler {
@@ -54,6 +61,11 @@ func (h *BotHandler) WithCallbackSupport(
 	h.installations = installations
 	h.encryptionKey = encryptionKey
 	return h
+}
+
+// SetBotFather sets the BotFather callback handler for inline keyboard interception.
+func (h *BotHandler) SetBotFather(bf BotFatherCallbackHandler) {
+	h.botFather = bf
 }
 
 func (h *BotHandler) Register(router fiber.Router) {
@@ -365,6 +377,13 @@ func (h *BotHandler) sendCallback(c *fiber.Ctx) error {
 	bot, err := h.svc.GetBotByUserID(c.Context(), viaBotID)
 	if err != nil {
 		return response.Error(c, err)
+	}
+
+	// BotFather interception: handle callbacks synchronously without webhook/polling
+	if h.botFather != nil && bot.IsSystem && viaBotID == h.botFather.UserID() {
+		queryID := uuid.New().String()
+		result := h.botFather.HandleCallback(c.Context(), callerID, chatID, queryID, req.Data)
+		return response.JSON(c, fiber.StatusOK, result)
 	}
 
 	// Security: verify this bot is installed in the specified chat

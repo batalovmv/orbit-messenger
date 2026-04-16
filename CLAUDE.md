@@ -6,7 +6,7 @@
 
 ## Проект
 
-**Orbit Messenger** — корпоративный мессенджер для компании MST (150+ сотрудников). Замена Telegram с полным контролем данных, E2E-шифрованием и уникальными корпоративными фичами.
+**Orbit Messenger** — корпоративный мессенджер для компании MST (150+ сотрудников). Замена Telegram с полным контролем данных, шифрованием at-rest и уникальными корпоративными фичами. Администрация имеет полный доступ к переписке (compliance model).
 
 - **Репозиторий**: монорепо, все сервисы + фронтенд в одном месте
 - **Деплой**: Saturn.ac (self-hosted PaaS), auto-deploy по `git push origin main`
@@ -24,7 +24,7 @@
 | Phase 3: Media & Files | Done | Media service, R2 pipeline, Saturn upload/download wiring, MediaViewer/shared media foundation |
 | Phase 4: Search, Notifications & Settings | Done | Meilisearch, push/VAPID, privacy/settings, in-app banners, in-chat search wiring |
 | Phase 5: Rich Messaging | **Done** | Reactions, stickers, GIF, polls, scheduled messages, no-premium wiring, frontend стабилизирован |
-| Phase 7: E2E Encryption | **Done (7.0 + 7.1)** | X3DH + Double Ratchet, device enrollment, send/receive, Safety Numbers UI, disappearing messages, client-side search, multi-device fanout, **медиа-шифрование (Phase 7.1): AES-GCM через structured payload внутри ratchet, Composer/MediaViewer wiring через downloadMedia intercept, toggleIsProtected**. Phase 7.2 (Sender Keys для групп) — сознательно deferred (ломает AI/search/bots) |
+| Phase 7: E2E Encryption | **Reverted** | E2E (Signal Protocol) откачена — конфликт с корпоративной моделью (compliance ДОЛЖЕН читать переписку). Заменена на **server-side at-rest encryption**: AES-256-GCM обёртка `messages.content` в store-слое, мастер-ключ из `ORBIT_MESSAGE_ENCRYPTION_KEY`. Кража дампа БД → ciphertext. Admin читает прозрачно |
 | Phase 6: Calls | Pending | Pion SFU signalling, coturn |
 | Phase 8A: AI | **Done** | Claude SSE summarize/translate/reply-suggest, Whisper transcribe, `@orbit-ai` chat mention bot. `/ai/search` отложен на 8A.2 (pgvector) |
 | Phase 8B: Bots | **Done** | Bot API, admin UI, inline keyboards, webhooks |
@@ -584,14 +584,12 @@ chunked_upload:{uploadId}      TTL = 1 hour
 - **File type validation + scan** перед сохранением
 - **SSRF protection** — блокировка private IP ranges и loopback
 
-### Будущее (Phase 7 — E2E)
+### At-rest encryption (вместо E2E)
 
-- Signal Protocol (X3DH + Double Ratchet) для DM
-- Sender Keys для групп — ротация при выходе участника
-- AES-256-GCM для медиа перед upload
-- Private keys только client-side (IndexedDB)
-- Sealed Sender — сервер не знает отправителя
-- Safety Numbers — warning при смене identity key
+- **messages.content** — AES-256-GCM в store-слое messaging service. Мастер-ключ: `ORBIT_MESSAGE_ENCRYPTION_KEY` (env). Кража дампа БД → ciphertext. Админ/compliance читают прозрачно через API
+- **Медиа at-rest** — TODO Phase 8D (per-file ключ, мастер оборачивает)
+- **KMS** — TODO (сейчас env-key, планируется HashiCorp Vault / AWS KMS)
+- E2E (Signal Protocol) сознательно отклонена: корпоративный мессенджер, администрация ДОЛЖНА видеть всё
 
 ## Performance targets (SLO)
 

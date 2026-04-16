@@ -14,11 +14,18 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
+// BotFatherInterceptor is implemented by botfather.BotFather to handle DM messages.
+type BotFatherInterceptor interface {
+	HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, senderID string, content string, messageType string) bool
+	UserID() uuid.UUID
+}
+
 type BotNATSSubscriber struct {
 	nc            *nats.Conn
 	installations store.InstallationStore
 	webhookWorker *WebhookWorker
 	updateQueue   *UpdateQueue
+	botFather     BotFatherInterceptor
 	logger        *slog.Logger
 }
 
@@ -44,6 +51,11 @@ func NewBotNATSSubscriber(
 		updateQueue:   updateQueue,
 		logger:        logger,
 	}
+}
+
+// SetBotFather sets the BotFather interceptor for DM message handling.
+func (s *BotNATSSubscriber) SetBotFather(bf BotFatherInterceptor) {
+	s.botFather = bf
 }
 
 func (s *BotNATSSubscriber) Start() error {
@@ -76,6 +88,39 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// BotFather interception: handle DM messages before normal bot delivery.
+	// Check if BotFather's userID is in the event's member_ids list (meaning it's a participant in this chat).
+	if s.botFather != nil && strings.HasSuffix(msg.Subject, ".message.new") {
+		bfUID := s.botFather.UserID().String()
+		isBFChat := false
+		for _, mid := range event.MemberIDs {
+			if mid == bfUID {
+				isBFChat = true
+				break
+			}
+		}
+		if isBFChat {
+			var payload struct {
+				SenderID string `json:"sender_id"`
+				Content  string `json:"content"`
+				Type     string `json:"type"`
+			}
+			if err := json.Unmarshal(event.Data, &payload); err == nil {
+				senderID := payload.SenderID
+				if senderID == "" {
+					senderID = event.SenderID
+				}
+				msgType := payload.Type
+				if msgType == "" {
+					msgType = "text"
+				}
+				if s.botFather.HandleIfBotFatherDM(ctx, chatID, senderID, payload.Content, msgType) {
+					return
+				}
+			}
+		}
+	}
 
 	bots, err := s.installations.ListChatsWithWebhookBots(ctx, chatID)
 	if err != nil {

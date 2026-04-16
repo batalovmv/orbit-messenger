@@ -25,6 +25,7 @@ type ConnectorStore interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetSecretHash(ctx context.Context, id uuid.UUID) (string, error)
 	SetSecretHash(ctx context.Context, id uuid.UUID, hash string) error
+	GetBotUserID(ctx context.Context, botID uuid.UUID) (uuid.UUID, error)
 }
 
 type connectorStore struct {
@@ -234,4 +235,17 @@ func (s *connectorStore) SetSecretHash(ctx context.Context, id uuid.UUID, hash s
 	}
 
 	return nil
+}
+
+// GetBotUserID resolves a bot's user_id from the bots table.
+func (s *connectorStore) GetBotUserID(ctx context.Context, botID uuid.UUID) (uuid.UUID, error) {
+	var userID uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT user_id FROM bots WHERE id = $1`, botID).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, fmt.Errorf("bot not found: %s", botID)
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("get bot user_id: %w", err)
+	}
+	return userID, nil
 }
