@@ -405,7 +405,11 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
   const lastMessageId = threadId === MAIN_THREAD_ID
     ? selectChatLastMessageId(global, chatId) : threadInfo?.lastMessageId;
 
+  // eslint-disable-next-line no-console
+  console.error('[SEND DEBUG] before getPeerStarsForMessage');
   const messagePriceInStars = await getPeerStarsForMessage(global, chatId);
+  // eslint-disable-next-line no-console
+  console.error('[SEND DEBUG] after getPeerStarsForMessage', { messagePriceInStars });
 
   const suggestedPostPrice = draftSuggestedPostInfo?.price;
   const suggestedPostAmount = suggestedPostPrice?.amount || 0;
