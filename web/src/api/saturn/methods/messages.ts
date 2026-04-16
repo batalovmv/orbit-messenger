@@ -740,10 +740,6 @@ export async function sendMessage({
     setTimeout(resolve, 0);
   });
 
-  if (!getGlobalMessage(chatId, localId)) {
-    return undefined;
-  }
-
   let uploadedMediaIds = mediaIds || [];
   if (attachment) {
     try {
