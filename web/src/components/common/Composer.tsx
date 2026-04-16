@@ -1254,7 +1254,11 @@ const Composer = ({
         return;
       }
 
+      // eslint-disable-next-line no-console
+      console.error('[SEND DEBUG] handleSendCore', { text: text?.substring(0, 20), isForwarding, hasAttachments: currentAttachments.length });
       if (!text && !isForwarding) {
+        // eslint-disable-next-line no-console
+        console.error('[SEND DEBUG] ABORTED: no text');
         return;
       }
 
@@ -1265,7 +1269,11 @@ const Composer = ({
       const effectId = effect?.id;
 
       if (text || isForwarding) {
-        if (!checkSlowMode()) return;
+        if (!checkSlowMode()) {
+          // eslint-disable-next-line no-console
+          console.error('[SEND DEBUG] ABORTED: slowMode check failed');
+          return;
+        }
 
         const isInvertedMedia = hasWebPagePreview ? attachmentSettings.isInvertedMedia : undefined;
 
@@ -1308,7 +1316,11 @@ const Composer = ({
     scheduledAt?: number,
     scheduleRepeatPeriod?: number,
   ) => {
+    // eslint-disable-next-line no-console
+    console.error('[SEND DEBUG] handleSend called', { hasMessageList: !!currentMessageList, storyId });
     if (!currentMessageList && !storyId) {
+      // eslint-disable-next-line no-console
+      console.error('[SEND DEBUG] ABORTED: no messageList');
       return;
     }
 
