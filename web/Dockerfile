@@ -16,4 +16,6 @@ RUN APP_ENV=production npm run build:production
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/templates/default.conf.template
+# Default to 80; Saturn overrides PORT at runtime
+ENV PORT=80
 EXPOSE 80
