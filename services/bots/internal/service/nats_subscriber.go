@@ -135,8 +135,9 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 			continue
 		}
 
-		// Enforce scopes: only deliver message events to bots with ScopeReadMessages
-		if info.Scopes&model.ScopeReadMessages == 0 {
+		// Enforce scopes: only deliver message events to bots with ScopeReadMessages.
+		// Legacy installations (scopes=0) get full access for backward compatibility.
+		if info.Scopes != 0 && info.Scopes&model.ScopeReadMessages == 0 {
 			continue
 		}
 

@@ -369,6 +369,7 @@ func (s *BotService) IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID
 }
 
 // CheckBotScope verifies the bot is installed in the chat AND has the required scope.
+// Legacy installations with scopes=0 are treated as having full access (backward compatibility).
 func (s *BotService) CheckBotScope(ctx context.Context, botID, chatID uuid.UUID, requiredScope int64) error {
 	inst, err := s.installations.GetByBotAndChat(ctx, botID, chatID)
 	if err != nil {
@@ -377,7 +378,8 @@ func (s *BotService) CheckBotScope(ctx context.Context, botID, chatID uuid.UUID,
 	if inst == nil || !inst.IsActive {
 		return apperror.Forbidden("Bot is not installed in this chat")
 	}
-	if inst.Scopes&requiredScope == 0 {
+	// scopes=0 means legacy installation before scope enforcement — allow all
+	if inst.Scopes != 0 && inst.Scopes&requiredScope == 0 {
 		return apperror.Forbidden("Bot does not have the required scope for this action")
 	}
 	return nil
