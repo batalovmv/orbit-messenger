@@ -34,28 +34,7 @@ export function callApi(fnName: string, ...args: any[]): any {
     }
     return Promise.resolve(undefined);
   }
-  if (fnName === 'sendMessage') {
-    // eslint-disable-next-line no-console
-    console.error('[SEND DEBUG] callApi sendMessage', { hasMethod: !!method, argKeys: Object.keys(args[0] || {}) });
-  }
-  try {
-    const result = method(...args);
-    if (fnName === 'sendMessage') {
-      // eslint-disable-next-line no-console
-      console.error('[SEND DEBUG] callApi sendMessage returned', typeof result);
-      if (result instanceof Promise) {
-        result.catch((err: unknown) => {
-          // eslint-disable-next-line no-console
-          console.error('[SEND DEBUG] callApi sendMessage REJECTED', err);
-        });
-      }
-    }
-    return result;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[SEND DEBUG] callApi sendMessage THREW', err);
-    throw err;
-  }
+  return method(...args);
 }
 
 export function cancelApiProgress(progressCallback: ApiOnProgress) {
