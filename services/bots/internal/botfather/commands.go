@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/services/bots/internal/model"
 	"github.com/mst-corp/orbit/services/bots/internal/service"
 )
@@ -222,6 +223,8 @@ func (bf *BotFather) handleStatefulInput(ctx context.Context, chatID uuid.UUID, 
 	// /setwebhook flow
 	case StepSetWebhookAwait:
 		bf.stateSetWebhook(ctx, chatID, senderID, text, state.BotID)
+	case StepSetWebhookAwaitSecret:
+		bf.stateSetWebhookSecret(ctx, chatID, senderID, text, state.BotID, state.Data)
 
 	// /setcommands flow
 	case StepSetCmdsAwait:
@@ -341,12 +344,6 @@ func (bf *BotFather) stateSetDescription(ctx context.Context, chatID uuid.UUID, 
 func (bf *BotFather) stateSetWebhook(ctx context.Context, chatID uuid.UUID, senderID uuid.UUID, url string, botID uuid.UUID) {
 	url = strings.TrimSpace(url)
 
-	bot, err := bf.svc.GetBot(ctx, botID)
-	if err != nil {
-		bf.reply(ctx, chatID, msgBotNotFound, nil)
-		return
-	}
-
 	if strings.ToLower(url) == "clear" || url == "" {
 		_, err := bf.svc.SetWebhook(ctx, botID, nil, nil)
 		if err != nil {
@@ -363,15 +360,43 @@ func (bf *BotFather) stateSetWebhook(ctx context.Context, chatID uuid.UUID, send
 		return
 	}
 
-	_, err = bf.svc.SetWebhook(ctx, botID, &url, nil)
+	// Save URL in state.Data and ask for optional secret
+	bf.state.SetState(ctx, senderID, &ConversationState{
+		Step:  StepSetWebhookAwaitSecret,
+		BotID: botID,
+		Data:  url,
+	})
+	bf.reply(ctx, chatID, msgSetWebhookAskSecret, nil)
+}
+
+func (bf *BotFather) stateSetWebhookSecret(ctx context.Context, chatID uuid.UUID, senderID uuid.UUID, text string, botID uuid.UUID, webhookURL string) {
+	text = strings.TrimSpace(text)
+
+	var secretEnc *string
+	if strings.ToLower(text) != "skip" && text != "-" && text != "" {
+		encrypted, err := crypto.Encrypt(text, bf.encryptionKey)
+		if err != nil {
+			bf.logger.Error("failed to encrypt webhook secret", "error", err)
+			bf.reply(ctx, chatID, msgInternalError, nil)
+			return
+		}
+		secretEnc = &encrypted
+	}
+
+	_, err := bf.svc.SetWebhook(ctx, botID, &webhookURL, secretEnc)
 	if err != nil {
 		bf.logger.Error("failed to set webhook", "error", err, "bot_id", botID)
 		bf.reply(ctx, chatID, msgInternalError, nil)
 		return
 	}
 
+	bot, _ := bf.svc.GetBot(ctx, botID)
 	bf.state.ClearState(ctx, senderID)
-	bf.reply(ctx, chatID, msgSetWebhookDone(bot.Username, url), nil)
+	username := "bot"
+	if bot != nil {
+		username = bot.Username
+	}
+	bf.reply(ctx, chatID, msgSetWebhookDone(username, webhookURL), nil)
 }
 
 func (bf *BotFather) stateSetCommands(ctx context.Context, chatID uuid.UUID, senderID uuid.UUID, text string, botID uuid.UUID) {

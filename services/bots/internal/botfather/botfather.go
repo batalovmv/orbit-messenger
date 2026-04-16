@@ -30,6 +30,7 @@ type BotFather struct {
 	msgClient        *client.MessagingClient
 	integrationsClient *client.IntegrationsClient
 	state            *RedisStateStore
+	encryptionKey    []byte
 	logger           *slog.Logger
 }
 
@@ -45,6 +46,7 @@ func Provision(
 	msgClient *client.MessagingClient,
 	integrationsClient *client.IntegrationsClient,
 	stateStore *RedisStateStore,
+	encryptionKey []byte,
 	logger *slog.Logger,
 ) (*BotFather, error) {
 	existing, err := botStore.GetByUsername(ctx, BotFatherUsername)
@@ -139,6 +141,7 @@ func Provision(
 		msgClient:          msgClient,
 		integrationsClient: integrationsClient,
 		state:              stateStore,
+		encryptionKey:      encryptionKey,
 		logger:             logger,
 	}, nil
 }

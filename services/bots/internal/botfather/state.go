@@ -19,8 +19,9 @@ const (
 	StepSetDescAwait     = "setdescription:await_value"
 
 	// /setwebhook
-	StepSetWebhookSelectBot = "setwebhook:select_bot"
-	StepSetWebhookAwait     = "setwebhook:await_value"
+	StepSetWebhookSelectBot  = "setwebhook:select_bot"
+	StepSetWebhookAwait      = "setwebhook:await_value"
+	StepSetWebhookAwaitSecret = "setwebhook:await_secret"
 
 	// /setcommands
 	StepSetCmdsSelectBot = "setcommands:select_bot"

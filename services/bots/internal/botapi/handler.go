@@ -2,7 +2,9 @@ package botapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -20,6 +22,7 @@ import (
 type BotService interface {
 	TokenValidator
 	IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID) (bool, error)
+	CheckBotScope(ctx context.Context, botID, chatID uuid.UUID, requiredScope int64) error
 	SetWebhook(ctx context.Context, botID uuid.UUID, webhookURL, secretHash *string) (*model.Bot, error)
 }
 
@@ -31,16 +34,18 @@ type UpdateQueue interface {
 type BotAPIHandler struct {
 	svc           BotService
 	msgClient     *client.MessagingClient
+	mediaClient   *client.MediaClient
 	redis         *redis.Client
 	updateQueue   UpdateQueue
 	encryptionKey []byte
 	logger        *slog.Logger
 }
 
-func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, encryptionKey []byte, logger *slog.Logger) *BotAPIHandler {
+func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, mediaClient *client.MediaClient, encryptionKey []byte, logger *slog.Logger) *BotAPIHandler {
 	return &BotAPIHandler{
 		svc:           svc,
 		msgClient:     msgClient,
+		mediaClient:   mediaClient,
 		encryptionKey: encryptionKey,
 		logger:        logger,
 	}
@@ -59,6 +64,8 @@ func (h *BotAPIHandler) WithUpdateQueue(updateQueue UpdateQueue) *BotAPIHandler 
 func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Get("/getMe", h.getMe)
 	router.Post("/sendMessage", h.sendMessage)
+	router.Post("/sendPhoto", h.sendPhoto)
+	router.Post("/sendDocument", h.sendDocument)
 	router.Post("/editMessageText", h.editMessageText)
 	router.Post("/deleteMessage", h.deleteMessage)
 	router.Post("/answerCallbackQuery", h.answerCallbackQuery)
@@ -99,12 +106,8 @@ func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 		return botError(c, apperror.BadRequest("Invalid chat_id"))
 	}
 
-	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
-	if err != nil {
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
 		return botError(c, err)
-	}
-	if !installed {
-		return botError(c, apperror.Forbidden("Bot is not installed in this chat"))
 	}
 
 	var replyToID *uuid.UUID
@@ -125,6 +128,81 @@ func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 	}
 
 	return botSuccess(c, message)
+}
+
+func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	chatIDStr := c.FormValue("chat_id")
+	if err := validator.RequireUUID(chatIDStr, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	chatID, err := uuid.Parse(chatIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
+		return botError(c, err)
+	}
+
+	file, err := c.FormFile(fieldName)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Missing "+fieldName+" file"))
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		return botError(c, apperror.Internal("Failed to open uploaded file"))
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return botError(c, apperror.Internal("Failed to read uploaded file"))
+	}
+
+	if h.mediaClient == nil {
+		return botError(c, apperror.Internal("Media service not configured"))
+	}
+
+	mediaID, err := h.mediaClient.UploadFile(c.Context(), bot.UserID, file.Filename, msgType, data)
+	if err != nil {
+		return botError(c, apperror.Internal("Failed to upload media: "+err.Error()))
+	}
+
+	caption := c.FormValue("caption", "")
+	replyMarkupRaw := c.FormValue("reply_markup", "")
+	var replyMarkup json.RawMessage
+	if replyMarkupRaw != "" {
+		replyMarkup = json.RawMessage(replyMarkupRaw)
+	}
+
+	var replyToID *uuid.UUID
+	if rtID := c.FormValue("reply_to_message_id", ""); rtID != "" {
+		parsed, parseErr := uuid.Parse(rtID)
+		if parseErr == nil {
+			replyToID = &parsed
+		}
+	}
+
+	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, caption, msgType, replyMarkup, replyToID, mediaID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, message)
+}
+
+func (h *BotAPIHandler) sendPhoto(c *fiber.Ctx) error {
+	return h.sendMedia(c, "photo", "photo")
+}
+
+func (h *BotAPIHandler) sendDocument(c *fiber.Ctx) error {
+	return h.sendMedia(c, "document", "document")
 }
 
 func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
@@ -152,12 +230,8 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 		return botError(c, apperror.BadRequest("Invalid chat_id"))
 	}
 
-	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
-	if err != nil {
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
 		return botError(c, err)
-	}
-	if !installed {
-		return botError(c, apperror.Forbidden("Bot is not installed in this chat"))
 	}
 
 	messageID, err := uuid.Parse(req.MessageID)
@@ -195,12 +269,8 @@ func (h *BotAPIHandler) deleteMessage(c *fiber.Ctx) error {
 		return botError(c, apperror.BadRequest("Invalid chat_id"))
 	}
 
-	installed, err := h.svc.IsBotInstalled(c.Context(), bot.ID, chatID)
-	if err != nil {
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
 		return botError(c, err)
-	}
-	if !installed {
-		return botError(c, apperror.Forbidden("Bot is not installed in this chat"))
 	}
 
 	messageID, err := uuid.Parse(req.MessageID)

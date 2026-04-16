@@ -93,13 +93,14 @@ func main() {
 	botHandler := handler.NewBotHandler(botService, logger).
 		WithCallbackSupport(rdb, webhookWorker, updateQueue, installationStore, encryptionKey)
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
-	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
+	mediaClient := client.NewMediaClient(mediaServiceURL, internalSecret)
+	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, mediaClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
 	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
 
 	// Provision BotFather system bot
 	intClient := client.NewIntegrationsClient(integrationsServiceURL, internalSecret)
 	stateStore := botfather.NewRedisStateStore(rdb)
-	bf, err := botfather.Provision(ctx, botService, botStore, tokenStore, commandStore, msgClient, intClient, stateStore, logger)
+	bf, err := botfather.Provision(ctx, botService, botStore, tokenStore, commandStore, msgClient, intClient, stateStore, encryptionKey, logger)
 	if err != nil {
 		logger.Error("failed to provision botfather", "error", err)
 		os.Exit(1)

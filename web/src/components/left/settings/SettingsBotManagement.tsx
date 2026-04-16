@@ -116,6 +116,8 @@ const SettingsBotManagement = () => {
       await updateBot(editingBot.id, {
         display_name: editingBot.display_name,
         description: editingBot.description || undefined,
+        short_description: editingBot.short_description || undefined,
+        webhook_url: editingBot.webhook_url || undefined,
       });
       loadBots();
     } catch (e) {
@@ -156,9 +158,18 @@ const SettingsBotManagement = () => {
             })}
           />
           <InputText
+            label={lang('BotShortDescription')}
+            value={editingBot.short_description || ''}
+            onChange={(e) => setEditingBot({
+              ...editingBot, short_description: (e.target as HTMLInputElement).value,
+            })}
+          />
+          <InputText
             label={lang('BotWebhookUrl')}
             value={editingBot.webhook_url || ''}
-            disabled
+            onChange={(e) => setEditingBot({
+              ...editingBot, webhook_url: (e.target as HTMLInputElement).value,
+            })}
           />
           {editingBot.token && (
             <div className="settings-item">

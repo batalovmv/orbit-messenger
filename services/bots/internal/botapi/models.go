@@ -23,6 +23,20 @@ type DeleteMessageRequest struct {
 	MessageID string `json:"message_id"`
 }
 
+type SendPhotoRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Caption          string          `json:"caption,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
+type SendDocumentRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Caption          string          `json:"caption,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
 type AnswerCallbackQueryRequest struct {
 	CallbackQueryID string `json:"callback_query_id"`
 	Text            string `json:"text,omitempty"`

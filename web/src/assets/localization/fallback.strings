@@ -2853,7 +2853,8 @@
 "BotUsername" = "Username";
 "BotDisplayName" = "Display Name";
 "BotDescription" = "Description";
-"BotWebhookUrl" = "Webhook URL";
+"BotShortDescription" = "Short Description";
+"BotWebhookUrl" = "Webhook URL (HTTPS)";
 "BotToken" = "Bot Token";
 "BotRotateToken" = "Rotate Token";
 "BotCommands" = "Commands";

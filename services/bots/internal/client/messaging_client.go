@@ -52,11 +52,15 @@ func (c *MessagingClient) SendMessage(
 	msgType string,
 	replyMarkup json.RawMessage,
 	replyToID *uuid.UUID,
+	mediaIDs ...string,
 ) (*MessageResponse, error) {
 	payload := map[string]any{
 		"content":    content,
 		"type":       msgType,
 		"via_bot_id": botUserID.String(),
+	}
+	if len(mediaIDs) > 0 {
+		payload["media_ids"] = mediaIDs
 	}
 	if len(replyMarkup) > 0 {
 		// Bot API clients send reply_markup as a JSON-encoded string (Telegram convention).

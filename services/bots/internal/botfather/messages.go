@@ -80,6 +80,7 @@ func msgSetWebhookDone(username, url string) string {
 }
 
 const msgSetWebhookInvalid = "URL должен начинаться с https://. Попробуй ещё раз."
+const msgSetWebhookAskSecret = "Отправь секретный ключ для подписи webhook payload (HMAC-SHA256), или 'skip' чтобы пропустить:"
 
 // /setcommands
 const msgSetCmdsSelectBot = "Выбери бота для настройки команд:"

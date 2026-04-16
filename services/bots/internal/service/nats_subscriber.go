@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/bots/internal/botapi"
+	"github.com/mst-corp/orbit/services/bots/internal/model"
 	"github.com/mst-corp/orbit/services/bots/internal/store"
 	"github.com/nats-io/nats.go"
 )
@@ -131,6 +132,11 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 	update := buildBotUpdate(chatID, event)
 	for _, info := range bots {
 		if event.SenderID != "" && info.UserID.String() == event.SenderID {
+			continue
+		}
+
+		// Enforce scopes: only deliver message events to bots with ScopeReadMessages
+		if info.Scopes&model.ScopeReadMessages == 0 {
 			continue
 		}
 

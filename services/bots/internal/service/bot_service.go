@@ -368,6 +368,21 @@ func (s *BotService) IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID
 	return inst.IsActive, nil
 }
 
+// CheckBotScope verifies the bot is installed in the chat AND has the required scope.
+func (s *BotService) CheckBotScope(ctx context.Context, botID, chatID uuid.UUID, requiredScope int64) error {
+	inst, err := s.installations.GetByBotAndChat(ctx, botID, chatID)
+	if err != nil {
+		return fmt.Errorf("get bot installation: %w", err)
+	}
+	if inst == nil || !inst.IsActive {
+		return apperror.Forbidden("Bot is not installed in this chat")
+	}
+	if inst.Scopes&requiredScope == 0 {
+		return apperror.Forbidden("Bot does not have the required scope for this action")
+	}
+	return nil
+}
+
 func (s *BotService) SetWebhook(ctx context.Context, botID uuid.UUID, webhookURL, secretHash *string) (*model.Bot, error) {
 	bot, err := s.bots.GetByID(ctx, botID)
 	if err != nil {
