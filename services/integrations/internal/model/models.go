@@ -36,21 +36,34 @@ type Route struct {
 }
 
 type Delivery struct {
-	ID              uuid.UUID  `json:"id"`
-	ConnectorID     uuid.UUID  `json:"connector_id"`
-	RouteID         *uuid.UUID `json:"route_id,omitempty"`
-	ExternalEventID *string    `json:"external_event_id,omitempty"`
-	EventType       string     `json:"event_type"`
-	Payload         JSONB      `json:"payload"`
-	Status          string     `json:"status"`
-	OrbitMessageID  *uuid.UUID `json:"orbit_message_id,omitempty"`
-	CorrelationKey  *string    `json:"correlation_key,omitempty"`
-	AttemptCount    int        `json:"attempt_count"`
-	MaxAttempts     int        `json:"max_attempts"`
-	LastError       *string    `json:"last_error,omitempty"`
-	NextRetryAt     *time.Time `json:"next_retry_at,omitempty"`
-	DeliveredAt     *time.Time `json:"delivered_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID              uuid.UUID         `json:"id"`
+	ConnectorID     uuid.UUID         `json:"connector_id"`
+	RouteID         *uuid.UUID        `json:"route_id,omitempty"`
+	ExternalEventID *string           `json:"external_event_id,omitempty"`
+	EventType       string            `json:"event_type"`
+	Payload         JSONB             `json:"payload"`
+	Status          string            `json:"status"`
+	OrbitMessageID  *uuid.UUID        `json:"orbit_message_id,omitempty"`
+	CorrelationKey  *string           `json:"correlation_key,omitempty"`
+	AttemptCount    int               `json:"attempt_count"`
+	MaxAttempts     int               `json:"max_attempts"`
+	LastError       *string           `json:"last_error,omitempty"`
+	NextRetryAt     *time.Time        `json:"next_retry_at,omitempty"`
+	DeliveredAt     *time.Time        `json:"delivered_at,omitempty"`
+	CreatedAt       time.Time         `json:"created_at"`
+	Attempts        []DeliveryAttempt `json:"attempts,omitempty"`
+}
+
+// DeliveryAttempt is a single send attempt within a delivery's retry timeline.
+type DeliveryAttempt struct {
+	ID                  uuid.UUID `json:"id"`
+	DeliveryID          uuid.UUID `json:"delivery_id"`
+	AttemptNo           int       `json:"attempt_no"`
+	Status              string    `json:"status"`
+	ResponseStatus      *int      `json:"response_status,omitempty"`
+	ResponseBodySnippet *string   `json:"response_body_snippet,omitempty"`
+	Error               *string   `json:"error,omitempty"`
+	RanAt               time.Time `json:"ran_at"`
 }
 
 type JSONB json.RawMessage

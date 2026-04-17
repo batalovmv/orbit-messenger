@@ -296,6 +296,13 @@ func (s *IntegrationService) GetDelivery(ctx context.Context, id uuid.UUID) (*mo
 		return nil, apperror.NotFound("Delivery not found")
 	}
 
+	attempts, err := s.deliveries.ListAttempts(ctx, id)
+	if err != nil {
+		s.logger.Error("failed to list delivery attempts", "delivery_id", id, "error", err)
+	} else {
+		delivery.Attempts = attempts
+	}
+
 	return delivery, nil
 }
 
@@ -468,6 +475,7 @@ func (s *IntegrationService) ProcessInboundWebhook(
 					"error", updateErr,
 				)
 			}
+			s.recordAttempt(ctx, delivery.ID, 1, deliveryStatusFailed, nil, "", err)
 			s.logger.Error("integration delivery failed",
 				"delivery_id", delivery.ID,
 				"connector_id", connectorID,
@@ -480,6 +488,7 @@ func (s *IntegrationService) ProcessInboundWebhook(
 		if err := s.deliveries.UpdateStatus(ctx, delivery.ID, deliveryStatusDelivered, nil, nil, &message.ID); err != nil {
 			return fmt.Errorf("mark delivery as delivered: %w", err)
 		}
+		s.recordAttempt(ctx, delivery.ID, 1, deliveryStatusDelivered, nil, "", nil)
 	}
 
 	return nil
@@ -496,6 +505,47 @@ func (s *IntegrationService) dispatchDelivery(ctx context.Context, delivery *mod
 	}
 
 	return s.msgClient.SendMessage(ctx, payload.SenderID, payload.ChatID, payload.Content, payload.MessageType, payload.ReplyMarkup, nil)
+}
+
+// recordAttempt writes a row into integration_delivery_attempts for the given
+// attempt. Logs and swallows errors — attempt history is diagnostic, it must
+// never break the main delivery path.
+func (s *IntegrationService) recordAttempt(
+	ctx context.Context,
+	deliveryID uuid.UUID,
+	attemptNo int,
+	status string,
+	responseStatus *int,
+	responseBody string,
+	runErr error,
+) {
+	attempt := &model.DeliveryAttempt{
+		DeliveryID:     deliveryID,
+		AttemptNo:      attemptNo,
+		Status:         status,
+		ResponseStatus: responseStatus,
+	}
+	if snippet := truncate(responseBody, 1024); snippet != "" {
+		attempt.ResponseBodySnippet = &snippet
+	}
+	if runErr != nil {
+		errMsg := runErr.Error()
+		attempt.Error = &errMsg
+	}
+	if err := s.deliveries.InsertAttempt(ctx, attempt); err != nil {
+		s.logger.Error("failed to record delivery attempt",
+			"delivery_id", deliveryID,
+			"attempt_no", attemptNo,
+			"error", err,
+		)
+	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
 }
 
 func buildDeliveryMessagePayload(

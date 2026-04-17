@@ -95,6 +95,7 @@ func (w *DeliveryWorker) retryDelivery(ctx context.Context, delivery model.Deliv
 					"error", markErr,
 				)
 			}
+			w.recordAttempt(ctx, delivery.ID, attemptNumber, deliveryStatusDeadLetter, err)
 			return
 		}
 
@@ -108,6 +109,7 @@ func (w *DeliveryWorker) retryDelivery(ctx context.Context, delivery model.Deliv
 				"error", updateErr,
 			)
 		}
+		w.recordAttempt(ctx, delivery.ID, attemptNumber, deliveryStatusFailed, err)
 		return
 	}
 
@@ -121,11 +123,34 @@ func (w *DeliveryWorker) retryDelivery(ctx context.Context, delivery model.Deliv
 		return
 	}
 
+	w.recordAttempt(ctx, delivery.ID, attemptNumber, deliveryStatusDelivered, nil)
+
 	w.logger.Info("integration delivery retry succeeded",
 		"delivery_id", delivery.ID,
 		"connector_id", delivery.ConnectorID,
 		"attempt_count", attemptNumber,
 	)
+}
+
+// recordAttempt mirrors IntegrationService.recordAttempt for the retry worker;
+// kept local because the worker owns a DeliveryStore but not the full service.
+func (w *DeliveryWorker) recordAttempt(ctx context.Context, deliveryID uuid.UUID, attemptNo int, status string, runErr error) {
+	attempt := &model.DeliveryAttempt{
+		DeliveryID: deliveryID,
+		AttemptNo:  attemptNo,
+		Status:     status,
+	}
+	if runErr != nil {
+		errMsg := runErr.Error()
+		attempt.Error = &errMsg
+	}
+	if err := w.deliveries.InsertAttempt(ctx, attempt); err != nil {
+		w.logger.Error("failed to record retry attempt",
+			"delivery_id", deliveryID,
+			"attempt_no", attemptNo,
+			"error", err,
+		)
+	}
 }
 
 func (w *DeliveryWorker) sendDelivery(ctx context.Context, orbitMessageID *uuid.UUID, payload *deliveryMessagePayload) (*client.MessageResponse, error) {

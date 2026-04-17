@@ -227,3 +227,11 @@ func (m *mockDeliveryStore) MarkDeadLetter(ctx context.Context, id uuid.UUID, la
 	}
 	return nil
 }
+
+func (m *mockDeliveryStore) InsertAttempt(ctx context.Context, attempt *model.DeliveryAttempt) error {
+	return nil
+}
+
+func (m *mockDeliveryStore) ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]model.DeliveryAttempt, error) {
+	return nil, nil
+}

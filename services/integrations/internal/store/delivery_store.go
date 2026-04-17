@@ -22,6 +22,8 @@ type DeliveryStore interface {
 	FindByCorrelation(ctx context.Context, connectorID uuid.UUID, correlationKey string) (*model.Delivery, error)
 	FindByExternalID(ctx context.Context, connectorID uuid.UUID, externalEventID string) (*model.Delivery, error)
 	MarkDeadLetter(ctx context.Context, id uuid.UUID, lastError string) error
+	InsertAttempt(ctx context.Context, attempt *model.DeliveryAttempt) error
+	ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]model.DeliveryAttempt, error)
 }
 
 type deliveryStore struct {
@@ -191,6 +193,50 @@ func (s *deliveryStore) FindByExternalID(ctx context.Context, connectorID uuid.U
 		ORDER BY created_at DESC
 		LIMIT 1
 	`, connectorID, externalEventID)
+}
+
+func (s *deliveryStore) InsertAttempt(ctx context.Context, attempt *model.DeliveryAttempt) error {
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO integration_delivery_attempts (
+			delivery_id, attempt_no, status, response_status, response_body_snippet, error
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, ran_at
+	`,
+		attempt.DeliveryID, attempt.AttemptNo, attempt.Status,
+		attempt.ResponseStatus, attempt.ResponseBodySnippet, attempt.Error,
+	).Scan(&attempt.ID, &attempt.RanAt)
+	if err != nil {
+		return fmt.Errorf("insert delivery attempt: %w", err)
+	}
+	return nil
+}
+
+func (s *deliveryStore) ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]model.DeliveryAttempt, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, delivery_id, attempt_no, status, response_status, response_body_snippet, error, ran_at
+		FROM integration_delivery_attempts
+		WHERE delivery_id = $1
+		ORDER BY attempt_no ASC
+	`, deliveryID)
+	if err != nil {
+		return nil, fmt.Errorf("list delivery attempts: %w", err)
+	}
+	defer rows.Close()
+
+	attempts := make([]model.DeliveryAttempt, 0)
+	for rows.Next() {
+		var a model.DeliveryAttempt
+		if err := rows.Scan(&a.ID, &a.DeliveryID, &a.AttemptNo, &a.Status,
+			&a.ResponseStatus, &a.ResponseBodySnippet, &a.Error, &a.RanAt); err != nil {
+			return nil, fmt.Errorf("scan delivery attempt: %w", err)
+		}
+		attempts = append(attempts, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate delivery attempts: %w", err)
+	}
+	return attempts, nil
 }
 
 func (s *deliveryStore) MarkDeadLetter(ctx context.Context, id uuid.UUID, lastError string) error {
