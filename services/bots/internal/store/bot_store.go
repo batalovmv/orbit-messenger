@@ -33,6 +33,7 @@ type BotStore interface {
 	Update(ctx context.Context, bot *model.Bot) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	CreateBotUser(ctx context.Context, username, displayName string) (uuid.UUID, error)
+	SetAvatarURL(ctx context.Context, botID uuid.UUID, avatarURL string) error
 }
 
 type botStore struct {
@@ -321,6 +322,21 @@ func (s *botStore) Update(ctx context.Context, bot *model.Bot) error {
 		return fmt.Errorf("commit update bot tx: %w", err)
 	}
 
+	return nil
+}
+
+func (s *botStore) SetAvatarURL(ctx context.Context, botID uuid.UUID, avatarURL string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE users
+		SET avatar_url = $1
+		WHERE id = (SELECT user_id FROM bots WHERE id = $2)
+	`, avatarURL, botID)
+	if err != nil {
+		return fmt.Errorf("set bot avatar: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrBotNotFound
+	}
 	return nil
 }
 

@@ -87,6 +87,10 @@ func (m *mockBotStore) CreateBotUser(ctx context.Context, username, displayName 
 	return uuid.New(), nil
 }
 
+func (m *mockBotStore) SetAvatarURL(ctx context.Context, botID uuid.UUID, avatarURL string) error {
+	return nil
+}
+
 type mockTokenStore struct {
 	createFn          func(ctx context.Context, botID uuid.UUID, tokenHash, tokenPrefix string) (*model.BotToken, error)
 	getByHashFn       func(ctx context.Context, tokenHash string) (*model.BotToken, error)

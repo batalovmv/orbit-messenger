@@ -248,3 +248,14 @@ const lblDisabled = "Выключен"
 const lblAllowed = "Разрешено"
 const lblDisallowed = "Запрещено"
 
+// /setuserpic
+const msgSetUserpicSelectBot = "Выбери бота для смены аватара:"
+const msgSetUserpicAwait = "Отправь фото — оно станет новым аватаром бота. Принимаются только изображения."
+const msgSetUserpicNotPhoto = "Ожидается изображение. Пришли фото или используй /cancel."
+const msgSetUserpicNoAttachment = "В сообщении не найдено изображение. Попробуй ещё раз."
+const msgSetUserpicUnexpected = "Сейчас не запрошена загрузка аватара. Напиши /setuserpic чтобы начать."
+
+func msgSetUserpicDone(username string) string {
+	return fmt.Sprintf("Аватар бота @%s обновлён.", username)
+}
+

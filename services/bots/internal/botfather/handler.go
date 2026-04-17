@@ -7,12 +7,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/bots/internal/model"
+	"github.com/mst-corp/orbit/services/bots/internal/service"
 )
 
 // HandleIfBotFatherDM handles a message in a chat where BotFather is a member.
 // The caller (NATS subscriber) has already verified that BotFather's userID is
 // in the event's member_ids. Returns true if the message was handled.
-func (bf *BotFather) HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, senderID string, content string, messageType string) bool {
+func (bf *BotFather) HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, senderID string, content string, messageType string, attachments []service.IncomingAttachment) bool {
 	// Self-loop prevention: don't handle our own messages
 	if senderID == bf.userID.String() {
 		return true // consumed, but no action
@@ -23,7 +24,13 @@ func (bf *BotFather) HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, 
 		return false
 	}
 
-	// Non-text messages
+	// Photo upload only makes sense inside /setuserpic; otherwise it's rejected.
+	if messageType == "photo" || messageType == "image" {
+		bf.handlePhoto(ctx, chatID, senderUUID, attachments)
+		return true
+	}
+
+	// Other non-text messages are rejected with a hint.
 	if messageType != "" && messageType != "text" {
 		bf.reply(ctx, chatID, msgTextOnly, nil)
 		return true
@@ -103,6 +110,8 @@ func (bf *BotFather) handleCommand(ctx context.Context, chatID uuid.UUID, sender
 		bf.cmdSetMenuButton(ctx, chatID, senderID)
 	case "/revoke":
 		bf.cmdRevoke(ctx, chatID, senderID)
+	case "/setuserpic":
+		bf.cmdSetUserpic(ctx, chatID, senderID)
 	default:
 		bf.reply(ctx, chatID, msgUnknownCommand, nil)
 	}

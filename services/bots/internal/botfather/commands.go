@@ -244,6 +244,11 @@ func (bf *BotFather) handleStatefulInput(ctx context.Context, chatID uuid.UUID, 
 	case StepSetMenuAwaitURL:
 		bf.stateMenuButtonURL(ctx, chatID, senderID, text, state.BotID, state.Data)
 
+	// /setuserpic — expects a photo, not text.
+	case StepSetUserpicAwait:
+		bf.reply(ctx, chatID, msgSetUserpicNotPhoto, nil)
+		return
+
 	// Inline keyboard steps — advise user to tap buttons.
 	case StepIntegrationSelectBot, StepIntegrationSelectConnector,
 		StepSetPrivacyChoice, StepSetInlineChoice, StepSetJoinGroupsChoice,
@@ -558,6 +563,10 @@ func (bf *BotFather) handleBotSelection(ctx context.Context, chatID uuid.UUID, c
 			"revoke:cancel",
 		)
 		bf.reply(ctx, chatID, fmt.Sprintf(msgRevokeConfirm, bot.Username), kb)
+
+	case StepSetUserpicSelectBot:
+		bf.state.SetState(ctx, callerID, &ConversationState{Step: StepSetUserpicAwait, BotID: botID})
+		bf.reply(ctx, chatID, msgSetUserpicAwait, nil)
 
 	default:
 		// Show management menu

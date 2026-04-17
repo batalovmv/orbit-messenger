@@ -203,6 +203,20 @@ func (s *BotService) UpdateBot(ctx context.Context, actorID uuid.UUID, actorRole
 	return updated, nil
 }
 
+// SetBotAvatar updates the bot's avatar URL (stored on the underlying user row).
+func (s *BotService) SetBotAvatar(ctx context.Context, botID uuid.UUID, avatarURL string) error {
+	if strings.TrimSpace(avatarURL) == "" {
+		return apperror.BadRequest("avatar URL is required")
+	}
+	if err := s.bots.SetAvatarURL(ctx, botID, avatarURL); err != nil {
+		if errors.Is(err, model.ErrBotNotFound) {
+			return apperror.NotFound("Bot not found")
+		}
+		return fmt.Errorf("set bot avatar: %w", err)
+	}
+	return nil
+}
+
 func (s *BotService) DeleteBot(ctx context.Context, actorID uuid.UUID, actorRole string, id uuid.UUID) error {
 	bot, err := s.bots.GetByID(ctx, id)
 	if err != nil {

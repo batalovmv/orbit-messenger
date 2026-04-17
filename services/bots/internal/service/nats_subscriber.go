@@ -17,8 +17,16 @@ import (
 
 // BotFatherInterceptor is implemented by botfather.BotFather to handle DM messages.
 type BotFatherInterceptor interface {
-	HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, senderID string, content string, messageType string) bool
+	HandleIfBotFatherDM(ctx context.Context, chatID uuid.UUID, senderID string, content string, messageType string, attachments []IncomingAttachment) bool
 	UserID() uuid.UUID
+}
+
+// IncomingAttachment is the minimal media payload BotFather needs for /setuserpic.
+type IncomingAttachment struct {
+	MediaID  string
+	Type     string
+	MimeType string
+	URL      string
 }
 
 type BotNATSSubscriber struct {
@@ -103,9 +111,15 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 		}
 		if isBFChat {
 			var payload struct {
-				SenderID string `json:"sender_id"`
-				Content  string `json:"content"`
-				Type     string `json:"type"`
+				SenderID         string `json:"sender_id"`
+				Content          string `json:"content"`
+				Type             string `json:"type"`
+				MediaAttachments []struct {
+					MediaID  string `json:"media_id"`
+					Type     string `json:"type"`
+					MimeType string `json:"mime_type"`
+					URL      string `json:"url"`
+				} `json:"media_attachments,omitempty"`
 			}
 			if err := json.Unmarshal(event.Data, &payload); err == nil {
 				senderID := payload.SenderID
@@ -116,7 +130,13 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 				if msgType == "" {
 					msgType = "text"
 				}
-				if s.botFather.HandleIfBotFatherDM(ctx, chatID, senderID, payload.Content, msgType) {
+				attachments := make([]IncomingAttachment, 0, len(payload.MediaAttachments))
+				for _, a := range payload.MediaAttachments {
+					attachments = append(attachments, IncomingAttachment{
+						MediaID: a.MediaID, Type: a.Type, MimeType: a.MimeType, URL: a.URL,
+					})
+				}
+				if s.botFather.HandleIfBotFatherDM(ctx, chatID, senderID, payload.Content, msgType, attachments) {
 					return
 				}
 			}

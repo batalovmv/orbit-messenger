@@ -10,6 +10,48 @@ import (
 	"github.com/mst-corp/orbit/services/bots/internal/service"
 )
 
+// ── /setuserpic ──────────────────────────────────────────────────────────
+
+func (bf *BotFather) cmdSetUserpic(ctx context.Context, chatID, senderID uuid.UUID) {
+	bf.selectBotForField(ctx, chatID, senderID,
+		StepSetUserpicSelectBot, StepSetUserpicAwait,
+		msgSetUserpicSelectBot, msgSetUserpicAwait,
+	)
+}
+
+// handlePhoto is invoked by the NATS subscriber when an image message arrives
+// in the BotFather DM. Only meaningful while a /setuserpic flow is pending.
+func (bf *BotFather) handlePhoto(ctx context.Context, chatID, senderID uuid.UUID, attachments []service.IncomingAttachment) {
+	state, err := bf.state.GetState(ctx, senderID)
+	if err != nil || state == nil || state.Step != StepSetUserpicAwait {
+		bf.reply(ctx, chatID, msgSetUserpicUnexpected, nil)
+		return
+	}
+
+	var photo *service.IncomingAttachment
+	for i := range attachments {
+		a := attachments[i]
+		if a.Type == "photo" || a.Type == "image" || strings.HasPrefix(a.MimeType, "image/") {
+			photo = &a
+			break
+		}
+	}
+	if photo == nil || photo.URL == "" {
+		bf.reply(ctx, chatID, msgSetUserpicNoAttachment, nil)
+		return
+	}
+
+	if err := bf.svc.SetBotAvatar(ctx, state.BotID, photo.URL); err != nil {
+		bf.logger.Error("failed to set bot avatar", "error", err, "bot_id", state.BotID)
+		bf.reply(ctx, chatID, msgInternalError, nil)
+		return
+	}
+
+	bot, _ := bf.svc.GetBot(ctx, state.BotID)
+	bf.state.ClearState(ctx, senderID)
+	bf.reply(ctx, chatID, msgSetUserpicDone(safeUsername(bot)), nil)
+}
+
 // ── /setabouttext ────────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdSetAbout(ctx context.Context, chatID, senderID uuid.UUID) {

@@ -66,6 +66,10 @@ const (
 	// /revoke
 	StepRevokeSelectBot = "revoke:select_bot"
 	StepRevokeConfirm   = "revoke:confirm"
+
+	// /setuserpic
+	StepSetUserpicSelectBot = "setuserpic:select_bot"
+	StepSetUserpicAwait     = "setuserpic:await_photo"
 )
 
 // ConversationState holds the current BotFather conversation state for a user.
