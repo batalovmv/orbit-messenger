@@ -32,6 +32,7 @@ import {
   fetchConnectors,
   fetchDeliveries,
   fetchRoutes,
+  previewTemplate,
   retryDelivery,
   rotateConnectorSecret,
   testConnector,
@@ -78,6 +79,7 @@ const SettingsIntegrations = () => {
   const [newRouteChatId, setNewRouteChatId] = useState('');
   const [newRouteEventFilter, setNewRouteEventFilter] = useState('');
   const [newRouteTemplate, setNewRouteTemplate] = useState('');
+  const [templatePreview, setTemplatePreview] = useState<string | undefined>();
 
   const loadConnectors = useLastCallback(async () => {
     markLoading();
@@ -240,6 +242,34 @@ const SettingsIntegrations = () => {
       }
     }
     openRouteCreate();
+  });
+
+  const handlePreviewTemplate = useLastCallback(async () => {
+    if (!selectedConnector || !newRouteTemplate.trim()) {
+      setTemplatePreview(undefined);
+      return;
+    }
+    try {
+      const result = await previewTemplate({
+        connector_id: selectedConnector.id,
+        template: newRouteTemplate,
+        event_type: newRouteEventFilter.split(',')[0]?.trim() || 'preview.event',
+        sample_payload: {
+          service: 'orbit-web',
+          status: 'succeeded',
+          commit_sha: 'abc1234',
+          user: 'admin',
+          message: 'Sample deploy payload',
+          campaign_name: 'Spring 2026',
+          offer_name: 'Demo offer',
+          amount: 1234,
+          currency: 'USD',
+        },
+      });
+      setTemplatePreview(result?.rendered ?? '');
+    } catch (e) {
+      setTemplatePreview(`Error: ${e}`);
+    }
   });
 
   const handleCreateRoute = useLastCallback(async () => {
@@ -449,6 +479,17 @@ const SettingsIntegrations = () => {
               value={newRouteTemplate}
               onChange={(e) => setNewRouteTemplate((e.target as HTMLInputElement).value)}
             />
+            <Button size="smaller" color="translucent" onClick={handlePreviewTemplate}>
+              Preview template
+            </Button>
+            {templatePreview !== undefined && (
+              <div className="settings-item">
+                <div className="settings-item-header">Rendered preview</div>
+                <p className="settings-item-description" style="white-space: pre-wrap; word-break: break-word">
+                  {templatePreview || '(empty)'}
+                </p>
+              </div>
+            )}
             <Button onClick={handleCreateRoute} color="primary">
               {lang('CreateRoute')}
             </Button>

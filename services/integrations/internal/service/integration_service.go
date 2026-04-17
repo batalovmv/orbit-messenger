@@ -308,6 +308,46 @@ type ConnectorStats struct {
 	LastDeliveryAt *time.Time `json:"last_delivery_at,omitempty"`
 }
 
+// PreviewTemplate renders the given template against a sample JSON payload
+// using the same substitution logic as outbound delivery. connectorID is
+// optional — when set we load the connector so {{.connector.name}} and
+// {{.connector.display_name}} resolve; otherwise they render as empty.
+func (s *IntegrationService) PreviewTemplate(
+	ctx context.Context,
+	connectorID *uuid.UUID,
+	template string,
+	eventType string,
+	samplePayload []byte,
+) (string, error) {
+	if strings.TrimSpace(template) == "" {
+		return "", apperror.BadRequest("template is required")
+	}
+	if len(samplePayload) == 0 {
+		samplePayload = []byte("{}")
+	}
+	if !json.Valid(samplePayload) {
+		return "", apperror.BadRequest("sample payload must be valid JSON")
+	}
+
+	connector := &model.Connector{}
+	if connectorID != nil {
+		c, err := s.connectors.GetByID(ctx, *connectorID)
+		if err != nil {
+			return "", fmt.Errorf("preview: load connector: %w", err)
+		}
+		if c != nil {
+			connector = c
+		}
+	}
+
+	route := model.Route{Template: &template}
+	rendered, err := renderDeliveryMessage(connector, route, eventType, samplePayload)
+	if err != nil {
+		return "", apperror.BadRequest(fmt.Sprintf("render failed: %v", err))
+	}
+	return rendered, nil
+}
+
 // TestConnectorResult is returned from POST /integrations/connectors/:id/test.
 type TestConnectorResult struct {
 	DeliveryIDs []uuid.UUID `json:"delivery_ids"`

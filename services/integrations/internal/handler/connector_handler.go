@@ -50,6 +50,7 @@ func (h *ConnectorHandler) Register(router fiber.Router) {
 	router.Get("/integrations/connectors/:id/deliveries", h.listDeliveries)
 	router.Get("/integrations/connectors/:id/stats", h.getConnectorStats)
 	router.Post("/integrations/connectors/:id/test", h.testConnector)
+	router.Post("/integrations/templates/preview", h.previewTemplate)
 	router.Get("/integrations/deliveries/:id", h.getDelivery)
 	router.Post("/integrations/deliveries/:id/retry", h.retryDelivery)
 }

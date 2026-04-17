@@ -86,6 +86,15 @@ export async function testConnector(
   return request<SaturnTestConnectorResult>('POST', `/integrations/connectors/${connectorId}/test`, data);
 }
 
+export async function previewTemplate(data: {
+  connector_id?: string;
+  template: string;
+  event_type?: string;
+  sample_payload?: Record<string, unknown>;
+}) {
+  return request<{ rendered: string }>('POST', '/integrations/templates/preview', data);
+}
+
 export async function fetchDeliveries(connectorId: string, limit = 50, offset = 0, status?: string) {
   let url = `/integrations/connectors/${connectorId}/deliveries?limit=${limit}&offset=${offset}`;
   if (status) url += `&status=${status}`;

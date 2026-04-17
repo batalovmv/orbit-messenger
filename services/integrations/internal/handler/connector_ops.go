@@ -1,17 +1,23 @@
 package handler
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/integrations/internal/service"
 )
+
+func marshalJSON(v any) ([]byte, error) {
+	return json.Marshal(v)
+}
 
 // updateRoute applies partial changes to a route (event_filter / template / is_active).
 func (h *ConnectorHandler) updateRoute(c *fiber.Ctx) error {
@@ -137,4 +143,53 @@ func numberParam(c *fiber.Ctx, name string, def int) int {
 		}
 	}
 	return def
+}
+
+// previewTemplate renders the given template against a sample JSON payload
+// using the same substitution logic as outbound delivery. Used by the route
+// editor so admins can see what their template produces before saving.
+func (h *ConnectorHandler) previewTemplate(c *fiber.Ctx) error {
+	if err := checkManageIntegrationsPermission(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	var req struct {
+		ConnectorID   string         `json:"connector_id,omitempty"`
+		Template      string         `json:"template"`
+		EventType     string         `json:"event_type,omitempty"`
+		SamplePayload map[string]any `json:"sample_payload,omitempty"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	eventType := strings.TrimSpace(req.EventType)
+	if eventType == "" {
+		eventType = "preview.event"
+	}
+
+	var sampleBytes []byte
+	if req.SamplePayload != nil {
+		raw, err := marshalJSON(req.SamplePayload)
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("sample_payload must be JSON-serialisable"))
+		}
+		sampleBytes = raw
+	}
+
+	var connectorIDPtr *uuid.UUID
+	if strings.TrimSpace(req.ConnectorID) != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(req.ConnectorID))
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid connector_id"))
+		}
+		connectorIDPtr = &parsed
+	}
+
+	rendered, err := h.svc.PreviewTemplate(c.Context(), connectorIDPtr, req.Template, eventType, sampleBytes)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"rendered": rendered})
 }
