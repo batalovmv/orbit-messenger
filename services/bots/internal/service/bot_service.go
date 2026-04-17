@@ -26,13 +26,20 @@ type BotService struct {
 }
 
 type UpdateBotInput struct {
-	Username         *string
-	DisplayName      *string
-	Description      *string
-	ShortDescription *string
-	IsInline         *bool
-	WebhookURL       *string
-	IsActive         *bool
+	Username                *string
+	DisplayName             *string
+	Description             *string
+	ShortDescription        *string
+	AboutText               *string
+	IsInline                *bool
+	InlinePlaceholder       *string
+	IsPrivacyEnabled        *bool
+	CanJoinGroups           *bool
+	CanReadAllGroupMessages *bool
+	MenuButton              *model.MenuButton
+	ClearMenuButton         bool
+	WebhookURL              *string
+	IsActive                *bool
 }
 
 func NewBotService(
@@ -145,8 +152,28 @@ func (s *BotService) UpdateBot(ctx context.Context, actorID uuid.UUID, actorRole
 	if input.ShortDescription != nil {
 		bot.ShortDescription = normalizeNullableString(*input.ShortDescription)
 	}
+	if input.AboutText != nil {
+		bot.AboutText = normalizeNullableString(*input.AboutText)
+	}
 	if input.IsInline != nil {
 		bot.IsInline = *input.IsInline
+	}
+	if input.InlinePlaceholder != nil {
+		bot.InlinePlaceholder = normalizeNullableString(*input.InlinePlaceholder)
+	}
+	if input.IsPrivacyEnabled != nil {
+		bot.IsPrivacyEnabled = *input.IsPrivacyEnabled
+	}
+	if input.CanJoinGroups != nil {
+		bot.CanJoinGroups = *input.CanJoinGroups
+	}
+	if input.CanReadAllGroupMessages != nil {
+		bot.CanReadAllGroupMessages = *input.CanReadAllGroupMessages
+	}
+	if input.ClearMenuButton {
+		bot.MenuButton = nil
+	} else if input.MenuButton != nil {
+		bot.MenuButton = input.MenuButton
 	}
 	if input.WebhookURL != nil {
 		bot.WebhookURL = normalizeNullableString(*input.WebhookURL)

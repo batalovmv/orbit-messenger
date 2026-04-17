@@ -23,23 +23,37 @@ var (
 	ErrInvalidToken        = errors.New("invalid token")
 )
 
+// MenuButton mirrors Telegram's bot menu button config shown in the composer.
+// Type: "default" | "commands" | "web_app". WebAppURL required when Type == "web_app".
+type MenuButton struct {
+	Type      string `json:"type"`
+	Text      string `json:"text,omitempty"`
+	WebAppURL string `json:"web_app_url,omitempty"`
+}
+
 // Bot represents a bot identity linked to a user account.
 type Bot struct {
-	ID                uuid.UUID `json:"id"`
-	UserID            uuid.UUID `json:"user_id"`
-	OwnerID           uuid.UUID `json:"owner_id"`
-	Username          string    `json:"username"`
-	DisplayName       string    `json:"display_name"`
-	AvatarURL         *string   `json:"avatar_url,omitempty"`
-	Description       *string   `json:"description,omitempty"`
-	ShortDescription  *string   `json:"short_description,omitempty"`
-	IsSystem          bool      `json:"is_system"`
-	IsInline          bool      `json:"is_inline"`
-	WebhookURL        *string   `json:"webhook_url,omitempty"`
-	WebhookSecretHash *string   `json:"-"`
-	IsActive          bool      `json:"is_active"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	ID                      uuid.UUID   `json:"id"`
+	UserID                  uuid.UUID   `json:"user_id"`
+	OwnerID                 uuid.UUID   `json:"owner_id"`
+	Username                string      `json:"username"`
+	DisplayName             string      `json:"display_name"`
+	AvatarURL               *string     `json:"avatar_url,omitempty"`
+	Description             *string     `json:"description,omitempty"`
+	ShortDescription        *string     `json:"short_description,omitempty"`
+	AboutText               *string     `json:"about_text,omitempty"`
+	IsSystem                bool        `json:"is_system"`
+	IsInline                bool        `json:"is_inline"`
+	InlinePlaceholder       *string     `json:"inline_placeholder,omitempty"`
+	IsPrivacyEnabled        bool        `json:"is_privacy_enabled"`
+	CanJoinGroups           bool        `json:"can_join_groups"`
+	CanReadAllGroupMessages bool        `json:"can_read_all_group_messages"`
+	MenuButton              *MenuButton `json:"menu_button,omitempty"`
+	WebhookURL              *string     `json:"webhook_url,omitempty"`
+	WebhookSecretHash       *string     `json:"-"`
+	IsActive                bool        `json:"is_active"`
+	CreatedAt               time.Time   `json:"created_at"`
+	UpdatedAt               time.Time   `json:"updated_at"`
 }
 
 // BotToken exposes token metadata without the sensitive hash.

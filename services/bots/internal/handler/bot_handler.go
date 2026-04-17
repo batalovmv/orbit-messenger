@@ -231,13 +231,20 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Username         *string `json:"username"`
-		DisplayName      *string `json:"display_name"`
-		Description      *string `json:"description"`
-		ShortDescription *string `json:"short_description"`
-		IsInline         *bool   `json:"is_inline"`
-		WebhookURL       *string `json:"webhook_url"`
-		IsActive         *bool   `json:"is_active"`
+		Username                *string           `json:"username"`
+		DisplayName             *string           `json:"display_name"`
+		Description             *string           `json:"description"`
+		ShortDescription        *string           `json:"short_description"`
+		AboutText               *string           `json:"about_text"`
+		IsInline                *bool             `json:"is_inline"`
+		InlinePlaceholder       *string           `json:"inline_placeholder"`
+		IsPrivacyEnabled        *bool             `json:"is_privacy_enabled"`
+		CanJoinGroups           *bool             `json:"can_join_groups"`
+		CanReadAllGroupMessages *bool             `json:"can_read_all_group_messages"`
+		MenuButton              *model.MenuButton `json:"menu_button"`
+		ClearMenuButton         bool              `json:"clear_menu_button"`
+		WebhookURL              *string           `json:"webhook_url"`
+		IsActive                *bool             `json:"is_active"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -263,15 +270,44 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 			return response.Error(c, err)
 		}
 	}
+	if req.AboutText != nil && strings.TrimSpace(*req.AboutText) != "" {
+		if err := validator.RequireString(*req.AboutText, "about_text", 1, 120); err != nil {
+			return response.Error(c, err)
+		}
+	}
+	if req.InlinePlaceholder != nil && strings.TrimSpace(*req.InlinePlaceholder) != "" {
+		if err := validator.RequireString(*req.InlinePlaceholder, "inline_placeholder", 1, 64); err != nil {
+			return response.Error(c, err)
+		}
+	}
+	if req.MenuButton != nil {
+		switch req.MenuButton.Type {
+		case "default", "commands":
+			// no extra fields required
+		case "web_app":
+			if strings.TrimSpace(req.MenuButton.WebAppURL) == "" {
+				return response.Error(c, apperror.BadRequest("web_app menu button requires web_app_url"))
+			}
+		default:
+			return response.Error(c, apperror.BadRequest("menu_button.type must be one of: default, commands, web_app"))
+		}
+	}
 
 	bot, err := h.svc.UpdateBot(c.Context(), userID, getUserRole(c), botID, service.UpdateBotInput{
-		Username:         req.Username,
-		DisplayName:      req.DisplayName,
-		Description:      req.Description,
-		ShortDescription: req.ShortDescription,
-		IsInline:         req.IsInline,
-		WebhookURL:       req.WebhookURL,
-		IsActive:         req.IsActive,
+		Username:                req.Username,
+		DisplayName:             req.DisplayName,
+		Description:             req.Description,
+		ShortDescription:        req.ShortDescription,
+		AboutText:               req.AboutText,
+		IsInline:                req.IsInline,
+		InlinePlaceholder:       req.InlinePlaceholder,
+		IsPrivacyEnabled:        req.IsPrivacyEnabled,
+		CanJoinGroups:           req.CanJoinGroups,
+		CanReadAllGroupMessages: req.CanReadAllGroupMessages,
+		MenuButton:              req.MenuButton,
+		ClearMenuButton:         req.ClearMenuButton,
+		WebhookURL:              req.WebhookURL,
+		IsActive:                req.IsActive,
 	})
 	if err != nil {
 		return response.Error(c, err)

@@ -91,6 +91,18 @@ func (bf *BotFather) handleCommand(ctx context.Context, chatID uuid.UUID, sender
 		bf.cmdToken(ctx, chatID, senderID)
 	case "/setintegration":
 		bf.cmdSetIntegration(ctx, chatID, senderID)
+	case "/setabouttext":
+		bf.cmdSetAbout(ctx, chatID, senderID)
+	case "/setprivacy":
+		bf.cmdSetPrivacy(ctx, chatID, senderID)
+	case "/setinline":
+		bf.cmdSetInline(ctx, chatID, senderID)
+	case "/setjoingroups":
+		bf.cmdSetJoinGroups(ctx, chatID, senderID)
+	case "/setmenubutton":
+		bf.cmdSetMenuButton(ctx, chatID, senderID)
+	case "/revoke":
+		bf.cmdRevoke(ctx, chatID, senderID)
 	default:
 		bf.reply(ctx, chatID, msgUnknownCommand, nil)
 	}
@@ -128,6 +140,17 @@ func (bf *BotFather) HandleCallback(ctx context.Context, callerID uuid.UUID, cha
 
 	case "integration":
 		bf.callbackIntegration(ctx, chatID, callerID, action, parts)
+
+	case "setprivacy":
+		bf.callbackPrivacy(ctx, chatID, callerID, action, parts)
+	case "setinline":
+		bf.callbackInline(ctx, chatID, callerID, action, parts)
+	case "setjoin":
+		bf.callbackJoinGroups(ctx, chatID, callerID, action, parts)
+	case "setmenu":
+		bf.callbackSetMenu(ctx, chatID, callerID, action, parts)
+	case "revoke":
+		bf.callbackRevoke(ctx, chatID, callerID, action, parts)
 	}
 
 	return map[string]any{}

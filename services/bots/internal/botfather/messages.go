@@ -20,9 +20,15 @@ const msgHelp = `Команды BotFather:
 Настройка бота:
 /setname — изменить имя бота
 /setdescription — изменить описание
+/setabouttext — короткий текст about (120 символов)
 /setcommands — задать список команд
+/setprivacy — режим приватности в группах
+/setinline — inline-режим
+/setjoingroups — разрешить добавлять в группы
+/setmenubutton — кнопка меню у композера
 /setwebhook — настроить вебхук
 /token — показать или перегенерировать токен
+/revoke — полная ротация токена (hard reset)
 /deletebot — удалить бота
 
 Другое:
@@ -136,3 +142,109 @@ const msgIntegrationNotAvailable = "Сервис интеграций недос
 // Errors
 const msgBotNotFound = "Бот не найден или не принадлежит тебе."
 const msgInternalError = "Произошла внутренняя ошибка. Попробуй позже."
+
+// /setabouttext
+const msgSetAboutSelectBot = "Выбери бота для изменения about:"
+const msgSetAboutAwait = "Отправь краткий текст about (до 120 символов). Этот текст показывается на странице профиля бота. 'clear' — очистить."
+const msgSetAboutTooLong = "About может быть до 120 символов. Попробуй ещё раз."
+
+func msgSetAboutDone(username string) string {
+	return fmt.Sprintf("About бота @%s обновлён.", username)
+}
+
+// /setprivacy
+const msgSetPrivacySelectBot = "Выбери бота для настройки режима приватности:"
+const msgSetPrivacyPrompt = `Режим приватности определяет, какие сообщения бот видит в группах.
+
+• Включён: только команды (/foo), ответы на сообщения бота, и сообщения, начинающиеся с @botname.
+• Выключен: все сообщения в группе.
+
+Текущее состояние: %s
+
+Выбери новое значение:`
+
+func msgSetPrivacyDone(username string, enabled bool) string {
+	if enabled {
+		return fmt.Sprintf("Режим приватности для @%s включён. Бот видит только команды.", username)
+	}
+	return fmt.Sprintf("Режим приватности для @%s выключен. Бот видит все сообщения.", username)
+}
+
+// /setinline
+const msgSetInlineSelectBot = "Выбери бота для настройки inline-режима:"
+const msgSetInlinePrompt = `Inline-режим позволяет вызывать бота из любого чата через @botname query.
+
+Текущее состояние: %s
+
+Выбери новое значение:`
+const msgSetInlineAskPlaceholder = "Отправь placeholder для inline-режима (до 64 символов), или 'skip' чтобы оставить пустым:"
+const msgSetInlinePlaceholderTooLong = "Placeholder может быть до 64 символов. Попробуй ещё раз."
+
+func msgSetInlineOn(username string) string {
+	return fmt.Sprintf("Inline-режим для @%s включён.", username)
+}
+
+func msgSetInlineOff(username string) string {
+	return fmt.Sprintf("Inline-режим для @%s выключен.", username)
+}
+
+// /setjoingroups
+const msgSetJoinGroupsSelectBot = "Выбери бота для настройки добавления в группы:"
+const msgSetJoinGroupsPrompt = `Настройка определяет, могут ли пользователи добавлять бота в групповые чаты.
+
+Текущее состояние: %s
+
+Выбери новое значение:`
+
+func msgSetJoinGroupsDone(username string, allowed bool) string {
+	if allowed {
+		return fmt.Sprintf("Бота @%s теперь можно добавлять в группы.", username)
+	}
+	return fmt.Sprintf("Бота @%s больше нельзя добавлять в группы.", username)
+}
+
+// /setmenubutton
+const msgSetMenuSelectBot = "Выбери бота для настройки кнопки меню:"
+const msgSetMenuPrompt = `Кнопка меню отображается слева от поля ввода в чате с ботом.
+
+• default — стандартная кнопка ☰ (список команд)
+• commands — кнопка «Команды» (открывает список /commands)
+• web_app — кнопка открывает Web App
+
+Выбери тип кнопки:`
+const msgSetMenuAskText = "Отправь текст кнопки (до 32 символов):"
+const msgSetMenuAskURL = "Отправь URL Web App (начиная с https://):"
+const msgSetMenuInvalidURL = "URL должен начинаться с https://. Попробуй ещё раз."
+const msgSetMenuTextTooLong = "Текст кнопки может быть до 32 символов. Попробуй ещё раз."
+
+func msgSetMenuDone(username, kind string) string {
+	return fmt.Sprintf("Кнопка меню для @%s установлена: %s.", username, kind)
+}
+
+func msgSetMenuCleared(username string) string {
+	return fmt.Sprintf("Кнопка меню для @%s сброшена на стандартную.", username)
+}
+
+// /revoke
+const msgRevokeSelectBot = "Выбери бота для полной ротации токена:"
+const msgRevokeConfirm = `Полная ротация токена бота @%s.
+
+Это действие:
+• выпускает новый токен
+• деактивирует все старые токены
+• очищает webhook secret
+
+После подтверждения webhook нужно будет перенастроить.`
+
+func msgRevokeDone(username, token string) string {
+	return fmt.Sprintf("Готово! Новый токен для @%s:\n`%s`\n\nВсе старые токены деактивированы. Не забудь перенастроить webhook secret.", username, token)
+}
+
+const msgRevokeCancelled = "Ротация отменена."
+
+// Generic toggle labels
+const lblEnabled = "Включён"
+const lblDisabled = "Выключен"
+const lblAllowed = "Разрешено"
+const lblDisallowed = "Запрещено"
+

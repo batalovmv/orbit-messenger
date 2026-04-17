@@ -230,8 +230,24 @@ func (bf *BotFather) handleStatefulInput(ctx context.Context, chatID uuid.UUID, 
 	case StepSetCmdsAwait:
 		bf.stateSetCommands(ctx, chatID, senderID, text, state.BotID)
 
-	// /setintegration flow — these steps use inline keyboards, not text
-	case StepIntegrationSelectBot, StepIntegrationSelectConnector:
+	// /setabouttext flow
+	case StepSetAboutAwait:
+		bf.stateSetAbout(ctx, chatID, senderID, text, state.BotID)
+
+	// /setinline placeholder flow
+	case StepSetInlineAwaitPlaceholder:
+		bf.stateSetInlinePlaceholder(ctx, chatID, senderID, text, state.BotID)
+
+	// /setmenubutton web_app flow
+	case StepSetMenuAwaitText:
+		bf.stateMenuButtonText(ctx, chatID, senderID, text, state.BotID)
+	case StepSetMenuAwaitURL:
+		bf.stateMenuButtonURL(ctx, chatID, senderID, text, state.BotID, state.Data)
+
+	// Inline keyboard steps — advise user to tap buttons.
+	case StepIntegrationSelectBot, StepIntegrationSelectConnector,
+		StepSetPrivacyChoice, StepSetInlineChoice, StepSetJoinGroupsChoice,
+		StepSetMenuChoice, StepRevokeConfirm:
 		bf.reply(ctx, chatID, "Используй кнопки выше для выбора. Или /cancel для отмены.", nil)
 		return
 
@@ -506,6 +522,43 @@ func (bf *BotFather) handleBotSelection(ctx context.Context, chatID uuid.UUID, c
 		bf.showTokenActions(ctx, chatID, callerID, botID)
 	case StepIntegrationSelectBot:
 		bf.showConnectorList(ctx, chatID, callerID, botID)
+
+	case StepSetAboutSelectBot:
+		bf.state.SetState(ctx, callerID, &ConversationState{Step: StepSetAboutAwait, BotID: botID})
+		bf.reply(ctx, chatID, msgSetAboutAwait, nil)
+	case StepSetPrivacySelectBot:
+		bot, _ := bf.svc.GetBot(ctx, botID)
+		if bot != nil {
+			bf.showPrivacyToggle(ctx, chatID, callerID, bot)
+		}
+	case StepSetInlineSelectBot:
+		bot, _ := bf.svc.GetBot(ctx, botID)
+		if bot != nil {
+			bf.showInlineToggle(ctx, chatID, callerID, bot)
+		}
+	case StepSetJoinGroupsSelectBot:
+		bot, _ := bf.svc.GetBot(ctx, botID)
+		if bot != nil {
+			bf.showJoinGroupsToggle(ctx, chatID, callerID, bot)
+		}
+	case StepSetMenuSelectBot:
+		bot, _ := bf.svc.GetBot(ctx, botID)
+		if bot != nil {
+			bf.showMenuTypeSelector(ctx, chatID, callerID, bot)
+		}
+	case StepRevokeSelectBot:
+		bot, _ := bf.svc.GetBot(ctx, botID)
+		if bot == nil {
+			bf.reply(ctx, chatID, msgBotNotFound, nil)
+			return
+		}
+		bf.state.SetState(ctx, callerID, &ConversationState{Step: StepRevokeConfirm, BotID: botID})
+		kb := buildConfirmKeyboard(
+			fmt.Sprintf("revoke:yes:%s", botID),
+			"revoke:cancel",
+		)
+		bf.reply(ctx, chatID, fmt.Sprintf(msgRevokeConfirm, bot.Username), kb)
+
 	default:
 		// Show management menu
 		bot, _ := bf.svc.GetBot(ctx, botID)

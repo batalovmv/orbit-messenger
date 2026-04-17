@@ -39,6 +39,33 @@ const (
 	// /setintegration
 	StepIntegrationSelectBot       = "integration:select_bot"
 	StepIntegrationSelectConnector = "integration:select_connector"
+
+	// /setabouttext
+	StepSetAboutSelectBot = "setabouttext:select_bot"
+	StepSetAboutAwait     = "setabouttext:await_value"
+
+	// /setprivacy
+	StepSetPrivacySelectBot = "setprivacy:select_bot"
+	StepSetPrivacyChoice    = "setprivacy:choice"
+
+	// /setinline
+	StepSetInlineSelectBot         = "setinline:select_bot"
+	StepSetInlineChoice            = "setinline:choice"
+	StepSetInlineAwaitPlaceholder  = "setinline:await_placeholder"
+
+	// /setjoingroups
+	StepSetJoinGroupsSelectBot = "setjoingroups:select_bot"
+	StepSetJoinGroupsChoice    = "setjoingroups:choice"
+
+	// /setmenubutton
+	StepSetMenuSelectBot   = "setmenubutton:select_bot"
+	StepSetMenuChoice      = "setmenubutton:choice"
+	StepSetMenuAwaitText   = "setmenubutton:await_text"
+	StepSetMenuAwaitURL    = "setmenubutton:await_url"
+
+	// /revoke
+	StepRevokeSelectBot = "revoke:select_bot"
+	StepRevokeConfirm   = "revoke:confirm"
 )
 
 // ConversationState holds the current BotFather conversation state for a user.

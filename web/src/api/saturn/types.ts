@@ -488,6 +488,12 @@ export interface SaturnAuditEntry {
 
 // === Bots ===
 
+export interface SaturnBotMenuButton {
+  type: 'default' | 'commands' | 'web_app';
+  text?: string;
+  web_app_url?: string;
+}
+
 export interface SaturnBot {
   id: string;
   user_id: string;
@@ -497,8 +503,14 @@ export interface SaturnBot {
   avatar_url?: string;
   description?: string;
   short_description?: string;
+  about_text?: string;
   is_system: boolean;
   is_inline: boolean;
+  inline_placeholder?: string;
+  is_privacy_enabled: boolean;
+  can_join_groups: boolean;
+  can_read_all_group_messages: boolean;
+  menu_button?: SaturnBotMenuButton;
   webhook_url?: string;
   is_active: boolean;
   created_at: string;

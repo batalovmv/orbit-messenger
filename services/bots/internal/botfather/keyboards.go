@@ -103,3 +103,28 @@ func buildConfirmKeyboard(yesData, cancelData string) *InlineKeyboardMarkup {
 		},
 	}
 }
+
+// buildToggleKeyboard creates an on/off toggle keyboard with localized labels.
+// onData / offData become the callback_data for the two options.
+func buildToggleKeyboard(onLabel, offLabel, onData, offData string) *InlineKeyboardMarkup {
+	return &InlineKeyboardMarkup{
+		InlineKeyboard: [][]InlineKeyboardButton{
+			{
+				{Text: onLabel, CallbackData: onData},
+				{Text: offLabel, CallbackData: offData},
+			},
+		},
+	}
+}
+
+// buildMenuButtonTypeKeyboard creates the 4-row type selector for /setmenubutton.
+func buildMenuButtonTypeKeyboard(botID string) *InlineKeyboardMarkup {
+	return &InlineKeyboardMarkup{
+		InlineKeyboard: [][]InlineKeyboardButton{
+			{{Text: "default", CallbackData: fmt.Sprintf("setmenu:default:%s", botID)}},
+			{{Text: "commands", CallbackData: fmt.Sprintf("setmenu:commands:%s", botID)}},
+			{{Text: "web_app", CallbackData: fmt.Sprintf("setmenu:webapp:%s", botID)}},
+			{{Text: "Сбросить", CallbackData: fmt.Sprintf("setmenu:clear:%s", botID)}},
+		},
+	}
+}

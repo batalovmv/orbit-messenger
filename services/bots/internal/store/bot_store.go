@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -14,8 +15,11 @@ import (
 
 const botSelectColumns = `
 	b.id, b.user_id, b.owner_id, u.username, u.display_name, u.avatar_url,
-	b.description, b.short_description, b.is_system, b.is_inline, b.webhook_url,
-	b.webhook_secret_hash,
+	b.description, b.short_description, b.about_text,
+	b.is_system, b.is_inline, b.inline_placeholder,
+	b.is_privacy_enabled, b.can_join_groups, b.can_read_all_group_messages,
+	b.menu_button,
+	b.webhook_url, b.webhook_secret_hash,
 	b.is_active, b.created_at, b.updated_at
 `
 
@@ -44,7 +48,8 @@ func NewBotStore(pool *pgxpool.Pool) BotStore {
 }
 
 func scanBot(scanner botScanner, bot *model.Bot) error {
-	return scanner.Scan(
+	var menuButtonRaw []byte
+	if err := scanner.Scan(
 		&bot.ID,
 		&bot.UserID,
 		&bot.OwnerID,
@@ -53,14 +58,30 @@ func scanBot(scanner botScanner, bot *model.Bot) error {
 		&bot.AvatarURL,
 		&bot.Description,
 		&bot.ShortDescription,
+		&bot.AboutText,
 		&bot.IsSystem,
 		&bot.IsInline,
+		&bot.InlinePlaceholder,
+		&bot.IsPrivacyEnabled,
+		&bot.CanJoinGroups,
+		&bot.CanReadAllGroupMessages,
+		&menuButtonRaw,
 		&bot.WebhookURL,
 		&bot.WebhookSecretHash,
 		&bot.IsActive,
 		&bot.CreatedAt,
 		&bot.UpdatedAt,
-	)
+	); err != nil {
+		return err
+	}
+	if len(menuButtonRaw) > 0 {
+		mb := &model.MenuButton{}
+		if err := json.Unmarshal(menuButtonRaw, mb); err != nil {
+			return fmt.Errorf("decode menu_button: %w", err)
+		}
+		bot.MenuButton = mb
+	}
+	return nil
 }
 
 func (s *botStore) GetBotUserIDByUsername(ctx context.Context, username string) (uuid.UUID, error) {
@@ -97,6 +118,7 @@ func (s *botStore) CreateBotUser(ctx context.Context, username, displayName stri
 }
 
 func (s *botStore) Create(ctx context.Context, bot *model.Bot) error {
+	// New privacy/inline/menu fields use DB defaults on insert; Update handles mutations.
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO bots (
 			user_id, owner_id, description, short_description, is_system,
@@ -255,18 +277,39 @@ func (s *botStore) Update(ctx context.Context, bot *model.Bot) error {
 		return model.ErrBotNotFound
 	}
 
+	var menuButtonJSON []byte
+	if bot.MenuButton != nil {
+		raw, err := json.Marshal(bot.MenuButton)
+		if err != nil {
+			return fmt.Errorf("encode menu_button: %w", err)
+		}
+		menuButtonJSON = raw
+	}
+
 	tag, err = tx.Exec(ctx, `
 		UPDATE bots
 		SET description = $1,
 		    short_description = $2,
-		    is_system = $3,
-		    is_inline = $4,
-		    webhook_url = $5,
-		    webhook_secret_hash = $6,
-		    is_active = $7,
+		    about_text = $3,
+		    is_system = $4,
+		    is_inline = $5,
+		    inline_placeholder = $6,
+		    is_privacy_enabled = $7,
+		    can_join_groups = $8,
+		    can_read_all_group_messages = $9,
+		    menu_button = $10,
+		    webhook_url = $11,
+		    webhook_secret_hash = $12,
+		    is_active = $13,
 		    updated_at = NOW()
-		WHERE id = $8
-	`, bot.Description, bot.ShortDescription, bot.IsSystem, bot.IsInline, bot.WebhookURL, bot.WebhookSecretHash, bot.IsActive, bot.ID)
+		WHERE id = $14
+	`,
+		bot.Description, bot.ShortDescription, bot.AboutText,
+		bot.IsSystem, bot.IsInline, bot.InlinePlaceholder,
+		bot.IsPrivacyEnabled, bot.CanJoinGroups, bot.CanReadAllGroupMessages,
+		menuButtonJSON,
+		bot.WebhookURL, bot.WebhookSecretHash, bot.IsActive, bot.ID,
+	)
 	if err != nil {
 		return fmt.Errorf("update bot: %w", err)
 	}
