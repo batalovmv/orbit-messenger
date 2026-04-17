@@ -13,4 +13,5 @@ RUN apk --no-cache add ca-certificates tzdata \
     && addgroup -S app && adduser -S app -G app
 COPY --from=builder /server /server
 USER app
+EXPOSE 8084
 ENTRYPOINT ["/server"]
