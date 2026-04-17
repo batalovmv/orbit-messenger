@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/integrations/internal/model"
+	"github.com/mst-corp/orbit/services/integrations/internal/store"
 )
 
 type mockConnectorStore struct {
@@ -234,4 +235,8 @@ func (m *mockDeliveryStore) InsertAttempt(ctx context.Context, attempt *model.De
 
 func (m *mockDeliveryStore) ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]model.DeliveryAttempt, error) {
 	return nil, nil
+}
+
+func (m *mockDeliveryStore) ConnectorStats(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*store.ConnectorStatsRow, error) {
+	return &store.ConnectorStatsRow{}, nil
 }

@@ -260,6 +260,162 @@ func (s *IntegrationService) DeleteRoute(ctx context.Context, id uuid.UUID) erro
 	return nil
 }
 
+// UpdateRouteInput holds the patchable route fields. nil means "leave as-is",
+// empty string for EventFilter/Template means "clear".
+type UpdateRouteInput struct {
+	EventFilter *string
+	Template    *string
+	IsActive    *bool
+}
+
+func (s *IntegrationService) UpdateRoute(ctx context.Context, id uuid.UUID, input UpdateRouteInput) (*model.Route, error) {
+	route, err := s.routes.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get route for update: %w", err)
+	}
+	if route == nil {
+		return nil, apperror.NotFound("Route not found")
+	}
+
+	if input.EventFilter != nil {
+		route.EventFilter = normalizePtr(*input.EventFilter)
+	}
+	if input.Template != nil {
+		route.Template = normalizePtr(*input.Template)
+	}
+	if input.IsActive != nil {
+		route.IsActive = *input.IsActive
+	}
+
+	if err := s.routes.Update(ctx, route); err != nil {
+		if errors.Is(err, model.ErrRouteNotFound) {
+			return nil, apperror.NotFound("Route not found")
+		}
+		return nil, fmt.Errorf("update route: %w", err)
+	}
+
+	return route, nil
+}
+
+// ConnectorStats is a 24h (or custom window) summary of delivery outcomes.
+type ConnectorStats struct {
+	Window         string     `json:"window"`
+	Total          int        `json:"total"`
+	Delivered      int        `json:"delivered"`
+	Failed         int        `json:"failed"`
+	Pending        int        `json:"pending"`
+	DeadLetter     int        `json:"dead_letter"`
+	LastDeliveryAt *time.Time `json:"last_delivery_at,omitempty"`
+}
+
+// TestConnectorResult is returned from POST /integrations/connectors/:id/test.
+type TestConnectorResult struct {
+	DeliveryIDs []uuid.UUID `json:"delivery_ids"`
+	RouteCount  int         `json:"route_count"`
+	EventType   string      `json:"event_type"`
+}
+
+// TestConnector fires a synthetic payload through the normal route/template
+// pipeline, skipping signature verification and idempotency dedup. Returns
+// the created delivery IDs so the admin UI can link directly to them.
+func (s *IntegrationService) TestConnector(ctx context.Context, connectorID uuid.UUID, eventType string, payload map[string]any) (*TestConnectorResult, error) {
+	if strings.TrimSpace(eventType) == "" {
+		eventType = "test.event"
+	}
+
+	connector, err := s.connectors.GetByID(ctx, connectorID)
+	if err != nil {
+		return nil, fmt.Errorf("get connector for test: %w", err)
+	}
+	if connector == nil {
+		return nil, apperror.NotFound("Connector not found")
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, apperror.BadRequest("payload must be JSON-serialisable")
+	}
+
+	routes, err := s.routes.FindMatchingRoutes(ctx, connectorID, eventType)
+	if err != nil {
+		return nil, fmt.Errorf("find routes for test: %w", err)
+	}
+	if len(routes) == 0 {
+		return nil, apperror.BadRequest("no active routes match this event_type; add a route before testing")
+	}
+
+	senderID := connector.CreatedBy
+	if connector.BotID != nil {
+		if botUserID, err := s.connectors.GetBotUserID(ctx, *connector.BotID); err == nil {
+			senderID = botUserID
+		}
+	}
+
+	result := &TestConnectorResult{RouteCount: len(routes), EventType: eventType}
+	for _, route := range routes {
+		msgPayload, err := buildDeliveryMessagePayload(connector, route, eventType, payloadBytes, senderID)
+		if err != nil {
+			return nil, fmt.Errorf("build test delivery payload: %w", err)
+		}
+
+		nextRetryAt := time.Now().UTC()
+		testType := "test." + eventType
+		delivery := &model.Delivery{
+			ConnectorID:  connectorID,
+			RouteID:      uuidPtr(route.ID),
+			EventType:    testType,
+			Payload:      msgPayload,
+			Status:       deliveryStatusPending,
+			AttemptCount: 0,
+			MaxAttempts:  defaultMaxAttempts,
+			NextRetryAt:  &nextRetryAt,
+		}
+		if err := s.deliveries.Create(ctx, delivery); err != nil {
+			return nil, fmt.Errorf("create test delivery: %w", err)
+		}
+
+		message, err := s.dispatchDelivery(ctx, delivery)
+		if err != nil {
+			lastError := err.Error()
+			retryAt := time.Now().UTC().Add(nextRetryDelay(1))
+			if updateErr := s.deliveries.UpdateStatus(ctx, delivery.ID, deliveryStatusFailed, &lastError, &retryAt, nil); updateErr != nil {
+				s.logger.Error("failed to mark test delivery as failed",
+					"delivery_id", delivery.ID, "error", updateErr)
+			}
+			s.recordAttempt(ctx, delivery.ID, 1, deliveryStatusFailed, nil, "", err)
+		} else {
+			if err := s.deliveries.UpdateStatus(ctx, delivery.ID, deliveryStatusDelivered, nil, nil, &message.ID); err != nil {
+				s.logger.Error("failed to mark test delivery as delivered",
+					"delivery_id", delivery.ID, "error", err)
+			}
+			s.recordAttempt(ctx, delivery.ID, 1, deliveryStatusDelivered, nil, "", nil)
+		}
+		result.DeliveryIDs = append(result.DeliveryIDs, delivery.ID)
+	}
+
+	return result, nil
+}
+
+func (s *IntegrationService) GetConnectorStats(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*ConnectorStats, error) {
+	if window <= 0 {
+		window = 24 * time.Hour
+	}
+	row, err := s.deliveries.ConnectorStats(ctx, connectorID, window)
+	if err != nil {
+		return nil, fmt.Errorf("connector stats: %w", err)
+	}
+	stats := &ConnectorStats{
+		Window:         window.String(),
+		Total:          row.Total,
+		Delivered:      row.Delivered,
+		Failed:         row.Failed,
+		Pending:        row.Pending,
+		DeadLetter:     row.DeadLetter,
+		LastDeliveryAt: row.LastDeliveryAt,
+	}
+	return stats, nil
+}
+
 func (s *IntegrationService) ListDeliveries(ctx context.Context, connectorID uuid.UUID, status *string, limit, offset int) ([]model.Delivery, int, error) {
 	if filterer, ok := s.deliveries.(deliveryFilterer); ok {
 		deliveries, total, err := filterer.ListByConnectorFiltered(ctx, connectorID, status, limit, offset)
@@ -546,6 +702,16 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen]
+}
+
+// normalizePtr trims input and returns nil when the result is empty, mirroring
+// the nullable-string contract used throughout the integrations service.
+func normalizePtr(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 func buildDeliveryMessagePayload(

@@ -45,8 +45,11 @@ func (h *ConnectorHandler) Register(router fiber.Router) {
 	router.Post("/integrations/connectors/:id/rotate-secret", h.rotateSecret)
 	router.Post("/integrations/connectors/:id/routes", h.createRoute)
 	router.Delete("/integrations/routes/:id", h.deleteRoute)
+	router.Patch("/integrations/routes/:id", h.updateRoute)
 	router.Get("/integrations/connectors/:id/routes", h.listRoutes)
 	router.Get("/integrations/connectors/:id/deliveries", h.listDeliveries)
+	router.Get("/integrations/connectors/:id/stats", h.getConnectorStats)
+	router.Post("/integrations/connectors/:id/test", h.testConnector)
 	router.Get("/integrations/deliveries/:id", h.getDelivery)
 	router.Post("/integrations/deliveries/:id/retry", h.retryDelivery)
 }

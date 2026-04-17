@@ -49,6 +49,43 @@ export async function deleteRoute(routeId: string) {
   return request<void>('DELETE', `/integrations/routes/${routeId}`);
 }
 
+export async function updateRoute(
+  routeId: string,
+  data: Partial<{ event_filter: string; template: string; is_active: boolean }>,
+) {
+  return request<SaturnIntegrationRoute>('PATCH', `/integrations/routes/${routeId}`, data);
+}
+
+export interface SaturnConnectorStats {
+  window: string;
+  total: number;
+  delivered: number;
+  failed: number;
+  pending: number;
+  dead_letter: number;
+  last_delivery_at?: string;
+}
+
+export async function fetchConnectorStats(connectorId: string, window = '24h') {
+  return request<SaturnConnectorStats>(
+    'GET',
+    `/integrations/connectors/${connectorId}/stats?window=${encodeURIComponent(window)}`,
+  );
+}
+
+export interface SaturnTestConnectorResult {
+  delivery_ids: string[];
+  route_count: number;
+  event_type: string;
+}
+
+export async function testConnector(
+  connectorId: string,
+  data: { event_type?: string; payload?: Record<string, unknown> } = {},
+) {
+  return request<SaturnTestConnectorResult>('POST', `/integrations/connectors/${connectorId}/test`, data);
+}
+
 export async function fetchDeliveries(connectorId: string, limit = 50, offset = 0, status?: string) {
   let url = `/integrations/connectors/${connectorId}/deliveries?limit=${limit}&offset=${offset}`;
   if (status) url += `&status=${status}`;

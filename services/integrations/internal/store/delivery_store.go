@@ -24,6 +24,18 @@ type DeliveryStore interface {
 	MarkDeadLetter(ctx context.Context, id uuid.UUID, lastError string) error
 	InsertAttempt(ctx context.Context, attempt *model.DeliveryAttempt) error
 	ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]model.DeliveryAttempt, error)
+	ConnectorStats(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*ConnectorStatsRow, error)
+}
+
+// ConnectorStatsRow is the raw aggregate pulled from SQL, before the service
+// layer decorates it with the window label shown in the API response.
+type ConnectorStatsRow struct {
+	Total          int
+	Delivered      int
+	Failed         int
+	Pending        int
+	DeadLetter     int
+	LastDeliveryAt *time.Time
 }
 
 type deliveryStore struct {
@@ -237,6 +249,27 @@ func (s *deliveryStore) ListAttempts(ctx context.Context, deliveryID uuid.UUID) 
 		return nil, fmt.Errorf("iterate delivery attempts: %w", err)
 	}
 	return attempts, nil
+}
+
+func (s *deliveryStore) ConnectorStats(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*ConnectorStatsRow, error) {
+	row := &ConnectorStatsRow{}
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) AS total,
+			COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
+			COUNT(*) FILTER (WHERE status = 'failed') AS failed,
+			COUNT(*) FILTER (WHERE status = 'pending' OR status = 'processing') AS pending,
+			COUNT(*) FILTER (WHERE status = 'dead_letter') AS dead_letter,
+			MAX(delivered_at) AS last_delivery_at
+		FROM integration_deliveries
+		WHERE connector_id = $1
+		  AND created_at >= NOW() - $2::interval
+	`, connectorID, fmt.Sprintf("%d seconds", int(window.Seconds()))).
+		Scan(&row.Total, &row.Delivered, &row.Failed, &row.Pending, &row.DeadLetter, &row.LastDeliveryAt)
+	if err != nil {
+		return nil, fmt.Errorf("connector stats: %w", err)
+	}
+	return row, nil
 }
 
 func (s *deliveryStore) MarkDeadLetter(ctx context.Context, id uuid.UUID, lastError string) error {

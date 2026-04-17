@@ -563,6 +563,17 @@ export interface SaturnIntegrationRoute {
   is_active: boolean;
 }
 
+export interface SaturnIntegrationDeliveryAttempt {
+  id: string;
+  delivery_id: string;
+  attempt_no: number;
+  status: 'delivered' | 'failed' | 'dead_letter';
+  response_status?: number;
+  response_body_snippet?: string;
+  error?: string;
+  ran_at: string;
+}
+
 export interface SaturnIntegrationDelivery {
   id: string;
   connector_id: string;
@@ -573,6 +584,7 @@ export interface SaturnIntegrationDelivery {
   last_error?: string;
   delivered_at?: string;
   created_at: string;
+  attempts?: SaturnIntegrationDeliveryAttempt[];
 }
 
 export interface SaturnConnectorCreateResponse {
