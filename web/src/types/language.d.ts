@@ -2080,6 +2080,7 @@ export interface LangPair {
   'BotUsername': undefined;
   'BotDisplayName': undefined;
   'BotDescription': undefined;
+  'BotShortDescription': undefined;
   'BotWebhookUrl': undefined;
   'BotToken': undefined;
   'BotRotateToken': undefined;
@@ -2089,6 +2090,8 @@ export interface LangPair {
   'BotCreated': undefined;
   'BotDeleted': undefined;
   'TokenRotated': undefined;
+  'BotAddToGroup': undefined;
+  'BotAddedToGroup': undefined;
   'ConnectorName': undefined;
   'ConnectorDisplayName': undefined;
   'ConnectorType': undefined;
@@ -2126,6 +2129,16 @@ export interface LangPair {
   'AiTranslateCopy': undefined;
   'AiTranslateFailed': undefined;
   'AiGeneratedDisclaimer': undefined;
+  'BotPermissions': undefined;
+  'BotPrivacyMode': undefined;
+  'BotPrivacyModeHint': undefined;
+  'BotCanJoinGroups': undefined;
+  'BotCanJoinGroupsHint': undefined;
+  'BotCanReadAllMessages': undefined;
+  'BotCanReadAllMessagesHint': undefined;
+  'BotInlineMode': undefined;
+  'BotInlineModeHint': undefined;
+  'BotInlinePlaceholder': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3666,6 +3679,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AiTranslateSkipped': {
     'count': V;
+  };
+  'ExactTextCopied': {
+    '0': V;
   };
 }
 
