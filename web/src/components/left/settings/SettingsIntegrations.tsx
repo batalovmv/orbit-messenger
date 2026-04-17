@@ -7,6 +7,7 @@ import type {
   SaturnIntegrationDelivery,
   SaturnIntegrationRoute,
 } from '../../../api/saturn/types';
+import type { SaturnConnectorStats } from '../../../api/saturn/methods/integrations';
 
 import { copyTextToClipboard } from '../../../util/clipboard';
 
@@ -27,13 +28,16 @@ import {
   createRoute,
   deleteConnector,
   deleteRoute,
+  fetchConnectorStats,
   fetchConnectors,
   fetchDeliveries,
   fetchRoutes,
   retryDelivery,
   rotateConnectorSecret,
+  testConnector,
   updateConnector,
 } from '../../../api/saturn/methods/integrations';
+import { request as saturnRequest } from '../../../api/saturn/client';
 import {
   findPresetById,
   getDefaultPreset,
@@ -61,6 +65,13 @@ const SettingsIntegrations = () => {
   const [newName, setNewName] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newPresetId, setNewPresetId] = useState<string>(getDefaultPreset().id);
+
+  // Stats
+  const [stats, setStats] = useState<SaturnConnectorStats | undefined>();
+
+  // Delivery detail modal
+  const [deliveryDetail, setDeliveryDetail] = useState<SaturnIntegrationDelivery | undefined>();
+  const [isDeliveryOpen, openDelivery, closeDelivery] = useFlag(false);
 
   // Route form
   const [isRouteCreateOpen, openRouteCreate, closeRouteCreate] = useFlag(false);
@@ -161,6 +172,48 @@ const SettingsIntegrations = () => {
     }
   });
 
+  const loadStats = useLastCallback(async (connectorId: string) => {
+    try {
+      const result = await fetchConnectorStats(connectorId, '24h');
+      setStats(result);
+    } catch {
+      setStats(undefined);
+    }
+  });
+
+  // Pull 24h stats whenever the edit view opens a connector.
+  useEffect(() => {
+    if (viewMode === 'edit' && selectedConnector) {
+      loadStats(selectedConnector.id);
+    } else if (viewMode === 'list') {
+      setStats(undefined);
+    }
+  }, [viewMode, selectedConnector, loadStats]);
+
+  const handleTest = useLastCallback(async () => {
+    if (!selectedConnector) return;
+    try {
+      const result = await testConnector(selectedConnector.id);
+      showNotification({
+        message: `Test fired: ${result.delivery_ids.length} delivery(ies) across ${result.route_count} route(s)`,
+      });
+      // Stats reflect the fresh delivery.
+      loadStats(selectedConnector.id);
+    } catch (e) {
+      showNotification({ message: String(e) });
+    }
+  });
+
+  const handleOpenDelivery = useLastCallback(async (deliveryId: string) => {
+    try {
+      const detail = await saturnRequest<SaturnIntegrationDelivery>('GET', `/integrations/deliveries/${deliveryId}`);
+      setDeliveryDetail(detail);
+      openDelivery();
+    } catch (e) {
+      showNotification({ message: String(e) });
+    }
+  });
+
   const handleViewRoutes = useLastCallback(async (connector: SaturnIntegrationConnector) => {
     setSelectedConnector(connector);
     setViewMode('routes');
@@ -250,6 +303,14 @@ const SettingsIntegrations = () => {
   if (viewMode === 'edit' && selectedConnector) {
     const editedPresetId = (selectedConnector.config as { preset_id?: string } | undefined)?.preset_id;
     const editedPreset = findPresetById(editedPresetId);
+    // Webhook URL is served by the integrations service behind the gateway.
+    // On localhost the web dev server lives on :3000 but the webhook is on :8080;
+    // on Saturn both share the same origin.
+    const gatewayOrigin = window.location.port === '3000'
+      ? window.location.origin.replace(':3000', ':8080')
+      : window.location.origin;
+    const webhookUrl = `${gatewayOrigin}/api/v1/webhooks/in/${selectedConnector.id}`;
+
     return (
       <div className="settings-content custom-scroll">
         <div className="settings-item">
@@ -262,29 +323,51 @@ const SettingsIntegrations = () => {
               {editedPreset.status === 'framework-only' ? ' — framework only, pending live testing' : ''}
             </p>
           )}
-          {connectorSecret && (
-            <div className="settings-item">
-              <p className="settings-item-description">{lang('ConnectorSecret')}</p>
-              <code style="word-break: break-all; font-size: 0.75rem">{connectorSecret}</code>
-              <Button size="smaller" onClick={() => handleCopySecret(connectorSecret)}>
-                Copy
-              </Button>
-            </div>
-          )}
-          <div className="settings-item-footer">
-            <Button onClick={handleRotateSecret} color="translucent">
-              {lang('SecretRotated')}
-            </Button>
-            <Button onClick={() => handleViewRoutes(selectedConnector)}>
-              {lang('Routes')}
-            </Button>
-            <Button onClick={() => handleConfirmDelete(selectedConnector.id)} color="danger">
-              {lang('DeleteConnector')}
-            </Button>
-            <Button onClick={handleBack} color="translucent">
-              {lang('Back')}
-            </Button>
+        </div>
+
+        {stats && (
+          <div className="settings-item">
+            <div className="settings-item-header">24h stats</div>
+            <p className="settings-item-description">
+              Total: <b>{stats.total}</b> · Delivered: <b>{stats.delivered}</b> ·
+              {' '}Failed: <b>{stats.failed}</b> · Dead-letter: <b>{stats.dead_letter}</b>
+            </p>
+            {stats.last_delivery_at && (
+              <p className="settings-item-description">
+                Last delivery: {new Date(stats.last_delivery_at).toLocaleString()}
+              </p>
+            )}
           </div>
+        )}
+
+        <div className="settings-item">
+          <div className="settings-item-header">Inbound webhook URL</div>
+          <code style="word-break: break-all; font-size: 0.75rem">{webhookUrl}</code>
+          <Button size="smaller" onClick={() => handleCopySecret(webhookUrl)}>Copy URL</Button>
+        </div>
+
+        {connectorSecret && (
+          <div className="settings-item">
+            <div className="settings-item-header">{lang('ConnectorSecret')}</div>
+            <code style="word-break: break-all; font-size: 0.75rem">{connectorSecret}</code>
+            <Button size="smaller" onClick={() => handleCopySecret(connectorSecret)}>Copy</Button>
+          </div>
+        )}
+
+        <div className="settings-item-footer">
+          <Button onClick={handleTest} color="primary">Send test event</Button>
+          <Button onClick={handleRotateSecret} color="translucent">
+            {lang('SecretRotated')}
+          </Button>
+          <Button onClick={() => handleViewRoutes(selectedConnector)}>
+            {lang('Routes')}
+          </Button>
+          <Button onClick={() => handleConfirmDelete(selectedConnector.id)} color="danger">
+            {lang('DeleteConnector')}
+          </Button>
+          <Button onClick={handleBack} color="translucent">
+            {lang('Back')}
+          </Button>
         </div>
       </div>
     );
@@ -328,6 +411,8 @@ const SettingsIntegrations = () => {
             <ListItem
               key={delivery.id}
               narrow
+              secondaryIcon="next"
+              onClick={() => handleOpenDelivery(delivery.id)}
               contextActions={delivery.status === 'failed' ? [{
                 title: lang('RetryDelivery'),
                 icon: 'replace',
@@ -335,7 +420,9 @@ const SettingsIntegrations = () => {
               }] : undefined}
             >
               <span className="title">{delivery.event_type || 'event'}</span>
-              <span className="subtitle">{delivery.status} — {new Date(delivery.created_at).toLocaleString()}</span>
+              <span className="subtitle">
+                {delivery.status} · attempt {delivery.attempt_count}/3 · {new Date(delivery.created_at).toLocaleString()}
+              </span>
             </ListItem>
           ))}
           {!deliveries.length && <p className="settings-item-description">No deliveries yet</p>}
@@ -366,6 +453,51 @@ const SettingsIntegrations = () => {
               {lang('CreateRoute')}
             </Button>
           </div>
+        </Modal>
+
+        <Modal
+          isOpen={isDeliveryOpen}
+          onClose={closeDelivery}
+          title={deliveryDetail ? `Delivery: ${deliveryDetail.event_type || 'event'}` : 'Delivery'}
+        >
+          {deliveryDetail && (
+            <div className="settings-item">
+              <p className="settings-item-description">
+                Status: <b>{deliveryDetail.status}</b>
+                {'  '}·{'  '}Attempts: <b>{deliveryDetail.attempt_count}</b>
+              </p>
+              <p className="settings-item-description">
+                Created: {new Date(deliveryDetail.created_at).toLocaleString()}
+                {deliveryDetail.delivered_at && (
+                  <> · Delivered: {new Date(deliveryDetail.delivered_at).toLocaleString()}</>
+                )}
+              </p>
+              {deliveryDetail.last_error && (
+                <>
+                  <div className="settings-item-header">Last error</div>
+                  <code style="word-break: break-all; font-size: 0.75rem">{deliveryDetail.last_error}</code>
+                </>
+              )}
+              {deliveryDetail.attempts && deliveryDetail.attempts.length > 0 && (
+                <>
+                  <div className="settings-item-header">Attempts timeline</div>
+                  {deliveryDetail.attempts.map((a) => (
+                    <div key={a.id} className="settings-item-description">
+                      #{a.attempt_no} · <b>{a.status}</b>
+                      {a.response_status ? ` · HTTP ${a.response_status}` : ''}
+                      {' '}· {new Date(a.ran_at).toLocaleString()}
+                      {a.error && <div style="color: var(--color-error); word-break: break-all">{a.error}</div>}
+                    </div>
+                  ))}
+                </>
+              )}
+              {deliveryDetail.status === 'failed' && (
+                <Button size="smaller" onClick={() => { handleRetryDelivery(deliveryDetail.id); closeDelivery(); }}>
+                  {lang('RetryDelivery')}
+                </Button>
+              )}
+            </div>
+          )}
         </Modal>
       </div>
     );
