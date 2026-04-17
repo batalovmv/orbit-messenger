@@ -516,9 +516,12 @@ export default memo(withGlobal<OwnProps>(
       } as Complete<StateProps>;
     }
 
-    const bot = selectBot(global, chatId);
+    // Saturn DMs have chat.id !== peer user id; resolve the bot via peerUserId
+    // so call/block/start-bot gating works correctly.
+    const peerUserId = chat.peerUserId || chatId;
+    const bot = selectBot(global, peerUserId);
     const chatFullInfo = !isPrivate ? selectChatFullInfo(global, chatId) : undefined;
-    const userFullInfo = isPrivate ? selectUserFullInfo(global, chatId) : undefined;
+    const userFullInfo = isPrivate ? selectUserFullInfo(global, peerUserId) : undefined;
     const fullInfo = chatFullInfo || userFullInfo;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;

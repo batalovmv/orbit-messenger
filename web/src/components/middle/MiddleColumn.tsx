@@ -779,7 +779,8 @@ export default memo(withGlobal<OwnProps>(
     const { chatId, threadId, type: messageListType } = currentMessageList;
     const isPrivate = isUserId(chatId);
     const chat = selectChat(global, chatId);
-    const bot = selectBot(global, chatId);
+    // In Saturn DMs chat.id !== bot user id; resolve via peerUserId.
+    const bot = selectBot(global, chat?.peerUserId || chatId);
     const pinnedIds = selectPinnedIds(global, chatId, threadId);
     const chatFullInfo = chatId ? selectChatFullInfo(global, chatId) : undefined;
     const userFullInfo = chatId ? selectUserFullInfo(global, chatId) : undefined;
