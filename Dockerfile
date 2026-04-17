@@ -24,5 +24,6 @@ FROM alpine:3.21
 RUN apk --no-cache add ca-certificates tzdata \
     && addgroup -S app && adduser -S app -G app
 COPY --from=builder /server /server
+COPY migrations/ /migrations/
 USER app
 ENTRYPOINT ["/server"]
