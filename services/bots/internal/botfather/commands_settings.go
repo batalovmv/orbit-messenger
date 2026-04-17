@@ -89,7 +89,7 @@ func (bf *BotFather) stateSetAbout(ctx context.Context, chatID, senderID uuid.UU
 // ── /setprivacy ──────────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdSetPrivacy(ctx context.Context, chatID, senderID uuid.UUID) {
-	bf.selectBotForToggle(ctx, chatID, senderID, StepSetPrivacySelectBot, func(bot *model.Bot) {
+	bf.selectBotForToggle(ctx, chatID, senderID, StepSetPrivacySelectBot, msgSetPrivacySelectBot, func(bot *model.Bot) {
 		bf.showPrivacyToggle(ctx, chatID, senderID, bot)
 	})
 }
@@ -120,7 +120,7 @@ func (bf *BotFather) applyPrivacyChoice(ctx context.Context, chatID, senderID, b
 // ── /setinline ───────────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdSetInline(ctx context.Context, chatID, senderID uuid.UUID) {
-	bf.selectBotForToggle(ctx, chatID, senderID, StepSetInlineSelectBot, func(bot *model.Bot) {
+	bf.selectBotForToggle(ctx, chatID, senderID, StepSetInlineSelectBot, msgSetInlineSelectBot, func(bot *model.Bot) {
 		bf.showInlineToggle(ctx, chatID, senderID, bot)
 	})
 }
@@ -185,7 +185,7 @@ func (bf *BotFather) stateSetInlinePlaceholder(ctx context.Context, chatID, send
 // ── /setjoingroups ───────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdSetJoinGroups(ctx context.Context, chatID, senderID uuid.UUID) {
-	bf.selectBotForToggle(ctx, chatID, senderID, StepSetJoinGroupsSelectBot, func(bot *model.Bot) {
+	bf.selectBotForToggle(ctx, chatID, senderID, StepSetJoinGroupsSelectBot, msgSetJoinGroupsSelectBot, func(bot *model.Bot) {
 		bf.showJoinGroupsToggle(ctx, chatID, senderID, bot)
 	})
 }
@@ -216,7 +216,7 @@ func (bf *BotFather) applyJoinGroupsChoice(ctx context.Context, chatID, senderID
 // ── /setmenubutton ───────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdSetMenuButton(ctx context.Context, chatID, senderID uuid.UUID) {
-	bf.selectBotForToggle(ctx, chatID, senderID, StepSetMenuSelectBot, func(bot *model.Bot) {
+	bf.selectBotForToggle(ctx, chatID, senderID, StepSetMenuSelectBot, msgSetMenuSelectBot, func(bot *model.Bot) {
 		bf.showMenuTypeSelector(ctx, chatID, senderID, bot)
 	})
 }
@@ -285,7 +285,7 @@ func (bf *BotFather) stateMenuButtonURL(ctx context.Context, chatID, senderID uu
 // ── /revoke ──────────────────────────────────────────────────────────────
 
 func (bf *BotFather) cmdRevoke(ctx context.Context, chatID, senderID uuid.UUID) {
-	bf.selectBotForToggle(ctx, chatID, senderID, StepRevokeSelectBot, func(bot *model.Bot) {
+	bf.selectBotForToggle(ctx, chatID, senderID, StepRevokeSelectBot, msgRevokeSelectBot, func(bot *model.Bot) {
 		bf.state.SetState(ctx, senderID, &ConversationState{Step: StepRevokeConfirm, BotID: bot.ID})
 		kb := buildConfirmKeyboard(
 			fmt.Sprintf("revoke:yes:%s", bot.ID),
@@ -344,7 +344,7 @@ func (bf *BotFather) selectBotForField(ctx context.Context, chatID, senderID uui
 // selectBotForToggle is used for toggle settings (privacy/inline/joingroups/menu/revoke).
 // After the bot is picked, `onPick` is invoked with the resolved bot.
 func (bf *BotFather) selectBotForToggle(ctx context.Context, chatID, senderID uuid.UUID,
-	selectStep string, onPick func(bot *model.Bot),
+	selectStep string, promptMsg string, onPick func(bot *model.Bot),
 ) {
 	bots, err := bf.getUserBots(ctx, senderID)
 	if err != nil {
@@ -365,7 +365,7 @@ func (bf *BotFather) selectBotForToggle(ctx context.Context, chatID, senderID uu
 		return
 	}
 	bf.state.SetState(ctx, senderID, &ConversationState{Step: selectStep})
-	bf.reply(ctx, chatID, msgSetPrivacySelectBot, buildBotListKeyboard(bots, "mybots:select"))
+	bf.reply(ctx, chatID, promptMsg, buildBotListKeyboard(bots, "mybots:select"))
 }
 
 func safeUsername(bot *model.Bot) string {

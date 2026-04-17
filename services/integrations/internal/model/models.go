@@ -96,6 +96,21 @@ func (j JSONB) Value() (driver.Value, error) {
 	return []byte(j), nil
 }
 
+func (j JSONB) MarshalJSON() ([]byte, error) {
+	if len(j) == 0 {
+		return []byte("{}"), nil
+	}
+	return j, nil
+}
+
+func (j *JSONB) UnmarshalJSON(data []byte) error {
+	if j == nil {
+		return fmt.Errorf("JSONB: UnmarshalJSON on nil pointer")
+	}
+	*j = append((*j)[0:0], data...)
+	return nil
+}
+
 var (
 	ErrConnectorNotFound = errors.New("connector not found")
 	ErrConnectorAlreadyExists = errors.New("connector already exists")

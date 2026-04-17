@@ -26,6 +26,7 @@ const msgHelp = `Команды BotFather:
 /setinline — inline-режим
 /setjoingroups — разрешить добавлять в группы
 /setmenubutton — кнопка меню у композера
+/setuserpic — загрузить аватар бота
 /setwebhook — настроить вебхук
 /token — показать или перегенерировать токен
 /revoke — полная ротация токена (hard reset)
