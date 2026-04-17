@@ -2129,6 +2129,7 @@ export interface LangPair {
   'AiTranslateCopy': undefined;
   'AiTranslateFailed': undefined;
   'AiGeneratedDisclaimer': undefined;
+  'BotAboutText': undefined;
   'BotPermissions': undefined;
   'BotPrivacyMode': undefined;
   'BotPrivacyModeHint': undefined;
@@ -2139,6 +2140,7 @@ export interface LangPair {
   'BotInlineMode': undefined;
   'BotInlineModeHint': undefined;
   'BotInlinePlaceholder': undefined;
+  'SettingsSaved': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
