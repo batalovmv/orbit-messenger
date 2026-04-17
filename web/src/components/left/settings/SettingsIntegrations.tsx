@@ -469,11 +469,44 @@ const SettingsIntegrations = () => {
               value={newRouteChatId}
               onChange={(e) => setNewRouteChatId((e.target as HTMLInputElement).value)}
             />
-            <InputText
-              label={lang('EventFilter')}
-              value={newRouteEventFilter}
-              onChange={(e) => setNewRouteEventFilter((e.target as HTMLInputElement).value)}
-            />
+            {(() => {
+              const presetId = (selectedConnector?.config as { preset_id?: string } | undefined)?.preset_id;
+              const preset = findPresetById(presetId);
+              const selected = new Set(
+                newRouteEventFilter.split(',').map((s) => s.trim()).filter(Boolean),
+              );
+              if (preset?.availableEventTypes?.length) {
+                const toggle = (ev: string) => {
+                  const next = new Set(selected);
+                  if (next.has(ev)) next.delete(ev); else next.add(ev);
+                  setNewRouteEventFilter(Array.from(next).join(','));
+                };
+                return (
+                  <div className="settings-item">
+                    <div className="settings-item-header">{lang('EventFilter')}</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem">
+                      {preset.availableEventTypes.map((ev) => (
+                        <Button
+                          key={ev}
+                          size="tiny"
+                          color={selected.has(ev) ? 'primary' : 'translucent'}
+                          onClick={() => toggle(ev)}
+                        >
+                          {ev}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <InputText
+                  label={lang('EventFilter')}
+                  value={newRouteEventFilter}
+                  onChange={(e) => setNewRouteEventFilter((e.target as HTMLInputElement).value)}
+                />
+              );
+            })()}
             <InputText
               label={lang('MessageTemplate')}
               value={newRouteTemplate}

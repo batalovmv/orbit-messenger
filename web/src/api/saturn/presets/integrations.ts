@@ -46,6 +46,8 @@ export type IntegrationPreset = {
   defaultTemplate: string;
   /** Pre-fill for Route.EventFilter — comma-separated event type list. */
   defaultEventFilter?: string;
+  /** Optional allowed event types — enables the chip-select UI in route form. */
+  availableEventTypes?: string[];
   /** Persisted into Connector.Config (JSONB). Read by the webhook handler. */
   config: IntegrationPresetConfig;
   /** Rendered as multi-line admin instructions under the dropdown. */
@@ -63,6 +65,7 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     defaultConnectorDisplayName: 'Saturn.ac Deploy',
     defaultTemplate: '🚀 Deploy {{.service}} → {{.status}} ({{.commit_sha}}) by {{.user}}',
     defaultEventFilter: 'deploy.started,deploy.succeeded,deploy.failed',
+    availableEventTypes: ['deploy.started', 'deploy.succeeded', 'deploy.failed'],
     config: {
       preset_id: 'saturn_deploy',
       http_method: 'POST',
@@ -87,6 +90,7 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     defaultConnectorDisplayName: 'InsightFlow Alerts',
     defaultTemplate: '💰 Конверсия: {{.offer_name}} — {{.amount}} {{.currency}}',
     defaultEventFilter: 'conversion.lead,conversion.sale',
+    availableEventTypes: ['conversion.lead', 'conversion.sale', 'conversion.chargeback'],
     config: {
       preset_id: 'insightflow',
       http_method: 'POST',
@@ -114,6 +118,7 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     defaultConnectorDisplayName: 'ASA Analytics',
     defaultTemplate: '📊 Кампания {{.campaign_name}}: CPI ${{.cpi}}, {{.installs}} установок, ${{.spend}} потрачено',
     defaultEventFilter: 'campaign.alert,campaign.limit_reached',
+    availableEventTypes: ['campaign.alert', 'campaign.limit_reached', 'campaign.paused'],
     config: {
       preset_id: 'asa_analytics',
       http_method: 'POST',
@@ -140,6 +145,7 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     defaultConnectorDisplayName: 'Keitaro Postbacks',
     defaultTemplate: '🎯 Postback: {{.campaign}} — {{.status}} ({{.payout}}$)',
     defaultEventFilter: 'postback.approved,postback.rejected',
+    availableEventTypes: ['postback.approved', 'postback.rejected', 'postback.pending'],
     config: {
       preset_id: 'keitaro',
       http_method: 'GET',
