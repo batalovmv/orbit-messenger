@@ -1,6 +1,8 @@
-import type { SaturnUser } from '../types';
+import type { SaturnBot, SaturnBotCommand, SaturnUser } from '../types';
 
-import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBuilders/users';
+import {
+  buildApiBotInfoFromSaturn, buildApiUser, buildApiUserFullInfo, buildApiUserStatus,
+} from '../apiBuilders/users';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 
@@ -54,6 +56,22 @@ export async function fetchFullUser({ id }: { id: string; accessHash?: string })
   const user = buildApiUser(saturnUser);
   const fullInfo = buildApiUserFullInfo(saturnUser);
   const status = buildApiUserStatus(saturnUser);
+
+  if (saturnUser.account_type === 'bot') {
+    try {
+      const bot = await client.request<SaturnBot>('GET', `/bots/by-user/${saturnUser.id}`);
+      let commands: SaturnBotCommand[] | undefined;
+      try {
+        commands = await client.request<SaturnBotCommand[]>('GET', `/bots/${bot.id}/commands`);
+      } catch {
+        commands = undefined;
+      }
+      fullInfo.botInfo = buildApiBotInfoFromSaturn(bot, commands);
+    } catch {
+      // Not every bot-typed user is in the bots registry (e.g. legacy system accounts);
+      // leaving botInfo undefined keeps the UI in "no bot metadata" state.
+    }
+  }
 
   sendApiUpdate({
     '@type': 'updateUser',

@@ -1,5 +1,6 @@
+import type { ApiBotInfo, ApiBotMenuButton } from '../../types';
 import type { ApiUser, ApiUserFullInfo, ApiUserStatus } from '../../types';
-import type { SaturnUser } from '../types';
+import type { SaturnBot, SaturnBotCommand, SaturnUser } from '../types';
 
 import { buildAvatarPhoto, getAvatarPhotoId } from './avatars';
 
@@ -57,5 +58,37 @@ export function buildApiUserFullInfo(user: SaturnUser): ApiUserFullInfo {
     bio: user.bio || undefined,
     profilePhoto: buildAvatarPhoto(user.id, user.avatar_url),
     commonChatsCount: 1, // Hint to show tab; real count loaded by loadCommonChats
+  };
+}
+
+// buildApiBotInfoFromSaturn maps our Saturn bot record into the ApiBotInfo
+// shape the legacy Telegram UI expects. We intentionally leave photo/gif
+// empty — Saturn bots reuse the user avatar rendered by MessageListAccountInfo
+// instead of the TG "rich cover" media slot.
+export function buildApiBotInfoFromSaturn(bot: SaturnBot, commands?: SaturnBotCommand[]): ApiBotInfo {
+  const description = (bot.about_text && bot.about_text.trim())
+    || (bot.description && bot.description.trim())
+    || undefined;
+
+  const apiCommands = commands?.map((c) => ({
+    botId: bot.id,
+    command: c.command,
+    description: c.description,
+  }));
+
+  let menuButton: ApiBotMenuButton = { type: 'commands' };
+  if (bot.menu_button?.type === 'web_app' && bot.menu_button.web_app_url) {
+    menuButton = {
+      type: 'webApp',
+      text: bot.menu_button.text || 'Open',
+      url: bot.menu_button.web_app_url,
+    };
+  }
+
+  return {
+    botId: bot.user_id,
+    description,
+    commands: apiCommands,
+    menuButton,
   };
 }

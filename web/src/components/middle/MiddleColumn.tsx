@@ -658,7 +658,7 @@ function MiddleColumn({
                     </Button>
                   </div>
                 )}
-                {isMobile && renderingCanStartBot && (
+                {renderingCanStartBot && (
                   <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"

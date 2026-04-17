@@ -252,9 +252,13 @@ export default memo(withGlobal<OwnProps>(
       countryList: { phoneCodes: phoneCodeList },
     } = global;
     const chat = selectChat(global, chatId);
-    const userFullInfo = selectUserFullInfo(global, chatId);
-    const commonChats = selectUserCommonChats(global, chatId);
-    const chatBot = selectBot(global, chatId);
+    // In Orbit DMs chat.id !== peer user id; fall back to peerUserId so we
+    // pick the bot's userFullInfo (which carries botInfo) rather than an empty
+    // chat-level record.
+    const userId = chat?.peerUserId || chatId;
+    const userFullInfo = selectUserFullInfo(global, userId);
+    const commonChats = selectUserCommonChats(global, userId);
+    const chatBot = selectBot(global, userId);
 
     let isLoadingFullUser = false;
     let botInfo;
