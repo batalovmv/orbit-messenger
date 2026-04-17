@@ -288,24 +288,26 @@ export default function createConfig(
       }),
       // WebpackObfuscator disabled — causes rlottie-wasm worker hash mismatches
       // and is unnecessary for a corporate messenger
-      new WatchFilePlugin({
-        rules: [
-          {
-            files: 'src/assets/localization/fallback.strings',
-            action: 'npm run lang:ts',
-          },
-          {
-            files: 'src/lib/gramjs/tl/static/**/*',
-            action: 'npm run gramjs:tl',
-            sharedAction: true,
-          },
-          {
-            files: 'src/assets/font-icons/*.svg',
-            action: 'npm run icons:build',
-            sharedAction: true,
-          },
-        ],
-      }),
+      ...(mode === 'development' ? [
+        new WatchFilePlugin({
+          rules: [
+            {
+              files: 'src/assets/localization/fallback.strings',
+              action: 'npm run lang:ts',
+            },
+            {
+              files: 'src/lib/gramjs/tl/static/**/*',
+              action: 'npm run gramjs:tl',
+              sharedAction: true,
+            },
+            {
+              files: 'src/assets/font-icons/*.svg',
+              action: 'npm run icons:build',
+              sharedAction: true,
+            },
+          ],
+        }),
+      ] : []),
     ],
 
     devtool: mode === 'production' ? false : 'source-map',
