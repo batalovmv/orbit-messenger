@@ -10,6 +10,7 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 import Button from '../../ui/Button';
+import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
@@ -133,9 +134,18 @@ const SettingsBotManagement = () => {
         display_name: editingBot.display_name,
         description: editingBot.description || undefined,
         short_description: editingBot.short_description || undefined,
+        about_text: editingBot.about_text || undefined,
         webhook_url: editingBot.webhook_url || undefined,
+        is_privacy_enabled: editingBot.is_privacy_enabled,
+        can_join_groups: editingBot.can_join_groups,
+        can_read_all_group_messages: editingBot.can_read_all_group_messages,
+        is_inline: editingBot.is_inline,
+        inline_placeholder: editingBot.is_inline
+          ? (editingBot.inline_placeholder || '')
+          : '',
       });
       loadBots();
+      showNotification({ message: lang('SettingsSaved') });
     } catch (e) {
       showNotification({ message: String(e) });
     }
@@ -181,12 +191,54 @@ const SettingsBotManagement = () => {
             })}
           />
           <InputText
+            label={lang('BotAboutText')}
+            value={editingBot.about_text || ''}
+            onChange={(e) => setEditingBot({
+              ...editingBot, about_text: (e.target as HTMLInputElement).value,
+            })}
+          />
+          <InputText
             label={lang('BotWebhookUrl')}
             value={editingBot.webhook_url || ''}
             onChange={(e) => setEditingBot({
               ...editingBot, webhook_url: (e.target as HTMLInputElement).value,
             })}
           />
+
+          <div className="settings-item-header">{lang('BotPermissions')}</div>
+          <Checkbox
+            label={lang('BotPrivacyMode')}
+            subLabel={lang('BotPrivacyModeHint')}
+            checked={editingBot.is_privacy_enabled}
+            onCheck={(checked) => setEditingBot({ ...editingBot, is_privacy_enabled: checked })}
+          />
+          <Checkbox
+            label={lang('BotCanJoinGroups')}
+            subLabel={lang('BotCanJoinGroupsHint')}
+            checked={editingBot.can_join_groups}
+            onCheck={(checked) => setEditingBot({ ...editingBot, can_join_groups: checked })}
+          />
+          <Checkbox
+            label={lang('BotCanReadAllMessages')}
+            subLabel={lang('BotCanReadAllMessagesHint')}
+            checked={editingBot.can_read_all_group_messages}
+            onCheck={(checked) => setEditingBot({ ...editingBot, can_read_all_group_messages: checked })}
+          />
+          <Checkbox
+            label={lang('BotInlineMode')}
+            subLabel={lang('BotInlineModeHint')}
+            checked={editingBot.is_inline}
+            onCheck={(checked) => setEditingBot({ ...editingBot, is_inline: checked })}
+          />
+          {editingBot.is_inline && (
+            <InputText
+              label={lang('BotInlinePlaceholder')}
+              value={editingBot.inline_placeholder || ''}
+              onChange={(e) => setEditingBot({
+                ...editingBot, inline_placeholder: (e.target as HTMLInputElement).value,
+              })}
+            />
+          )}
           {editingBot.token && (
             <div className="settings-item">
               <p className="settings-item-description">{lang('BotToken')}</p>
