@@ -4,6 +4,8 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
+import { startMessageTranslation } from './AiTranslateInline';
+
 import type {
   ApiAvailableReaction,
   ApiChat,
@@ -255,7 +257,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     cancelPollVote,
     closePoll,
     toggleReaction,
-    requestMessageTranslation,
     showOriginalMessage,
     openChatLanguageModal,
     openMessageReactionPicker,
@@ -619,10 +620,17 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleTranslate = useLastCallback(() => {
-    requestMessageTranslation({
-      chatId: message.chatId,
-      id: message.id,
-    });
+    // Orbit AI translation. Target language is the user's own locale —
+    // what they want to read the foreign message in. We'll pull this
+    // from user settings in a later slice; for now detect from the
+    // browser with an EN fallback. The legacy requestMessageTranslation
+    // action (Telegram Premium) is intentionally skipped — Premium
+    // isn't part of Orbit's scope.
+    const raw = typeof navigator !== 'undefined' ? navigator.language : '';
+    const normalized = raw.slice(0, 2).toLowerCase();
+    const supported = ['en', 'ru', 'es', 'de', 'fr'];
+    const targetLang = supported.includes(normalized) ? normalized : 'en';
+    startMessageTranslation(message.chatId, message.id, targetLang);
     closeMenu();
   });
 
@@ -867,7 +875,11 @@ export default memo(withGlobal<OwnProps>(
     const hasTranslation = translationRequestLanguage
       ? Boolean(selectMessageTranslations(global, message.chatId, translationRequestLanguage)[message.id]?.text)
       : undefined;
-    const canTranslate = !hasTranslation && selectCanTranslateMessage(global, message, detectedLanguage);
+    // Orbit AI translation is available for any message that has text
+    // content — no Premium gate, no language-list restriction. The old
+    // selectCanTranslateMessage path is Telegram-Premium-only and returns
+    // false for free users, which is never what we want in Orbit.
+    const canTranslate = Boolean(message.content.text?.text?.trim());
     const isChatTranslated = selectRequestedChatTranslationLanguage(global, message.chatId);
 
     const isInSavedMessages = selectIsChatWithSelf(global, message.chatId);

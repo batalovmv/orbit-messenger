@@ -190,6 +190,7 @@ import Game from './Game';
 import Giveaway from './Giveaway';
 import InlineButtons from './InlineButtons';
 import AiTranscribeButton from './AiTranscribeButton';
+import AiTranslateInline from './AiTranslateInline';
 import Invoice from './Invoice';
 import InvoiceMediaPreview from './InvoiceMediaPreview';
 import Location from './Location';
@@ -1849,6 +1850,7 @@ const Message = ({
             </>
           )}
           {renderContent()}
+          <AiTranslateInline messageId={message.id} />
           {!isInDocumentGroupNotLast && metaPosition === 'standalone' && !isStoryMention && renderReactionsAndMeta()}
           {canShowActionButton && (
             <div className="message-action-buttons-container">
