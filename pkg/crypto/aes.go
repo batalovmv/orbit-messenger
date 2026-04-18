@@ -35,6 +35,38 @@ func Encrypt(plaintext string, key []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
+// DecryptContentField unwraps an AES-256-GCM ciphertext stored in a nullable
+// string column. It mutates *ct in place with the plaintext. If the column is
+// NULL/empty it is a no-op. When decryption fails (legacy rows written before
+// at-rest encryption was enabled, or ciphertext produced with a different key)
+// the value is left as-is so existing rows remain readable instead of causing
+// 500 errors. The store layer should use this for any SELECT of an encrypted
+// content column to stay consistent with the rest of the read paths.
+func DecryptContentField(ct *string, key []byte) {
+	if ct == nil || *ct == "" {
+		return
+	}
+	pt, err := Decrypt(*ct, key)
+	if err != nil {
+		return
+	}
+	*ct = pt
+}
+
+// EncryptContentField wraps nullable plaintext with AES-256-GCM. Returns nil
+// when the input is nil so INSERTs/UPDATEs preserve NULLs for rows that never
+// had plaintext (media-only, stickers, polls).
+func EncryptContentField(p *string, key []byte) (*string, error) {
+	if p == nil {
+		return nil, nil
+	}
+	ct, err := Encrypt(*p, key)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt content: %w", err)
+	}
+	return &ct, nil
+}
+
 // Decrypt decrypts ciphertext produced by Encrypt.
 func Decrypt(ciphertext string, key []byte) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)

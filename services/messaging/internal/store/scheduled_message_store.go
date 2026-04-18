@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
 
@@ -37,11 +38,16 @@ type ScheduledMessageStore interface {
 }
 
 type scheduledMessageStore struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	atRest []byte // master key for AES-256-GCM content encryption, shared with messageStore
 }
 
-func NewScheduledMessageStore(pool *pgxpool.Pool) ScheduledMessageStore {
-	return &scheduledMessageStore{pool: pool}
+// NewScheduledMessageStore creates a ScheduledMessageStore. `atRestKey` MUST be
+// the same 32-byte master key used by MessageStore so plaintext never lands on
+// disk, and delivery into `messages.content` round-trips through plaintext
+// correctly instead of double-encrypting.
+func NewScheduledMessageStore(pool *pgxpool.Pool, atRestKey []byte) ScheduledMessageStore {
+	return &scheduledMessageStore{pool: pool, atRest: atRestKey}
 }
 
 func (s *scheduledMessageStore) Create(ctx context.Context, msg *model.ScheduledMessage) error {
@@ -54,6 +60,11 @@ func (s *scheduledMessageStore) Create(ctx context.Context, msg *model.Scheduled
 		return fmt.Errorf("marshal scheduled poll payload: %w", err)
 	}
 
+	ctContent, err := crypto.EncryptContentField(msg.Content, s.atRest)
+	if err != nil {
+		return err
+	}
+
 	return s.pool.QueryRow(ctx,
 		`INSERT INTO scheduled_messages (
 		    chat_id, sender_id, content, entities, reply_to_id, type,
@@ -63,7 +74,7 @@ func (s *scheduledMessageStore) Create(ctx context.Context, msg *model.Scheduled
 		 RETURNING id, type, is_sent, sent_at, created_at, updated_at`,
 		msg.ChatID,
 		msg.SenderID,
-		msg.Content,
+		ctContent,
 		msg.Entities,
 		msg.ReplyToID,
 		msg.Type,
@@ -76,7 +87,7 @@ func (s *scheduledMessageStore) Create(ctx context.Context, msg *model.Scheduled
 
 func (s *scheduledMessageStore) GetByID(ctx context.Context, id uuid.UUID) (*model.ScheduledMessage, error) {
 	msg := &model.ScheduledMessage{}
-	err := scanScheduledMessageRow(
+	err := s.scanScheduledMessageRow(
 		s.pool.QueryRow(ctx, scheduledMessageSelectQuery(`WHERE sm.id = $1`), id),
 		msg,
 	)
@@ -110,7 +121,7 @@ func (s *scheduledMessageStore) ListByChat(ctx context.Context, chatID, senderID
 	var messages []model.ScheduledMessage
 	for rows.Next() {
 		var msg model.ScheduledMessage
-		if err := scanScheduledMessageRow(rows, &msg); err != nil {
+		if err := s.scanScheduledMessageRow(rows, &msg); err != nil {
 			return nil, fmt.Errorf("scan scheduled message: %w", err)
 		}
 		messages = append(messages, msg)
@@ -127,6 +138,10 @@ func (s *scheduledMessageStore) ListByChat(ctx context.Context, chatID, senderID
 }
 
 func (s *scheduledMessageStore) Update(ctx context.Context, id uuid.UUID, content *string, entities []byte, scheduledAt *time.Time) error {
+	ctContent, err := crypto.EncryptContentField(content, s.atRest)
+	if err != nil {
+		return err
+	}
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE scheduled_messages
 		 SET content = COALESCE($2, content),
@@ -134,7 +149,7 @@ func (s *scheduledMessageStore) Update(ctx context.Context, id uuid.UUID, conten
 		     scheduled_at = COALESCE($4, scheduled_at),
 		     updated_at = NOW()
 		 WHERE id = $1`,
-		id, content, entities, scheduledAt,
+		id, ctContent, entities, scheduledAt,
 	)
 	if err != nil {
 		return fmt.Errorf("update scheduled message: %w", err)
@@ -225,7 +240,7 @@ func (s *scheduledMessageStore) ClaimAndMarkPending(ctx context.Context, limit i
 	var messages []model.ScheduledMessage
 	for rows.Next() {
 		var msg model.ScheduledMessage
-		if err := scanScheduledMessageRow(rows, &msg); err != nil {
+		if err := s.scanScheduledMessageRow(rows, &msg); err != nil {
 			return nil, fmt.Errorf("scan claimed scheduled message: %w", err)
 		}
 		messages = append(messages, msg)
@@ -252,7 +267,7 @@ type scheduledMessageScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanScheduledMessageRow(scanner scheduledMessageScanner, msg *model.ScheduledMessage) error {
+func (s *scheduledMessageStore) scanScheduledMessageRow(scanner scheduledMessageScanner, msg *model.ScheduledMessage) error {
 	var pollPayload []byte
 
 	err := scanner.Scan(
@@ -276,6 +291,8 @@ func scanScheduledMessageRow(scanner scheduledMessageScanner, msg *model.Schedul
 	if err != nil {
 		return err
 	}
+
+	crypto.DecryptContentField(msg.Content, s.atRest)
 
 	if len(pollPayload) > 0 {
 		var payload model.ScheduledPollPayload

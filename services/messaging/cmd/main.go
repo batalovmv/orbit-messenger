@@ -136,7 +136,7 @@ func main() {
 	atRestKey := crypto.DeriveKey(config.MustEnv("ORBIT_MESSAGE_ENCRYPTION_KEY"))
 
 	// Stores
-	chatStore := store.NewChatStore(pool)
+	chatStore := store.NewChatStore(pool, atRestKey)
 	messageStore := store.NewMessageStore(pool, atRestKey)
 	userStore := store.NewUserStore(pool)
 	inviteStore := store.NewInviteStore(pool)
@@ -149,7 +149,7 @@ func main() {
 	stickerStore := store.NewStickerStore(pool)
 	gifStore := store.NewGIFStore(pool)
 	pollStore := store.NewPollStore(pool)
-	scheduledStore := store.NewScheduledMessageStore(pool)
+	scheduledStore := store.NewScheduledMessageStore(pool, atRestKey)
 	searchHistoryStore := store.NewSearchHistoryStore(pool)
 	auditStore := store.NewAuditStore(pool)
 

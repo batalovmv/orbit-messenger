@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/mst-corp/orbit/pkg/crypto"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 )
@@ -49,11 +50,15 @@ type ChatStore interface {
 }
 
 type chatStore struct {
-	pool *pgxpool.Pool
+	pool   *pgxpool.Pool
+	atRest []byte // master key used to unwrap messages.content for last-message previews
 }
 
-func NewChatStore(pool *pgxpool.Pool) ChatStore {
-	return &chatStore{pool: pool}
+// NewChatStore creates a ChatStore. `atRestKey` MUST be the same 32-byte
+// master key used by MessageStore so that last-message previews joined into
+// the chat list are decrypted consistently with the per-chat message reads.
+func NewChatStore(pool *pgxpool.Pool, atRestKey []byte) ChatStore {
+	return &chatStore{pool: pool, atRest: atRestKey}
 }
 
 func (s *chatStore) GetUserChatIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
@@ -195,6 +200,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			if msgType != nil {
 				msg.Type = *msgType
 			}
+			crypto.DecryptContentField(msgContent, s.atRest)
 			msg.Content = msgContent
 			msg.ReplyToID = msgReplyToID
 			if msgIsEdited != nil {
