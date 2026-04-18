@@ -1,0 +1,153 @@
+{
+  "uid": "orbit-slo-overview",
+  "title": "Orbit — SLO Overview",
+  "tags": ["orbit", "slo"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(orbit_http_requests_total, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total RPS",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(orbit_http_requests_total[1m]))", "refId": "A", "legendFormat": "rps" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Error rate (5xx)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(orbit_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(orbit_http_requests_total[5m])), 0.001)", "refId": "A", "legendFormat": "err" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "decimals": 2, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.005 }, { "color": "red", "value": 0.02 }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "API p95 latency (SLO < 200ms)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(orbit_http_request_duration_seconds_bucket[5m])))", "refId": "A", "legendFormat": "p95" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "decimals": 3, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.15 }, { "color": "red", "value": 0.2 }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "WebSocket connections (gateway)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "orbit_ws_active_connections{service=\"gateway\"}", "refId": "A", "legendFormat": "active" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 400 }, { "color": "red", "value": 500 }] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "colorMode": "background", "graphMode": "area" }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request rate per service (RPS)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (service) (rate(orbit_http_requests_total{service=~\"$service\"}[1m]))", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Error rate per service (% 4xx+5xx)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum by (service) (rate(orbit_http_requests_total{service=~\"$service\",status=~\"[45]..\"}[5m])) / clamp_min(sum by (service) (rate(orbit_http_requests_total{service=~\"$service\"}[5m])), 0.001)", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Latency percentiles (across $service)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(orbit_http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))", "refId": "A", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(orbit_http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))", "refId": "B", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(orbit_http_request_duration_seconds_bucket{service=~\"$service\"}[5m])))", "refId": "C", "legendFormat": "p99" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 5 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "p99" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Top routes by p95 latency",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "topk(15, histogram_quantile(0.95, sum by (service, route, method, le) (rate(orbit_http_request_duration_seconds_bucket{service=~\"$service\"}[5m]))))", "refId": "A", "format": "table", "instant": true }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true }, "renameByName": { "Value": "p95 (s)" } } },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "p95 (s)", "desc": true }] } }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "p95 (s)" }, "properties": [{ "id": "unit", "value": "s" }, { "id": "decimals", "value": 3 }, { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.15 }, { "color": "red", "value": 0.2 }] } }] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm" }
+    }
+  ]
+}

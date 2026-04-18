@@ -1,0 +1,99 @@
+{
+  "uid": "orbit-service-health",
+  "title": "Orbit — Service Health",
+  "tags": ["orbit", "runtime"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(go_goroutines, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Goroutines per service",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "go_goroutines{service=~\"$service\"}", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Heap inuse (bytes)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "go_memstats_heap_inuse_bytes{service=~\"$service\"}", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU usage (cores)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "rate(process_cpu_seconds_total{service=~\"$service\"}[1m])", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 3, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "GC pause p99 (last 5m)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "go_gc_duration_seconds{quantile=\"1\",service=~\"$service\"}", "refId": "A", "legendFormat": "{{service}} max" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 4, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull", "max"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Open file descriptors",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "process_open_fds{service=~\"$service\"}", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Resident memory (RSS)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{service=~\"$service\"}", "refId": "A", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "lastNotNull"] }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}

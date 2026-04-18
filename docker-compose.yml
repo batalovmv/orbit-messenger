@@ -349,6 +349,26 @@ services:
       - gateway
     restart: unless-stopped
 
+  # Grafana — local dev only. Auto-provisions the Prometheus datasource and
+  # loads every dashboard JSON from monitoring/grafana/dashboards. Login:
+  # admin / admin (you'll be asked to change on first login).
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_USERS_DEFAULT_THEME: "dark"
+      GF_LOG_LEVEL: "warn"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 configs:
   prometheus_config:
     content: |
@@ -378,5 +398,6 @@ volumes:
   postgres_data:
   redis_data:
   prometheus_data:
+  grafana_data:
   meili_data:
   minio_data:
