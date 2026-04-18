@@ -159,6 +159,7 @@ type mockDeliveryStore struct {
 	findByCorrelationFn        func(ctx context.Context, connectorID uuid.UUID, correlationKey string) (*model.Delivery, error)
 	findByExternalIDFn         func(ctx context.Context, connectorID uuid.UUID, externalEventID string) (*model.Delivery, error)
 	markDeadLetterFn           func(ctx context.Context, id uuid.UUID, lastError string) error
+	connectorStatsFn           func(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*store.ConnectorStatsRow, error)
 }
 
 func (m *mockDeliveryStore) Create(ctx context.Context, d *model.Delivery) error {
@@ -238,5 +239,8 @@ func (m *mockDeliveryStore) ListAttempts(ctx context.Context, deliveryID uuid.UU
 }
 
 func (m *mockDeliveryStore) ConnectorStats(ctx context.Context, connectorID uuid.UUID, window time.Duration) (*store.ConnectorStatsRow, error) {
+	if m.connectorStatsFn != nil {
+		return m.connectorStatsFn(ctx, connectorID, window)
+	}
 	return &store.ConnectorStatsRow{}, nil
 }

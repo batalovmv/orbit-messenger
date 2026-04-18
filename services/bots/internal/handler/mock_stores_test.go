@@ -19,6 +19,7 @@ type mockBotStore struct {
 	updateFn                func(ctx context.Context, bot *model.Bot) error
 	deleteFn                func(ctx context.Context, id uuid.UUID) error
 	createBotUserFn         func(ctx context.Context, username, displayName string) (uuid.UUID, error)
+	setAvatarURLFn          func(ctx context.Context, botID uuid.UUID, avatarURL string) error
 }
 
 func (m *mockBotStore) Create(ctx context.Context, bot *model.Bot) error {
@@ -88,6 +89,9 @@ func (m *mockBotStore) CreateBotUser(ctx context.Context, username, displayName 
 }
 
 func (m *mockBotStore) SetAvatarURL(ctx context.Context, botID uuid.UUID, avatarURL string) error {
+	if m.setAvatarURLFn != nil {
+		return m.setAvatarURLFn(ctx, botID, avatarURL)
+	}
 	return nil
 }
 

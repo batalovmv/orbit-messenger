@@ -20,14 +20,21 @@ import (
 )
 
 func newBotHandlerTestApp(botStore *mockBotStore, tokenStore *mockTokenStore) *fiber.App {
+	return newBotHandlerTestAppWithInstall(botStore, tokenStore, nil)
+}
+
+func newBotHandlerTestAppWithInstall(botStore *mockBotStore, tokenStore *mockTokenStore, installStore *mockInstallationStore) *fiber.App {
 	if botStore == nil {
 		botStore = &mockBotStore{}
 	}
 	if tokenStore == nil {
 		tokenStore = &mockTokenStore{}
 	}
+	if installStore == nil {
+		installStore = &mockInstallationStore{}
+	}
 
-	svc := service.NewBotService(botStore, tokenStore, &mockCommandStore{}, &mockInstallationStore{}, "test-secret")
+	svc := service.NewBotService(botStore, tokenStore, &mockCommandStore{}, installStore, "test-secret")
 	h := NewBotHandler(svc, slog.Default())
 
 	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
