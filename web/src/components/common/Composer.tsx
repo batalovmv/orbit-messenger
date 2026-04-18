@@ -169,6 +169,7 @@ import useMentionTooltip from '../middle/composer/hooks/useMentionTooltip';
 import usePaidMessageConfirmation from '../middle/composer/hooks/usePaidMessageConfirmation';
 import useStickerTooltip from '../middle/composer/hooks/useStickerTooltip';
 import useVoiceRecording from '../middle/composer/hooks/useVoiceRecording';
+import useAiSuggestReply from '../middle/composer/hooks/useAiSuggestReply';
 
 import AttachmentModal from '../middle/composer/AttachmentModal.async';
 import AttachMenu from '../middle/composer/AttachMenu';
@@ -184,6 +185,7 @@ import EmojiTooltip from '../middle/composer/EmojiTooltip.async';
 import InlineBotTooltip from '../middle/composer/InlineBotTooltip.async';
 import MentionTooltip from '../middle/composer/MentionTooltip.async';
 import AiSuggestReplyBar from '../middle/composer/AiSuggestReplyBar';
+import AiSuggestReplyTooltip from '../middle/composer/AiSuggestReplyTooltip';
 import MessageInput from '../middle/composer/MessageInput';
 import PollModal from '../middle/composer/PollModal.async';
 import SendAsMenu from '../middle/composer/SendAsMenu.async';
@@ -914,6 +916,7 @@ const Composer = ({
     editedMessage: editingMessage,
     isDisabled: isInStoryViewer || Boolean(requestedDraft) || (!hasSuggestedPost && isMonoforum),
   });
+
 
   useLoadLinkPreview({
     chatId,
@@ -1762,6 +1765,12 @@ const Composer = ({
 
   const hasText = useDerivedState(() => Boolean(getHtml()), [getHtml]);
 
+  // Orbit AI "Suggest reply" state. Trigger button lives inside the
+  // message-input-wrapper below; the tooltip panel is rendered at the
+  // same tree level as MentionTooltip / ChatCommandTooltip so the shared
+  // .composer-tooltip styling anchors above the whole composer.
+  const aiSuggestReply = useAiSuggestReply(chatId, hasText, insertTextAndUpdateCursor);
+
   const withBotMenuButton = isChatWithBot && botMenuButton?.type === 'webApp' && !editingMessage
     && messageListType === 'thread';
   const isBotMenuButtonOpen = withBotMenuButton && !hasText && !activeVoiceRecording;
@@ -2110,6 +2119,13 @@ const Composer = ({
         onInsertUserName={insertMention}
         onClose={closeMentionTooltip}
       />
+      <AiSuggestReplyTooltip
+        isOpen={aiSuggestReply.isOpen && isInMessageList && !editingMessage && !isInStoryViewer}
+        isLoading={aiSuggestReply.isLoading}
+        suggestions={aiSuggestReply.suggestions}
+        error={aiSuggestReply.error}
+        onPick={aiSuggestReply.pickSuggestion}
+      />
       <ChatCommandTooltip
         isOpen={isChatCommandTooltipOpen}
         chatId={chatId}
@@ -2262,11 +2278,11 @@ const Composer = ({
               forceDarkTheme={isInStoryViewer}
             />
           )}
-          {isInMessageList && !editingMessage && !isInStoryViewer && (
+          {isInMessageList && !editingMessage && !isInStoryViewer && !hasText && (
             <AiSuggestReplyBar
-              chatId={chatId}
-              hasText={hasText}
-              onSuggestionClick={insertTextAndUpdateCursor}
+              isOpen={aiSuggestReply.isOpen}
+              isLoading={aiSuggestReply.isLoading}
+              onToggle={aiSuggestReply.isOpen ? aiSuggestReply.close : aiSuggestReply.open}
             />
           )}
           <MessageInput

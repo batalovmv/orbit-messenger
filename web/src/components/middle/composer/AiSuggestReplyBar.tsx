@@ -1,114 +1,46 @@
-import { memo, useEffect, useState } from '../../../lib/teact/teact';
+import { memo } from '../../../lib/teact/teact';
 
-import { suggestReply } from '../../../api/saturn/methods/ai';
 import buildClassName from '../../../util/buildClassName';
 
-import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
-import useLastCallback from '../../../hooks/useLastCallback';
 
 import Icon from '../../common/icons/Icon';
-import Spinner from '../../ui/Spinner';
 
 import styles from './AiSuggestReplyBar.module.scss';
 
 type OwnProps = {
-  chatId: string;
-  hasText: boolean;
-  onSuggestionClick: (text: string) => void;
+  isOpen: boolean;
+  isLoading: boolean;
+  onToggle: NoneToVoidFunction;
 };
 
-const AiSuggestReplyBar = ({ chatId, hasText, onSuggestionClick }: OwnProps) => {
+/**
+ * Inline trigger button that sits between emoji and attach in the
+ * composer's message-input row. Clicking toggles the floating
+ * AiSuggestReplyTooltip that renders above the composer — state lives in
+ * useAiSuggestReply at the Composer level so this component is purely
+ * presentational.
+ *
+ * Hidden entirely when composer has text (we never want to steal focus
+ * from in-progress typing), which the parent handles by not rendering
+ * us in that case.
+ */
+const AiSuggestReplyBar = ({ isOpen, isLoading, onToggle }: OwnProps) => {
   const lang = useLang();
 
-  const [suggestions, setSuggestions] = useState<string[] | undefined>();
-  const [error, setError] = useState<string | undefined>();
-  const [isLoading, startLoading, stopLoading] = useFlag(false);
-
-  // Hide suggestions when the user starts typing — don't overwrite input.
-  useEffect(() => {
-    if (hasText && suggestions) {
-      setSuggestions(undefined);
-    }
-  }, [hasText, suggestions]);
-
-  // Reset when switching chats.
-  useEffect(() => {
-    setSuggestions(undefined);
-    setError(undefined);
-    stopLoading();
-  }, [chatId, stopLoading]);
-
-  const handleFetch = useLastCallback(async () => {
-    setError(undefined);
-    startLoading();
-    try {
-      const result = await suggestReply({ chatId });
-      if (!result || result.length === 0) {
-        setError(lang('AiNotConfigured'));
-        setSuggestions(undefined);
-      } else {
-        setSuggestions(result);
-      }
-    } catch (err) {
-      const e = err as Error & { status?: number };
-      if (e?.status === 503) {
-        setError(lang('AiNotConfigured'));
-      } else {
-        setError(e?.message || lang('AiSuggestFailed'));
-      }
-    } finally {
-      stopLoading();
-    }
-  });
-
-  const handlePick = useLastCallback((text: string) => {
-    onSuggestionClick(text);
-    setSuggestions(undefined);
-  });
-
-  if (hasText) return undefined;
-
-  if (isLoading) {
-    return (
-      <div className={styles.root}>
-        <Spinner color="gray" />
-        <span className={styles.label}>{lang('AiSuggestLoading')}</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={buildClassName(styles.root, styles.error)}>
-        <Icon name="warning" />
-        <span className={styles.label}>{error}</span>
-      </div>
-    );
-  }
-
-  if (suggestions && suggestions.length > 0) {
-    return (
-      <div className={styles.root}>
-        {suggestions.map((text) => (
-          <button
-            key={text}
-            type="button"
-            className={styles.chip}
-            onClick={() => handlePick(text)}
-            title={text}
-          >
-            {text}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <button type="button" className={buildClassName(styles.root, styles.trigger)} onClick={handleFetch}>
+    <button
+      type="button"
+      className={buildClassName(
+        styles.trigger,
+        isOpen && styles.triggerOpen,
+        isLoading && styles.triggerLoading,
+      )}
+      onClick={onToggle}
+      title={lang('AiSuggestReply')}
+      aria-label={lang('AiSuggestReply')}
+    >
       <Icon name="lamp" />
-      <span className={styles.label}>{lang('AiSuggestReply')}</span>
     </button>
   );
 };

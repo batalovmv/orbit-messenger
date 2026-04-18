@@ -2895,6 +2895,8 @@
 "AiSuggestReply" = "Suggest reply";
 "AiSuggestLoading" = "Generating suggestions…";
 "AiSuggestFailed" = "Failed to load suggestions";
+"AiSuggestRateLimited" = "Too many requests, try again in a minute";
+"AiSuggestUnavailable" = "AI is temporarily unavailable, please retry";
 "AiTranslateTitle" = "Translate messages";
 "AiTranslateLanguage" = "Target language";
 "AiTranslateGenerate" = "Translate";

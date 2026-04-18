@@ -2122,6 +2122,8 @@ export interface LangPair {
   'AiSuggestReply': undefined;
   'AiSuggestLoading': undefined;
   'AiSuggestFailed': undefined;
+  'AiSuggestRateLimited': undefined;
+  'AiSuggestUnavailable': undefined;
   'AiTranslateTitle': undefined;
   'AiTranslateLanguage': undefined;
   'AiTranslateGenerate': undefined;
