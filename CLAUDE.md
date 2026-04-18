@@ -204,10 +204,21 @@ cd web && npm run dev:mocked   # порт 1235, mock client (без бэкенд
 
 ### At-rest encryption
 
-- `messages.content` → AES-256-GCM в store-слое messaging. Ключ: `ORBIT_MESSAGE_ENCRYPTION_KEY` (env)
+- `messages.content` + `scheduled_messages.content` → AES-256-GCM в store-слое messaging. Ключ: `ORBIT_MESSAGE_ENCRYPTION_KEY` (env). Helpers: `crypto.EncryptContentField` / `crypto.DecryptContentField` в `pkg/crypto`. **Любой store, читающий колонку content, должен вызвать DecryptContentField после Scan** — иначе превью/списки уйдут клиенту ciphertext'ом (было у `chat_store` до 18.04.2026, фикс b6624d7)
 - Медиа at-rest: TODO Phase 8D (per-file ключ)
 - KMS: TODO (сейчас env-key → HashiCorp Vault / AWS KMS)
 - Signal Protocol E2E **сознательно отклонена**: compliance model
+
+**Plaintext вне БД messages — где живёт и почему ок:**
+
+| Место | Формат | Почему ок |
+|-------|--------|-----------|
+| NATS events (`new_message`, `message_updated`, mention) | plaintext | Внутренняя сеть кластера, нужен bots/gateway/indexer для доставки и превью |
+| Meilisearch индекс | plaintext | Admin/compliance читают всё → plaintext поиск не хуже. Защита на уровне тома (disk encryption для Meili volume — Phase 8D) |
+| Push body (FCM/APNs) | plaintext preview (100 chars) | Стандартная практика (Telegram non-E2E, iMessage). Toggle "скрывать текст в уведомлениях" — future |
+| WebSocket frames клиентам | plaintext | Сессия авторизована, доставляется только членам чата |
+
+**Что НЕ должно утекать plaintext'ом:** PostgreSQL dump → бэкапы шифруются GPG перед R2 (Phase 8D), голая ФС media volume, логи (поле `content` не логируется через slog).
 
 ## Workflows — самообновление документации
 
