@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/gateway/internal/handler"
 	"github.com/mst-corp/orbit/services/gateway/internal/middleware"
@@ -136,13 +137,30 @@ func main() {
 	}
 	app := fiber.New(fiberCfg)
 
+	// Metrics registry + middleware — one per service, mounts /metrics
+	// behind the internal token so only the platform scraper can read it.
+	metricsReg := metrics.New("gateway")
+	wsConnectionsGauge := metricsReg.Gauge(
+		"orbit_ws_active_connections",
+		"Active WebSocket connections currently held by this gateway instance.",
+	)
+	hub.SetMetricsCallback(func(delta int) {
+		wsConnectionsGauge.WithLabelValues().Add(float64(delta))
+	})
+
 	// Global middleware
 	app.Use(middleware.SecurityHeadersMiddleware())
 	app.Use(middleware.LoggingMiddleware())
+	app.Use(metricsReg.HTTPMiddleware())
 	app.Use(middleware.CORSMiddleware(frontendURL))
 
 	// Health
 	app.Get("/health", handler.HealthHandler)
+
+	// /metrics is guarded by the internal token so only the platform
+	// scraper (or an operator with INTERNAL_SECRET) can read it. No JWT
+	// required — Prometheus doesn't speak JWT.
+	app.Get("/metrics", middleware.RequireInternalToken(internalSecret), metricsReg.Handler())
 
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")

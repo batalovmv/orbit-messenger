@@ -185,8 +185,9 @@ func (c *Conn) Close(code int, text string) error {
 
 // Hub manages WebSocket connections indexed by user ID.
 type Hub struct {
-	mu    sync.RWMutex
-	conns map[string][]*Conn // userID -> connections (multi-device)
+	mu          sync.RWMutex
+	conns       map[string][]*Conn // userID -> connections (multi-device)
+	onCountDiff func(delta int)    // optional metrics observer (+1/-1 per register/unregister)
 }
 
 func NewHub() *Hub {
@@ -195,34 +196,53 @@ func NewHub() *Hub {
 	}
 }
 
+// SetMetricsCallback wires a gauge-style observer. Kept optional so the
+// hub does not depend on the metrics package directly.
+func (h *Hub) SetMetricsCallback(cb func(delta int)) {
+	h.mu.Lock()
+	h.onCountDiff = cb
+	h.mu.Unlock()
+}
+
 // Register adds a connection to the hub. Returns true if this is the first connection for the user.
 func (h *Hub) Register(conn *Conn) bool {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if conn.send == nil && conn.WS != nil {
 		conn.send = make(chan interface{}, sendQueueCapacity)
 	}
 	conn.ensureWriter()
 	isFirst := len(h.conns[conn.UserID]) == 0
 	h.conns[conn.UserID] = append(h.conns[conn.UserID], conn)
-	slog.Info("ws: user connected", "user_id", conn.UserID, "total", len(h.conns[conn.UserID]))
+	cb := h.onCountDiff
+	userTotal := len(h.conns[conn.UserID])
+	h.mu.Unlock()
+	if cb != nil {
+		cb(1)
+	}
+	slog.Info("ws: user connected", "user_id", conn.UserID, "total", userTotal)
 	return isFirst
 }
 
 // Unregister removes a connection from the hub. Returns true if this was the last connection for the user.
 func (h *Hub) Unregister(conn *Conn) bool {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	conns := h.conns[conn.UserID]
+	removed := false
 	for i, c := range conns {
 		if c == conn {
 			h.conns[conn.UserID] = append(conns[:i], conns[i+1:]...)
+			removed = true
 			break
 		}
 	}
 	isLast := len(h.conns[conn.UserID]) == 0
 	if isLast {
 		delete(h.conns, conn.UserID)
+	}
+	cb := h.onCountDiff
+	h.mu.Unlock()
+	if cb != nil && removed {
+		cb(-1)
 	}
 	slog.Info("ws: user disconnected", "user_id", conn.UserID)
 	return isLast
