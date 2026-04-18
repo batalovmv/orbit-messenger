@@ -1,8 +1,9 @@
 # Orbit PostgreSQL restore runbook
 
-Steps to restore Orbit's production database from a nightly backup produced by
-[`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh). Backups are
-encrypted GPG (AES-256, symmetric) over gzipped `pg_dump` plain SQL.
+Steps to restore Orbit's production database from a backup produced by
+[`scripts/backup-postgres.sh`](../scripts/backup-postgres.sh). Backups run every
+4 hours (RPO ≈ 4h until WAL/PITR lands) and are encrypted GPG (AES-256,
+symmetric) over gzipped `pg_dump` plain SQL.
 
 ## Prerequisites
 

@@ -33,9 +33,10 @@ RUN apk add --no-cache \
 COPY scripts/backup-postgres.sh /usr/local/bin/backup-postgres.sh
 RUN chmod +x /usr/local/bin/backup-postgres.sh
 
-# Crontab: daily at 03:00 UTC. The container image is the same in dev
-# and prod; override BACKUP_CRON at runtime to change the schedule.
-ENV BACKUP_CRON="0 3 * * *"
+# Crontab: every 4 hours on the hour (00/04/08/12/16/20 UTC). The
+# container image is the same in dev and prod; override BACKUP_CRON at
+# runtime to change the schedule. RPO ≈ 4h until WAL/PITR lands.
+ENV BACKUP_CRON="0 */4 * * *"
 COPY deploy/backup-cron/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

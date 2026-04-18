@@ -305,16 +305,16 @@ services:
     depends_on:
       - gateway
 
-  # Nightly PostgreSQL backup. Runs supercronic which fires
+  # PostgreSQL backup. Runs supercronic which fires
   # scripts/backup-postgres.sh on the BACKUP_CRON schedule (default
-  # 03:00 UTC daily). Dumps → gzip → gpg (AES-256) → R2. See
+  # every 4h on the hour, UTC). Dumps → gzip → gpg (AES-256) → R2. See
   # docs/runbook-restore.md for recovery.
   backup-cron:
     build:
       context: .
       dockerfile: deploy/backup-cron/Dockerfile
     environment:
-      BACKUP_CRON: ${BACKUP_CRON:-0 3 * * *}
+      BACKUP_CRON: ${BACKUP_CRON:-0 */4 * * *}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE}
       R2_ENDPOINT: ${R2_ENDPOINT}

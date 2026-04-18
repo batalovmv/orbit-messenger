@@ -1516,8 +1516,8 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [ ] GPL-3.0 compliance: license headers, source availability
 
 **Backup:**
-- [x] PostgreSQL: nightly pg_dump → gzip → gpg (AES-256) → R2 (`scripts/backup-postgres.sh`, supercronic cron container, daily 03:00 UTC). Retention via R2 lifecycle rules (7d+4w+12m). Restore runbook at `docs/runbook-restore.md`
-- [ ] PostgreSQL WAL archiving for PITR (deferred — nightly is sufficient for 150-user pilot)
+- [x] PostgreSQL: pg_dump → gzip → gpg (AES-256) → R2 (`scripts/backup-postgres.sh`, supercronic cron container, every 4h on the hour UTC, RPO ≈ 4h). Retention via R2 lifecycle rules (7d+4w+12m). Restore runbook at `docs/runbook-restore.md`
+- [ ] PostgreSQL WAL archiving for PITR (deferred — 4h pg_dump is sufficient for 150-user pilot)
 - [ ] ScyllaDB: snapshot + incremental (deferred — not on ScyllaDB yet)
 - [ ] Redis: RDB snapshot каждые 15 мин
 - [ ] R2: cross-region replication (real-time)
