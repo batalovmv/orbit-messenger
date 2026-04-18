@@ -12,9 +12,13 @@ import { selectIsCurrentUserPremium } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import { oldSetLanguage } from '../../../util/oldLangProvider';
+import {
+  getStoredTranslateLang, ORBIT_TRANSLATE_LANGS, setStoredTranslateLang,
+} from '../../../util/orbitTranslateLang';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
@@ -61,6 +65,8 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(language);
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag();
+  const [translateDefaultLang, setTranslateDefaultLang] = useState<string>(() => getStoredTranslateLang() || 'auto');
+  const newLang = useLang();
 
   const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
 
@@ -140,6 +146,19 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     openSettingsScreen({ screen: SettingsScreens.DoNotTranslate });
   });
 
+  const translateDefaultOptions = useMemo<ItemPickerOption[]>(() => [
+    { value: 'auto', label: newLang('AiTranslateDefaultAuto') },
+    ...ORBIT_TRANSLATE_LANGS.map(({ code, nameKey }) => ({
+      value: code,
+      label: newLang(nameKey),
+    } satisfies ItemPickerOption)),
+  ], [newLang]);
+
+  const handleTranslateDefaultChange = useLastCallback((value: string) => {
+    setTranslateDefaultLang(value);
+    setStoredTranslateLang(value === 'auto' ? undefined : value);
+  });
+
   useHistoryBack({
     isActive,
     onBack: onReset,
@@ -179,6 +198,18 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
           </p>
         </div>
       )}
+      <div className="settings-item settings-item-picker">
+        <h4 className="settings-item-header">{newLang('AiTranslateDefaultTitle')}</h4>
+        <ItemPicker
+          items={translateDefaultOptions}
+          selectedValue={translateDefaultLang}
+          forceRenderAllItems
+          onSelectedValueChange={handleTranslateDefaultChange}
+          itemInputType="radio"
+          className="settings-picker"
+        />
+        <p className="settings-item-description mb-0 mt-1">{newLang('AiTranslateDefaultAbout')}</p>
+      </div>
       <div className="settings-item settings-item-picker">
         <h4 className="settings-item-header">
           {getLanguageText('Localization.InterfaceLanguage', LANGUAGE_SCREEN_FALLBACKS.interfaceLanguage)}

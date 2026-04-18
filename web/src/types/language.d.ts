@@ -2130,6 +2130,16 @@ export interface LangPair {
   'AiTranslateStreaming': undefined;
   'AiTranslateCopy': undefined;
   'AiTranslateFailed': undefined;
+  'AiTranslateRetranslate': undefined;
+  'AiHideTranslation': undefined;
+  'AiTranslateDefaultTitle': undefined;
+  'AiTranslateDefaultAbout': undefined;
+  'AiTranslateDefaultAuto': undefined;
+  'AiTranslateLangEn': undefined;
+  'AiTranslateLangRu': undefined;
+  'AiTranslateLangEs': undefined;
+  'AiTranslateLangDe': undefined;
+  'AiTranslateLangFr': undefined;
   'AiGeneratedDisclaimer': undefined;
   'BotAboutText': undefined;
   'BotPermissions': undefined;

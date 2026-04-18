@@ -4,7 +4,8 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import { startMessageTranslation } from './AiTranslateInline';
+import { resolveTranslateLang } from '../../../util/orbitTranslateLang';
+import { clearMessageTranslation, hasMessageTranslation, startMessageTranslation } from './AiTranslateInline';
 
 import type {
   ApiAvailableReaction,
@@ -620,19 +621,21 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   });
 
   const handleTranslate = useLastCallback(() => {
-    // Orbit AI translation. Target language is the user's own locale —
-    // what they want to read the foreign message in. We'll pull this
-    // from user settings in a later slice; for now detect from the
-    // browser with an EN fallback. The legacy requestMessageTranslation
-    // action (Telegram Premium) is intentionally skipped — Premium
-    // isn't part of Orbit's scope.
-    const raw = typeof navigator !== 'undefined' ? navigator.language : '';
-    const normalized = raw.slice(0, 2).toLowerCase();
-    const supported = ['en', 'ru', 'es', 'de', 'fr'];
-    const targetLang = supported.includes(normalized) ? normalized : 'en';
+    // Orbit AI translation. Target language priority: explicit user
+    // override in Settings → active UI language → 'en'. We deliberately
+    // skip the legacy requestMessageTranslation action (Telegram
+    // Premium) — Premium isn't part of Orbit's scope.
+    const targetLang = resolveTranslateLang(lang.code);
     startMessageTranslation(message.chatId, message.id, targetLang);
     closeMenu();
   });
+
+  const handleHideTranslation = useLastCallback(() => {
+    clearMessageTranslation(message.id);
+    closeMenu();
+  });
+
+  const canHideTranslation = hasMessageTranslation(message.id);
 
   const handleShowOriginal = useLastCallback(() => {
     showOriginalMessage({
@@ -752,6 +755,8 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onShowReactors={handleOpenReactorListModal}
         onReactionPickerOpen={handleReactionPickerOpen}
         onTranslate={handleTranslate}
+        canHideTranslation={canHideTranslation}
+        onHideTranslation={handleHideTranslation}
         onShowOriginal={handleShowOriginal}
         onSelectLanguage={handleSelectLanguage}
         userFullName={userFullName}
