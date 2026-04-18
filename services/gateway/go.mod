@@ -9,12 +9,12 @@ require (
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/fasthttp/websocket v1.5.8
 	github.com/gofiber/contrib/websocket v1.3.2
-	github.com/gofiber/fiber/v2 v2.52.6
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/gofiber/fiber/v2 v2.52.12
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/mst-corp/orbit/pkg v0.0.0
 	github.com/nats-io/nats.go v1.37.0
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/valyala/fasthttp v1.58.0
 )
 

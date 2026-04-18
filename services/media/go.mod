@@ -11,13 +11,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.59
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.2
 	github.com/disintegration/imaging v1.6.2
-	github.com/gofiber/fiber/v2 v2.52.6
+	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/mst-corp/orbit/pkg v0.0.0-00010101000000-000000000000
 	github.com/nats-io/nats.go v1.37.0
-	github.com/redis/go-redis/v9 v9.7.0
-	golang.org/x/image v0.23.0
+	github.com/redis/go-redis/v9 v9.7.3
+	golang.org/x/image v0.38.0
 )
 
 require (
@@ -61,8 +61,8 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
