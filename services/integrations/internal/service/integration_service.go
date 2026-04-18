@@ -527,14 +527,20 @@ func (s *IntegrationService) VerifySignature(ctx context.Context, connectorID uu
 		}
 		return fmt.Errorf("get connector secret: %w", err)
 	}
+	// Fail-closed: a connector with no secret is not trusted. Every connector
+	// gets a secret on creation (see CreateConnector); an empty value here
+	// means corrupt data or a bypass attempt and must be rejected.
 	if strings.TrimSpace(secretEnc) == "" {
-		return nil
+		return apperror.Unauthorized("Connector signature verification not configured")
 	}
 
 	// When connector has a secret, signature AND timestamp are both required
 	normalizedSignature := normalizeSignature(signature)
 	if normalizedSignature == "" {
 		return apperror.Unauthorized("Missing webhook signature")
+	}
+	if strings.TrimSpace(timestamp) == "" {
+		return apperror.Unauthorized("Missing webhook timestamp")
 	}
 
 	// Decrypt to get the raw secret for HMAC verification

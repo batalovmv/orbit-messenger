@@ -179,11 +179,24 @@ func main() {
 	apiRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
 		Redis: rdb, MaxPerMin: 600, KeyPrefix: "api",
 	})
+	// AI endpoints are expensive (Claude/Whisper API spend) and already
+	// enforce 20/min/user inside the ai service. Mirror that limit at the
+	// edge so abusive callers get rejected before we pay for a Redis
+	// round-trip and a downstream proxy hop.
+	aiRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 20, KeyPrefix: "ai",
+	})
 
 	// WebSocket endpoint — auth happens via first "auth" frame after connection,
-	// NOT via query param (tokens must not appear in URLs per TZ §8.1)
+	// NOT via query param (tokens must not appear in URLs per TZ §8.1).
+	// The limit keys on IP here because we run before JWT auth; when
+	// TRUSTED_PROXIES is unset (as it often is on Saturn edge) every user
+	// appears from the same ingress IP, so a strict 10/min would throttle
+	// every legitimate user at once during a reconnect storm. 60/min/IP is
+	// enough to stop casual scanning while still absorbing a full reconnect
+	// wave. Per-user throttling happens post-auth inside the WS handler.
 	wsRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
-		Redis: rdb, MaxPerMin: 10, KeyPrefix: "ws",
+		Redis: rdb, MaxPerMin: 60, KeyPrefix: "ws",
 	})
 	app.Use("/api/v1/ws", wsRateLimit, func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
@@ -229,6 +242,10 @@ func main() {
 	// Note: media GET routes are handled by apiGroup.All("/media/*") in SetupProxy,
 	// which applies JWT middleware and forwards X-Internal-Token to the media service.
 	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
+
+	// Stricter per-user limit for AI endpoints — must be registered before
+	// SetupProxy so the middleware applies to apiGroup.All("/ai/*").
+	apiGroup.Use("/ai/*", aiRateLimit)
 
 	// Setup proxy routes
 	handler.SetupProxy(app, apiGroup, handler.ProxyConfig{

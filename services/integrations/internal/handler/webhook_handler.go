@@ -99,9 +99,10 @@ func (h *ConnectorHandler) receiveWebhook(c *fiber.Ctx) error {
 		}
 	}
 
-	// Timestamp validation happens regardless of signature presence when
-	// connector has a secret.
-	if signature != "" {
+	// Always validate the timestamp window if a timestamp was supplied. When
+	// no timestamp is supplied, VerifySignature below rejects the request
+	// (timestamp is mandatory when a connector has a secret, which is always).
+	if strings.TrimSpace(timestamp) != "" {
 		if err := validateWebhookTimestamp(timestamp); err != nil {
 			return response.Error(c, err)
 		}

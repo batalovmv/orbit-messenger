@@ -131,16 +131,19 @@ func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID
 	if err != nil {
 		return nil, fmt.Errorf("get message: %w", err)
 	}
-	if msg == nil || msg.IsDeleted {
+	if msg == nil {
 		return nil, apperror.NotFound("Message not found")
 	}
 
+	// Check access BEFORE checking is_deleted, and collapse the "not a member"
+	// case into NotFound so an outsider can't enumerate valid message UUIDs
+	// by distinguishing 403 (exists, no access) from 404 (does not exist).
 	hasAccess, err := s.checkChatAccess(ctx, msg.ChatID, userID, userRole)
 	if err != nil {
 		return nil, err
 	}
-	if !hasAccess {
-		return nil, apperror.Forbidden("Not a member of this chat")
+	if !hasAccess || msg.IsDeleted {
+		return nil, apperror.NotFound("Message not found")
 	}
 
 	return msg, nil
