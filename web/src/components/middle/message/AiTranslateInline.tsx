@@ -38,6 +38,34 @@ function subscribe(messageId: number, cb: () => void): () => void {
   return () => { set!.delete(cb); if (set!.size === 0) listeners.delete(messageId); };
 }
 
+// Defensive cleanup for Claude's output. The single-message prompt asks
+// the model to return only the translated text, no prefixes — but LLMs
+// sometimes drift back toward the transcript format we use in batch
+// mode, or add helpful-sounding meta-commentary ("Translation:",
+// "This is a command, no translation needed"). Strip those before we
+// paint the result under the bubble. We're intentionally conservative:
+// if a heuristic doesn't match cleanly, leave the output alone.
+function sanitizeTranslation(raw: string): string {
+  let text = raw;
+
+  // Remove a leading "[HH:MM] Name: " transcript prefix if present.
+  text = text.replace(/^\s*\[\d{1,2}:\d{2}\]\s+[^:\n]{1,80}:\s*/u, '');
+
+  // Strip a leading "Translation:" / "Перевод:" label the model sometimes prepends.
+  text = text.replace(/^\s*(Translation|Перевод|Traducción|Übersetzung|Traduction)\s*:\s*/i, '');
+
+  // Drop the model's "nothing to translate" preamble followed by a `---` separator.
+  const separatorIdx = text.indexOf('\n---\n');
+  if (separatorIdx >= 0 && /нечего|ничего не.*перевод|nothing to translate|no translation needed/i.test(text.slice(0, separatorIdx))) {
+    text = text.slice(separatorIdx + 5);
+    // After the separator the model typically dumps the original with the
+    // transcript prefix again — strip that too.
+    text = text.replace(/^\s*\[\d{1,2}:\d{2}\]\s+[^:\n]{1,80}:\s*/u, '');
+  }
+
+  return text.trim();
+}
+
 function updateEntry(messageId: number, entry: TranslationEntry | undefined) {
   if (entry) {
     cache.set(messageId, entry);
@@ -82,13 +110,14 @@ export function startMessageTranslation(
       })) {
         accumulated += chunk;
         // Mid-stream updates — lets the UI render tokens as they land.
-        updateEntry(messageId, { status: 'loading', targetLang, text: accumulated });
+        updateEntry(messageId, { status: 'loading', targetLang, text: sanitizeTranslation(accumulated) });
       }
-      if (!accumulated.trim()) {
+      const cleaned = sanitizeTranslation(accumulated);
+      if (!cleaned.trim()) {
         updateEntry(messageId, { status: 'error', targetLang, messageKey: 'AiNotConfigured' });
         return;
       }
-      updateEntry(messageId, { status: 'done', targetLang, text: accumulated });
+      updateEntry(messageId, { status: 'done', targetLang, text: cleaned });
     } catch (err) {
       const e = err as Error & { status?: number };
       const messageKey = e?.status === 503 ? 'AiNotConfigured'

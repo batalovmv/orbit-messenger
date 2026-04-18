@@ -307,17 +307,37 @@ func (s *AIService) Translate(
 		return nil, apperror.BadRequest("No messages found for translation")
 	}
 
-	systemPrompt := fmt.Sprintf(
-		"Ты — AI-ассистент корпоративного мессенджера Orbit. "+
-			"Пользователь просит перевести сообщения на язык '%s'. "+
-			"Переведи КАЖДОЕ сообщение отдельно, сохранив формат вида '[время] Имя: текст'. "+
-			"Сохраняй тон и регистр оригинала. Если сообщение уже на целевом языке — оставь как есть.",
-		req.TargetLanguage,
-	)
+	// Different prompts for single-message (inline per-bubble UX) vs batch
+	// (modal over a selection). The single path returns ONLY the translated
+	// text with no prefixes or meta-commentary, because the UI displays it
+	// verbatim under the bubble — any "[time] Name:" leak or
+	// "This is a command, nothing to translate" commentary is noise.
+	var systemPrompt string
+	var userContent string
+	if len(messages) == 1 {
+		systemPrompt = fmt.Sprintf(
+			"Ты — переводчик. Переведи сообщение на язык '%s'. "+
+				"Верни ТОЛЬКО переведённый текст — без пояснений, без префиксов вида '[время] Имя:', "+
+				"без кавычек, без отметок 'Translation:'. "+
+				"Если сообщение уже на целевом языке — верни его БЕЗ изменений, так же без комментариев. "+
+				"Команды (начинающиеся с '/'), имена пользователей (@username), URL и код не переводи, "+
+				"просто включи их как есть. Никаких мета-комментариев в духе 'нечего переводить'.",
+			req.TargetLanguage,
+		)
+		userContent = messages[0].Content
+	} else {
+		systemPrompt = fmt.Sprintf(
+			"Ты — AI-ассистент корпоративного мессенджера Orbit. "+
+				"Пользователь просит перевести сообщения на язык '%s'. "+
+				"Переведи КАЖДОЕ сообщение отдельно, сохранив формат вида '[время] Имя: текст'. "+
+				"Сохраняй тон и регистр оригинала. Если сообщение уже на целевом языке — оставь как есть.",
+			req.TargetLanguage,
+		)
+		userContent = "Сообщения для перевода:\n\n" + renderTranscript(messages)
+	}
 
-	transcript := renderTranscript(messages)
 	claudeMessages := []client.AnthropicMessage{
-		{Role: "user", Content: "Сообщения для перевода:\n\n" + transcript},
+		{Role: "user", Content: userContent},
 	}
 
 	streamCh, err := s.anthropic.CreateMessageStream(ctx, systemPrompt, claudeMessages, 2048)
