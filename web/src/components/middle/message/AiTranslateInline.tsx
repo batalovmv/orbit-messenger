@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 
 import { translateMessages } from '../../../api/saturn/methods/ai';
+import { resolveMessageUuid } from '../../../api/saturn/methods/messages';
 import buildClassName from '../../../util/buildClassName';
 
 import useLang from '../../../hooks/useLang';
@@ -59,6 +60,16 @@ export function startMessageTranslation(
   messageId: number,
   targetLang: string,
 ): void {
+  // Saturn backend wants the message UUID, not the Telegram Web numeric
+  // (= sequence_number) id that the rest of the app uses. The mapping
+  // lives in saturn/apiBuilders/messages and is populated as messages
+  // get hydrated; if it's missing the message hasn't been loaded yet.
+  const uuid = resolveMessageUuid(chatId, messageId);
+  if (!uuid) {
+    updateEntry(messageId, { status: 'error', targetLang, messageKey: 'AiTranslateFailed' });
+    return;
+  }
+
   updateEntry(messageId, { status: 'loading', targetLang, text: '' });
 
   (async () => {
@@ -66,10 +77,7 @@ export function startMessageTranslation(
       let accumulated = '';
       for await (const chunk of translateMessages({
         chatId,
-        // Saturn expects string IDs, Telegram Web A uses numeric message
-        // IDs internally — stringify at the boundary the same way
-        // AiTranslateModal does.
-        messageIds: [String(messageId)],
+        messageIds: [uuid],
         targetLanguage: targetLang,
       })) {
         accumulated += chunk;

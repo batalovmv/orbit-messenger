@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import { translateMessages } from '../../api/saturn/methods/ai';
+import { resolveMessageUuid } from '../../api/saturn/methods/messages';
 import { selectChatMessage } from '../../global/selectors';
 
 import useFlag from '../../hooks/useFlag';
@@ -66,7 +67,19 @@ const AiTranslateModal = ({
     startStreaming();
 
     try {
-      const ids = translatableIds.slice(0, MAX_MESSAGES).map(String);
+      // Saturn wants UUIDs, not the Telegram Web numeric (sequence_number)
+      // ids. Translate the batch through the id mapping and drop anything
+      // that hasn't been hydrated yet — better a partial batch than a
+      // 400/500 from an invalid UUID.
+      const ids = translatableIds
+        .slice(0, MAX_MESSAGES)
+        .map((id) => resolveMessageUuid(chatId, id))
+        .filter((v): v is string => Boolean(v));
+      if (ids.length === 0) {
+        setError(lang('AiTranslateFailed'));
+        stopStreaming();
+        return;
+      }
       const generator = translateMessages({
         chatId,
         messageIds: ids,
