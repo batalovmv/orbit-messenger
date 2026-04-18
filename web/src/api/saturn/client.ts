@@ -175,11 +175,32 @@ export async function request<T>(
     throw new ApiError(errorBody.message || errorBody.error, response.status, errorBody.error);
   }
 
+  // Successful REST reply is proof the backend is reachable. If the WS client
+  // is stuck in a long exponential backoff after a transient outage, force an
+  // immediate reconnect instead of waiting out the current timer.
+  kickWsReconnect();
+
   if (response.status === 204) {
     return undefined as T;
   }
 
   return response.json();
+}
+
+function kickWsReconnect() {
+  // Only relevant when WS is not currently open.
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  // Ignore if the app explicitly disconnected (logout, etc).
+  if (wsIntentionalClose) return;
+  // Reset backoff — REST confirms the server is back.
+  wsReconnectDelay = WS_RECONNECT_BASE_MS;
+  if (wsReconnectTimeout) {
+    clearTimeout(wsReconnectTimeout);
+    wsReconnectTimeout = undefined;
+  }
+  scheduleReconnect();
 }
 
 export function deduplicateRequest<T>(key: string, factory: () => Promise<T>): Promise<T> {
