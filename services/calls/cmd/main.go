@@ -14,6 +14,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/calls/internal/handler"
 	"github.com/mst-corp/orbit/services/calls/internal/service"
@@ -134,9 +135,14 @@ func main() {
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
+	metricsReg := metrics.New("calls")
+	app.Use(metricsReg.HTTPMiddleware())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-calls"})
 	})
+
+	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
 
 	// Register routes behind internal token middleware
 	api := app.Group("", handler.RequireInternalToken(internalSecret))

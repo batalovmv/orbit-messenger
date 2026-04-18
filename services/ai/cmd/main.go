@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/ai/internal/client"
 	"github.com/mst-corp/orbit/services/ai/internal/handler"
@@ -108,6 +109,9 @@ func main() {
 		WriteBufferSize:   8192,
 	})
 
+	metricsReg := metrics.New("ai")
+	app.Use(metricsReg.HTTPMiddleware())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":               "ok",
@@ -116,6 +120,8 @@ func main() {
 			"whisper_configured":   whisperClient.Configured(),
 		})
 	})
+
+	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
 
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	aiHandler.Register(api)

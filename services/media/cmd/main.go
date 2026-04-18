@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/config"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/media/internal/handler"
 	"github.com/mst-corp/orbit/services/media/internal/middleware"
@@ -144,8 +146,19 @@ func main() {
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
+	metricsReg := metrics.New("media")
+	app.Use(metricsReg.HTTPMiddleware())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-media"})
+	})
+
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		token := c.Get("X-Internal-Token")
+		if internalSecret == "" || subtle.ConstantTimeCompare([]byte(token), []byte(internalSecret)) != 1 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		return metricsReg.Handler()(c)
 	})
 
 	// Register routes

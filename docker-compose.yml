@@ -305,8 +305,58 @@ services:
     depends_on:
       - gateway
 
+  # Prometheus scraper — local dev only. Saturn uses its own managed stack.
+  # Pulls metrics from every service's /metrics endpoint. Services gate
+  # /metrics behind the shared INTERNAL_SECRET, which we inject via
+  # X-Internal-Token. Prometheus does NOT expand ${VARS} in scrape configs
+  # (only in external_labels), so the config is templated inline via
+  # docker-compose `configs:` — compose itself expands ${INTERNAL_SECRET}
+  # at `docker compose up` time.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+configs:
+  prometheus_config:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: orbit
+          metrics_path: /metrics
+          static_configs:
+            - targets:
+                - gateway:8080
+                - auth:8081
+                - messaging:8082
+                - media:8083
+                - calls:8084
+                - ai:8085
+                - bots:8086
+                - integrations:8087
+          http_headers:
+            X-Internal-Token:
+              values:
+                - ${INTERNAL_SECRET}
+
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
   meili_data:
   minio_data:

@@ -14,6 +14,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/config"
 	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/integrations/internal/client"
 	"github.com/mst-corp/orbit/services/integrations/internal/handler"
@@ -78,9 +79,14 @@ func main() {
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
+	metricsReg := metrics.New("integrations")
+	app.Use(metricsReg.HTTPMiddleware())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-integrations"})
 	})
+
+	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
 
 	// Public inbound webhook endpoint is registered at /webhooks/in/:connectorId
 	// (WITHOUT the /api/v1 prefix) to ensure Fiber's group-level Use() middleware

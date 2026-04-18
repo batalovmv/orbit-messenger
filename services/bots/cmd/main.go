@@ -15,6 +15,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/config"
 	orchidCrypto "github.com/mst-corp/orbit/pkg/crypto"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/bots/internal/botapi"
 	"github.com/mst-corp/orbit/services/bots/internal/botfather"
@@ -118,9 +119,14 @@ func main() {
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
+	metricsReg := metrics.New("bots")
+	app.Use(metricsReg.HTTPMiddleware())
+
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-bots"})
 	})
+
+	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
 
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	botHandler.Register(api)
