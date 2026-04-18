@@ -149,6 +149,54 @@ func (s *MessageService) GetMessage(ctx context.Context, msgID, userID uuid.UUID
 	return msg, nil
 }
 
+// GetMessagesByIDs returns every requested message the caller is allowed
+// to read. Messages belonging to chats the caller is not a member of are
+// silently dropped (same IDOR posture as GetMessage — we never tell the
+// caller "this ID exists but you can't see it"). Soft-deleted messages
+// are also dropped. Callers must tolerate a partial result.
+func (s *MessageService) GetMessagesByIDs(
+	ctx context.Context,
+	ids []uuid.UUID,
+	userID uuid.UUID,
+	userRole string,
+) ([]model.Message, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	msgs, err := s.messages.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("get messages by ids: %w", err)
+	}
+	if len(msgs) == 0 {
+		return nil, nil
+	}
+
+	// Resolve access per distinct chat, not per message — a 50-message
+	// batch from 2 chats becomes 2 membership checks, not 50.
+	chatAccess := make(map[uuid.UUID]bool)
+	result := make([]model.Message, 0, len(msgs))
+	for i := range msgs {
+		m := &msgs[i]
+		if m.IsDeleted {
+			continue
+		}
+		allowed, seen := chatAccess[m.ChatID]
+		if !seen {
+			ok, err := s.checkChatAccess(ctx, m.ChatID, userID, userRole)
+			if err != nil {
+				return nil, err
+			}
+			chatAccess[m.ChatID] = ok
+			allowed = ok
+		}
+		if !allowed {
+			continue
+		}
+		result = append(result, *m)
+	}
+	return result, nil
+}
+
 func (s *MessageService) ViewOneTimeMessage(ctx context.Context, msgID, userID uuid.UUID) (*model.Message, error) {
 	msg, err := s.messages.MarkOneTimeViewed(ctx, msgID, userID)
 	if err != nil {

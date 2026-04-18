@@ -88,6 +88,7 @@ func (h *MessageHandler) Register(app fiber.Router) {
 	app.Patch("/messages/:id", h.EditMessage)
 	app.Delete("/messages/:id", h.DeleteMessage)
 	app.Post("/messages/forward", h.ForwardMessages)
+	app.Post("/messages/batch", h.BatchGetMessages)
 
 	// Link preview
 	app.Get("/messages/link-preview", h.GetLinkPreview)
@@ -721,6 +722,47 @@ func (h *MessageHandler) GetLinkPreview(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"preview": preview})
+}
+
+// BatchGetMessages returns the subset of requested messages the caller
+// is authorised to read. Used by the AI service's translate pipeline
+// (fetches the exact message IDs the user picked), and is safe to call
+// from the gateway on behalf of an end user — service.GetMessagesByIDs
+// silently drops any ID the caller has no chat membership for.
+func (h *MessageHandler) BatchGetMessages(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	role := c.Get("X-User-Role")
+
+	var req struct {
+		MessageIDs []string `json:"message_ids"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+	if len(req.MessageIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("message_ids is required"))
+	}
+	if len(req.MessageIDs) > 100 {
+		return response.Error(c, apperror.BadRequest("Too many message_ids (max 100)"))
+	}
+
+	ids := make([]uuid.UUID, 0, len(req.MessageIDs))
+	for _, raw := range req.MessageIDs {
+		id, err := uuid.Parse(strings.TrimSpace(raw))
+		if err != nil {
+			return response.Error(c, apperror.BadRequest("Invalid message ID: "+raw))
+		}
+		ids = append(ids, id)
+	}
+
+	msgs, err := h.svc.GetMessagesByIDs(c.Context(), ids, uid, role)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"data": msgs})
 }
 
 func (h *MessageHandler) hydrateMessages(ctx context.Context, userID uuid.UUID, msgs []model.Message) error {
