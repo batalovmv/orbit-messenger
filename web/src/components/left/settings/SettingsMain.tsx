@@ -169,6 +169,14 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
         >
           {lang('MenuStickers')}
         </ListItem>
+        <ListItem
+          icon="bots"
+          narrow
+
+          onClick={() => openSettingsScreen({ screen: SettingsScreens.AiUsage })}
+        >
+          {lang('AiUsageTitle')}
+        </ListItem>
       </div>
       {isSaturnAdmin && (
         <div className="settings-main-menu">

@@ -271,6 +271,7 @@ export enum SettingsScreens {
   Integrations,
   IntegrationEdit,
   IntegrationRoutes,
+  AiUsage,
 }
 
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (

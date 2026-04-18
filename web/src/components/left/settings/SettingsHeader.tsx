@@ -284,6 +284,9 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.IntegrationRoutes:
         return <h3>{lang('IntegrationsTitle')}</h3>;
 
+      case SettingsScreens.AiUsage:
+        return <h3>{lang('AiUsageTitle')}</h3>;
+
       default:
         return (
           <div className="settings-main-header">

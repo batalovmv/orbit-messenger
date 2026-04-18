@@ -2142,6 +2142,22 @@ export interface LangPair {
   'AiTranslateLangFr': undefined;
   'AiGeneratedDisclaimer': undefined;
   'TranslateMessage': undefined;
+  'AiUsageTitle': undefined;
+  'AiUsageTotalsHeader': undefined;
+  'AiUsageByFeatureHeader': undefined;
+  'AiUsageTotalRequests': undefined;
+  'AiUsageInputTokens': undefined;
+  'AiUsageOutputTokens': undefined;
+  'AiUsageCost': undefined;
+  'AiUsagePeriodFallback': undefined;
+  'AiUsageEmpty': undefined;
+  'AiUsageUnavailable': undefined;
+  'AiUsageEndpointSummarize': undefined;
+  'AiUsageEndpointTranslate': undefined;
+  'AiUsageEndpointTranscribe': undefined;
+  'AiUsageEndpointSuggest': undefined;
+  'AiUsageEndpointAsk': undefined;
+  'AiUsageEndpointSearch': undefined;
   'BotAboutText': undefined;
   'BotPermissions': undefined;
   'BotPrivacyMode': undefined;
@@ -3694,6 +3710,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AiTranslateSkipped': {
     'count': V;
+  };
+  'AiUsagePeriodSince': {
+    'date': V;
   };
   'ExactTextCopied': {
     '0': V;
