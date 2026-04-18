@@ -421,7 +421,7 @@ const MessageContextMenu: FC<OwnProps> = ({
         )}
         {canTranslate && (
           <MenuItem icon="language" onClick={onTranslate}>
-            {canHideTranslation ? lang('AiTranslateRetranslate') : oldLang('TranslateMessage')}
+            {canHideTranslation ? lang('AiTranslateRetranslate') : lang('TranslateMessage')}
           </MenuItem>
         )}
         {canHideTranslation && (

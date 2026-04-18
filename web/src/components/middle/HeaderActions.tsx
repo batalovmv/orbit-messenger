@@ -303,11 +303,11 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
         size="smaller"
         className={isOpen ? 'active' : ''}
         onClick={onTrigger}
-        ariaLabel={oldLang('TranslateMessage')}
+        ariaLabel={lang('TranslateMessage')}
         iconName="language"
       />
     );
-  }, [isRightColumnShown, oldLang]);
+  }, [isRightColumnShown, lang]);
 
   return (
     <div className="HeaderActions">

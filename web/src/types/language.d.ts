@@ -2141,6 +2141,7 @@ export interface LangPair {
   'AiTranslateLangDe': undefined;
   'AiTranslateLangFr': undefined;
   'AiGeneratedDisclaimer': undefined;
+  'TranslateMessage': undefined;
   'BotAboutText': undefined;
   'BotPermissions': undefined;
   'BotPrivacyMode': undefined;
