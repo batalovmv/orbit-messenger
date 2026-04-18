@@ -419,6 +419,26 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 		}
 		return nil
 	})
+	// /chats/:id/bots lives on the bots service but sits under /chats/
+	// so without this explicit route it would fall through to the
+	// messaging catch-all below and return 404.
+	apiGroup.All("/chats/:id/bots", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := strings.TrimRight(cfg.BotsServiceURL, "/") + "/api/v1" + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, botsClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("bots proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Bots service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
 	apiGroup.All("/bots", func(c *fiber.Ctx) error {
 		proxyPath := sanitizeProxyPath(c.Path())
 		if proxyPath == "" {
