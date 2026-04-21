@@ -1064,6 +1064,9 @@ export {
   semanticSearch,
 } from './ai';
 
+export { translateText } from './translateText';
+export { toggleAutoTranslation } from './toggleAutoTranslation';
+
 export {
   deleteHistory, deleteMessages, editMessage, fetchMessageLink, fetchMessages, fetchMessagesByDate,
   fetchPinnedMessages, forwardMessages, markMessageListRead, markMessagesRead,
