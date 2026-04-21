@@ -197,6 +197,7 @@ type UserSettings struct {
 	SendByEnter bool      `json:"send_by_enter"`
 	DNDFrom     *string   `json:"dnd_from,omitempty"`
 	DNDUntil    *string   `json:"dnd_until,omitempty"`
+	DefaultTranslateLang *string   `json:"default_translate_lang,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	// Global notification defaults per chat type
@@ -206,6 +207,13 @@ type UserSettings struct {
 	NotifyGroupsPreview bool `json:"notify_groups_preview"`
 }
 
+
+type MessageTranslation struct {
+	MessageID uuid.UUID `json:"message_id"`
+	Lang      string    `json:"lang"`
+	Text      string    `json:"translated_text"`
+	CreatedAt time.Time `json:"created_at"`
+}
 type GlobalNotifySettings struct {
 	UsersMuted    bool `json:"users_muted"`
 	GroupsMuted   bool `json:"groups_muted"`

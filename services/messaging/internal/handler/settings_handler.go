@@ -133,16 +133,29 @@ func (h *SettingsHandler) UpdateUserSettings(c *fiber.Ctx) error {
 		FontSize    int     `json:"font_size"`
 		SendByEnter bool    `json:"send_by_enter"`
 		DNDFrom     *string `json:"dnd_from"`
-		DNDUntil    *string `json:"dnd_until"`
+		DNDUntil             *string `json:"dnd_until"`
+		DefaultTranslateLang *string `json:"default_translate_lang"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	// Validate default_translate_lang if provided
+	if req.DefaultTranslateLang != nil {
+		validLangs := map[string]bool{"ru": true, "en": true, "de": true, "es": true, "fr": true, "zh": true, "ja": true}
+		if *req.DefaultTranslateLang != "" && !validLangs[*req.DefaultTranslateLang] {
+			return response.Error(c, apperror.BadRequest("invalid default_translate_lang"))
+		}
+		// Empty string means clear the setting
+		if *req.DefaultTranslateLang == "" {
+			req.DefaultTranslateLang = nil
+		}
+	}
+
 	us, err := h.settingsSvc.UpdateUserSettings(
 		c.Context(), uid,
 		req.Theme, req.Language, req.FontSize, req.SendByEnter,
-		req.DNDFrom, req.DNDUntil,
+		req.DNDFrom, req.DNDUntil, req.DefaultTranslateLang,
 	)
 	if err != nil {
 		return response.Error(c, err)

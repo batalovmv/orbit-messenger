@@ -1056,6 +1056,8 @@ export {
 export {
   summarizeChat,
   translateMessages,
+  fetchTranslation,
+  fetchTranslationsBatch,
   suggestReply,
   transcribeVoice,
   fetchAiUsage,

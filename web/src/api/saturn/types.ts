@@ -237,6 +237,7 @@ export interface SaturnUserSettings {
   send_by_enter: boolean;
   dnd_from?: string;
   dnd_until?: string;
+  default_translate_lang?: string;
   created_at: string;
   updated_at: string;
 }

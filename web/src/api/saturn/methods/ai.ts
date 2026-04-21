@@ -257,3 +257,34 @@ export async function semanticSearch(_args: { query: string; chatId?: string }):
   }
   return [];
 }
+
+
+// --- Live Translate Phase 2 -------------------------------------------------
+
+export type TranslationResult = {
+  message_id: string;
+  lang: string;
+  translated_text: string;
+};
+
+export type TranslationBatchResult = {
+  translations: Record<string, TranslationResult>;
+  uncached: string[];
+};
+
+export async function fetchTranslation(
+  messageId: string,
+  lang: string,
+): Promise<TranslationResult | undefined> {
+  return request<TranslationResult>('GET', `/messages/${messageId}/translation/${lang}`);
+}
+
+export async function fetchTranslationsBatch(
+  messageIds: string[],
+  lang: string,
+): Promise<TranslationBatchResult | undefined> {
+  return request<TranslationBatchResult>(
+    'GET',
+    `/messages/translations?ids=${messageIds.join(',')}&lang=${lang}`,
+  );
+}

@@ -56,6 +56,9 @@ CTO проекта Orbit. Общаемся на русском, неформал
 | `TZ-ORBIT` security | superadmin / compliance roles | **Не реализованы** — только chat-level RBAC. Запланировано на Phase 9+ (Super Access) |
 | `TZ-ORBIT` messaging | "чаты, группы, каналы" | **Каналы удалены** (migration 035). Только direct + group |
 | `TZ-PHASES-V2` | gRPC + Protobuf inter-service | **HTTP + X-Internal-Token** через Gateway. Нет .proto файлов |
+| `TZ-ORBIT` §11.8 | Semantic search (embeddings) как Must | **Не реализовано** — `ai_service.go:578` возвращает 501 (Phase 8A.2 deferred). Нужен pgvector + embeddings API |
+| `TZ-ORBIT` §9.5 | ClamAV scanning при upload | **Не интегрировано** в media service. Только MIME/size validation |
+| `TZ-ORBIT` §11.7.5 | Per-file AES-256-GCM для медиа в R2 | **Не реализовано** для обычных uploads. `UploadEncrypted` endpoint существует как Phase 7.1 E2E-остаток, но regular media в R2 plain |
 
 При обнаружении новых расхождений — **обнови эту таблицу**.
 

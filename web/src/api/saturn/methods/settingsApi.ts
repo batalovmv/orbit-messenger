@@ -68,7 +68,7 @@ export async function getUserSettings(): Promise<SaturnUserSettings | undefined>
 }
 
 export async function updateUserSettings({
-  theme, language, fontSize, sendByEnter, dndFrom, dndUntil,
+  theme, language, fontSize, sendByEnter, dndFrom, dndUntil, defaultTranslateLang,
 }: {
   theme: string;
   language: string;
@@ -76,6 +76,7 @@ export async function updateUserSettings({
   sendByEnter: boolean;
   dndFrom?: string;
   dndUntil?: string;
+  defaultTranslateLang?: string;
 }): Promise<SaturnUserSettings | undefined> {
   try {
     return await request<SaturnUserSettings>('PUT', '/users/me/settings/appearance', {
@@ -85,6 +86,7 @@ export async function updateUserSettings({
       send_by_enter: sendByEnter,
       dnd_from: dndFrom,
       dnd_until: dndUntil,
+      default_translate_lang: defaultTranslateLang,
     });
   } catch (err) {
     logSettingsApiError('updateUserSettings', err);
