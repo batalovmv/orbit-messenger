@@ -43,6 +43,7 @@ type TranslateRequest struct {
 	MessageIDs     []string `json:"message_ids"`
 	ChatID         string   `json:"chat_id,omitempty"`
 	TargetLanguage string   `json:"target_language"`
+	ResponseFormat string   `json:"response_format,omitempty"` // "json_map" for batch
 }
 
 type ReplySuggestRequest struct {

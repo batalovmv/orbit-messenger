@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -307,6 +308,11 @@ func (s *AIService) Translate(
 		return nil, apperror.BadRequest("No messages found for translation")
 	}
 
+	// JSON-map branch: non-streaming, returns {uuid: translated_text} for batch.
+	if req.ResponseFormat == "json_map" && len(messages) > 1 {
+		return s.translateJSONMap(ctx, userID, req, messages)
+	}
+
 	// Different prompts for single-message (inline per-bubble UX) vs batch
 	// (modal over a selection). The single path returns ONLY the translated
 	// text with no prefixes or meta-commentary, because the UI displays it
@@ -364,6 +370,93 @@ func (s *AIService) Translate(
 		}
 	}()
 	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// Translate JSON-map (non-streaming batch)
+// ---------------------------------------------------------------------------
+
+func (s *AIService) translateJSONMap(
+	ctx context.Context,
+	userID string,
+	req model.TranslateRequest,
+	messages []model.Message,
+) (<-chan client.StreamEvent, error) {
+	systemPrompt := fmt.Sprintf(
+		"You are a translator. Translate each message to the target language '%s'. "+
+			"Return ONLY a valid JSON object mapping message UUIDs to their translated text. "+
+			"No markdown fences, no explanation, no preamble. "+
+			`Format: {"uuid1": "translated text 1", "uuid2": "translated text 2"} `+
+			"If a message is already in the target language, include it unchanged. "+
+			"Do not translate commands (starting with '/'), @mentions, URLs, or code blocks — include them as-is.",
+		req.TargetLanguage,
+	)
+
+	var userContent strings.Builder
+	for _, m := range messages {
+		userContent.WriteString(m.ID)
+		userContent.WriteString(": ")
+		userContent.WriteString(m.Content)
+		userContent.WriteByte('\n')
+	}
+
+	claudeMessages := []client.AnthropicMessage{
+		{Role: "user", Content: userContent.String()},
+	}
+
+	result, err := s.anthropic.CreateMessage(ctx, systemPrompt, claudeMessages, 4096)
+	if err != nil {
+		if errors.Is(err, model.ErrAIUnavailable) {
+			return nil, apperror.ServiceUnavailable("AI provider not configured")
+		}
+		return nil, fmt.Errorf("anthropic create message: %w", err)
+	}
+
+	jsonStr, err := extractJSON(result.Text)
+	if err != nil {
+		return nil, apperror.Internal("Failed to parse translation response: " + err.Error())
+	}
+
+	// Validate that it's a proper map.
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		return nil, apperror.Internal("AI returned invalid JSON map: " + err.Error())
+	}
+
+	s.recordUsageAsync(userID, "translate", s.anthropic.Model(),
+		result.InputTokens, result.OutputTokens)
+
+	out := make(chan client.StreamEvent, 2)
+	go func() {
+		defer close(out)
+		out <- client.StreamEvent{Delta: jsonStr}
+		out <- client.StreamEvent{Done: &client.StreamDoneInfo{
+			InputTokens:  result.InputTokens,
+			OutputTokens: result.OutputTokens,
+		}}
+	}()
+	return out, nil
+}
+
+// extractJSON strips markdown code fences and locates the JSON object in raw
+// Claude output.
+func extractJSON(raw string) (string, error) {
+	stripped := strings.TrimSpace(raw)
+	if strings.HasPrefix(stripped, "```") {
+		if idx := strings.Index(stripped, "\n"); idx != -1 {
+			stripped = stripped[idx+1:]
+		}
+		if idx := strings.LastIndex(stripped, "```"); idx != -1 {
+			stripped = stripped[:idx]
+		}
+		stripped = strings.TrimSpace(stripped)
+	}
+	start := strings.Index(stripped, "{")
+	end := strings.LastIndex(stripped, "}")
+	if start == -1 || end == -1 || end <= start {
+		return "", fmt.Errorf("no JSON object found in response")
+	}
+	return stripped[start : end+1], nil
 }
 
 // ---------------------------------------------------------------------------
