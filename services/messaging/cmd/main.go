@@ -153,6 +153,10 @@ func main() {
 	scheduledStore := store.NewScheduledMessageStore(pool, atRestKey)
 	searchHistoryStore := store.NewSearchHistoryStore(pool)
 	auditStore := store.NewAuditStore(pool)
+	translationStore := store.NewTranslationStore(pool)
+
+
+	aiServiceURL := config.EnvOr("AI_SERVICE_URL", "http://localhost:8085")
 
 	// Services
 	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)
@@ -161,7 +165,7 @@ func main() {
 	// been provisioned AND the AI service is reachable.
 	msgSvc.ConfigureOrbitAIBot(
 		config.EnvOr("ORBIT_AI_BOT_USER_ID", ""),
-		config.EnvOr("AI_SERVICE_URL", "http://localhost:8085"),
+		aiServiceURL,
 		internalSecret,
 	)
 	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc).WithPublisher(natsPublisher)
@@ -273,6 +277,7 @@ func main() {
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
 	adminSvc := service.NewAdminService(userStore, chatStore, auditStore, natsPublisher)
 	adminHandler := handler.NewAdminHandler(adminSvc)
+	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -305,6 +310,7 @@ func main() {
 	pollHandler.Register(api)
 	scheduledHandler.Register(api)
 	adminHandler.Register(api)
+	translationHandler.Register(api)
 
 	// Graceful shutdown
 	go func() {
