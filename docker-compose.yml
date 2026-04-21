@@ -178,6 +178,7 @@ services:
       MEILISEARCH_URL: http://meilisearch:7700
       MEILISEARCH_KEY: ${MEILISEARCH_KEY}
       ORBIT_AI_BOT_USER_ID: ${ORBIT_AI_BOT_USER_ID:-}
+      AI_SERVICE_URL: http://ai:8085
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -208,6 +209,7 @@ services:
       redis: { condition: service_healthy }
       nats: { condition: service_healthy }
       minio: { condition: service_healthy }
+      clamav: { condition: service_healthy }
 
   calls:
     build:
@@ -300,6 +302,20 @@ services:
       - media
     restart: unless-stopped
 
+
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck || clamdscan --ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
   web:
     build:
       context: ./web
@@ -336,8 +352,7 @@ services:
   # Prometheus scraper — local dev only. Saturn uses its own managed stack.
   # Pulls metrics from every service's /metrics endpoint. Services gate
   # /metrics behind the shared INTERNAL_SECRET.
-      INTERNAL_SECRET, which we inject via
-  # X-Internal-Token. Prometheus does NOT expand ${VARS} in scrape configs
+  #     INTERNAL_SECRET, which we inject via
   # (only in external_labels), so the config is templated inline via
   # docker-compose `configs:` — compose itself expands ${INTERNAL_SECRET}
   # at `docker compose up` time.
@@ -402,20 +417,6 @@ configs:
             X-Internal-Token:
               values:
                 - ${INTERNAL_SECRET}
-
-  clamav:
-    image: clamav/clamav:latest
-    ports:
-      - "127.0.0.1:3310:3310"
-    volumes:
-      - clamav_data:/var/lib/clamav
-    healthcheck:
-      test: ["CMD-SHELL", "clamdcheck || clamdscan --ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    restart: unless-stopped
 
 volumes:
   postgres_data:
