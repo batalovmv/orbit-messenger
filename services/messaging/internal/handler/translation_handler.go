@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"bufio"
@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -176,40 +177,54 @@ func (h *TranslationHandler) GetTranslationsBatch(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	// Find uncached
-	uncachedIDs := make([]string, 0)
-	uncachedChatID := ""
+	// Group uncached by chatID for per-group AI calls
+	uncachedByChat := make(map[uuid.UUID][]string) // chatID -> []messageIDString
 	for _, id := range allowedIDs {
 		if _, ok := cached[id]; !ok {
-			uncachedIDs = append(uncachedIDs, id.String())
-			if cid, ok := msgByChatID[id]; ok {
-				uncachedChatID = cid.String()
-			}
+			chatID := msgByChatID[id]
+			uncachedByChat[chatID] = append(uncachedByChat[chatID], id.String())
 		}
 	}
 
-	// Call AI for uncached
+	// Call AI for uncached — parallel per chat group
 	failedIDs := make([]string, 0)
-	if len(uncachedIDs) > 0 {
-		results, err := h.callAITranslate(c.Context(), uncachedIDs, uncachedChatID, lang)
-		if err != nil {
-			h.logger.Error("ai batch translate failed", "error", err)
-			failedIDs = uncachedIDs
-		} else {
-			for _, idStr := range uncachedIDs {
-				text, ok := results[idStr]
-				if !ok || text == "" {
-					failedIDs = append(failedIDs, idStr)
-					continue
+	if len(uncachedByChat) > 0 {
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+
+		for chatID, msgIDs := range uncachedByChat {
+			wg.Add(1)
+			go func(chatID uuid.UUID, msgIDs []string) {
+				defer wg.Done()
+				results, err := h.callAITranslate(c.Context(), msgIDs, chatID.String(), lang)
+
+				mu.Lock()
+				defer mu.Unlock()
+
+				if err != nil {
+					h.logger.Error("ai batch translate failed", "error", err, "chat_id", chatID)
+					failedIDs = append(failedIDs, msgIDs...)
+					return
 				}
-				id, _ := uuid.Parse(idStr)
-				tr := &model.MessageTranslation{MessageID: id, Lang: lang, Text: text}
-				if upsertErr := h.translations.Upsert(c.Context(), tr); upsertErr != nil {
-					h.logger.Error("failed to cache translation", "error", upsertErr)
+
+				// Anti-poison: only upsert keys actually in the response with non-empty text
+				for _, idStr := range msgIDs {
+					text, ok := results[idStr]
+					if !ok || text == "" {
+						failedIDs = append(failedIDs, idStr)
+						continue
+					}
+					id, _ := uuid.Parse(idStr)
+					tr := &model.MessageTranslation{MessageID: id, Lang: lang, Text: text}
+					if upsertErr := h.translations.Upsert(c.Context(), tr); upsertErr != nil {
+						h.logger.Error("failed to cache translation", "error", upsertErr)
+					}
+					cached[id] = tr
 				}
-				cached[id] = tr
-			}
+			}(chatID, msgIDs)
 		}
+
+		wg.Wait()
 	}
 
 	// Build response
@@ -230,6 +245,7 @@ func (h *TranslationHandler) callAITranslate(ctx context.Context, messageIDs []s
 		"message_ids":     messageIDs,
 		"chat_id":         chatID,
 		"target_language": lang,
+		"response_format": "json_map",
 	})
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.aiServiceURL+"/ai/translate", bytes.NewReader(body))
@@ -276,20 +292,40 @@ func (h *TranslationHandler) callAITranslate(ctx context.Context, messageIDs []s
 		return nil, fmt.Errorf("incomplete or empty translation response")
 	}
 
-	// For single message, map the full text to the first ID.
-	// AI service returns a single stream for the batch.
 	result := make(map[string]string, len(messageIDs))
+	fullText := textBuilder.String()
+
 	if len(messageIDs) == 1 {
-		result[messageIDs[0]] = textBuilder.String()
+		result[messageIDs[0]] = fullText
 	} else {
-		// Try to parse as JSON map if batch response
-		var parsed map[string]string
-		if err := json.Unmarshal([]byte(textBuilder.String()), &parsed); err == nil {
-			result = parsed
-		} else {
-			// Fallback: assign full text to first ID
-			result[messageIDs[0]] = textBuilder.String()
+		// Extract JSON from response (strip markdown fences if Claude wrapped them)
+		jsonStr := extractJSONFromResponse(fullText)
+		if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+			return nil, fmt.Errorf("failed to parse AI translation response as JSON: %w", err)
 		}
 	}
 	return result, nil
+}
+
+// extractJSONFromResponse strips markdown code fences and locates the JSON
+// object in the AI response text.
+func extractJSONFromResponse(raw string) string {
+	stripped := strings.TrimSpace(raw)
+	// Strip markdown fences
+	if strings.HasPrefix(stripped, "```") {
+		if idx := strings.Index(stripped, "\n"); idx != -1 {
+			stripped = stripped[idx+1:]
+		}
+		if idx := strings.LastIndex(stripped, "```"); idx != -1 {
+			stripped = stripped[:idx]
+		}
+		stripped = strings.TrimSpace(stripped)
+	}
+	// Find JSON object boundaries
+	start := strings.Index(stripped, "{")
+	end := strings.LastIndex(stripped, "}")
+	if start != -1 && end > start {
+		return stripped[start : end+1]
+	}
+	return stripped
 }
