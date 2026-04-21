@@ -1,5 +1,6 @@
-FROM postgres:16-alpine
-RUN apk add --no-cache curl bash
-RUN curl -L https://github.com/wal-g/wal-g/releases/download/v3.0.3/wal-g-pg-ubuntu-amd64.tar.gz | tar xz -C /usr/local/bin/ || echo "WAL-G binary may need different arch, check release page"
+FROM postgres:16
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN curl -fL https://github.com/wal-g/wal-g/releases/download/v3.0.3/wal-g-pg-ubuntu-amd64.tar.gz | tar xz -C /usr/local/bin/
+RUN wal-g --version
 COPY wal-g.env.sh /etc/wal-g.env.sh
 COPY setup-archiving.sh /docker-entrypoint-initdb.d/99-setup-archiving.sh
