@@ -21,6 +21,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/media/internal/handler"
 	"github.com/mst-corp/orbit/services/media/internal/middleware"
+	"github.com/mst-corp/orbit/services/media/internal/scanner"
 	"github.com/mst-corp/orbit/services/media/internal/service"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
 	"github.com/mst-corp/orbit/services/media/internal/store"
@@ -130,6 +131,19 @@ func main() {
 
 	// Service
 	mediaSvc := service.NewMediaService(mediaStore, r2Client, rdb, nc).WithMaxUserStorageBytes(maxUserStorageBytes)
+
+	// ClamAV virus scanner
+	clamAddr := config.EnvOr("CLAMAV_ADDR", "")
+	if clamAddr != "" {
+		clamTimeout := config.EnvDurationOr("CLAMAV_TIMEOUT", 10*time.Second)
+		sc := scanner.NewClamAVScanner(clamAddr, clamTimeout)
+		if sc != nil {
+			mediaSvc.WithScanner(sc)
+			slog.Info("ClamAV scanner enabled", "addr", clamAddr, "timeout", clamTimeout)
+		}
+	} else {
+		slog.Warn("ClamAV scanner disabled: CLAMAV_ADDR not set")
+	}
 
 	// Start orphan cleanup loop (every 6 hours)
 	appCtx, cancel := context.WithCancel(ctx)

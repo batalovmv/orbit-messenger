@@ -200,6 +200,8 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-minioadmin}
       R2_BUCKET: ${R2_BUCKET:-orbit-media}
       R2_PUBLIC_ENDPOINT: ${R2_PUBLIC_ENDPOINT:-http://localhost:9000}
+      CLAMAV_ADDR: clamav:3310
+      CLAMAV_TIMEOUT: 10s
       INTERNAL_SECRET: ${INTERNAL_SECRET}
     depends_on:
       postgres: { condition: service_healthy }
@@ -333,7 +335,8 @@ services:
 
   # Prometheus scraper — local dev only. Saturn uses its own managed stack.
   # Pulls metrics from every service's /metrics endpoint. Services gate
-  # /metrics behind the shared INTERNAL_SECRET, which we inject via
+  # /metrics behind the shared INTERNAL_SECRET.
+      INTERNAL_SECRET, which we inject via
   # X-Internal-Token. Prometheus does NOT expand ${VARS} in scrape configs
   # (only in external_labels), so the config is templated inline via
   # docker-compose `configs:` — compose itself expands ${INTERNAL_SECRET}
@@ -400,10 +403,25 @@ configs:
               values:
                 - ${INTERNAL_SECRET}
 
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck || clamdscan --ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
   prometheus_data:
   grafana_data:
   meili_data:
+  clamav_data:
   minio_data:

@@ -18,6 +18,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/services/media/internal/model"
+	"github.com/mst-corp/orbit/services/media/internal/scanner"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
 	"github.com/mst-corp/orbit/services/media/internal/store"
 )
@@ -35,6 +36,7 @@ type MediaService struct {
 	rdb                 *redis.Client
 	nc                  *nats.Conn
 	maxUserStorageBytes int64
+	scanner             scanner.Scanner
 	presignGetURL       func(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 
@@ -49,6 +51,11 @@ func NewMediaService(st store.Store, r2 *storage.R2Client, rdb *redis.Client, nc
 
 func (s *MediaService) WithMaxUserStorageBytes(limit int64) *MediaService {
 	s.maxUserStorageBytes = limit
+	return s
+}
+
+func (s *MediaService) WithScanner(sc scanner.Scanner) *MediaService {
+	s.scanner = sc
 	return s
 }
 
@@ -141,6 +148,26 @@ func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileDat
 	}
 	if err := s.ensureUserStorageAvailable(ctx, uploaderID, int64(len(fileData))); err != nil {
 		return nil, err
+	}
+
+	// ClamAV virus scan before upload
+	if s.scanner != nil {
+		scanCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		result, scanErr := s.scanner.Scan(scanCtx, bytes.NewReader(fileData), filename)
+		if scanErr != nil {
+			slog.Warn("virus scan failed, rejecting upload",
+				"event", "scan_error", "error", scanErr,
+				"filename", filename, "user_id", uploaderID)
+			return nil, apperror.ServiceUnavailable("File scanning temporarily unavailable, please retry")
+		}
+		if result != nil && !result.Clean {
+			slog.Warn("virus detected in upload",
+				"event", "virus_detected", "virus", result.Virus,
+				"filename", filename, "user_id", uploaderID,
+				"size_bytes", len(fileData), "mime_type", mimeType)
+			return nil, &apperror.AppError{Code: "virus_detected", Message: "File rejected: malware detected", Status: 422}
+		}
 	}
 
 	mediaID := uuid.New()
