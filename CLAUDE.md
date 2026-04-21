@@ -44,7 +44,7 @@ CTO проекта Orbit. Общаемся на русском, неформал
 | Phase 8A: AI | Done | Claude SSE, Whisper transcribe, @orbit-ai bot |
 | Phase 8B: Bots | Done | Bot API, admin UI, inline keyboards, webhooks |
 | Phase 8C: Integrations | Done | Webhook framework, Saturn.ac E2E, MST presets |
-| Phase 8D: Hardening | **In Progress** | ScyllaDB, monitoring, OWASP, backups |
+| Phase 8D: Hardening | **In Progress (~21% по PHASES.md, но pre-pilot blockers фактически закрыты)** | Security audit done, metrics foundation, 4h pg_dump. Осталось pre-GA: Loki, OTel, OWASP sweep, secrets rotation, pentest, GPL headers, WAL/PITR, Grafana на prod |
 
 ## Расхождения ТЗ с реальностью
 
@@ -59,6 +59,9 @@ CTO проекта Orbit. Общаемся на русском, неформал
 | `TZ-ORBIT` §11.8 | Semantic search (embeddings) как Must | **Не реализовано** — `ai_service.go:578` возвращает 501 (Phase 8A.2 deferred). Нужен pgvector + embeddings API |
 | `TZ-ORBIT` §9.5 | ClamAV scanning при upload | **Не интегрировано** в media service. Только MIME/size validation |
 | `TZ-ORBIT` §11.7.5 | Per-file AES-256-GCM для медиа в R2 | **Не реализовано** для обычных uploads. `UploadEncrypted` endpoint существует как Phase 7.1 E2E-остаток, но regular media в R2 plain |
+| `PHASES.md` 8D | NATS JetStream: 4 streams (MESSAGES, EVENTS, PUSH, WEBHOOKS) | **Работает как 1 stream `ORBIT` под `orbit.>` с 24h retention**, publisher/subscriber wired, dedup по `Nats-Msg-Id`, fallback на core NATS. Разделение на 4 stream — future optimization, не блокер |
+| `PHASES.md` 8D | Redis схема 5 ключей (online, typing, session, ratelimit, jwt_blacklist) | **online/typing — в памяти Gateway Hub** (корректный дизайн для WS). Реально в Redis: `jwt_cache:*`, `jwt_blacklist:*`, `ratelimit:*` префиксы. 5-ключевая "схема" устарела |
+| `PHASES.md` 8D статус | "In Progress, ~21%" — перечислено 15 открытых задач | **Ни одна из "pre-pilot blocker" задач (ScyllaDB/NATS/Redis) реально не блокер.** ScyllaDB отложена до 500+ users (roadmap 2026-04-18). Оставшиеся 15 пунктов — pre-GA, не пилот |
 
 При обнаружении новых расхождений — **обнови эту таблицу**.
 
