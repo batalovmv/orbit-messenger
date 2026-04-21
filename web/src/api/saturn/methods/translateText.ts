@@ -1,4 +1,4 @@
-﻿
+
 // ---------------------------------------------------------------------------
 // Saturn translateText — bridges the TG-original translateMessages action
 // (which calls callApi('translateText')) to our cached translation endpoints.
@@ -64,15 +64,29 @@ export async function translateText(params: TranslateTextParams) {
     return undefined;
   }
 
-  // Build ApiFormattedText array in the same order as messageIds
+  // Build ApiFormattedText array in the same order as messageIds,
+  // guarding against empty translations from partial AI responses
   const translations: ApiFormattedText[] = messageIds.map((seqNum) => {
     const uuid = resolveMessageUuid(chat.id, seqNum);
     const entry = uuid ? result.translations[uuid] : undefined;
+    const text = entry?.translated_text;
     return {
-      text: entry?.translated_text || '',
+      text: (text && text.length > 0) ? text : '',
       entities: [],
     };
   });
+
+  // Only emit update if at least one translation has actual text
+  const hasValidTranslation = translations.some((t) => t.text.length > 0);
+  if (!hasValidTranslation) {
+    sendApiUpdate({
+      '@type': 'failedMessageTranslations',
+      chatId: chat.id,
+      messageIds,
+      toLanguageCode,
+    });
+    return undefined;
+  }
 
   sendApiUpdate({
     '@type': 'updateMessageTranslations',

@@ -310,7 +310,7 @@ services:
     volumes:
       - clamav_data:/var/lib/clamav
     healthcheck:
-      test: ["CMD-SHELL", "clamdcheck || clamdscan --ping"]
+      test: ["CMD-SHELL", "echo PING | nc -w 5 localhost 3310"]
       interval: 30s
       timeout: 10s
       retries: 5
