@@ -66,19 +66,25 @@ export async function translateText(params: TranslateTextParams) {
 
   // Build ApiFormattedText array in the same order as messageIds,
   // guarding against empty translations from partial AI responses
-  const translations: ApiFormattedText[] = messageIds.map((seqNum) => {
+  const successMessageIds: number[] = [];
+  const successTranslations: ApiFormattedText[] = [];
+  const failedMessageIds: number[] = [];
+
+  for (let i = 0; i < messageIds.length; i++) {
+    const seqNum = messageIds[i];
     const uuid = resolveMessageUuid(chat.id, seqNum);
     const entry = uuid ? result.translations[uuid] : undefined;
     const text = entry?.translated_text;
-    return {
-      text: (text && text.length > 0) ? text : '',
-      entities: [],
-    };
-  });
 
-  // Only emit update if at least one translation has actual text
-  const hasValidTranslation = translations.some((t) => t.text.length > 0);
-  if (!hasValidTranslation) {
+    if (text && text.length > 0) {
+      successMessageIds.push(seqNum);
+      successTranslations.push({ text, entities: [] });
+    } else {
+      failedMessageIds.push(seqNum);
+    }
+  }
+
+  if (!successMessageIds.length) {
     sendApiUpdate({
       '@type': 'failedMessageTranslations',
       chatId: chat.id,
@@ -88,13 +94,22 @@ export async function translateText(params: TranslateTextParams) {
     return undefined;
   }
 
+  if (failedMessageIds.length) {
+    sendApiUpdate({
+      '@type': 'failedMessageTranslations',
+      chatId: chat.id,
+      messageIds: failedMessageIds,
+      toLanguageCode,
+    });
+  }
+
   sendApiUpdate({
     '@type': 'updateMessageTranslations',
     chatId: chat.id,
-    messageIds,
-    translations,
+    messageIds: successMessageIds,
+    translations: successTranslations,
     toLanguageCode,
   });
 
-  return translations;
+  return successTranslations;
 }
