@@ -36,10 +36,11 @@ const (
 // making a network call. The handler layer translates that into 503 so the
 // service stays callable on Saturn.ac even before real keys are provisioned.
 type AnthropicClient struct {
-	apiKey string
-	model  string
-	http   *http.Client
-	logger *slog.Logger
+	apiKey  string
+	model   string
+	baseURL string
+	http    *http.Client
+	logger  *slog.Logger
 }
 
 func NewAnthropicClient(apiKey, modelName string, logger *slog.Logger) *AnthropicClient {
@@ -50,11 +51,17 @@ func NewAnthropicClient(apiKey, modelName string, logger *slog.Logger) *Anthropi
 		modelName = anthropicDefaultModel
 	}
 	return &AnthropicClient{
-		apiKey: strings.TrimSpace(apiKey),
-		model:  modelName,
-		http:   &http.Client{Timeout: anthropicRequestTimeout},
-		logger: logger,
+		apiKey:  strings.TrimSpace(apiKey),
+		model:   modelName,
+		baseURL: anthropicBaseURL,
+		http:    &http.Client{Timeout: anthropicRequestTimeout},
+		logger:  logger,
 	}
+}
+
+// SetBaseURL overrides the API base URL. Intended for testing only.
+func (c *AnthropicClient) SetBaseURL(url string) {
+	c.baseURL = strings.TrimRight(url, "/")
 }
 
 func NewAnthropicClientFromEnv(logger *slog.Logger) *AnthropicClient {
@@ -134,7 +141,7 @@ func (c *AnthropicClient) CreateMessage(
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicBaseURL+"/messages", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/messages", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build anthropic request: %w", err)
 	}
@@ -231,7 +238,7 @@ func (c *AnthropicClient) CreateMessageStream(
 		return nil, fmt.Errorf("marshal stream request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicBaseURL+"/messages", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/messages", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build stream request: %w", err)
 	}

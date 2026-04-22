@@ -296,6 +296,9 @@ func (s *AIService) Translate(
 	if len(req.MessageIDs) == 0 {
 		return nil, apperror.BadRequest("message_ids is required")
 	}
+	if len(req.MessageIDs) > 50 {
+		return nil, apperror.BadRequest("Too many message_ids (max 50)")
+	}
 	if strings.TrimSpace(req.TargetLanguage) == "" {
 		return nil, apperror.BadRequest("target_language is required")
 	}
