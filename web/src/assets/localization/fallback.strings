@@ -2947,3 +2947,12 @@
 "BotInlinePlaceholder" = "Inline placeholder (up to 64 characters)";
 "SettingsSaved" = "Settings saved";
 "ExactTextCopied" = "Copied: {0}";
+"SmartNotifications" = "Smart Notifications";
+"SmartNotificationsDesc" = "AI prioritizes your notifications based on importance";
+"SmartNotificationsModeSmart" = "Smart";
+"SmartNotificationsModeAll" = "All notifications";
+"SmartNotificationsModeOff" = "Off";
+"NotificationPriorityUrgent" = "Urgent";
+"NotificationPriorityImportant" = "Important";
+"NotificationPriorityNormal" = "Normal";
+"NotificationPriorityLow" = "Low";

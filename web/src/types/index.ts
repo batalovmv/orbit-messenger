@@ -159,6 +159,7 @@ export interface AccountSettings {
   translationLanguage?: string;
   doNotTranslate: string[];
   shouldPaidMessageAutoApprove: boolean;
+  smartNotificationMode?: 'smart' | 'all' | 'off';
 }
 
 export type IAnchorPosition = {
@@ -272,6 +273,7 @@ export enum SettingsScreens {
   IntegrationEdit,
   IntegrationRoutes,
   AiUsage,
+  SmartNotifications,
 }
 
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (

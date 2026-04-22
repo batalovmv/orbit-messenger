@@ -2158,6 +2158,15 @@ export interface LangPair {
   'AiUsageEndpointSuggest': undefined;
   'AiUsageEndpointAsk': undefined;
   'AiUsageEndpointSearch': undefined;
+  'SmartNotifications': undefined;
+  'SmartNotificationsDesc': undefined;
+  'SmartNotificationsModeSmart': undefined;
+  'SmartNotificationsModeAll': undefined;
+  'SmartNotificationsModeOff': undefined;
+  'NotificationPriorityUrgent': undefined;
+  'NotificationPriorityImportant': undefined;
+  'NotificationPriorityNormal': undefined;
+  'NotificationPriorityLow': undefined;
   'BotAboutText': undefined;
   'BotPermissions': undefined;
   'BotPrivacyMode': undefined;

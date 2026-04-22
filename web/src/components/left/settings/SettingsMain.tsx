@@ -120,6 +120,14 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           {lang('Notifications')}
         </ListItem>
         <ListItem
+          icon="mention"
+          narrow
+
+          onClick={() => openSettingsScreen({ screen: SettingsScreens.SmartNotifications })}
+        >
+          {lang('SmartNotifications')}
+        </ListItem>
+        <ListItem
           icon="data"
           narrow
 

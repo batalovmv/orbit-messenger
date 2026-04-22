@@ -20,6 +20,7 @@ import PrivacyMessages from './PrivacyMessages';
 import SettingsActiveSessions from './SettingsActiveSessions';
 import SettingsActiveWebsites from './SettingsActiveWebsites';
 import SettingsAiUsage from './SettingsAiUsage';
+import SettingsSmartNotifications from './SettingsSmartNotifications';
 import SettingsCustomEmoji from './SettingsCustomEmoji';
 import SettingsDataStorage from './SettingsDataStorage';
 import SettingsDoNotTranslate from './SettingsDoNotTranslate';
@@ -515,6 +516,14 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.AiUsage:
         return (
           <SettingsAiUsage
+            isActive={isScreenActive}
+            onReset={handleReset}
+          />
+        );
+
+      case SettingsScreens.SmartNotifications:
+        return (
+          <SettingsSmartNotifications
             isActive={isScreenActive}
             onReset={handleReset}
           />

@@ -17,6 +17,7 @@ type PushData = {
     message_id?: number | string;
     should_replace_history?: boolean;
     is_silent?: boolean;
+    priority?: 'urgent' | 'important' | 'normal' | 'low';
   };
 };
 
@@ -65,6 +66,7 @@ type NotificationData = {
   icon?: string;
   reaction?: string;
   shouldReplaceHistory?: boolean;
+  priority?: 'urgent' | 'important' | 'normal' | 'low';
 };
 
 type FocusMessageData = {
@@ -160,6 +162,7 @@ function getNotificationData(data: PushData | LegacyPushData): NotificationData 
       isSilent: data.data?.is_silent === true || data.is_silent === true,
       shouldReplaceHistory: data.data?.should_replace_history !== false,
       title: data.title || APP_NAME,
+      priority: data.data?.priority,
     };
   }
 
@@ -205,9 +208,16 @@ function showNotification({
   reaction,
   isSilent,
   shouldReplaceHistory,
+  priority,
 }: NotificationData) {
   const isFirstBatch = new Date().valueOf() - lastSyncAt < 1000;
   const tag = String(isFirstBatch ? 0 : chatId || 0);
+
+  // Low-priority notifications are silent; urgent ones are persistent
+  const isLowPriority = priority === 'low';
+  const isUrgent = priority === 'urgent';
+  const effectiveSilent = isSilent || isLowPriority;
+
   const options: NotificationOptions = {
     body,
     data: {
@@ -220,13 +230,14 @@ function showNotification({
     icon: icon || 'icon-192x192.png',
     badge: 'icon-192x192.png',
     tag,
+    requireInteraction: isUrgent,
     // @ts-ignore
     vibrate: [200, 100, 200],
   };
 
   return Promise.all([
     // TODO Update condition when reaction badges are implemented
-    (!reaction && !isSilent) ? playNotificationSound(String(messageId) || chatId || '') : undefined,
+    (!reaction && !effectiveSilent) ? playNotificationSound(String(messageId) || chatId || '') : undefined,
     self.registration.showNotification(title, options),
   ]);
 }
