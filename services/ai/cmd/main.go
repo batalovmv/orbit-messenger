@@ -42,6 +42,7 @@ func main() {
 
 	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
 	anthropicModel := config.EnvOr("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+	classifyModel := config.EnvOr("ANTHROPIC_CLASSIFY_MODEL", "claude-3-haiku-20240307")
 	whisperKey := os.Getenv("OPENAI_API_KEY")
 	whisperModel := config.EnvOr("WHISPER_MODEL", "whisper-1")
 
@@ -82,16 +83,20 @@ func main() {
 
 	// External clients — all tolerant to missing credentials (see client.Configured()).
 	anthropicClient := client.NewAnthropicClient(anthropicKey, anthropicModel, logger)
+	classifyClient := client.NewAnthropicClient(anthropicKey, classifyModel, logger)
 	whisperClient := client.NewWhisperClient(whisperKey, whisperModel, logger)
 	messagingClient := client.NewMessagingClient(messagingURL, internalSecret)
 
 	// Store + service wiring.
 	usageStore := store.NewUsageStore(pool)
+	notificationStore := store.NewNotificationStore(pool)
 	aiService := service.NewAIService(service.AIServiceConfig{
 		Anthropic:       anthropicClient,
+		ClassifyClient:  classifyClient,
 		Whisper:         whisperClient,
 		Messaging:       messagingClient,
 		Usage:           usageStore,
+		Notification:    notificationStore,
 		Redis:           rdb,
 		MediaServiceURL: mediaURL,
 		InternalToken:   internalSecret,
@@ -100,6 +105,7 @@ func main() {
 	})
 
 	aiHandler := handler.NewAIHandler(aiService, logger)
+	notifHandler := handler.NewNotificationHandler(aiService, notificationStore, logger)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -125,6 +131,7 @@ func main() {
 
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	aiHandler.Register(api)
+	notifHandler.Register(api)
 
 	go func() {
 		if err := app.Listen(":" + port); err != nil {

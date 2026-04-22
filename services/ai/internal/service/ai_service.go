@@ -28,9 +28,11 @@ import (
 //     understands (503 ai_unavailable, 429 rate_limited, etc.)
 type AIService struct {
 	anthropic       *client.AnthropicClient
+	classifyClient  *client.AnthropicClient
 	whisper         *client.WhisperClient
 	messaging       *client.MessagingClient
 	usage           store.UsageStore
+	notification    store.NotificationStore
 	redis           *redis.Client
 	mediaServiceURL string
 	internalToken   string
@@ -40,9 +42,11 @@ type AIService struct {
 
 type AIServiceConfig struct {
 	Anthropic       *client.AnthropicClient
+	ClassifyClient  *client.AnthropicClient
 	Whisper         *client.WhisperClient
 	Messaging       *client.MessagingClient
 	Usage           store.UsageStore
+	Notification    store.NotificationStore
 	Redis           *redis.Client
 	MediaServiceURL string
 	InternalToken   string
@@ -62,9 +66,11 @@ func NewAIService(cfg AIServiceConfig) *AIService {
 	}
 	return &AIService{
 		anthropic:       cfg.Anthropic,
+		classifyClient:  cfg.ClassifyClient,
 		whisper:         cfg.Whisper,
 		messaging:       cfg.Messaging,
 		usage:           cfg.Usage,
+		notification:    cfg.Notification,
 		redis:           cfg.Redis,
 		mediaServiceURL: cfg.MediaServiceURL,
 		internalToken:   cfg.InternalToken,
