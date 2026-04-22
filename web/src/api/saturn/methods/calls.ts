@@ -497,6 +497,8 @@ export function confirmCall() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const remoteSfuStreams = new Map<string, MediaStream>();
+// Maps trackId → userId so removal callbacks can carry the correct userId.
+const remoteSfuTrackOwners = new Map<string, string>();
 
 export function getSfuRemoteStreams(): ReadonlyMap<string, MediaStream> {
   return remoteSfuStreams;
@@ -578,6 +580,7 @@ export async function joinGroupCall(args?: { call?: { id?: string; type?: string
       isVideo: Boolean(isVideo),
       onRemoteTrack: (track: SfuRemoteTrack) => {
         remoteSfuStreams.set(track.trackId, track.stream);
+        remoteSfuTrackOwners.set(track.trackId, track.userId);
         sendApiUpdate({
           '@type': 'updateGroupCallStreams',
           userId: track.userId,
@@ -585,10 +588,12 @@ export async function joinGroupCall(args?: { call?: { id?: string; type?: string
         } as any);
       },
       onRemoteTrackRemoved: (trackId: string) => {
+        const userId = remoteSfuTrackOwners.get(trackId) || '';
         remoteSfuStreams.delete(trackId);
+        remoteSfuTrackOwners.delete(trackId);
         sendApiUpdate({
           '@type': 'updateGroupCallStreams',
-          userId: '',
+          userId,
           streamId: trackId,
         } as any);
       },
@@ -623,6 +628,7 @@ export async function leaveGroupCall(args?: { call?: { id?: string }; isPageUnlo
   const callId = args?.call?.id || activeCallId;
   leaveSfuCall();
   remoteSfuStreams.clear();
+  remoteSfuTrackOwners.clear();
   if (callId) {
     try {
       await request('DELETE', `/calls/${callId}/leave`);

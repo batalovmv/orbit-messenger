@@ -138,6 +138,16 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
     };
   }, [handleInactive, stream]);
 
+  // Teact does not patch srcObject on re-render when the stream reference
+  // changes — we must imperatively update the video element ourselves.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+  }, [stream]);
+
   useEffect(() => {
     setIsHidden(false);
   }, []);
