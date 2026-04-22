@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS notification_priority_feedback (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_npf_user_message ON notification_priority_feedback(user_id, message_id);
 CREATE INDEX IF NOT EXISTS idx_npf_user_created ON notification_priority_feedback(user_id, created_at DESC);
 
 -- User notification priority mode
