@@ -118,6 +118,22 @@ func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
 	return d.sendToUsers(userIDs, payload, d.defaultOptions())
 }
 
+// SendToUsersWithPriority sends a push notification with AI-classified priority.
+func (d *Dispatcher) SendToUsersWithPriority(userIDs []string, payload []byte, priority string) error {
+	opts := d.defaultOptions()
+	switch priority {
+	case "urgent":
+		opts.urgency = webpush.UrgencyHigh
+	case "important":
+		opts.urgency = webpush.UrgencyNormal
+	case "low":
+		opts.urgency = webpush.UrgencyLow
+	default:
+		opts.urgency = webpush.UrgencyNormal
+	}
+	return d.sendToUsers(userIDs, payload, opts)
+}
+
 func (d *Dispatcher) SendToUser(userID string, payload []byte) error {
 	return d.sendToUser(userID, payload, d.defaultOptions())
 }

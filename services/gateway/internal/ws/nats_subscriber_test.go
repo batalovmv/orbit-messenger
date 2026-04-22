@@ -16,8 +16,9 @@ import (
 )
 
 type mockPushSender struct {
-	sendToUsersFn     func(userIDs []string, payload []byte) error
-	sendCallToUsersFn func(userIDs []string, payload []byte) error
+	sendToUsersFn             func(userIDs []string, payload []byte) error
+	sendCallToUsersFn         func(userIDs []string, payload []byte) error
+	sendToUsersWithPriorityFn func(userIDs []string, payload []byte, priority string) error
 }
 
 func (m *mockPushSender) SendToUsers(userIDs []string, payload []byte) error {
@@ -32,6 +33,13 @@ func (m *mockPushSender) SendCallToUsers(userIDs []string, payload []byte) error
 		return m.sendCallToUsersFn(userIDs, payload)
 	}
 	return nil
+}
+
+func (m *mockPushSender) SendToUsersWithPriority(userIDs []string, payload []byte, priority string) error {
+	if m.sendToUsersWithPriorityFn != nil {
+		return m.sendToUsersWithPriorityFn(userIDs, payload, priority)
+	}
+	return m.SendToUsers(userIDs, payload)
 }
 
 func TestSubscriber_HandleEvent_RichMessageEventsDeliverWithMemberIDs(t *testing.T) {

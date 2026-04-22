@@ -111,6 +111,8 @@ func main() {
 	}
 
 	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret, pushDispatcher)
+	classifier := ws.NewNotificationClassifier(aiURL, internalSecret)
+	subscriber.SetNotificationClassifier(classifier)
 	if err := subscriber.Start(); err != nil {
 		slog.Error("failed to start NATS subscriber", "error", err)
 		os.Exit(1)

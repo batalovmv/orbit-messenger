@@ -20,6 +20,7 @@ const maxConcurrentFetches = 50 // Bound goroutines spawned for fallback member-
 type pushSender interface {
 	SendToUsers(userIDs []string, payload []byte) error
 	SendCallToUsers(userIDs []string, payload []byte) error
+	SendToUsersWithPriority(userIDs []string, payload []byte, priority string) error
 }
 
 const (
@@ -42,8 +43,14 @@ type Subscriber struct {
 	internalSecret      string
 	httpClient          *http.Client
 	pushDispatcher      pushSender
+	classifier          *NotificationClassifier
 	sem                 chan struct{} // semaphore to bound concurrent goroutines
 	dedup               *dedupCache  // deduplicates redelivered JetStream events
+}
+
+// SetNotificationClassifier attaches an AI notification classifier to the subscriber.
+func (s *Subscriber) SetNotificationClassifier(nc *NotificationClassifier) {
+	s.classifier = nc
 }
 
 // NewSubscriber creates a Subscriber backed by a JetStream durable consumer.
@@ -185,6 +192,7 @@ type pushPayload struct {
 		MessageID            int64  `json:"message_id"`
 		Type                 string `json:"type"`
 		ShouldReplaceHistory bool   `json:"should_replace_history"`
+		Priority             string `json:"priority,omitempty"`
 	} `json:"data"`
 }
 
@@ -284,8 +292,23 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 		return
 	}
 
-	if err := s.pushDispatcher.SendToUsers(recipients, payload); err != nil {
-		slog.Error("nats: push dispatch failed", "error", err, "chat_id", msg.ChatID)
+	// Classify notification priority (fail-open to "normal")
+	priority := defaultPriority
+	if s.classifier != nil {
+		priority = s.classifier.Classify(context.Background(), classifyRequest{
+			SenderID:    event.SenderID,
+			SenderRole:  "member",
+			ChatType:    inferChatType(event),
+			MessageText: stringPtrToString(msg.Content),
+			HasMention:  false,
+			ReplyToMe:   false,
+		})
+	}
+
+	payload = injectPriorityIntoPayload(payload, priority)
+
+	if err := s.pushDispatcher.SendToUsersWithPriority(recipients, payload, priority); err != nil {
+		slog.Error("nats: push dispatch failed", "error", err, "chat_id", msg.ChatID, "priority", priority)
 	}
 }
 
@@ -325,7 +348,9 @@ func (s *Subscriber) enqueueMentionPushDispatch(event NATSEvent, memberIDs []str
 				return
 			}
 
-			if err := s.pushDispatcher.SendToUsers(recipients, payload); err != nil {
+			// Mentions are always "important" priority — no AI call needed
+			payload = injectPriorityIntoPayload(payload, "important")
+			if err := s.pushDispatcher.SendToUsersWithPriority(recipients, payload, "important"); err != nil {
 				slog.Error("nats: mention push dispatch failed", "error", err, "chat_id", msg.ChatID)
 			}
 		},
@@ -386,6 +411,33 @@ func (s *Subscriber) runAsync(label string, fn func()) {
 	default:
 		slog.Warn("nats: goroutine limit reached, dropping async task", "task", label)
 	}
+}
+
+func inferChatType(event NATSEvent) string {
+	if len(event.MemberIDs) == 2 {
+		return "direct"
+	}
+	return "group"
+}
+
+func stringPtrToString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func injectPriorityIntoPayload(payload []byte, priority string) []byte {
+	var p pushPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return payload
+	}
+	p.Data.Priority = priority
+	result, err := json.Marshal(p)
+	if err != nil {
+		return payload
+	}
+	return result
 }
 
 func buildPushPayload(msg pushMessageData) ([]byte, error) {
