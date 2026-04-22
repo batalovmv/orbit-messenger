@@ -1,173 +1,272 @@
-# PITR Restore Runbook
+# PITR Restore Drill — Orbit Messenger
 
-> **Область применения**: PostgreSQL 16 с WAL-G архивацией на Cloudflare R2  
-> **Время выполнения**: ~15–30 минут в зависимости от размера БД и объёма WAL
+> **Scope**: PostgreSQL 16 point-in-time recovery on Saturn.ac **staging** using WAL-G + Cloudflare R2.  
+> **Audience**: Ops on-call.  
+> **Est. time**: 15–30 min depending on DB size and WAL volume.  
+> **Frequency**: Run drill at least once per quarter. Log each run in [Section 5](#5-drill-log).
 
----
-
-## Prerequisites
-
-- WAL-G v3.0.3 установлен локально или доступен внутри контейнера
-- Доступ к R2 (переменные `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`)
-- PostgreSQL 16 CLI (`psql`, `pg_ctl`, `pg_isready`)
-- Достаточно свободного места на диске (≥ размер БД × 2)
-
-Экспортируй переменные окружения перед выполнением любых команд:
-
-```bash
-source /etc/wal-g.env.sh
-# или вручную:
-export AWS_ENDPOINT=<R2_ENDPOINT>
-export AWS_ACCESS_KEY_ID=<key>
-export AWS_SECRET_ACCESS_KEY=<secret>
-export AWS_S3_FORCE_PATH_STYLE=true
-export AWS_REGION=auto
-export WALG_S3_PREFIX=s3://<R2_BUCKET>/wal-g
-export PGHOST=/var/run/postgresql
-```
+> ⛔ **Never run this procedure against production.** Staging only.
 
 ---
 
-## 1. Просмотр доступных бэкапов
+## 1. Prerequisites
+
+Confirm all of the following before starting:
+
+- [ ] `wal-g` binary installed and accessible (`wal-g --version` → v3.0.x)
+- [ ] SSH / console access to Saturn.ac staging confirmed
+- [ ] `WALG_S3_PREFIX` env var configured (e.g. `s3://orbit-backups/staging/wal-g`)
+- [ ] Cloudflare R2 credentials available in environment:
+  ```bash
+  export AWS_ACCESS_KEY_ID=<key>
+  export AWS_SECRET_ACCESS_KEY=<secret>
+  export AWS_ENDPOINT_URL=https://<account>.r2.cloudflarestorage.com
+  export AWS_S3_FORCE_PATH_STYLE=true
+  export AWS_REGION=auto
+  export WALG_S3_PREFIX=s3://<R2_BUCKET>/wal-g
+  ```
+  Or source the pre-configured env file: `source /etc/wal-g.env.sh`
+- [ ] PostgreSQL 16 CLI available on host (`psql`, `pg_ctl`, `pg_isready`)
+- [ ] Target data directory known (default: `/var/lib/postgresql/data`)
+- [ ] Write access to `postgresql.conf` on staging
+- [ ] Free disk space ≥ DB size × 2
+- [ ] Downstream services (gateway, auth, messaging, etc.) stopped or pointed away from staging DB
+
+---
+
+## 2. Backup Verification
+
+List available backups and confirm a recent one exists:
 
 ```bash
 wal-g backup-list
 ```
 
-Пример вывода:
+Expected output:
+
 ```
-name                          modified             wal_segment_backup_start
-base_000000010000000000000002  2026-04-20T10:00:00Z 000000010000000000000002
-base_000000010000000000000005  2026-04-21T10:00:00Z 000000010000000000000005
+name                          last_modified        wal_segment_backup_start
+base_000000010000000000000002  2026-04-22T03:00:05Z 000000010000000000000002
+base_000000010000000000000005  2026-04-23T03:00:07Z 000000010000000000000005
 ```
 
-Для детальной информации:
+For full metadata:
+
 ```bash
 wal-g backup-list DETAIL
 ```
 
+**Check**:
+- At least one backup dated within the last 24 hours exists
+- No `ERROR` lines in the output
+
+> If no recent backup is present — **stop here**. Investigate the backup job (`scripts/postgres/backup.sh`) before proceeding.
+
 ---
 
-## 2. Восстановление последнего бэкапа (без PITR)
+## 3. Restore Procedure
+
+### 3.1 Stop PostgreSQL
 
 ```bash
-# 1. Остановить Postgres
-pg_ctl stop -D $PGDATA -m fast
+# systemd
+sudo systemctl stop postgresql
 
-# 2. Очистить data directory (оставить только pg_wal если нужен replay)
-rm -rf $PGDATA/*
-
-# 3. Восстановить базовый бэкап
-wal-g backup-fetch $PGDATA LATEST
-
-# 4. Создать сигнальный файл для режима recovery
-touch $PGDATA/recovery.signal
-
-# 5. Запустить Postgres — он воспроизведёт WAL и выйдет в online
-pg_ctl start -D $PGDATA
+# or Docker Compose
+docker compose -f /opt/orbit/docker-compose.yml stop db
 ```
 
----
-
-## 3. PITR — восстановление до конкретного момента времени
+Verify fully stopped:
 
 ```bash
-# 1. Остановить Postgres
-pg_ctl stop -D $PGDATA -m fast
+sudo systemctl status postgresql   # should show "inactive (dead)"
+# or
+docker compose ps db               # should show "exited"
+```
 
-# 2. Очистить data directory
-rm -rf $PGDATA/*
+### 3.2 Clear the data directory
 
-# 3. Восстановить базовый бэкап (можно указать конкретный или LATEST)
-wal-g backup-fetch $PGDATA LATEST
+> ⚠️ This wipes current data. Double-check you are on **staging**.
 
-# 4. Добавить recovery_target_time в postgresql.conf
-cat >> $PGDATA/postgresql.conf <<EOF
-restore_command = 'source /etc/wal-g.env.sh && wal-g wal-fetch %f %p'
-recovery_target_time = '2026-04-21 09:30:00 UTC'
-recovery_target_action = promote
+```bash
+sudo rm -rf /var/lib/postgresql/data/*
+```
+
+### 3.3 Fetch the backup
+
+Restore the latest backup:
+
+```bash
+sudo -u postgres wal-g backup-fetch /var/lib/postgresql/data LATEST
+```
+
+Or restore a specific backup by name (copy name from `wal-g backup-list` output):
+
+```bash
+sudo -u postgres wal-g backup-fetch /var/lib/postgresql/data base_000000010000000000000005
+```
+
+### 3.4 Create `recovery.signal`
+
+PostgreSQL 12+ uses a signal file to enter recovery mode:
+
+```bash
+sudo -u postgres touch /var/lib/postgresql/data/recovery.signal
+```
+
+### 3.5 Set `recovery_target_time` in `postgresql.conf`
+
+Append the PITR block to `postgresql.conf` (or `postgresql.auto.conf`):
+
+```bash
+sudo -u postgres tee -a /var/lib/postgresql/data/postgresql.conf <<'EOF'
+
+# --- PITR restore drill — remove after drill ---
+restore_command = 'wal-g wal-fetch %f %p'
+recovery_target_time = '2026-04-23 02:00:00 UTC'
+recovery_target_action = 'promote'
+# -----------------------------------------------
 EOF
-
-# 5. Создать сигнальный файл
-touch $PGDATA/recovery.signal
-
-# 6. Запустить Postgres
-pg_ctl start -D $PGDATA
-
-# 7. Следить за логами — должна быть строка:
-# "recovery stopping before commit of transaction ..., time 2026-04-21 09:30:xx UTC"
-tail -f $PGDATA/log/postgresql.log | grep -E "recovery|PITR|promote"
 ```
 
-> ⚠️ Время в `recovery_target_time` должно быть **после** момента создания базового бэкапа и **до** нужного события.
+Replace `recovery_target_time` with the exact UTC timestamp you want to recover to.
+
+> ⚠️ The target time must be **after** the base backup was taken and **before** the event you are recovering from.
+
+### 3.6 Start PostgreSQL
+
+```bash
+sudo systemctl start postgresql
+# or
+docker compose -f /opt/orbit/docker-compose.yml start db
+```
+
+### 3.7 Monitor recovery progress
+
+```bash
+sudo journalctl -u postgresql -f
+# or
+docker compose logs -f db
+```
+
+Look for:
+
+```
+LOG:  starting point-in-time recovery to 2026-04-23 02:00:00+00
+LOG:  restored log file "000000010000000000000003" from archive
+...
+LOG:  recovery stopping before commit of transaction ..., time 2026-04-23 02:00:01+00
+LOG:  pausing at the end of recovery
+```
+
+The instance pauses at the target time and waits for explicit promotion.
+
+### 3.8 Promote the instance
+
+Connect and promote:
+
+```bash
+psql -U postgres -d orbit
+```
+
+```sql
+-- Confirm we are still in recovery
+SELECT pg_is_in_recovery();
+-- Expected: t
+
+-- Promote / resume
+SELECT pg_wal_replay_resume();
+
+-- Confirm promotion complete
+SELECT pg_is_in_recovery();
+-- Expected: f
+```
+
+### 3.9 Clean up recovery settings
+
+Remove or comment out the PITR block added in step 3.5 from `postgresql.conf` so it does not affect future restarts:
+
+```bash
+sudo -u postgres vi /var/lib/postgresql/data/postgresql.conf
+# Remove/comment the lines between "--- PITR restore drill ---" markers
+```
 
 ---
 
-## 4. Локальное тестирование через Docker Compose
+## 4. Verification Queries
 
-```bash
-# 1. Запустить только postgres с переменными R2
-docker compose up -d postgres
+Run immediately after promotion. Record the numbers in the drill log.
 
-# 2. Войти в контейнер
-docker compose exec postgres bash
-
-# 3. Внутри контейнера выполнить восстановление
-source /etc/wal-g.env.sh
-wal-g backup-list
-
-# 4. Остановить postgres внутри контейнера и восстановить
-pg_ctl stop -D $PGDATA -m fast
-rm -rf $PGDATA/*
-wal-g backup-fetch $PGDATA LATEST
-touch $PGDATA/recovery.signal
-pg_ctl start -D $PGDATA
+```sql
+-- Row counts across key tables
+SELECT 'users'        AS table_name, COUNT(*) AS row_count FROM users
+UNION ALL
+SELECT 'messages',                   COUNT(*)              FROM messages
+UNION ALL
+SELECT 'chats',                      COUNT(*)              FROM chats
+UNION ALL
+SELECT 'chat_members',               COUNT(*)              FROM chat_members;
 ```
 
-Или через временный контейнер для изоляции:
-```bash
-docker run --rm -it \
-  -e R2_ENDPOINT=$R2_ENDPOINT \
-  -e R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID \
-  -e R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY \
-  -e R2_BUCKET=$R2_BUCKET \
-  -v /tmp/pgdata-restore:/var/lib/postgresql/data \
-  orbit-postgres bash
+Additional sanity checks:
+
+```sql
+-- Most recent message — timestamp must be <= recovery_target_time
+SELECT MAX(created_at) FROM messages;
+
+-- Latest users
+SELECT id, username, created_at FROM users ORDER BY created_at DESC LIMIT 5;
+
+-- Orphaned chat_members (expected: 0)
+SELECT COUNT(*) FROM chat_members cm
+LEFT JOIN chats c ON c.id = cm.chat_id
+WHERE c.id IS NULL;
+
+-- pg_stat for top tables (cross-check live row counts)
+SELECT schemaname, tablename, n_live_tup
+FROM pg_stat_user_tables
+ORDER BY n_live_tup DESC
+LIMIT 10;
 ```
 
----
-
-## 5. Верификация после восстановления
+Instance ready check:
 
 ```bash
-# Postgres готов к соединениям?
 pg_isready -U orbit -d orbit
-# ожидаемый ответ: /var/run/postgresql:5432 - accepting connections
-
-# Количество строк в ключевых таблицах
-psql -U orbit -d orbit -c "SELECT COUNT(*) FROM users;"
-psql -U orbit -d orbit -c "SELECT COUNT(*) FROM messages;"
-psql -U orbit -d orbit -c "SELECT COUNT(*) FROM chats;"
-
-# Проверить последнюю транзакцию (для PITR)
-psql -U orbit -d orbit -c "SELECT MAX(created_at) FROM messages;"
-
-# Проверить целостность
-psql -U orbit -d orbit -c "SELECT schemaname, tablename, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 10;"
+# Expected: /var/run/postgresql:5432 - accepting connections
 ```
 
 ---
 
-## Rollback / Отмена восстановления
+## Rollback / Abort
 
-Если что-то пошло не так:
-1. Остановить Postgres: `pg_ctl stop -D $PGDATA -m fast`
-2. Восстановить из другого бэкапа (указать конкретное имя вместо `LATEST`)
-3. Или поднять prod snapshot из R2 в другую директорию для сравнения
+If something goes wrong during the drill:
+
+1. Stop PostgreSQL immediately: `sudo systemctl stop postgresql`
+2. Restore from a different named backup (specify backup name instead of `LATEST`)
+3. Or restore from a pre-drill snapshot if one was taken
+4. Document the failure in the drill log with the full error output
+5. Do **not** point any services at a partially-recovered staging DB
 
 ---
 
-## Регулярный cron-бэкап
+## 5. Drill Log
 
-Скрипт `scripts/postgres/backup.sh` должен запускаться ежедневно.  
-В docker-compose предусмотрен сервис `backup` (см. compose) с переменной `BACKUP_CRON`.
+Fill in one entry per drill run and commit the updated file (`docs: update PITR drill log YYYY-MM-DD`).
+
+---
+
+### 2026-04-23
+
+- **Operator**: [name]
+- **Staging env**: saturn.ac/staging
+- **Backup used**: [backup name from `wal-g backup-list`]
+- **Recovery target time**: [timestamp, e.g. `2026-04-23 02:00:00 UTC`]
+- **Row counts before**: users=X, messages=Y, chats=Z, chat_members=W
+- **Row counts after restore**: users=X, messages=Y, chats=Z, chat_members=W
+- **Result**: PASS / FAIL
+- **Notes**: [any issues encountered]
+
+---
+
+<!-- Add new entries above this line, newest first -->
