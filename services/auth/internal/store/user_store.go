@@ -23,6 +23,7 @@ type UserStore interface {
 	CountAdmins(ctx context.Context) (int, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error
 	UpdateTOTP(ctx context.Context, id uuid.UUID, secret *string, enabled bool) error
+	UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error
 }
 
 type userStore struct {
@@ -132,5 +133,12 @@ func (s *userStore) UpdateTOTP(ctx context.Context, id uuid.UUID, secret *string
 		`UPDATE users SET totp_secret = $1, totp_enabled = $2 WHERE id = $3`,
 		secret, enabled, id,
 	)
+	return err
+}
+
+func (s *userStore) UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE users SET notification_priority_mode = $1, updated_at = NOW() WHERE id = $2`,
+		mode, userID)
 	return err
 }

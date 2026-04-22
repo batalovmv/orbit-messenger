@@ -591,3 +591,17 @@ func generateInviteCode() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// UpdateNotificationPriorityMode updates the user's notification priority mode.
+func (s *AuthService) UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error {
+	if err := s.users.UpdateNotificationPriorityMode(ctx, userID, mode); err != nil {
+		return fmt.Errorf("update notification priority mode: %w", err)
+	}
+
+	if s.redis != nil {
+		cacheKey := fmt.Sprintf("user_priority_mode:%s", userID.String())
+		_ = s.redis.Set(ctx, cacheKey, mode, 5*time.Minute).Err()
+	}
+
+	return nil
+}

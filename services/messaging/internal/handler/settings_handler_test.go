@@ -145,13 +145,22 @@ func (m *mockNotificationSettingsStore) ListByUser(ctx context.Context, userID u
 }
 
 func newSettingsApp(pushStore *mockPushSubscriptionStore, notifStore *mockNotificationSettingsStore, internalSecret string) *fiber.App {
+	return newSettingsAppWithOverride(pushStore, notifStore, nil, internalSecret)
+}
+
+func newSettingsAppWithOverride(pushStore *mockPushSubscriptionStore, notifStore *mockNotificationSettingsStore, overrideStore *mockNotificationOverrideStore, internalSecret string) *fiber.App {
 	app := fiber.New()
+	opts := []service.SettingsServiceOption{}
+	if overrideStore != nil {
+		opts = append(opts, service.WithOverrideStore(overrideStore))
+	}
 	settingsSvc := service.NewSettingsService(
 		&noopPrivacySettingsStore{},
 		&noopBlockedUsersStore{},
 		&noopUserSettingsStore{},
 		notifStore,
 		&mockChatStore{},
+		opts...,
 	)
 	h := NewSettingsHandler(settingsSvc, pushStore, slog.Default(), internalSecret)
 	h.Register(app)
@@ -299,5 +308,184 @@ func TestListMutedUsers_Success(t *testing.T) {
 	}
 	if len(payload.MutedUserIDs) != 1 || payload.MutedUserIDs[0] != userTwo {
 		t.Fatalf("unexpected muted user ids: %+v", payload.MutedUserIDs)
+	}
+}
+
+// ─── NotificationOverride mock & tests ──────────────────────────────────────
+
+type mockNotificationOverrideStore struct {
+	upsertFn func(ctx context.Context, userID, chatID uuid.UUID, priority string) error
+	deleteFn func(ctx context.Context, userID, chatID uuid.UUID) error
+}
+
+func (m *mockNotificationOverrideStore) Upsert(ctx context.Context, userID, chatID uuid.UUID, priority string) error {
+	if m.upsertFn != nil {
+		return m.upsertFn(ctx, userID, chatID, priority)
+	}
+	return nil
+}
+
+func (m *mockNotificationOverrideStore) Delete(ctx context.Context, userID, chatID uuid.UUID) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, userID, chatID)
+	}
+	return nil
+}
+
+func TestUpdateChatNotificationPriority_HappyPath_Upsert(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	var gotPriority string
+
+	app := newSettingsAppWithOverride(
+		&mockPushSubscriptionStore{},
+		&mockNotificationSettingsStore{},
+		&mockNotificationOverrideStore{
+			upsertFn: func(_ context.Context, uid, cid uuid.UUID, priority string) error {
+				if uid != userID || cid != chatID {
+					t.Fatalf("unexpected IDs")
+				}
+				gotPriority = priority
+				return nil
+			},
+		},
+		"secret",
+	)
+
+	body := bytes.NewBufferString(`{"priority_override":"urgent"}`)
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+chatID.String()+"/notification-priority", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+	if gotPriority != "urgent" {
+		t.Fatalf("expected priority 'urgent', got %q", gotPriority)
+	}
+
+	var result map[string]*string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if result["priority_override"] == nil || *result["priority_override"] != "urgent" {
+		t.Fatalf("unexpected response: %+v", result)
+	}
+}
+
+func TestUpdateChatNotificationPriority_HappyPath_Delete(t *testing.T) {
+	userID := uuid.New()
+	chatID := uuid.New()
+	deleted := false
+
+	app := newSettingsAppWithOverride(
+		&mockPushSubscriptionStore{},
+		&mockNotificationSettingsStore{},
+		&mockNotificationOverrideStore{
+			deleteFn: func(_ context.Context, uid, cid uuid.UUID) error {
+				deleted = true
+				return nil
+			},
+		},
+		"secret",
+	)
+
+	body := bytes.NewBufferString(`{"priority_override":null}`)
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+chatID.String()+"/notification-priority", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+	if !deleted {
+		t.Fatal("expected delete to be called")
+	}
+}
+
+func TestUpdateChatNotificationPriority_InvalidPriority(t *testing.T) {
+	app := newSettingsAppWithOverride(
+		&mockPushSubscriptionStore{},
+		&mockNotificationSettingsStore{},
+		&mockNotificationOverrideStore{},
+		"secret",
+	)
+
+	body := bytes.NewBufferString(`{"priority_override":"xxx"}`)
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+uuid.New().String()+"/notification-priority", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateChatNotificationPriority_NotMember(t *testing.T) {
+	app := fiber.New()
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
+	settingsSvc := service.NewSettingsService(
+		&noopPrivacySettingsStore{},
+		&noopBlockedUsersStore{},
+		&noopUserSettingsStore{},
+		&mockNotificationSettingsStore{},
+		cs,
+		service.WithOverrideStore(&mockNotificationOverrideStore{}),
+	)
+	h := NewSettingsHandler(settingsSvc, &mockPushSubscriptionStore{}, slog.Default(), "secret")
+	h.Register(app)
+
+	body := bytes.NewBufferString(`{"priority_override":"urgent"}`)
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+uuid.New().String()+"/notification-priority", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestUpdateChatNotificationPriority_NoAuth(t *testing.T) {
+	app := newSettingsAppWithOverride(
+		&mockPushSubscriptionStore{},
+		&mockNotificationSettingsStore{},
+		&mockNotificationOverrideStore{},
+		"secret",
+	)
+
+	body := bytes.NewBufferString(`{"priority_override":"urgent"}`)
+	req, _ := http.NewRequest(http.MethodPut, "/chats/"+uuid.New().String()+"/notification-priority", body)
+	req.Header.Set("Content-Type", "application/json")
+	// No X-User-ID header
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }

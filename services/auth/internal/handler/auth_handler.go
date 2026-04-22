@@ -68,6 +68,10 @@ func (h *AuthHandler) Register(app *fiber.App) {
 	auth.Post("/invites", h.requireAuth, h.requireAdmin, h.CreateInvite)
 	auth.Get("/invites", h.requireAuth, h.requireAdmin, h.ListInvites)
 	auth.Delete("/invites/:id", h.requireAuth, h.requireAdmin, h.RevokeInvite)
+
+	// User settings routes (proxied from gateway as /users/me/*)
+	users := app.Group("/users/me", h.requireAuth)
+	users.Put("/notification-priority", h.UpdateNotificationPriorityMode)
 }
 
 // --- Middleware ---
@@ -505,4 +509,29 @@ func (h *AuthHandler) RevokeInvite(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Invite revoked"})
+}
+
+func (h *AuthHandler) UpdateNotificationPriorityMode(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	var req struct {
+		Mode string `json:"mode"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	validModes := map[string]bool{"smart": true, "all": true, "off": true}
+	if !validModes[req.Mode] {
+		return response.Error(c, apperror.BadRequest("mode must be one of: smart, all, off"))
+	}
+
+	if err := h.svc.UpdateNotificationPriorityMode(c.Context(), uid, req.Mode); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"mode": req.Mode})
 }

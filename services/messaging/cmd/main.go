@@ -171,7 +171,7 @@ func main() {
 	userSvc := service.NewUserService(userStore, chatStore, privacyStore, searchSvc).WithPublisher(natsPublisher)
 	linkPreviewSvc := service.NewLinkPreviewService(rdb, logger)
 	inviteSvc := service.NewInviteService(inviteStore, chatStore, natsPublisher)
-	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore)
+	settingsSvc := service.NewSettingsService(privacyStore, blockedStore, userSettingsStore, notifStore, chatStore, service.WithOverrideStore(store.NewNotificationOverrideStore(pool)))
 	reactionSvc := service.NewReactionService(reactionStore, messageStore, chatStore, natsPublisher, logger)
 	telegramStickerClient := service.NewTelegramBotStickerClient(telegramBotToken, logger)
 	stickerMediaUploader := service.NewMediaServiceStickerUploader(mediaServiceURL, internalSecret, logger)

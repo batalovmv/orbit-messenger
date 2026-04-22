@@ -109,6 +109,10 @@ func (m *mockUserStore) UpdateTOTP(_ context.Context, id uuid.UUID, secret *stri
 	return nil
 }
 
+func (m *mockUserStore) UpdateNotificationPriorityMode(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 type mockSessionStore struct {
 	sessions map[uuid.UUID]*model.Session
 	byToken  map[string]*model.Session
@@ -1105,5 +1109,62 @@ func TestListInvites_HappyPath(t *testing.T) {
 	}
 	if len(invites) < 2 {
 		t.Errorf("expected at least 2 invites, got %d", len(invites))
+	}
+}
+
+// --- Notification Priority Mode tests ---
+
+func TestUpdateNotificationPriorityMode_HappyPath(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+	token := bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "PUT", "/users/me/notification-priority", map[string]string{
+		"mode": "off",
+	}, map[string]string{"Authorization": "Bearer " + token})
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if result["mode"] != "off" {
+		t.Errorf("expected mode=off, got %v", result["mode"])
+	}
+}
+
+func TestUpdateNotificationPriorityMode_InvalidMode(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+	token := bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "PUT", "/users/me/notification-priority", map[string]string{
+		"mode": "invalid",
+	}, map[string]string{"Authorization": "Bearer " + token})
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateNotificationPriorityMode_NoAuth(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	resp := doRequest(app, "PUT", "/users/me/notification-priority", map[string]string{
+		"mode": "smart",
+	}, nil)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestUpdateNotificationPriorityMode_EmptyBody(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+	token := bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "PUT", "/users/me/notification-priority", map[string]string{}, map[string]string{"Authorization": "Bearer " + token})
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", resp.StatusCode)
 	}
 }

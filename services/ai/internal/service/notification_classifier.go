@@ -23,7 +23,7 @@ func (s *AIService) ClassifyNotification(
 	}
 
 	// Check cache.
-	cacheKey := notifCacheKey(req.SenderID, req.MessageText)
+	cacheKey := notifCacheKey(userID, req.SenderID, req.MessageText)
 	if cached, err := s.getNotifCache(ctx, cacheKey); err == nil && cached != nil {
 		cached.Cached = true
 		return cached, nil
@@ -127,8 +127,9 @@ func (s *AIService) classifyWithAI(ctx context.Context, req model.ClassifyNotifi
 	defer cancel()
 
 	text := req.MessageText
-	if len(text) > 200 {
-		text = text[:200]
+	runes := []rune(text)
+	if len(runes) > 200 {
+		text = string(runes[:200])
 	}
 
 	systemPrompt := "You classify message notification priority. " +
@@ -197,12 +198,13 @@ func (s *AIService) classifyWithAI(ctx context.Context, req model.ClassifyNotifi
 	}
 }
 
-// notifCacheKey builds a Redis key from sender + truncated message text.
-func notifCacheKey(senderID, text string) string {
-	if len(text) > 100 {
-		text = text[:100]
+// notifCacheKey builds a Redis key from user + sender + truncated message text.
+func notifCacheKey(userID, senderID, text string) string {
+	runes := []rune(text)
+	if len(runes) > 100 {
+		text = string(runes[:100])
 	}
-	h := sha256.Sum256([]byte(senderID + text))
+	h := sha256.Sum256([]byte(userID + ":" + senderID + ":" + text))
 	return fmt.Sprintf("notif:classify:%x", h)
 }
 

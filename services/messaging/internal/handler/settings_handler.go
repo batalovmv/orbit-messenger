@@ -60,6 +60,7 @@ func (h *SettingsHandler) Register(app fiber.Router) {
 	app.Put("/chats/:id/notifications", h.UpdateChatNotifications)
 	app.Get("/chats/:id/notifications", h.GetChatNotifications)
 	app.Delete("/chats/:id/notifications", h.DeleteChatNotifications)
+	app.Put("/chats/:id/notification-priority", h.UpdateChatNotificationPriority)
 	app.Post("/push/subscribe", h.SubscribePush)
 	app.Delete("/push/subscribe", h.UnsubscribePush)
 }
@@ -513,6 +514,38 @@ func (h *SettingsHandler) UpdateGlobalNotifySettings(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, gs)
+}
+
+func (h *SettingsHandler) UpdateChatNotificationPriority(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("unauthorized"))
+	}
+
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid chat ID"))
+	}
+
+	var req struct {
+		PriorityOverride *string `json:"priority_override"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("invalid request body"))
+	}
+
+	if req.PriorityOverride != nil {
+		valid := map[string]bool{"urgent": true, "important": true, "normal": true, "low": true}
+		if !valid[*req.PriorityOverride] {
+			return response.Error(c, apperror.BadRequest("priority_override must be one of: urgent, important, normal, low"))
+		}
+	}
+
+	if err := h.settingsSvc.UpdateChatNotificationPriority(c.Context(), uid, chatID, req.PriorityOverride); err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"priority_override": req.PriorityOverride})
 }
 
 func (h *SettingsHandler) ListNotificationExceptions(c *fiber.Ctx) error {

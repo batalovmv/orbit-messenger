@@ -17,6 +17,7 @@ type SettingsService struct {
 	blockedStore      store.BlockedUsersStore
 	userSettingsStore store.UserSettingsStore
 	notifStore        store.NotificationSettingsStore
+	overrideStore     store.NotificationOverrideStore
 	chatStore         store.ChatStore
 }
 
@@ -27,13 +28,28 @@ func NewSettingsService(
 	userSettingsStore store.UserSettingsStore,
 	notifStore store.NotificationSettingsStore,
 	chatStore store.ChatStore,
+	opts ...SettingsServiceOption,
 ) *SettingsService {
-	return &SettingsService{
+	s := &SettingsService{
 		privacyStore:      privacyStore,
 		blockedStore:      blockedStore,
 		userSettingsStore: userSettingsStore,
 		notifStore:        notifStore,
 		chatStore:         chatStore,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// SettingsServiceOption configures optional dependencies for SettingsService.
+type SettingsServiceOption func(*SettingsService)
+
+// WithOverrideStore sets the notification override store.
+func WithOverrideStore(s store.NotificationOverrideStore) SettingsServiceOption {
+	return func(svc *SettingsService) {
+		svc.overrideStore = s
 	}
 }
 
@@ -251,4 +267,15 @@ func (s *SettingsService) GetGlobalNotifySettings(ctx context.Context, userID uu
 
 func (s *SettingsService) UpdateGlobalNotifySettings(ctx context.Context, userID uuid.UUID, gs *model.GlobalNotifySettings) error {
 	return s.userSettingsStore.UpdateGlobalNotifySettings(ctx, userID, gs)
+}
+
+// UpdateChatNotificationPriority sets or clears a per-chat notification priority override.
+func (s *SettingsService) UpdateChatNotificationPriority(ctx context.Context, userID, chatID uuid.UUID, priorityOverride *string) error {
+	if err := s.requireChatMembership(ctx, userID, chatID); err != nil {
+		return err
+	}
+	if priorityOverride == nil {
+		return s.overrideStore.Delete(ctx, userID, chatID)
+	}
+	return s.overrideStore.Upsert(ctx, userID, chatID, *priorityOverride)
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 )
 
 const maxConcurrentFetches = 50 // Bound goroutines spawned for fallback member-ID fetches
@@ -44,8 +45,9 @@ type Subscriber struct {
 	httpClient          *http.Client
 	pushDispatcher      pushSender
 	classifier          *NotificationClassifier
-	sem                 chan struct{} // semaphore to bound concurrent goroutines
-	dedup               *dedupCache  // deduplicates redelivered JetStream events
+	rdb                 *redis.Client // shared Redis for user notification mode cache
+	sem                 chan struct{}  // semaphore to bound concurrent goroutines
+	dedup               *dedupCache   // deduplicates redelivered JetStream events
 }
 
 // SetNotificationClassifier attaches an AI notification classifier to the subscriber.
@@ -55,7 +57,7 @@ func (s *Subscriber) SetNotificationClassifier(nc *NotificationClassifier) {
 
 // NewSubscriber creates a Subscriber backed by a JetStream durable consumer.
 // When js is nil (unit tests) the subscriber falls back to core NATS nc.Subscribe.
-func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string, pushDispatchers ...pushSender) *Subscriber {
+func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret string, rdb *redis.Client, pushDispatchers ...pushSender) *Subscriber {
 	var pushDispatcher pushSender
 	if len(pushDispatchers) > 0 {
 		pushDispatcher = pushDispatchers[0]
@@ -76,6 +78,7 @@ func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret 
 		internalSecret:      internalSecret,
 		httpClient:          &http.Client{Timeout: 5 * time.Second},
 		pushDispatcher:      pushDispatcher,
+		rdb:                 rdb,
 		sem:                 make(chan struct{}, maxConcurrentFetches),
 		dedup:               newDedupCache(dedupCacheCapacity),
 	}
@@ -282,6 +285,19 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 		}
 		recipients = filtered
 	}
+
+	// Filter out users with notification_priority_mode="off"
+	offModeUsers := s.fetchOffModeUserIDs(context.Background(), recipients)
+	if len(offModeUsers) > 0 {
+		filtered := recipients[:0]
+		for _, userID := range recipients {
+			if _, off := offModeUsers[userID]; !off {
+				filtered = append(filtered, userID)
+			}
+		}
+		recipients = filtered
+	}
+
 	if len(recipients) == 0 {
 		return
 	}
@@ -297,11 +313,11 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 	if s.classifier != nil {
 		priority = s.classifier.Classify(context.Background(), classifyRequest{
 			SenderID:    event.SenderID,
-			SenderRole:  "member",
+			SenderRole:  "member", // TODO(Sprint3): enrich from NATSEvent.sender_role
 			ChatType:    inferChatType(event),
 			MessageText: stringPtrToString(msg.Content),
-			HasMention:  false,
-			ReplyToMe:   false,
+			HasMention:  false, // TODO(Sprint3): enrich from NATSEvent.has_mention
+			ReplyToMe:   false, // TODO(Sprint3): enrich from NATSEvent.reply_to_me
 		})
 	}
 
@@ -341,6 +357,21 @@ func (s *Subscriber) enqueueMentionPushDispatch(event NATSEvent, memberIDs []str
 				return
 			}
 
+			// Filter out users with notification_priority_mode="off" — even @mentions are suppressed
+			offModeUsers := s.fetchOffModeUserIDs(context.Background(), recipients)
+			if len(offModeUsers) > 0 {
+				filtered := recipients[:0]
+				for _, userID := range recipients {
+					if _, off := offModeUsers[userID]; !off {
+						filtered = append(filtered, userID)
+					}
+				}
+				recipients = filtered
+			}
+			if len(recipients) == 0 {
+				return
+			}
+
 			// Skip mute check — @mention always pushes per spec
 			payload, err := buildPushPayload(msg)
 			if err != nil {
@@ -355,6 +386,33 @@ func (s *Subscriber) enqueueMentionPushDispatch(event NATSEvent, memberIDs []str
 			}
 		},
 	)
+}
+
+// fetchOffModeUserIDs returns user IDs that have notification_priority_mode="off" from Redis cache.
+// On cache miss the user defaults to "smart" (push allowed).
+func (s *Subscriber) fetchOffModeUserIDs(ctx context.Context, userIDs []string) map[string]struct{} {
+	offUsers := make(map[string]struct{})
+	if s.rdb == nil {
+		return offUsers
+	}
+
+	pipe := s.rdb.Pipeline()
+	cmds := make(map[string]*redis.StringCmd, len(userIDs))
+	for _, uid := range userIDs {
+		cmds[uid] = pipe.Get(ctx, "user_priority_mode:"+uid)
+	}
+	_, _ = pipe.Exec(ctx) // ignore pipeline error, check per-key
+
+	for uid, cmd := range cmds {
+		mode, err := cmd.Result()
+		if err != nil {
+			continue // cache miss → default smart, allow push
+		}
+		if mode == "off" {
+			offUsers[uid] = struct{}{}
+		}
+	}
+	return offUsers
 }
 
 func (s *Subscriber) fetchMutedUserIDs(chatID string, userIDs []string) ([]string, error) {

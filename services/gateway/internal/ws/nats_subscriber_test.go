@@ -2,6 +2,7 @@ package ws
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 )
 
 type mockPushSender struct {
@@ -96,7 +99,7 @@ func TestSubscriber_HandleEvent_RichMessageEventsDeliverWithMemberIDs(t *testing
 			hub.Register(newCapturingConn(userTwo, userTwoDeliveries))
 			hub.Register(newCapturingConn(outsider, outsiderDeliveries))
 
-			subscriber := NewSubscriber(hub, nil, "", "")
+			subscriber := NewSubscriber(hub, nil, "", "", nil)
 
 			subject := fmt.Sprintf("orbit.chat.%s.message.updated", chatID)
 			payload := marshalTestNATSEvent(t, NATSEvent{
@@ -190,7 +193,7 @@ func TestSubscriber_HandleEvent_RichMessageEventsFallbackToMemberFetch(t *testin
 			}))
 			defer server.Close()
 
-			subscriber := NewSubscriber(hub, nil, server.URL, "internal-secret")
+			subscriber := NewSubscriber(hub, nil, server.URL, "internal-secret", nil)
 			subscriber.httpClient = server.Client()
 
 			subject := fmt.Sprintf("orbit.chat.%s.message.updated", chatID)
@@ -268,7 +271,7 @@ func TestSubscriber_HandleEvent_NewMessageDispatchesPushToOfflineUnmutedUsers(t 
 		},
 	}
 
-	subscriber := NewSubscriber(hub, nil, server.URL, "internal-secret", pushSender)
+	subscriber := NewSubscriber(hub, nil, server.URL, "internal-secret", nil, pushSender)
 	subscriber.httpClient = server.Client()
 
 	payload := marshalTestNATSEvent(t, NATSEvent{
@@ -348,6 +351,7 @@ func TestSubscriber_HandleEvent_NewMessageSkipsPushWhenMuteLookupFails(t *testin
 		nil,
 		server.URL,
 		"internal-secret",
+		nil,
 		&mockPushSender{
 			sendToUsersFn: func(userIDs []string, payload []byte) error {
 				pushCalls++
@@ -494,7 +498,7 @@ func TestSubscriber_HandleEvent_CallIncomingPushesOnlyToOfflineRecipients(t *tes
 		},
 	}
 
-	subscriber := NewSubscriber(hub, nil, "", "internal-secret", pushSender)
+	subscriber := NewSubscriber(hub, nil, "", "internal-secret", nil, pushSender)
 
 	payload := marshalTestNATSEvent(t, NATSEvent{
 		Event: EventCallIncoming,
@@ -552,7 +556,7 @@ func TestSubscriber_HandleEvent_UserDeactivatedClosesOnlyMatchingConnections(t *
 	hub.Register(newClosableConn(targetUserID, targetCloseTwo))
 	hub.Register(newClosableConn(otherUserID, otherClose))
 
-	subscriber := NewSubscriber(hub, nil, "", "")
+	subscriber := NewSubscriber(hub, nil, "", "", nil)
 
 	payload := marshalTestNATSEvent(t, NATSEvent{
 		Event:     EventUserDeactivated,
@@ -602,7 +606,7 @@ func TestSubscriber_HandleEvent_CallIncomingSkipsPushWhenAllRecipientsOnline(t *
 		},
 	}
 
-	subscriber := NewSubscriber(hub, nil, "", "internal-secret", pushSender)
+	subscriber := NewSubscriber(hub, nil, "", "internal-secret", nil, pushSender)
 
 	payload := marshalTestNATSEvent(t, NATSEvent{
 		Event: EventCallIncoming,
@@ -636,7 +640,7 @@ func TestSubscriber_HandleJSEvent_DedupSkipsDuplicateEventID(t *testing.T) {
 	deliveries := make(chan Envelope, 2) // buffer 2 to catch unexpected duplicates
 	hub.Register(newCapturingConn(userID, deliveries))
 
-	subscriber := NewSubscriber(hub, nil, "", "")
+	subscriber := NewSubscriber(hub, nil, "", "", nil)
 
 	msgPayload := marshalTestNATSEvent(t, NATSEvent{
 		Event:     EventMessageUpdated,
@@ -691,3 +695,86 @@ func jsonEqual(left, right []byte) bool {
 
 	return reflect.DeepEqual(leftValue, rightValue)
 }
+
+func TestFetchOffModeUserIDs(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	userOff := uuid.New().String()
+	userSmart := uuid.New().String()
+	userMissing := uuid.New().String()
+
+	mr.Set("user_priority_mode:"+userOff, "off")
+	mr.Set("user_priority_mode:"+userSmart, "smart")
+
+	sub := &Subscriber{rdb: rdb}
+	result := sub.fetchOffModeUserIDs(context.Background(), []string{userOff, userSmart, userMissing})
+
+	if _, ok := result[userOff]; !ok {
+		t.Errorf("expected userOff to be in off-mode set")
+	}
+	if _, ok := result[userSmart]; ok {
+		t.Errorf("expected userSmart NOT to be in off-mode set")
+	}
+	if _, ok := result[userMissing]; ok {
+		t.Errorf("expected userMissing (cache miss) NOT to be in off-mode set")
+	}
+}
+
+func TestFetchOffModeUserIDs_NilRedis(t *testing.T) {
+	sub := &Subscriber{rdb: nil}
+	result := sub.fetchOffModeUserIDs(context.Background(), []string{"user1"})
+	if len(result) != 0 {
+		t.Errorf("expected empty set when rdb is nil, got %d", len(result))
+	}
+}
+
+func TestDispatchPushNotifications_SkipsOffModeUsers(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	senderID := uuid.New().String()
+	userOff := uuid.New().String()
+	userNormal := uuid.New().String()
+
+	mr.Set("user_priority_mode:"+userOff, "off")
+
+	// Mock messaging service for muted users (returns none muted)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"muted_user_ids":[]}`)
+	}))
+	defer server.Close()
+
+	var pushedUsers []string
+	pushSender := &mockPushSender{
+		sendToUsersWithPriorityFn: func(userIDs []string, payload []byte, priority string) error {
+			pushedUsers = append(pushedUsers, userIDs...)
+			return nil
+		},
+	}
+
+	sub := NewSubscriber(NewHub(), nil, server.URL, "internal-secret", rdb, pushSender)
+	sub.httpClient = server.Client()
+
+	msgData, _ := json.Marshal(pushMessageData{
+		ID:             uuid.New().String(),
+		ChatID:         uuid.New().String(),
+		Content:        strPtr("hello"),
+		SenderName:     "Test",
+		SequenceNumber: 1,
+	})
+
+	sub.dispatchPushNotifications(NATSEvent{
+		Event:    EventNewMessage,
+		Data:     msgData,
+		SenderID: senderID,
+	}, []string{senderID, userOff, userNormal})
+
+	if len(pushedUsers) != 1 || pushedUsers[0] != userNormal {
+		t.Errorf("expected push only to userNormal, got %v", pushedUsers)
+	}
+}
+
+func strPtr(s string) *string { return &s }

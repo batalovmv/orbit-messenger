@@ -457,6 +457,45 @@ func (s *notificationSettingsStore) ListByUser(ctx context.Context, userID uuid.
 	return result, nil
 }
 
+// ─── NotificationOverrideStore ────────────────────────────────────────────────
+
+type NotificationOverrideStore interface {
+	Upsert(ctx context.Context, userID, chatID uuid.UUID, priority string) error
+	Delete(ctx context.Context, userID, chatID uuid.UUID) error
+}
+
+type notificationOverrideStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewNotificationOverrideStore(pool *pgxpool.Pool) NotificationOverrideStore {
+	return &notificationOverrideStore{pool: pool}
+}
+
+func (s *notificationOverrideStore) Upsert(ctx context.Context, userID, chatID uuid.UUID, priority string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO chat_notification_overrides (user_id, chat_id, priority_override, created_at, updated_at)
+		 VALUES ($1, $2, $3, NOW(), NOW())
+		 ON CONFLICT (user_id, chat_id) DO UPDATE SET
+		   priority_override = EXCLUDED.priority_override,
+		   updated_at = NOW()`,
+		userID, chatID, priority)
+	if err != nil {
+		return fmt.Errorf("notificationOverrideStore.Upsert: %w", err)
+	}
+	return nil
+}
+
+func (s *notificationOverrideStore) Delete(ctx context.Context, userID, chatID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`DELETE FROM chat_notification_overrides WHERE user_id = $1 AND chat_id = $2`,
+		userID, chatID)
+	if err != nil {
+		return fmt.Errorf("notificationOverrideStore.Delete: %w", err)
+	}
+	return nil
+}
+
 // ─── PushSubscriptionStore ───────────────────────────────────────────────────
 
 type PushSubscriptionStore interface {

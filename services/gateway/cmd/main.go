@@ -110,7 +110,7 @@ func main() {
 		slog.Warn("web push dispatcher disabled: missing VAPID configuration")
 	}
 
-	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret, pushDispatcher)
+	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret, rdb, pushDispatcher)
 	classifier := ws.NewNotificationClassifier(aiURL, internalSecret)
 	subscriber.SetNotificationClassifier(classifier)
 	if err := subscriber.Start(); err != nil {
