@@ -186,11 +186,19 @@ func (r *Room) attemptSync() bool {
 		}
 
 		// Avoid sending a peer its own published tracks (loopback).
+		// Receivers hold the raw remote track ID (e.g. "abc123"), but
+		// localTracks are keyed as "<userUUID>:<remoteID>". We must mark
+		// both the raw ID and the namespaced ID so the add-missing loop
+		// below skips tracks that originated from this peer.
 		for _, receiver := range p.PC.GetReceivers() {
 			if receiver.Track() == nil {
 				continue
 			}
-			existing[receiver.Track().ID()] = true
+			rawID := receiver.Track().ID()
+			existing[rawID] = true
+			// Also mark the namespaced key used in localTracks so that
+			// the forwarded copy of this peer's own track is excluded.
+			existing[p.UserID.String()+":"+rawID] = true
 		}
 
 		// Add missing tracks to this peer.
