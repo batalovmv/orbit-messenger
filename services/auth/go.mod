@@ -9,7 +9,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.7.3
 	github.com/mst-corp/orbit/pkg v0.0.0
 	github.com/pquerna/otp v1.4.0
 	github.com/redis/go-redis/v9 v9.7.3

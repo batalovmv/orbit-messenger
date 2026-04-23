@@ -8,7 +8,7 @@ require (
 	github.com/gofiber/contrib/websocket v1.3.2
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.7.3
 	github.com/mst-corp/orbit/pkg v0.0.0
 	github.com/nats-io/nats.go v1.37.0
 	github.com/pion/rtcp v1.2.15

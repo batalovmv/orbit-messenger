@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.6
-	github.com/jackc/pgx/v5 v5.9.1
+	github.com/jackc/pgx/v5 v5.7.3
 	github.com/prometheus/client_golang v1.23.2
 	github.com/valyala/fasthttp v1.58.0
 )
