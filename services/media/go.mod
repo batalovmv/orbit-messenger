@@ -1,6 +1,6 @@
 module github.com/mst-corp/orbit/services/media
 
-go 1.24.0
+go 1.25.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 
@@ -16,6 +16,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.3
 	github.com/mst-corp/orbit/pkg v0.0.0-00010101000000-000000000000
 	github.com/nats-io/nats.go v1.37.0
+	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.7.3
 	golang.org/x/image v0.38.0
 )
@@ -50,7 +51,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/nkeys v0.4.7 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
