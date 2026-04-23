@@ -30,15 +30,13 @@ func NewSettingsHandler(
 	settingsSvc *service.SettingsService,
 	pushStore store.PushSubscriptionStore,
 	logger *slog.Logger,
-	internalSecret ...string,
+	internalSecret string,
 ) *SettingsHandler {
 	h := &SettingsHandler{
-		settingsSvc: settingsSvc,
-		pushStore:   pushStore,
-		logger:      logger,
-	}
-	if len(internalSecret) > 0 {
-		h.internalSecret = internalSecret[0]
+		settingsSvc:    settingsSvc,
+		pushStore:      pushStore,
+		logger:         logger,
+		internalSecret: internalSecret,
 	}
 	return h
 }

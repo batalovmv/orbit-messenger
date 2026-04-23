@@ -121,7 +121,7 @@ func main() {
 	userStore := store.NewUserStore(pool)
 	sessionStore := store.NewSessionStore(pool)
 	inviteStore := store.NewInviteStore(pool)
-	authSvc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, svcCfg)
+	authSvc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, svcCfg, logger)
 	internalSecret := config.EnvOr("INTERNAL_SECRET", "")
 	// BOOTSTRAP_SECRET gates the /auth/bootstrap endpoint. When empty, the
 	// endpoint is hard-disabled. Set this only during initial provisioning,

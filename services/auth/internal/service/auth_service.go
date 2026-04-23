@@ -39,10 +39,11 @@ type AuthService struct {
 	invites  store.InviteStore
 	redis    *redis.Client
 	cfg      *Config
+	logger   *slog.Logger
 }
 
-func NewAuthService(users store.UserStore, sessions store.SessionStore, invites store.InviteStore, rdb *redis.Client, cfg *Config) *AuthService {
-	return &AuthService{users: users, sessions: sessions, invites: invites, redis: rdb, cfg: cfg}
+func NewAuthService(users store.UserStore, sessions store.SessionStore, invites store.InviteStore, rdb *redis.Client, cfg *Config, logger *slog.Logger) *AuthService {
+	return &AuthService{users: users, sessions: sessions, invites: invites, redis: rdb, cfg: cfg, logger: logger}
 }
 
 // Bootstrap creates the first admin account. Fails if any admin already exists.
@@ -259,6 +260,7 @@ func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID) (*model.User,
 // ResetAdmin resets an admin password using the admin reset key.
 func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPassword string) error {
 	if s.cfg.AdminResetKey == "" || subtle.ConstantTimeCompare([]byte(resetKey), []byte(s.cfg.AdminResetKey)) != 1 {
+		s.logger.Warn("reset_admin: invalid key attempted", "email", email)
 		return apperror.Forbidden("Invalid reset key")
 	}
 
@@ -267,6 +269,7 @@ func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPasswo
 		return fmt.Errorf("get user: %w", err)
 	}
 	if u == nil || (u.Role != "admin" && u.Role != "superadmin") {
+		s.logger.Warn("reset_admin: target not admin", "email", email)
 		return apperror.NotFound("Admin not found")
 	}
 
@@ -278,6 +281,8 @@ func (s *AuthService) ResetAdmin(ctx context.Context, resetKey, email, newPasswo
 	if err := s.users.UpdatePassword(ctx, u.ID, string(hash)); err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
+
+	s.logger.Info("reset_admin: password reset successful", "user_id", u.ID, "email", email, "role", u.Role)
 
 	// Revoke all sessions (fail-closed: password reset must invalidate all tokens)
 	if err := s.sessions.DeleteAllByUser(ctx, u.ID); err != nil {
@@ -612,7 +617,9 @@ func (s *AuthService) UpdateNotificationPriorityMode(ctx context.Context, userID
 
 	if s.redis != nil {
 		cacheKey := fmt.Sprintf("user_priority_mode:%s", userID.String())
-		_ = s.redis.Set(ctx, cacheKey, mode, 5*time.Minute).Err()
+		if err := s.redis.Set(ctx, cacheKey, mode, 5*time.Minute).Err(); err != nil {
+			s.logger.Warn("failed to cache notification priority mode", "user_id", userID, "error", err)
+		}
 	}
 
 	return nil
