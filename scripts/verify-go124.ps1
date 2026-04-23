@@ -23,7 +23,7 @@ foreach ($svc in $Services) {
     Write-Host "  go $GoDirective" -NoNewline -ForegroundColor Gray
 
     if ($GoDirective -notmatch "^1\.2[0-4]") {
-        Write-Host " [FAIL]" -ForegroundColor Red
+        Write-Host " [FAIL] - requires Go 1.25+" -ForegroundColor Red
         $Failed += $svc
         Pop-Location
         continue
