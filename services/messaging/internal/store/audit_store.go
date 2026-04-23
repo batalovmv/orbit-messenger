@@ -92,13 +92,7 @@ func (s *auditStore) List(ctx context.Context, filter AuditFilter) ([]model.Audi
 		argIdx++
 	}
 	if filter.Cursor != "" {
-		cursorID, err := uuid.Parse(filter.Cursor)
-		if err == nil {
-			// Cursor is a UUID-like string — but audit_log uses BIGSERIAL.
-			// Actually, we use the ID as cursor (int64 encoded as string).
-			_ = cursorID
-		}
-		// Cursor is the string representation of the last seen audit_log.id
+		// Cursor is the string representation of the last seen audit_log.id (BIGSERIAL int64)
 		conditions = append(conditions, fmt.Sprintf("a.id < $%d", argIdx))
 		args = append(args, filter.Cursor)
 		argIdx++

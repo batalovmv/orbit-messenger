@@ -198,8 +198,14 @@ func (s *ChatService) isFeatureEnabled(ctx context.Context, key string) bool {
 	return enabled
 }
 
-// CreateChat creates a group chat. memberIDs are added after creation (owner is always added).
+// CreateChat creates a group chat.
 func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType, name, description string, memberIDs []uuid.UUID) (*model.Chat, error) {
+	// Validate chat type - allowlist (fail-closed)
+	allowedTypes := map[string]bool{"group": true, "channel": true}
+	if !allowedTypes[chatType] {
+		return nil, apperror.BadRequest("Invalid chat type")
+	}
+
 	if name == "" {
 		return nil, apperror.BadRequest("Chat name is required")
 	}
@@ -208,9 +214,6 @@ func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType
 	}
 	if len(description) > 2048 {
 		return nil, apperror.BadRequest("Description too long (max 2048 characters)")
-	}
-	if chatType != "group" {
-		return nil, apperror.BadRequest("Invalid chat type")
 	}
 
 	chat := &model.Chat{
@@ -487,6 +490,12 @@ func (s *ChatService) RemoveMember(ctx context.Context, chatID, userID, targetID
 }
 
 func (s *ChatService) UpdateMemberRole(ctx context.Context, chatID, userID, targetID uuid.UUID, newRole string, newPerms int64, customTitle *string) error {
+	// Validate role - allowlist (fail-closed)
+	allowedRoles := map[string]bool{"owner": true, "admin": true, "member": true, "restricted": true}
+	if !allowedRoles[newRole] {
+		return apperror.BadRequest("Invalid role. Allowed: owner, admin, member, restricted")
+	}
+
 	actor, err := s.chats.GetMember(ctx, chatID, userID)
 	if err != nil || actor == nil {
 		return apperror.Forbidden("Not a member of this chat")
