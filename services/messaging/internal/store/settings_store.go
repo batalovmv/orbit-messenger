@@ -247,11 +247,13 @@ func NewUserSettingsStore(pool *pgxpool.Pool) UserSettingsStore {
 func (s *userSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserSettings, error) {
 	us := &model.UserSettings{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT user_id, theme, language, font_size, send_by_enter, dnd_from, dnd_until, default_translate_lang, created_at, updated_at, notify_users_muted, notify_groups_muted, notify_users_preview, notify_groups_preview FROM user_settings WHERE user_id = $1`,
+		`SELECT user_id, theme, language, font_size, send_by_enter, dnd_from, dnd_until, default_translate_lang, can_translate, can_translate_chats, created_at, updated_at, notify_users_muted, notify_groups_muted, notify_users_preview, notify_groups_preview FROM user_settings WHERE user_id = $1`,
 		userID,
 	).Scan(
 		&us.UserID, &us.Theme, &us.Language, &us.FontSize, &us.SendByEnter,
-		&us.DNDFrom, &us.DNDUntil, &us.DefaultTranslateLang, &us.CreatedAt, &us.UpdatedAt,
+		&us.DNDFrom, &us.DNDUntil, &us.DefaultTranslateLang,
+		&us.CanTranslate, &us.CanTranslateChats,
+		&us.CreatedAt, &us.UpdatedAt,
 		&us.NotifyUsersMuted, &us.NotifyGroupsMuted,
 		&us.NotifyUsersPreview, &us.NotifyGroupsPreview,
 	)
@@ -277,8 +279,11 @@ func (s *userSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (
 
 func (s *userSettingsStore) Upsert(ctx context.Context, settings *model.UserSettings) error {
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO user_settings (user_id, theme, language, font_size, send_by_enter, dnd_from, dnd_until, default_translate_lang, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET theme = EXCLUDED.theme, language = EXCLUDED.language, font_size = EXCLUDED.font_size, send_by_enter = EXCLUDED.send_by_enter, dnd_from = EXCLUDED.dnd_from, dnd_until = EXCLUDED.dnd_until, default_translate_lang = EXCLUDED.default_translate_lang, updated_at = NOW()`,
-		settings.UserID, settings.Theme, settings.Language, settings.FontSize, settings.SendByEnter, settings.DNDFrom, settings.DNDUntil, settings.DefaultTranslateLang,)
+		`INSERT INTO user_settings (user_id, theme, language, font_size, send_by_enter, dnd_from, dnd_until, default_translate_lang, can_translate, can_translate_chats, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) ON CONFLICT (user_id) DO UPDATE SET theme = EXCLUDED.theme, language = EXCLUDED.language, font_size = EXCLUDED.font_size, send_by_enter = EXCLUDED.send_by_enter, dnd_from = EXCLUDED.dnd_from, dnd_until = EXCLUDED.dnd_until, default_translate_lang = EXCLUDED.default_translate_lang, can_translate = EXCLUDED.can_translate, can_translate_chats = EXCLUDED.can_translate_chats, updated_at = NOW()`,
+		settings.UserID, settings.Theme, settings.Language, settings.FontSize, settings.SendByEnter,
+		settings.DNDFrom, settings.DNDUntil, settings.DefaultTranslateLang,
+		settings.CanTranslate, settings.CanTranslateChats,
+	)
 	if err != nil {
 		return fmt.Errorf("userSettingsStore.Upsert: %w", err)
 	}

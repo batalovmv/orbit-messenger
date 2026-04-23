@@ -129,8 +129,12 @@ func main() {
 	// Store
 	mediaStore := store.NewMediaStore(pool)
 
+	metricsReg := metrics.New("media")
+
 	// Service
-	mediaSvc := service.NewMediaService(mediaStore, r2Client, rdb, nc).WithMaxUserStorageBytes(maxUserStorageBytes)
+	mediaSvc := service.NewMediaService(mediaStore, r2Client, rdb, nc).
+		WithMaxUserStorageBytes(maxUserStorageBytes).
+		WithAuditMetrics(metricsReg)
 
 	// ClamAV virus scanner
 	clamAddr := config.EnvOr("CLAMAV_ADDR", "")
@@ -160,7 +164,6 @@ func main() {
 		ErrorHandler: response.FiberErrorHandler,
 	})
 
-	metricsReg := metrics.New("media")
 	app.Use(metricsReg.HTTPMiddleware())
 
 	app.Get("/health", func(c *fiber.Ctx) error {

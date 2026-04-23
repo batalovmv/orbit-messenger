@@ -9,9 +9,11 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +22,10 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/mst-corp/orbit/pkg/metrics"
+	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/media/internal/model"
+	"github.com/mst-corp/orbit/services/media/internal/scanner"
 	"github.com/mst-corp/orbit/services/media/internal/service"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
 	"github.com/mst-corp/orbit/services/media/internal/store"
@@ -270,6 +275,18 @@ func (m *mockMediaStore) LinkToMessage(ctx context.Context, msgID, mediaID uuid.
 
 func (m *mockMediaStore) CleanupOrphaned(ctx context.Context, maxAge int) ([]string, error) {
 	return nil, nil
+}
+
+func (m *mockMediaStore) GetUserStorageBytes(ctx context.Context, userID uuid.UUID) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockMediaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
+	return true, nil
+}
+
+func (m *mockMediaStore) AppendAuditLog(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error {
+	return nil
 }
 
 // mockR2 that tracks operations
@@ -541,32 +558,183 @@ func TestMediaResponse_NilOptionalFields(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// BUG-FINDING: Handler HTTP layer
+// Handler HTTP layer
 // ---------------------------------------------------------------------------
 
-func TestUploadHandler_NoFile(t *testing.T) {
-	// Create a minimal app with just the upload handler wired to a no-op service
-	app := fiber.New(fiber.Config{BodyLimit: 55 * 1024 * 1024})
-	// We can't create a real MediaService without R2, so test via HTTP directly
+type handlerAuditStore struct {
+	mockMediaStore
+	appendAuditLogFn func(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error
+	appendAuditCalls int
+	createCalls      int
+}
 
-	// Create handler with nil service — this tests that the handler validates before calling service
-	// Actually we need a real handler. Let's test the Fiber request parsing.
-	app.Post("/media/upload", func(c *fiber.Ctx) error {
-		// Simulate what UploadHandler.Upload does
-		userID := c.Get("X-User-ID")
-		if userID == "" {
-			return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-		}
-		_, err := c.FormFile("file")
-		if err != nil {
-			return c.Status(400).JSON(fiber.Map{"error": "no file"})
-		}
-		return c.Status(200).JSON(fiber.Map{"ok": true})
+func (m *handlerAuditStore) Create(ctx context.Context, media *model.Media) error {
+	m.createCalls++
+	return m.mockMediaStore.Create(ctx, media)
+}
+
+func (m *handlerAuditStore) AppendAuditLog(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error {
+	m.appendAuditCalls++
+	if m.appendAuditLogFn != nil {
+		return m.appendAuditLogFn(ctx, actorID, action, targetType, targetID, details, ipAddress, userAgent)
+	}
+	return nil
+}
+
+type handlerScannerStub struct {
+	scanFn func(ctx context.Context, reader io.Reader, filename string) (*scanner.ScanResult, error)
+}
+
+func (s *handlerScannerStub) Scan(ctx context.Context, reader io.Reader, filename string) (*scanner.ScanResult, error) {
+	if s.scanFn != nil {
+		return s.scanFn(ctx, reader, filename)
+	}
+	return &scanner.ScanResult{Clean: true}, nil
+}
+
+func newUploadTestApp(t *testing.T, mediaStore store.Store, scannerStub scanner.Scanner, logger *slog.Logger, metricsReg *metrics.Registry) *fiber.App {
+	t.Helper()
+	app := fiber.New(fiber.Config{
+		BodyLimit:    55 * 1024 * 1024,
+		ErrorHandler: response.FiberErrorHandler,
 	})
+	svc := service.NewMediaServiceWithR2(mediaStore, nil, nil, nil).
+		WithScanner(scannerStub).
+		WithAuditMetrics(metricsReg)
+	h := NewUploadHandler(svc, logger, "test-internal-token")
+	h.Register(app)
+	return app
+}
 
-	// Test: no file field
-	req, _ := http.NewRequest("POST", "/media/upload", bytes.NewBuffer([]byte{}))
+func TestUploadHandler_MalwareAuditSuccessReturns422(t *testing.T) {
+	userID := uuid.New()
+	app := newUploadTestApp(t, &handlerAuditStore{mockMediaStore: *newMockStore()}, &handlerScannerStub{
+		scanFn: func(ctx context.Context, reader io.Reader, filename string) (*scanner.ScanResult, error) {
+			return &scanner.ScanResult{Clean: false, Virus: "Eicar-Test-Signature"}, nil
+		},
+	}, slog.Default(), metrics.New("media"))
+
+	body, contentType := makeMultipartBody("eicar.txt", "text/plain", []byte("safe payload"), map[string]string{"type": "file"})
+	req, err := http.NewRequest("POST", "/media/upload", body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-User-ID", userID.String())
+	req.Header.Set("X-Internal-Token", "test-internal-token")
+	req.Header.Set("X-Trusted-Client-IP", "203.0.113.10")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	if resp.StatusCode != 422 {
+		t.Fatalf("expected 422, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got["error"] != "virus_detected" {
+		t.Fatalf("unexpected error code: %+v", got)
+	}
+}
+
+func TestUploadHandler_MalwareAuditFailureReturns503NoSideEffectsAndLogs(t *testing.T) {
+	userID := uuid.New()
+	st := &handlerAuditStore{
+		mockMediaStore: *newMockStore(),
+		appendAuditLogFn: func(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error {
+			return context.DeadlineExceeded
+		},
+	}
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+	prevDefault := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(prevDefault)
+	metricsReg := metrics.New("media")
+	app := newUploadTestApp(t, st, &handlerScannerStub{
+		scanFn: func(ctx context.Context, reader io.Reader, filename string) (*scanner.ScanResult, error) {
+			return &scanner.ScanResult{Clean: false, Virus: "Eicar-Test-Signature"}, nil
+		},
+	}, logger, metricsReg)
+
+	body, contentType := makeMultipartBody("eicar.txt", "text/plain", []byte("safe payload"), map[string]string{"type": "file"})
+	req, err := http.NewRequest("POST", "/media/upload", body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-User-ID", userID.String())
+	req.Header.Set("X-Internal-Token", "test-internal-token")
+	req.Header.Set("X-Trusted-Client-IP", "203.0.113.10")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app test: %v", err)
+	}
+	if resp.StatusCode != 503 {
+		t.Fatalf("expected 503, got %d", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got["error"] != "audit_unavailable" {
+		t.Fatalf("unexpected error code: %+v", got)
+	}
+	if msg, _ := got["message"].(string); msg != "Upload service temporarily unavailable, please retry." {
+		t.Fatalf("unexpected message: %q", msg)
+	}
+	if strings.Contains(strings.ToLower(fmt.Sprint(got)), "virus") || strings.Contains(strings.ToLower(fmt.Sprint(got)), "malware") {
+		t.Fatalf("response leaked malware verdict: %+v", got)
+	}
+	if st.createCalls != 0 {
+		t.Fatalf("expected no create side effects, got %d", st.createCalls)
+	}
+	if len(st.media) != 0 {
+		t.Fatalf("expected no persisted media objects, got %d", len(st.media))
+	}
+	for _, needle := range []string{"event=audit_persistent_failure", "user_id=" + userID.String(), "virus_name=Eicar-Test-Signature", "attempts_count=3"} {
+		if !strings.Contains(logBuf.String(), needle) {
+			t.Fatalf("expected log to contain %q, got %q", needle, logBuf.String())
+		}
+	}
+	metricFamilies, err := metricsReg.Prometheus().Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+	var timeoutCount float64
+	for _, mf := range metricFamilies {
+		if mf.GetName() != "media_audit_write_attempts_total" {
+			continue
+		}
+		for _, metric := range mf.GetMetric() {
+			result := ""
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "result" {
+					result = label.GetValue()
+				}
+			}
+			if result == "timeout" {
+				timeoutCount += metric.GetCounter().GetValue()
+			}
+		}
+	}
+	if timeoutCount != 3 {
+		t.Fatalf("expected timeout metric count 3, got %v", timeoutCount)
+	}
+}
+
+func TestUploadHandler_NoFile(t *testing.T) {
+	app := newUploadTestApp(t, &handlerAuditStore{mockMediaStore: *newMockStore()}, &handlerScannerStub{}, slog.Default(), metrics.New("media"))
+	body := bytes.NewBuffer([]byte{})
+	req, _ := http.NewRequest("POST", "/media/upload", body)
 	req.Header.Set("X-User-ID", uuid.New().String())
+	req.Header.Set("X-Internal-Token", "test-internal-token")
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=xxx")
 	resp, err := app.Test(req, -1)
 	if err != nil {
@@ -578,15 +746,7 @@ func TestUploadHandler_NoFile(t *testing.T) {
 }
 
 func TestUploadHandler_NoAuth(t *testing.T) {
-	app := fiber.New()
-	app.Post("/media/upload", func(c *fiber.Ctx) error {
-		userID := c.Get("X-User-ID")
-		if userID == "" {
-			return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
-		}
-		return c.Status(200).JSON(fiber.Map{"ok": true})
-	})
-
+	app := newUploadTestApp(t, &handlerAuditStore{mockMediaStore: *newMockStore()}, &handlerScannerStub{}, slog.Default(), metrics.New("media"))
 	req, _ := http.NewRequest("POST", "/media/upload", nil)
 	resp, _ := app.Test(req, -1)
 	if resp.StatusCode != 401 {

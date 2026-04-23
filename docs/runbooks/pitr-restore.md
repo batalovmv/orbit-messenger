@@ -23,9 +23,11 @@ Confirm all of the following before starting:
   export AWS_ENDPOINT_URL=https://<account>.r2.cloudflarestorage.com
   export AWS_S3_FORCE_PATH_STYLE=true
   export AWS_REGION=auto
-  export WALG_S3_PREFIX=s3://<R2_BUCKET>/wal-g
+  export WALG_S3_PREFIX=s3://<R2_BACKUP_WAL_BUCKET>/wal-g
   ```
   Or source the pre-configured env file: `source /etc/wal-g.env.sh`
+
+  > **Note**: WAL archiving is wired in the Docker image (`scripts/postgres/`). Requires `R2_BACKUP_WAL_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` in environment. Not confirmed active on Saturn.ac production — verify R2 credentials are set.
 - [ ] PostgreSQL 16 CLI available on host (`psql`, `pg_ctl`, `pg_isready`)
 - [ ] Target data directory known (default: `/var/lib/postgresql/data`)
 - [ ] Write access to `postgresql.conf` on staging
@@ -34,7 +36,36 @@ Confirm all of the following before starting:
 
 ---
 
-## 2. Backup Verification
+## 2. Quick Restore Reference
+
+Minimal steps for fast recovery (full detail in Section 3):
+
+```bash
+# 1. List available base backups
+source /etc/wal-g.env.sh && wal-g backup-list
+
+# 2. Stop PostgreSQL
+pg_ctl stop -D $PGDATA
+
+# 3. Clear data directory (keep tablespace symlinks)
+rm -rf $PGDATA/*
+
+# 4. Restore latest base backup
+source /etc/wal-g.env.sh && wal-g backup-fetch $PGDATA LATEST
+
+# 5. Create recovery signal and configure WAL restore
+touch $PGDATA/recovery.signal
+echo "restore_command = 'source /etc/wal-g.env.sh && wal-g wal-fetch %f %p'" >> $PGDATA/postgresql.conf
+# Optional: set recovery target time
+# echo "recovery_target_time = '2026-04-22 12:00:00'" >> $PGDATA/postgresql.conf
+
+# 6. Start PostgreSQL — it will replay WAL automatically
+pg_ctl start -D $PGDATA
+```
+
+---
+
+## 3. Backup Verification (Detailed)
 
 List available backups and confirm a recent one exists:
 
@@ -64,9 +95,9 @@ wal-g backup-list DETAIL
 
 ---
 
-## 3. Restore Procedure
+## 4. Restore Procedure
 
-### 3.1 Stop PostgreSQL
+### 4.1 Stop PostgreSQL
 
 ```bash
 # systemd
@@ -84,7 +115,7 @@ sudo systemctl status postgresql   # should show "inactive (dead)"
 docker compose ps db               # should show "exited"
 ```
 
-### 3.2 Clear the data directory
+### 4.2 Clear the data directory
 
 > ⚠️ This wipes current data. Double-check you are on **staging**.
 
@@ -92,7 +123,7 @@ docker compose ps db               # should show "exited"
 sudo rm -rf /var/lib/postgresql/data/*
 ```
 
-### 3.3 Fetch the backup
+### 4.3 Fetch the backup
 
 Restore the latest backup:
 
@@ -106,7 +137,7 @@ Or restore a specific backup by name (copy name from `wal-g backup-list` output)
 sudo -u postgres wal-g backup-fetch /var/lib/postgresql/data base_000000010000000000000005
 ```
 
-### 3.4 Create `recovery.signal`
+### 4.4 Create `recovery.signal`
 
 PostgreSQL 12+ uses a signal file to enter recovery mode:
 
@@ -114,7 +145,7 @@ PostgreSQL 12+ uses a signal file to enter recovery mode:
 sudo -u postgres touch /var/lib/postgresql/data/recovery.signal
 ```
 
-### 3.5 Set `recovery_target_time` in `postgresql.conf`
+### 4.5 Set `recovery_target_time` in `postgresql.conf`
 
 Append the PITR block to `postgresql.conf` (or `postgresql.auto.conf`):
 
@@ -133,7 +164,7 @@ Replace `recovery_target_time` with the exact UTC timestamp you want to recover 
 
 > ⚠️ The target time must be **after** the base backup was taken and **before** the event you are recovering from.
 
-### 3.6 Start PostgreSQL
+### 4.6 Start PostgreSQL
 
 ```bash
 sudo systemctl start postgresql
@@ -141,7 +172,7 @@ sudo systemctl start postgresql
 docker compose -f /opt/orbit/docker-compose.yml start db
 ```
 
-### 3.7 Monitor recovery progress
+### 4.7 Monitor recovery progress
 
 ```bash
 sudo journalctl -u postgresql -f
@@ -161,7 +192,7 @@ LOG:  pausing at the end of recovery
 
 The instance pauses at the target time and waits for explicit promotion.
 
-### 3.8 Promote the instance
+### 4.8 Promote the instance
 
 Connect and promote:
 
@@ -182,9 +213,9 @@ SELECT pg_is_in_recovery();
 -- Expected: f
 ```
 
-### 3.9 Clean up recovery settings
+### 4.9 Clean up recovery settings
 
-Remove or comment out the PITR block added in step 3.5 from `postgresql.conf` so it does not affect future restarts:
+Remove or comment out the PITR block added in step 4.5 from `postgresql.conf` so it does not affect future restarts:
 
 ```bash
 sudo -u postgres vi /var/lib/postgresql/data/postgresql.conf
@@ -193,7 +224,7 @@ sudo -u postgres vi /var/lib/postgresql/data/postgresql.conf
 
 ---
 
-## 4. Verification Queries
+## 5. Verification Queries
 
 Run immediately after promotion. Record the numbers in the drill log.
 

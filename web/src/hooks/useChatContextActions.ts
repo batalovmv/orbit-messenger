@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from '../lib/teact/teact';
 import { getActions } from '../global';
 
+import type { NotificationPriorityOverride } from '../api/saturn/methods/notifications';
 import type { MenuItemContextAction } from '../components/ui/ListItem';
 import type { GlobalState } from '../global/types';
 import { type ApiChat, type ApiUser, MAIN_THREAD_ID } from '../api/types';
@@ -31,6 +32,7 @@ const useChatContextActions = ({
   handleUnmute,
   handleChatFolderChange,
   handleReport,
+  handleNotificationPriority,
 }: {
   chat: ApiChat | undefined;
   user: ApiUser | undefined;
@@ -47,6 +49,7 @@ const useChatContextActions = ({
   handleUnmute?: NoneToVoidFunction;
   handleChatFolderChange: NoneToVoidFunction;
   handleReport?: NoneToVoidFunction;
+  handleNotificationPriority?: (priority: NotificationPriorityOverride) => void;
 }, isInSearch = false) => {
   const {
     toggleChatPinned,
@@ -159,7 +162,7 @@ const useChatContextActions = ({
       handler: handleChatFolderChange,
     } satisfies MenuItemContextAction : undefined;
 
-    const actionMute: MenuItemContextAction = isMuted
+     const actionMute: MenuItemContextAction = isMuted
       ? {
         title: lang('ChatsUnmute'),
         icon: 'unmute',
@@ -171,10 +174,23 @@ const useChatContextActions = ({
         handler: handleMute,
       };
 
+    const actionNotificationPriority = !isSelf ? {
+      title: lang('NotificationPriorityTitle'),
+      icon: 'notifications',
+      handler: () => handleNotificationPriority?.(undefined),
+    } satisfies MenuItemContextAction : undefined;
+
+
     if (isInSearch) {
-      return compact([
-        actionOpenInNewTab, actionQuickPreview, actionPin, actionAddToFolder, actionMute,
-      ]) as MenuItemContextAction[];
+       return compact([
+         actionOpenInNewTab,
+         actionQuickPreview,
+         actionPin,
+         actionAddToFolder,
+         actionMute,
+         actionNotificationPriority,
+       ]) as MenuItemContextAction[];
+
     }
 
     const actionMarkAsRead = (
@@ -209,16 +225,18 @@ const useChatContextActions = ({
       actionAddToFolder,
       actionMarkAsRead,
       actionMarkAsUnread,
-      actionPin,
-      !isSelf && actionMute,
-      !isSelf && !isServiceNotifications && !isInFolder && actionArchive,
-      actionReport,
-      actionDelete,
+       actionPin,
+       !isSelf && actionMute,
+       actionNotificationPriority,
+       !isSelf && !isServiceNotifications && !isInFolder && actionArchive,
+       actionReport,
+       actionDelete,
+
     ]);
   }, [
     chat, isPreview, lang, isSavedDialog, isPinned, deleteTitle, handleDelete, canChangeFolder,
     handleChatFolderChange, isMuted, handleUnmute, handleMute, isInSearch, chatReadState, topicsReadStates,
-    handleReport, user, folderId, isSelf, isServiceNotifications, currentUserId,
+    handleReport, handleNotificationPriority, user, folderId, isSelf, isServiceNotifications, currentUserId,
   ]);
 
   return preparedActions;

@@ -238,6 +238,8 @@ export interface SaturnUserSettings {
   dnd_from?: string;
   dnd_until?: string;
   default_translate_lang?: string;
+  can_translate?: boolean;
+  can_translate_chats?: boolean;
   created_at: string;
   updated_at: string;
 }

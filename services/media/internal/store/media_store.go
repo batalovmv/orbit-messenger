@@ -29,6 +29,7 @@ type Store interface {
 	// CanAccess returns true if the user may download the media:
 	// they are the uploader OR the media is attached to at least one message.
 	CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error)
+	AppendAuditLog(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error
 }
 
 // MediaStore handles PostgreSQL operations for media.
@@ -314,6 +315,18 @@ func (s *MediaStore) CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]st
 		return nil, fmt.Errorf("iterate orphaned media rows: %w", err)
 	}
 	return keys, nil
+}
+
+func (s *MediaStore) AppendAuditLog(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO audit_log (actor_id, action, target_type, target_id, details, ip_address, user_agent)
+		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
+		actorID, action, targetType, targetID, details, ipAddress, userAgent,
+	)
+	if err != nil {
+		return fmt.Errorf("append audit log: %w", err)
+	}
+	return nil
 }
 
 // MessageMediaRow represents a joined media row for a message.

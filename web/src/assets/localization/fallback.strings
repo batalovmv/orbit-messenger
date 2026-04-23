@@ -1,4 +1,4 @@
-"Month1" = "January";
+﻿"Month1" = "January";
 "Month2" = "February";
 "Month3" = "March";
 "Month4" = "April";
@@ -2956,3 +2956,13 @@
 "NotificationPriorityImportant" = "Important";
 "NotificationPriorityNormal" = "Normal";
 "NotificationPriorityLow" = "Low";
+
+"ShowTranslateButton" = "Show Translate Button";
+"ShowTranslateChatButton" = "Translate Entire Chats";
+"DoNotTranslate" = "Do Not Translate";
+"lng_translate_settings_about" = "Show translation controls for messages and chats when they are available.";
+"LocalizationInterfaceLanguage" = "Interface Language";
+"SmartNotificationsUpdateFailed" = "Failed to update notification settings";
+"NotificationPriorityDefault" = "Default";
+"NotificationPriorityTitle" = "Notification Priority";
+"NotificationPriorityAbout" = "Set a priority override for notifications from this chat.";

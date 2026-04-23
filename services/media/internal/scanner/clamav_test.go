@@ -1,4 +1,4 @@
-﻿package scanner
+package scanner
 
 import (
 	"context"
@@ -24,13 +24,11 @@ func startMockClamd(t *testing.T, response string, delay time.Duration) (addr st
 			}
 			go func(c net.Conn) {
 				defer c.Close()
-				buf := make([]byte, 1024)
-				n, err := c.Read(buf)
-				if err != nil {
+				cmd := make([]byte, len("zINSTREAM\x00"))
+				if _, err := io.ReadFull(c, cmd); err != nil {
 					return
 				}
-				cmd := string(buf[:n])
-				if !strings.Contains(cmd, "INSTREAM") {
+				if !strings.Contains(string(cmd), "INSTREAM") {
 					return
 				}
 				for {
@@ -46,6 +44,7 @@ func startMockClamd(t *testing.T, response string, delay time.Duration) (addr st
 						return
 					}
 				}
+
 				if delay > 0 {
 					time.Sleep(delay)
 				}

@@ -2,6 +2,11 @@ import type { FC } from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
+
+import {
+  type NotificationPriorityOverride,
+  updateChatNotificationPriority,
+} from '../../api/saturn/methods/notifications';
 import { getActions, withGlobal } from '../../global';
 
 import type {
@@ -61,6 +66,7 @@ import Menu from '../ui/Menu';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
 import Portal from '../ui/Portal';
+import NotificationPriorityPickerModal from '../common/NotificationPriorityPickerModal.async';
 
 import './HeaderMenuContainer.scss';
 
@@ -81,6 +87,7 @@ export type OwnProps = {
   isOpen: boolean;
   withExtraActions: boolean;
   anchor: IAnchorPosition;
+  notificationPriorityOverride?: NotificationPriorityOverride;
   canStartBot?: boolean;
   canSubscribe?: boolean;
   canSearch?: boolean;
@@ -139,6 +146,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   isOpen,
   withExtraActions,
   anchor,
+  notificationPriorityOverride,
   botCommands,
   botPrivacyPolicyUrl,
   withForumActions,
@@ -219,7 +227,11 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   const [shouldCloseFast, setShouldCloseFast] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isMuteModalOpen, setIsMuteModalOpen] = useState(false);
+  const [isNotificationPriorityModalOpen, setIsNotificationPriorityModalOpen] = useState(false);
   const [shouldRenderMuteModal, markRenderMuteModal, unmarkRenderMuteModal] = useFlag();
+  const [shouldRenderNotificationPriorityModal,
+    markRenderNotificationPriorityModal,
+    unmarkRenderNotificationPriorityModal] = useFlag();
   const { x, y } = anchor;
 
   useShowTransitionDeprecated(isOpen, onCloseAnimationEnd, undefined, false);
@@ -234,10 +246,17 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     return Object.values(disallowedGifts).every(Boolean);
   }, [disallowedGifts]);
 
-  const closeMuteModal = useLastCallback(() => {
-    setIsMuteModalOpen(false);
+   const closeMuteModal = useLastCallback(() => {
+     setIsMuteModalOpen(false);
+     onClose();
+   });
+
+  const closeNotificationPriorityModal = useLastCallback(() => {
+    setIsNotificationPriorityModalOpen(false);
+    unmarkRenderNotificationPriorityModal();
     onClose();
   });
+
 
   const handleReport = useLastCallback(() => {
     if (isAccountFrozen) {
@@ -309,6 +328,27 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
       setIsMuteModalOpen(true);
     }
     setIsMenuOpen(false);
+  });
+
+  const handleNotificationPriorityClick = useLastCallback(() => {
+    if (isAccountFrozen) {
+      openFrozenAccountModal();
+      closeMenu();
+      return;
+    }
+
+    markRenderNotificationPriorityModal();
+    setIsNotificationPriorityModalOpen(true);
+    setIsMenuOpen(false);
+  });
+
+  const handleNotificationPrioritySubmit = useLastCallback(async (priority: NotificationPriorityOverride) => {
+    try {
+      await updateChatNotificationPriority(chatId, priority);
+      closeNotificationPriorityModal();
+    } catch {
+      showNotification({ message: { key: 'NotificationPriorityUpdateFailed' } });
+    }
   });
 
   const handleCreateTopicClick = useLastCallback(() => {
@@ -719,6 +759,14 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               {oldLang('lng_context_translate')}
             </MenuItem>
           )}
+          {canMute && (
+            <MenuItem
+              icon="notifications"
+              onClick={handleNotificationPriorityClick}
+            >
+              {lang('NotificationPriorityTitle')}
+            </MenuItem>
+          )}
           {canReportChat && (
             <MenuItem
               icon="flag"
@@ -779,6 +827,14 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
             onClose={closeMuteModal}
             onCloseAnimationEnd={unmarkRenderMuteModal}
             chatId={chat.id}
+          />
+        )}
+        {shouldRenderNotificationPriorityModal && chat?.id && (
+          <NotificationPriorityPickerModal
+            isOpen={isNotificationPriorityModalOpen}
+            selectedValue={notificationPriorityOverride}
+            onClose={closeNotificationPriorityModal}
+            onSubmit={handleNotificationPrioritySubmit}
           />
         )}
       </div>

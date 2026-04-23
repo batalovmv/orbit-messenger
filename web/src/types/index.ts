@@ -160,6 +160,7 @@ export interface AccountSettings {
   doNotTranslate: string[];
   shouldPaidMessageAutoApprove: boolean;
   smartNotificationMode?: 'smart' | 'all' | 'off';
+  defaultTranslateLang?: string;
 }
 
 export type IAnchorPosition = {

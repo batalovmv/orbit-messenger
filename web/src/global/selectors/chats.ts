@@ -322,10 +322,10 @@ export function selectShouldDetectChatLanguage<T extends GlobalState>(
 
   const { canTranslateChats } = global.settings.byKey;
 
-  const isPremium = selectIsCurrentUserPremium(global);
   const isSavedMessages = selectIsChatWithSelf(global, chatId);
 
-  return IS_TRANSLATION_SUPPORTED && canTranslateChats && isPremium && !isSavedMessages;
+  // Orbit has no premium tier — gate removed. Translation available to every user.
+  return IS_TRANSLATION_SUPPORTED && canTranslateChats && !isSavedMessages;
 }
 
 export function selectCanTranslateChat<T extends GlobalState>(
@@ -337,10 +337,19 @@ export function selectCanTranslateChat<T extends GlobalState>(
   const requestedTranslation = selectRequestedChatTranslationLanguage(global, chatId, tabId);
   if (requestedTranslation) return true; // Prevent translation dropping on reevaluation
 
+  const { canTranslateChats, doNotTranslate } = global.settings.byKey;
+
+  // Orbit backend doesn't populate chat.detectedLanguage (Telegram MTProto-only
+  // field). Expose the translate dropdown whenever the user opts into chat
+  // translation so they can pick a target language manually.
+  if (canTranslateChats && !selectIsChatWithSelf(global, chatId)) {
+    const detectedLanguage = chat.detectedLanguage;
+    if (detectedLanguage && doNotTranslate.includes(detectedLanguage)) return false;
+    return IS_TRANSLATION_SUPPORTED;
+  }
+
   const isLanguageDetectable = selectShouldDetectChatLanguage(global, chatId);
   const detectedLanguage = chat.detectedLanguage;
-
-  const { doNotTranslate } = global.settings.byKey;
 
   return Boolean(isLanguageDetectable && detectedLanguage && !doNotTranslate.includes(detectedLanguage));
 }

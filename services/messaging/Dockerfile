@@ -1,5 +1,6 @@
 # Stage 1: Build
 FROM golang:1.24-alpine AS builder
+ENV GOTOOLCHAIN=auto
 WORKDIR /build
 COPY pkg/ ./pkg/
 COPY services/messaging/ ./services/messaging/

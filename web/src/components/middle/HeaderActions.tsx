@@ -2,6 +2,7 @@ import type { FC } from '../../lib/teact/teact';
 import {
   memo, useCallback, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
+import type { NotificationPriorityOverride } from '../../api/saturn/methods/notifications';
 import { getActions, withGlobal } from '../../global';
 
 import type { IAnchorPosition, MessageListType, ThreadId } from '../../types';
@@ -64,6 +65,7 @@ interface OwnProps {
 interface StateProps {
   noMenu?: boolean;
   isRightColumnShown?: boolean;
+  notificationPriorityOverride?: NotificationPriorityOverride;
   canStartBot?: boolean;
   canRestartBot?: boolean;
   canUnblock?: boolean;
@@ -94,6 +96,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
   threadId,
   noMenu,
   isMobile,
+  notificationPriorityOverride,
   canStartBot,
   canRestartBot,
   canUnblock,
@@ -476,6 +479,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           canSearch={canSearch}
           canCall={canCall}
           canMute={canMute}
+          notificationPriorityOverride={notificationPriorityOverride}
           canViewStatistics={canViewStatistics}
           canLeave={canLeave}
           canEnterVoiceChat={canEnterVoiceChat}
@@ -524,6 +528,7 @@ export default memo(withGlobal<OwnProps>(
     const userFullInfo = isPrivate ? selectUserFullInfo(global, peerUserId) : undefined;
     const fullInfo = chatFullInfo || userFullInfo;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
+    const notificationPriorityOverride = chat.notificationPriorityOverride;
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
     const isDiscussionThread = messageListType === 'thread' && threadId !== MAIN_THREAD_ID;
     const isRightColumnShown = selectIsRightColumnShown(global, isMobile);
@@ -561,6 +566,7 @@ export default memo(withGlobal<OwnProps>(
     return {
       noMenu: false,
       isRightColumnShown,
+      notificationPriorityOverride,
       canStartBot,
       canRestartBot,
       canSubscribe,

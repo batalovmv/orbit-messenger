@@ -158,6 +158,7 @@ func (s *SettingsService) UpdateUserSettings(
 	sendByEnter bool,
 	dndFrom, dndUntil *string,
 	defaultTranslateLang *string,
+	canTranslate, canTranslateChats bool,
 ) (*model.UserSettings, error) {
 	if !model.ValidThemes[theme] {
 		return nil, apperror.BadRequest(fmt.Sprintf("invalid theme %q", theme))
@@ -178,6 +179,8 @@ func (s *SettingsService) UpdateUserSettings(
 		DNDFrom:              dndFrom,
 		DNDUntil:             dndUntil,
 		DefaultTranslateLang: defaultTranslateLang,
+		CanTranslate:         canTranslate,
+		CanTranslateChats:    canTranslateChats,
 	}
 	if err := s.userSettingsStore.Upsert(ctx, us); err != nil {
 		return nil, fmt.Errorf("upsert user settings: %w", err)

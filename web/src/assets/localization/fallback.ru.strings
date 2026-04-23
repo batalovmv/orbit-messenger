@@ -1,0 +1,988 @@
+"Month1" = "Январь";
+"Month2" = "Февраль";
+"Month3" = "Март";
+"Month4" = "Апрель";
+"Month5" = "Май";
+"Month6" = "Июнь";
+"Month7" = "Июль";
+"Month8" = "Август";
+"Month9" = "Сентябрь";
+"Month10" = "Октябрь";
+"Month11" = "Ноябрь";
+"Month12" = "Декабрь";
+"January" = "Январь";
+"February" = "Февраль";
+"March" = "Март";
+"April" = "Апрель";
+"May" = "Май";
+"June" = "Июнь";
+"July" = "Июль";
+"August" = "Август";
+"September" = "Сентябрь";
+"October" = "Октябрь";
+"November" = "Ноябрь";
+"December" = "Декабрь";
+"Weekday.Monday" = "Понедельник";
+"Weekday.Tuesday" = "Вторник";
+"Weekday.Wednesday" = "Среда";
+"Weekday.Thursday" = "Четверг";
+"Weekday.Friday" = "Пятница";
+"Weekday.Saturday" = "Суббота";
+"Weekday.Sunday" = "Воскресенье";
+"Weekday.ShortMonday" = "Пн";
+"Weekday.ShortTuesday" = "Вт";
+"Weekday.ShortWednesday" = "Ср";
+"Weekday.ShortThursday" = "Чт";
+"Weekday.ShortFriday" = "Пт";
+"Weekday.ShortSaturday" = "Сб";
+"Weekday.ShortSunday" = "Вс";
+"Today" = "Сегодня";
+"Yesterday" = "Вчера";
+"Tomorrow" = "Завтра";
+"AutoDownloadToday" = "Сегодня";
+"AutoDownloadYesterday" = "Вчера";
+
+"Settings" = "Настройки";
+"SETTINGS" = "НАСТРОЙКИ";
+"AccDescrOpenSettings" = "Открыть настройки";
+"Search" = "Поиск";
+"SearchAllChatsShort" = "Поиск по чатам";
+"Searching" = "Поиск…";
+"SearchFromFiltersActive" = "Поиск активен";
+"NothingFound" = "Ничего не найдено";
+"NoResult" = "Нет результатов";
+"NoMessages" = "Нет сообщений";
+"NoMessagesFound" = "Сообщения не найдены";
+"Close" = "Закрыть";
+"Back" = "Назад";
+"Next" = "Далее";
+"Previous" = "Назад";
+"Cancel" = "Отмена";
+"Save" = "Сохранить";
+"Done" = "Готово";
+"OK" = "ОК";
+"Retry" = "Повторить";
+"Send" = "Отправить";
+"Yes" = "Да";
+"No" = "Нет";
+"Confirm" = "Подтвердить";
+"Loading" = "Загрузка…";
+"PleaseWait" = "Пожалуйста, подождите…";
+"Hide" = "Скрыть";
+"Show" = "Показать";
+"Edit" = "Изменить";
+"Remove" = "Убрать";
+"Add" = "Добавить";
+"Select" = "Выбрать";
+"SelectAll" = "Выбрать все";
+"Share" = "Поделиться";
+"Report" = "Пожаловаться";
+"Open" = "Открыть";
+"Apply" = "Применить";
+"Continue" = "Продолжить";
+"More" = "Ещё";
+"Less" = "Меньше";
+"ShowMore" = "Показать больше";
+"ShowLess" = "Свернуть";
+"Optional" = "Необязательно";
+"Required" = "Обязательно";
+
+"ChatList" = "Чаты";
+"Chats" = "Чаты";
+"NewChat" = "Новый чат";
+"NewGroup" = "Новая группа";
+"NewChannel" = "Новый канал";
+"NewMessageTitle" = "Новое сообщение";
+"Contact" = "Контакт";
+"SavedMessages" = "Избранное";
+"Archive" = "Архив";
+"Archived" = "Архивировано";
+"ArchivedChats" = "Архивированные чаты";
+"FilterAllChats" = "Все чаты";
+"FilterPrivateChats" = "Личные";
+"FilterGroups" = "Группы";
+"FilterChannels" = "Каналы";
+"FilterBots" = "Боты";
+"FilterUnread" = "Непрочитанные";
+"FilterMuted" = "Без звука";
+"Unread" = "Непрочитанные";
+"UnreadMessages" = "Непрочитанные";
+"MarkAsRead" = "Отметить как прочитанное";
+"MarkAsUnread" = "Отметить как непрочитанное";
+"MarkAllAsRead" = "Отметить все прочитанными";
+"UnreadCount_one" = "{count} непрочитанное";
+"UnreadCount_few" = "{count} непрочитанных";
+"UnreadCount_many" = "{count} непрочитанных";
+"UnreadCount_other" = "{count} непрочитанных";
+"PinnedChats" = "Закреплённые чаты";
+"UnpinFromTop" = "Открепить";
+"PinToTop" = "Закрепить";
+
+"ChatListAction.Archive" = "Архивировать";
+"ChatListAction.Unarchive" = "Вернуть из архива";
+"ChatListAction.Mute" = "Без звука";
+"ChatListAction.Unmute" = "Со звуком";
+"ChatListAction.Pin" = "Закрепить";
+"ChatListAction.Unpin" = "Открепить";
+"ChatListAction.Delete" = "Удалить";
+
+"ChatInfo" = "Информация";
+"ChatShareLink" = "Поделиться ссылкой";
+"ChatInviteLink" = "Ссылка-приглашение";
+"ChatMembers" = "Участники";
+"Member" = "Участник";
+"AddMember" = "Добавить участника";
+"AddMembers" = "Добавить участников";
+"GroupCreate" = "Создать группу";
+"GroupCreated" = "Группа создана";
+"GroupName" = "Название группы";
+"GroupDescription" = "Описание группы";
+"GroupInfo" = "Информация о группе";
+"GroupLeaveGroup" = "Покинуть группу";
+"GroupDelete" = "Удалить группу";
+"LeaveGroup" = "Покинуть группу";
+"LeaveChannel" = "Покинуть канал";
+"DeleteGroup" = "Удалить группу";
+"DeleteChannel" = "Удалить канал";
+"DeleteChat" = "Удалить чат";
+"DeleteChatConfirm" = "Удалить этот чат?";
+"GroupMembers" = "Участники группы";
+"GroupAdmins" = "Администраторы";
+"Admin" = "Администратор";
+"Admins" = "Администраторы";
+"AddAdmin" = "Добавить администратора";
+"GroupPermissions" = "Права участников";
+"Permissions" = "Права";
+
+"Chat" = "Чат";
+"ChatTitle" = "Название чата";
+"ChatBackground" = "Фон чата";
+"ChatBackgroundChange" = "Сменить фон";
+"SettingsChatBackground" = "Фон чата";
+"SetBackground" = "Установить фон";
+"ClearChatHistory" = "Очистить историю";
+"ClearHistory" = "Очистить историю";
+"DeleteChatHistory" = "Удалить историю чата";
+
+"TypeMessage" = "Написать сообщение…";
+"Message" = "Сообщение";
+"Messages_one" = "{count} сообщение";
+"Messages_few" = "{count} сообщения";
+"Messages_many" = "{count} сообщений";
+"Messages_other" = "{count} сообщения";
+"SendMessage" = "Отправить сообщение";
+"SendAnyway" = "Всё равно отправить";
+"SendFile" = "Отправить файл";
+"SendingMessage" = "Отправка…";
+"SendingFailed" = "Не удалось отправить";
+"Sent" = "Отправлено";
+"Failed" = "Ошибка";
+"EditingMessage" = "Изменение сообщения";
+"EditMessage" = "Изменить";
+"DeleteMessage" = "Удалить сообщение";
+"DeleteMessages" = "Удалить сообщения";
+"Reply" = "Ответить";
+"ReplyTo" = "Ответить {user}";
+"Forward" = "Переслать";
+"ForwardMessage" = "Переслать сообщение";
+"ForwardMessages" = "Переслать сообщения";
+"ForwardTo" = "Переслать в…";
+"ForwardedMessage" = "Пересланное сообщение";
+"ForwardedFrom" = "Переслано от {user}";
+"ForwardedFromChannel" = "Переслано из канала";
+"Copy" = "Копировать";
+"CopyLink" = "Копировать ссылку";
+"CopyText" = "Копировать текст";
+"CopyMessageText" = "Копировать текст сообщения";
+"MessagePinned" = "Закреплённое сообщение";
+"Pin" = "Закрепить";
+"Unpin" = "Открепить";
+"PinMessage" = "Закрепить сообщение";
+"UnpinMessage" = "Открепить сообщение";
+"UnpinAllMessages" = "Открепить все сообщения";
+"PinMessageAlertTitle" = "Закрепить";
+"PinMessageAlert" = "Закрепить это сообщение?";
+"UnpinMessageAlertTitle" = "Открепить";
+"UnpinMessageAlert" = "Открепить это сообщение?";
+"ScrollToPinned" = "Перейти к закреплённому";
+"Scheduled" = "Отложено";
+"ScheduledMessages" = "Отложенные сообщения";
+"ScheduleMessage" = "Отложить сообщение";
+"SendMessageAt" = "Отправить {date}";
+"SendMessageInTime" = "Отправить в {time}";
+
+"Delete" = "Удалить";
+"DeleteForAll" = "Удалить у всех";
+"DeleteForMe" = "Удалить у меня";
+"DeleteForEveryone" = "Удалить для всех";
+"DeleteConfirm" = "Вы уверены, что хотите удалить?";
+"DeleteMessageTitle" = "Удалить сообщение";
+"DeleteMessageText" = "Вы уверены, что хотите удалить это сообщение?";
+"DeleteMultipleMessages" = "Удалить {count} сообщений?";
+
+"Selected" = "Выбрано";
+"SelectedMessages" = "Выбрано: {count}";
+"UnselectAll" = "Снять выделение";
+"CopySelected" = "Копировать выбранное";
+"ForwardSelected" = "Переслать выбранное";
+"DeleteSelected" = "Удалить выбранное";
+
+"Bob" = "Боб";
+"LastSeen" = "был(а) в сети {time}";
+"LastSeenRecently" = "был(а) в сети недавно";
+"LastSeenWithinWeek" = "был(а) в сети на этой неделе";
+"LastSeenWithinMonth" = "был(а) в сети в этом месяце";
+"LastSeenLongTimeAgo" = "был(а) в сети давно";
+"LastSeenFormatted" = "был(а) в сети {time}";
+"last seen recently" = "был(а) в сети недавно";
+"typing" = "печатает";
+"UserTyping" = "{user} печатает";
+"SendActionRecordVideo" = "записывает видео";
+"SendActionUploadVideo" = "отправляет видео";
+"SendActionRecordAudio" = "записывает голосовое";
+"SendActionUploadAudio" = "отправляет голосовое";
+"SendActionUploadPhoto" = "отправляет фото";
+"SendActionUploadFile" = "отправляет файл";
+"SendActionChooseSticker" = "выбирает стикер";
+"SendActionRecordRound" = "записывает видеосообщение";
+"SendActionUploadRound" = "отправляет видеосообщение";
+"SendActionGeoLocation" = "выбирает геопозицию";
+"PlayingGame" = "играет";
+"UserActionWatchingAnimations" = "смотрит {emoji}";
+
+"AccDescrGroup" = "Группа";
+"AccDescrChannel" = "Канал";
+"AccDescrBot" = "Бот";
+"AccDescrUser" = "Пользователь";
+"AccDescrOpenChat" = "Открыть чат";
+"AccDescrOpenMenu" = "Открыть меню";
+"AccDescrCloseMenu" = "Закрыть меню";
+"AccDescrCloseChat" = "Закрыть чат";
+"AccDescrChatInfo" = "Информация о чате";
+"AccDescrSearchChats" = "Поиск в чатах";
+"AccDescrGoBack" = "Назад";
+"AccDescrSendMessage" = "Отправить сообщение";
+"AccDescrEditing" = "Изменить";
+"AccDescrReplying" = "Ответ";
+"AccDescrVoiceMessage" = "Голосовое сообщение";
+"AccDescrAttachFile" = "Прикрепить файл";
+"AccDescrAttachPhoto" = "Прикрепить фото";
+"AccDescrAttachMedia" = "Прикрепить медиа";
+"AccDescrMore" = "Ещё";
+"AriaSettingsEditProfilePhoto" = "Изменить фото профиля";
+
+"AttachMenu.Photo" = "Фото";
+"AttachMenu.Photos" = "Фото";
+"AttachMenu.Video" = "Видео";
+"AttachMenu.Documents" = "Файлы";
+"AttachMenu.Document" = "Файл";
+"AttachMenu.Media" = "Медиа";
+"AttachMenu.Links" = "Ссылки";
+"AttachMenu.Voice" = "Голосовые";
+"AttachMenu.Contact" = "Контакт";
+"AttachMenu.Location" = "Геопозиция";
+"AttachMenu.Poll" = "Опрос";
+"AttachMenu.Music" = "Музыка";
+"AttachMenu.Sticker" = "Стикер";
+"Attach" = "Прикрепить";
+"Attachments" = "Вложения";
+"AttachmentsCount_one" = "{count} файл";
+"AttachmentsCount_few" = "{count} файла";
+"AttachmentsCount_many" = "{count} файлов";
+"AttachmentsCount_other" = "{count} файла";
+"VoiceMessage" = "Голосовое сообщение";
+"VideoMessage" = "Видеосообщение";
+"VideoRound" = "Видеосообщение";
+"Photo" = "Фото";
+"Video" = "Видео";
+"Audio" = "Аудио";
+"AudioTitle" = "Название";
+"AudioArtist" = "Исполнитель";
+"AudioAlbum" = "Альбом";
+"Document" = "Файл";
+"Documents" = "Файлы";
+"Location" = "Геопозиция";
+"LiveLocation" = "Трансляция геопозиции";
+"Sticker" = "Стикер";
+"Stickers" = "Стикеры";
+"GIF" = "GIF";
+"GIFs" = "GIF";
+
+"Reactions" = "Реакции";
+"AddReaction" = "Добавить реакцию";
+"RemoveReaction" = "Убрать реакцию";
+"ChatReactions" = "Реакции в чате";
+"ChatReactionsAll" = "Все реакции";
+"ChatReactionsSome" = "Выбранные реакции";
+"ChatReactionsNone" = "Реакции отключены";
+"QuickReaction" = "Быстрая реакция";
+"ShowReactions" = "Показать реакции";
+
+"Comments_one" = "{count} комментарий";
+"Comments_few" = "{count} комментария";
+"Comments_many" = "{count} комментариев";
+"Comments_other" = "{count} комментария";
+"LeaveAComment" = "Написать комментарий";
+"NoComments" = "Нет комментариев";
+
+"SettingsProfile" = "Профиль";
+"EditProfile" = "Изменить профиль";
+"Name" = "Имя";
+"FirstName" = "Имя";
+"LastName" = "Фамилия";
+"UserName" = "Имя пользователя";
+"Username" = "Имя пользователя";
+"Usernames" = "Имена пользователей";
+"UsernameAvailable" = "{username} свободно.";
+"UsernameInUse" = "Имя пользователя уже занято.";
+"UsernameValid" = "Имя пользователя доступно.";
+"UsernameInvalid" = "Неверное имя пользователя.";
+"SetUsername" = "Задать имя пользователя";
+"SetUrl" = "Установить ссылку";
+"SetUrlAvailable" = "{url} свободно.";
+"SetUrlInUse" = "Эта ссылка уже занята.";
+"ProfilePhoto" = "Фото профиля";
+"UpdatePhoto" = "Обновить фото";
+"RemovePhoto" = "Удалить фото";
+"AddPhoto" = "Добавить фото";
+"Bio" = "О себе";
+"BioDesc" = "Расскажите о себе…";
+"UserInfo.DescriptionPlaceholder" = "О себе";
+"PhoneNumber" = "Номер телефона";
+"PhoneMobile" = "Мобильный телефон";
+"ChangePhoneNumber" = "Изменить номер";
+"AddOne" = "Добавить";
+
+"Appearance" = "Внешний вид";
+"AppearanceTheme" = "Тема";
+"ThemeAuto" = "Авто";
+"ThemeLight" = "Светлая";
+"ThemeDark" = "Тёмная";
+"ThemeDay" = "День";
+"ThemeNight" = "Ночь";
+"ColorTheme" = "Цветовая тема";
+"AutoNightTheme" = "Автоматическая смена темы";
+"AutoNightMode" = "Автоматический ночной режим";
+"MessageFontSize" = "Размер текста сообщений";
+"TextSize" = "Размер шрифта";
+"FontSize" = "Размер шрифта";
+"Animations" = "Анимации";
+"AnimationsEnabled" = "Включить анимации";
+"MessageSendShortcutEnter" = "Enter";
+"MessageSendShortcutCtrlEnter" = "Ctrl + Enter";
+"SendBy" = "Отправлять по";
+"SendByEnter" = "Enter";
+"SendByCtrlEnter" = "Ctrl + Enter";
+
+"Notifications" = "Уведомления";
+"NotificationsAndSounds" = "Уведомления и звуки";
+"NotificationsSettings" = "Настройки уведомлений";
+"NotificationsForPrivateChats" = "Личные чаты";
+"NotificationsForGroups" = "Группы";
+"NotificationsForChannels" = "Каналы";
+"NotificationsEnabled" = "Включены";
+"NotificationsDisabled" = "Выключены";
+"MessagePreview" = "Предпросмотр сообщения";
+"MessageSoundOn" = "Звук включён";
+"MessageSoundOff" = "Звук выключен";
+"Vibrate" = "Вибрация";
+"ContactJoined" = "Контакт зарегистрировался";
+"ResetAllNotifications" = "Сбросить все настройки уведомлений";
+"SmartNotifications" = "Умные уведомления";
+"SmartNotificationsTitle" = "Умные уведомления";
+"SmartNotificationsDescription" = "ИИ анализирует содержимое и уведомляет только о важном";
+"PriorityMode" = "Режим приоритетов";
+"PriorityModeOff" = "Все";
+"PriorityModeUrgent" = "Только срочные";
+"PriorityModeImportant" = "Важные и срочные";
+"PriorityLabelUrgent" = "Срочное";
+"PriorityLabelImportant" = "Важное";
+"PriorityLabelNormal" = "Обычное";
+
+"Privacy" = "Конфиденциальность";
+"PrivacyTitle" = "Конфиденциальность";
+"PrivacySettings" = "Настройки конфиденциальности";
+"PrivacyAndSecurity" = "Конфиденциальность и безопасность";
+"LastSeenTitle" = "Время захода";
+"PrivacyPhoneTitle" = "Номер телефона";
+"PrivacyProfilePhotoTitle" = "Фото профиля";
+"PrivacyForwardsTitle" = "Пересылки сообщений";
+"PrivacyCallsTitle" = "Звонки";
+"PrivacyVoiceMessagesTitle" = "Голосовые сообщения";
+"GroupsAndChannels" = "Группы и каналы";
+"BlockedUsers" = "Заблокированные пользователи";
+"BlockedUsersInfo" = "Пользователи из этого списка не смогут писать вам.";
+"BlockContact" = "Заблокировать";
+"BlockUser" = "Заблокировать пользователя";
+"Unblock" = "Разблокировать";
+"UnblockUser" = "Разблокировать пользователя";
+"ActiveSessions" = "Активные сеансы";
+"Devices" = "Устройства";
+"WebSessions" = "Веб-сессии";
+"AuthSessionsCurrentSession" = "Текущее устройство";
+"TerminateSession" = "Завершить сеанс";
+"TerminateAllSessions" = "Завершить все другие сеансы";
+"AreYouSureSessions" = "Завершить все другие сеансы?";
+"AreYouSureWebSessions" = "Отключить все веб-сессии?";
+"AreYouSure" = "Вы уверены?";
+
+"PrivacyLastSeen" = "Кто видит время захода";
+"PrivacyPhone" = "Кто видит мой номер";
+"PrivacyProfilePhoto" = "Кто видит моё фото";
+"PrivacyForwards" = "Кто видит ссылку при пересылке";
+"PrivacyCalls" = "Кто может мне звонить";
+"PrivacyEverybody" = "Все";
+"PrivacyNobody" = "Никто";
+"PrivacyContacts" = "Мои контакты";
+"AlwaysShareWith" = "Всегда делиться с…";
+"NeverShareWith" = "Никогда не делиться с…";
+"AlwaysAllow" = "Всегда разрешать";
+"NeverAllow" = "Никогда не разрешать";
+"AlwaysAllowPlaceholder" = "Добавьте пользователей";
+
+"TwoStepVerificationTitle" = "Двухэтапная аутентификация";
+"EnablePasscode" = "Включить код-пароль";
+"DisablePasscode" = "Отключить код-пароль";
+"ChangePasscode" = "Изменить код-пароль";
+"AutoLock" = "Автоблокировка";
+"Passcode" = "Код-пароль";
+"EnterPasscode" = "Введите код-пароль";
+"ConfirmPasscode" = "Подтвердите код-пароль";
+"PasscodesDoNotMatch" = "Коды не совпадают";
+"PasscodeControllerErrorCurrent" = "неверный код-пароль";
+
+"Language" = "Язык";
+"InterfaceLanguage" = "Язык интерфейса";
+"SettingsLanguage.Title" = "Язык";
+"ShowTranslateButton" = "Показывать кнопку «Перевести»";
+"TranslateEntireChats" = "Переводить чаты целиком";
+"DoNotTranslate" = "Не переводить";
+"DefaultTranslationLanguage" = "Язык перевода по умолчанию";
+"ChooseLanguage" = "Выберите язык";
+"ChooseLanguageTitle" = "Язык";
+"Translate" = "Перевести";
+"TranslateMessage" = "Перевести сообщение";
+"TranslatingMessage" = "Переводим…";
+"ShowOriginalButton" = "Показать оригинал";
+"TranslateToButton" = "Перевести на {language}";
+"DoNotTranslateLanguage" = "Не переводить {language}";
+"AddedToDoNotTranslate" = "Язык {language} добавлен в исключения";
+"TranslateMenuCocoon" = "Переводы через {link}";
+"TranslateMenuCocoonLinkText" = "наш AI-сервис";
+"Chat.Translate.Menu.To" = "Выбрать язык перевода";
+"AiTranslateDefaultAuto" = "Авто (язык интерфейса)";
+"AiTranslateLangEn" = "Английский";
+"AiTranslateLangRu" = "Русский";
+"AiTranslateLangEs" = "Испанский";
+"AiTranslateLangDe" = "Немецкий";
+"AiTranslateLangFr" = "Французский";
+"AiTranslateCopy" = "Копировать перевод";
+"AiTranslateFailed" = "Не удалось перевести";
+"AiTranslateGenerate" = "Перевести";
+"AiTranslateStreaming" = "Перевод…";
+"AiTranslateTitle" = "Перевод";
+"AiTranslateLanguage" = "Язык перевода";
+"AiTranslateModal" = "Перевод сообщения";
+"AiNotConfigured" = "AI-сервис не настроен";
+"AiGeneratedDisclaimer" = "Сгенерировано ИИ";
+
+"DataSettings" = "Данные и память";
+"Data and Storage" = "Данные и память";
+"DataUsage" = "Использование данных";
+"StorageUsage" = "Использование памяти";
+"NetworkUsage" = "Использование трафика";
+"CacheSettings" = "Настройки кэша";
+"ClearCache" = "Очистить кэш";
+"AutoDownloadMedia" = "Автозагрузка медиа";
+"AutoDownloadSettings" = "Автозагрузка";
+"AutoDownloadPhotosTitle" = "Фото";
+"AutoDownloadVideosTitle" = "Видео";
+"AutoDownloadFilesTitle" = "Файлы";
+"AutoDownloadMaxFileSize" = "Максимальный размер файла";
+"AutoDownloadSettingsContacts" = "В чатах с контактами";
+"AutoDownloadSettingsPrivateChats" = "В личных чатах";
+"AutoDownloadSettingsGroupChats" = "В группах";
+"AutoDownloadSettingsChannels" = "В каналах";
+"AutodownloadPrivateChats" = "Личные чаты";
+"AutodownloadGroupChats" = "Группы";
+"AutodownloadChannels" = "Каналы";
+"AutoplayMedia" = "Воспроизводить медиа";
+"AutoplayGifs" = "Автовоспроизведение GIF";
+"AutoplayVideo" = "Автовоспроизведение видео";
+
+"FilesTitle" = "Файлы";
+"FileSize" = "Размер";
+"SizeKB" = "{size} КБ";
+"SizeMB" = "{size} МБ";
+"SizeGB" = "{size} ГБ";
+"FileExpired" = "Срок хранения истёк";
+"FileUploading" = "Загрузка…";
+"FileUploaded" = "Загружено";
+"FileDownloading" = "Скачивание…";
+"FileDownloaded" = "Скачано";
+"FileAction.Download" = "Скачать";
+"FileAction.Open" = "Открыть";
+
+"Status" = "Статус";
+"Saved" = "Сохранено";
+"SavedForLater" = "Сохранено";
+"SaveToGallery" = "Сохранить в галерею";
+"SaveToCloud" = "Сохранить в облако";
+
+"CallConnecting" = "Соединение…";
+"CallStatusRinging" = "Вызов…";
+"CallStatusConnected" = "В сети";
+"CallStatusFailed" = "Не удалось";
+"CallStatusEnded" = "Звонок завершён";
+"CallStatusBusy" = "Занято";
+"CallStatusMissed" = "Пропущен";
+"CallDeclined" = "Отклонено";
+"Call" = "Звонок";
+"VideoCall" = "Видеозвонок";
+"VoiceCall" = "Голосовой вызов";
+"CallIncoming" = "Входящий звонок";
+"CallOutgoing" = "Исходящий звонок";
+"VoipAnswer" = "Ответить";
+"VoipEnd" = "Завершить";
+"VoipReject" = "Отклонить";
+"VoipDecline" = "Отклонить";
+"HangUp" = "Завершить";
+"MuteMic" = "Выключить микрофон";
+"UnmuteMic" = "Включить микрофон";
+"CameraOn" = "Включить камеру";
+"CameraOff" = "Выключить камеру";
+"SharingScreen" = "Трансляция экрана";
+"StartScreenSharing" = "Показ экрана";
+"StopScreenSharing" = "Остановить показ";
+
+"Bots" = "Боты";
+"Bot" = "Бот";
+"BotAboutText" = "О боте";
+"BotStart" = "Запустить";
+"BotRestart" = "Перезапустить";
+"BotStop" = "Остановить";
+"BotBlock" = "Заблокировать";
+"BotManagement" = "Управление ботом";
+"BotManagementTitle" = "Настройки бота";
+"BotSettings" = "Настройки бота";
+"BotCreated" = "Бот создан";
+"BotDeleted" = "Бот удалён";
+"BotToken" = "Токен бота";
+"BotShortDescription" = "Краткое описание";
+"BotDescription" = "Описание";
+"BotDisplayName" = "Отображаемое имя";
+"BotInfoTitle" = "Информация о боте";
+"BotAddToGroup" = "Добавить в группу";
+"BotAddedToGroup" = "Добавлен в группу";
+"BotInlineMode" = "Inline-режим";
+"BotInlineModeHint" = "Разрешить использовать @бота в чатах";
+"BotCanJoinGroups" = "Может вступать в группы";
+"BotCanJoinGroupsHint" = "Бот сможет быть добавлен в группы";
+"BotCanReadAllMessages" = "Может читать все сообщения";
+"BotCanReadAllMessagesHint" = "Бот видит все сообщения в группах";
+"BotPrivacyMode" = "Режим конфиденциальности";
+"BotPrivacyModeHint" = "Бот получает только команды";
+"BotPrivacyPolicy" = "Политика конфиденциальности";
+"BotRotateToken" = "Перегенерировать токен";
+"BotPermissions" = "Разрешения";
+"AddBot" = "Добавить бота";
+"NewBot" = "Новый бот";
+"MyBots" = "Мои боты";
+"BotFather" = "BotFather";
+
+"StickersTab" = "Стикеры";
+"EmojiTab" = "Эмодзи";
+"GifsTab" = "GIF";
+"StickersName" = "Стикерпаки";
+"StickersAddName" = "Добавить стикерпак";
+"StickersRemove" = "Удалить стикерпак";
+"StickersShare" = "Поделиться";
+"StickersEmpty" = "Нет стикеров";
+"MyStickers" = "Мои стикеры";
+
+"Polls" = "Опросы";
+"CreatePoll" = "Создать опрос";
+"PollQuestion" = "Вопрос";
+"PollOption" = "Вариант";
+"PollAddOption" = "Добавить вариант";
+"PollAnonymous" = "Анонимное голосование";
+"PollMultiple" = "Несколько ответов";
+"PollQuiz" = "Режим викторины";
+"PollResults" = "Результаты";
+"PollVoters_one" = "{count} голос";
+"PollVoters_few" = "{count} голоса";
+"PollVoters_many" = "{count} голосов";
+"PollVoters_other" = "{count} голоса";
+"NoVotes" = "Нет голосов";
+"Vote" = "Проголосовать";
+"ViewResults" = "Посмотреть результаты";
+"RetractVote" = "Отменить голос";
+
+"Mute" = "Отключить уведомления";
+"Unmute" = "Включить уведомления";
+"MuteFor1h" = "Отключить на 1 час";
+"MuteFor8h" = "Отключить на 8 часов";
+"MuteFor2Days" = "Отключить на 2 дня";
+"MuteForever" = "Отключить навсегда";
+"ChatNotifications" = "Уведомления чата";
+"ChatNotifications.Off" = "Выключены";
+"ChatNotifications.Default" = "По умолчанию";
+"ChatNotifications.Custom" = "Настраиваемые";
+
+"InviteLink" = "Ссылка-приглашение";
+"InviteLinks" = "Ссылки-приглашения";
+"CreateLink" = "Создать ссылку";
+"CreateInviteLink" = "Создать ссылку-приглашение";
+"AdminCreateInvite" = "Создать приглашение";
+"AdminInviteCreated" = "Ссылка создана";
+"AdminInviteError" = "Не удалось создать ссылку";
+"RevokeLink" = "Аннулировать ссылку";
+"CopyInviteLink" = "Копировать ссылку";
+"ShareInviteLink" = "Поделиться ссылкой";
+"Revoke" = "Аннулировать";
+
+"Nothing" = "Ничего";
+"Empty" = "Пусто";
+"Error" = "Ошибка";
+"ErrorOccurred" = "Произошла ошибка";
+"NetworkError" = "Проблема с сетью";
+"Offline" = "Нет подключения";
+"Connecting" = "Соединение…";
+"Reconnecting" = "Переподключение…";
+
+"AttachmentUploadFailed" = "Не удалось загрузить файл";
+"FileVirusDetected" = "Файл отклонён: обнаружен вирус";
+"VirusDetected" = "Обнаружен вирус";
+"FileTooLarge" = "Файл слишком большой";
+"FileTypeNotAllowed" = "Тип файла не разрешён";
+
+"LogOut" = "Выйти";
+"LogOutTitle" = "Выйти из аккаунта";
+"LogOutInfo" = "Вы уверены, что хотите выйти?";
+"LoggingOut" = "Выход…";
+
+"Help" = "Помощь";
+"FAQ" = "Частые вопросы";
+"Version" = "Версия";
+"About" = "О программе";
+"Support" = "Поддержка";
+"AskAQuestion" = "Задать вопрос";
+"PrivacyPolicyUrl" = "https://orbit.mst";
+
+"Members_one" = "{count} участник";
+"Members_few" = "{count} участника";
+"Members_many" = "{count} участников";
+"Members_other" = "{count} участника";
+"Online_one" = "{count} в сети";
+"Online_other" = "{count} в сети";
+"Contacts_one" = "{count} контакт";
+"Contacts_few" = "{count} контакта";
+"Contacts_many" = "{count} контактов";
+"Contacts_other" = "{count} контакта";
+
+"Seconds_one" = "{count} секунда";
+"Seconds_few" = "{count} секунды";
+"Seconds_many" = "{count} секунд";
+"Seconds_other" = "{count} секунды";
+"Minutes_one" = "{count} минута";
+"Minutes_few" = "{count} минуты";
+"Minutes_many" = "{count} минут";
+"Minutes_other" = "{count} минуты";
+"Hours_one" = "{count} час";
+"Hours_few" = "{count} часа";
+"Hours_many" = "{count} часов";
+"Hours_other" = "{count} часа";
+"Days_one" = "{count} день";
+"Days_few" = "{count} дня";
+"Days_many" = "{count} дней";
+"Days_other" = "{count} дня";
+"Weeks_one" = "{count} неделя";
+"Weeks_few" = "{count} недели";
+"Weeks_many" = "{count} недель";
+"Weeks_other" = "{count} недели";
+"Months_one" = "{count} месяц";
+"Months_few" = "{count} месяца";
+"Months_many" = "{count} месяцев";
+"Months_other" = "{count} месяца";
+"Years_one" = "{count} год";
+"Years_few" = "{count} года";
+"Years_many" = "{count} лет";
+"Years_other" = "{count} года";
+
+"JustNow" = "Только что";
+"MinAgo" = "{count} мин. назад";
+"HoursAgo_one" = "{count} час назад";
+"HoursAgo_few" = "{count} часа назад";
+"HoursAgo_many" = "{count} часов назад";
+"HoursAgo_other" = "{count} часа назад";
+
+"Drafts" = "Черновики";
+"Draft" = "Черновик";
+
+"SearchMessages" = "Поиск сообщений";
+"SearchInChat" = "Поиск в чате";
+"SearchMembers" = "Поиск участников";
+"SearchBy" = "Искать по…";
+"FromUser" = "От";
+"InChat" = "В чате";
+"ByDate" = "По дате";
+
+"BotsPlatform.Orbit" = "Orbit";
+"WorkspaceTitle" = "Рабочее пространство";
+"OrbitMessenger" = "Orbit Messenger";
+
+"Folders" = "Папки";
+"FoldersNewFolder" = "Новая папка";
+"FoldersEditFolder" = "Изменить папку";
+"FoldersIncludeChats" = "Включить чаты";
+"FoldersExcludeChats" = "Исключить чаты";
+"FoldersAll" = "Все чаты";
+"CreateFolder" = "Создать папку";
+
+"ArchiveAndMute" = "Архивировать и отключить";
+"ArchiveAndMuteInfo" = "Новые чаты от неконтактов будут попадать в архив";
+
+"IntegrationsTitle" = "Интеграции";
+"Integrations" = "Интеграции";
+"IntegrationAdd" = "Добавить интеграцию";
+"IntegrationRemove" = "Удалить интеграцию";
+"IntegrationEnable" = "Включить";
+"IntegrationDisable" = "Выключить";
+"WebhookUrl" = "URL webhook";
+"IntegrationStatus" = "Статус";
+"IntegrationActive" = "Активна";
+"IntegrationInactive" = "Выключена";
+
+"AiUsageTitle" = "Использование AI";
+"AiUsageUnavailable" = "Статистика AI недоступна";
+"AiUsageEmpty" = "Нет данных за период";
+"AiUsageTotalRequests" = "Всего запросов";
+"AiUsageInputTokens" = "Входные токены";
+"AiUsageOutputTokens" = "Выходные токены";
+"AiUsageCost" = "Стоимость";
+"AiUsagePeriodFallback" = "За всё время";
+"AiUsageByFeatureHeader" = "По функциям";
+"AiUsageTotalsHeader" = "Итого";
+
+"LinkCopied" = "Ссылка скопирована";
+"TextCopied" = "Текст скопирован";
+"MessageCopied" = "Сообщение скопировано";
+"UsernameCopied" = "Имя пользователя скопировано";
+"PhoneCopied" = "Номер скопирован";
+
+"Emoji" = "Эмодзи";
+"RecentStickers" = "Недавние стикеры";
+"FavoriteStickers" = "Избранные стикеры";
+
+"QuickReply" = "Быстрый ответ";
+"EditReactions" = "Изменить реакции";
+
+"ChatJoinAsAdmin" = "Вступить как админ";
+"JoinGroup" = "Вступить в группу";
+"JoinChannel" = "Подписаться на канал";
+"Join" = "Вступить";
+
+"Discuss" = "Обсудить";
+"DiscussionGroup" = "Группа обсуждения";
+
+"ScamAccount" = "Мошенничество";
+"FakeAccount" = "Подделка";
+
+"AddToContacts" = "Добавить в контакты";
+"AddContact" = "Добавить контакт";
+"RemoveFromContacts" = "Удалить из контактов";
+"NewContact" = "Новый контакт";
+"CreateGroupError" = "Невозможно создать группу с этими пользователями из-за их настроек приватности.";
+
+"LazyMedia" = "Медиа загружается…";
+
+"FwdMessages" = "Пересланные сообщения";
+"DeletedAccount" = "Удалённый аккаунт";
+"DeletedMessage" = "Сообщение удалено";
+"NoMessagesChat" = "В этом чате пока нет сообщений";
+
+"Reply.QuotedTitle" = "Цитата";
+"ReplyToUser" = "Ответить {user}";
+"InReplyTo" = "В ответ на";
+
+"Mentions" = "Упоминания";
+"Mention" = "Упоминание";
+"MentionUser" = "Упомянуть пользователя";
+
+"PremiumSubscribe" = "Подключить Premium";
+"UpgradePremium" = "Обновить до Premium";
+
+"Telegram Premium" = "Orbit Premium";
+
+"AdminPermissions.ChangeInfo" = "Изменять информацию";
+"AdminPermissions.PostMessages" = "Публиковать сообщения";
+"AdminPermissions.EditMessages" = "Редактировать сообщения";
+"AdminPermissions.DeleteMessages" = "Удалять сообщения";
+"AdminPermissions.BanUsers" = "Блокировать пользователей";
+"AdminPermissions.InviteUsers" = "Приглашать пользователей";
+"AdminPermissions.PinMessages" = "Закреплять сообщения";
+"AdminPermissions.AddAdmins" = "Добавлять администраторов";
+"AdminPermissions.Anonymous" = "Оставаться анонимным";
+
+"Passport" = "Паспорт";
+"Wallet" = "Кошелёк";
+
+"NoContactsYet" = "У вас пока нет контактов";
+"NoChatsYet" = "У вас пока нет чатов";
+
+"BackgroundBlurred" = "Размытие";
+"BackgroundMotion" = "Движение";
+"BackgroundPattern" = "Узор";
+"BackgroundIntensity" = "Насыщенность";
+
+"ThemeBuiltIn" = "Встроенные темы";
+"Colorize" = "Раскрасить";
+
+"MessagesSearch" = "Поиск сообщений";
+"FilesSearch" = "Поиск файлов";
+"LinksSearch" = "Поиск ссылок";
+"MusicSearch" = "Поиск музыки";
+"VoiceSearch" = "Поиск голосовых";
+
+"WhoCanCallMe" = "Кто может мне звонить";
+"PeerTypeContacts" = "Контакты";
+"PeerTypeGroup" = "Группы";
+"PeerTypePrivateChat" = "Личные чаты";
+"PeerTypeChannel" = "Каналы";
+"PeerTypeBot" = "Боты";
+
+"ChatSelf" = "Вы";
+"You" = "Вы";
+"Me" = "Я";
+"Everyone" = "Все";
+
+"Security" = "Безопасность";
+"Account" = "Аккаунт";
+"DeleteAccount" = "Удалить аккаунт";
+"DeleteAccountConfirm" = "Удалить аккаунт?";
+"DeleteAccountInfo" = "Все ваши данные будут удалены.";
+"DeleteMyAccount" = "Удалить мой аккаунт";
+
+"ScheduledMessagesEmpty" = "Нет отложенных сообщений";
+"Reminders" = "Напоминания";
+"Reminder" = "Напоминание";
+
+"TopPeers" = "Часто используемые";
+"RecentActions" = "Последние действия";
+"RecentPosts" = "Недавние публикации";
+"RecentChats" = "Недавние чаты";
+
+"GlobalSearch" = "Глобальный поиск";
+"LocalSearch" = "Локальный поиск";
+"MessagesAndGroups" = "Сообщения и группы";
+
+"Pinned" = "Закреплено";
+"PinnedMessage" = "Закреплённое сообщение";
+"PinnedMessages_one" = "{count} закреплённое сообщение";
+"PinnedMessages_few" = "{count} закреплённых сообщения";
+"PinnedMessages_many" = "{count} закреплённых сообщений";
+"PinnedMessages_other" = "{count} закреплённых сообщения";
+
+"ChatFontSize" = "Размер шрифта";
+"MessageTextSize" = "Размер текста";
+
+"ExceptionsAdd" = "Добавить исключение";
+"ExceptionsRemove" = "Убрать исключение";
+"Exceptions" = "Исключения";
+"Exception" = "Исключение";
+
+"ForwardFromChat" = "Переслать из чата";
+"ForwardAsCopy" = "Копировать без указания источника";
+"Show sender's name" = "Показать имя отправителя";
+
+"ReadAllChats" = "Отметить все прочитанными";
+"ClearAllDrafts" = "Очистить все черновики";
+
+"AdvancedSettings" = "Дополнительно";
+"ExperimentalSettings" = "Экспериментальные функции";
+
+"MessageOptionsBeta" = "Опции сообщения";
+"BetaBadge" = "BETA";
+"NewBadge" = "NEW";
+
+"LinkPreview" = "Предпросмотр ссылки";
+"HideLinkPreview" = "Скрыть предпросмотр";
+
+"ExpandMessage" = "Развернуть";
+"CollapseMessage" = "Свернуть";
+
+"TranslateBarTitle" = "Автоперевод";
+"TranslateBarHide" = "Скрыть перевод";
+"TranslateBarToOriginal" = "Исходный текст";
+"ShowTranslation" = "Показать перевод";
+"HideTranslation" = "Скрыть перевод";
+
+"Sound.Default" = "По умолчанию";
+"Sound.None" = "Без звука";
+
+"Invite" = "Пригласить";
+"InviteToGroup" = "Пригласить в группу";
+"InviteContacts" = "Пригласить контакты";
+
+"Username.Taken" = "Занято";
+"Username.Available" = "Доступно";
+"Username.CheckingAvailability" = "Проверка…";
+
+"AccountDeactivated" = "Аккаунт деактивирован";
+"AccountBanned" = "Аккаунт заблокирован";
+
+"KickUser" = "Удалить из группы";
+"RestrictUser" = "Ограничить пользователя";
+"BanUser" = "Заблокировать";
+
+"ReactionCountPlural_one" = "{count} реакция";
+"ReactionCountPlural_few" = "{count} реакции";
+"ReactionCountPlural_many" = "{count} реакций";
+"ReactionCountPlural_other" = "{count} реакции";
+
+"NoSelected" = "Ничего не выбрано";
+
+"From" = "От";
+"To" = "Кому";
+"Via" = "Через";
+
+"BlankUser" = "Пустой пользователь";
+
+"Edited" = "изменено";
+"EditedAt" = "изменено {time}";
+
+"CopyReactionLink" = "Копировать ссылку на реакцию";
+
+"NoUnread" = "Нет непрочитанных";
+
+"Languages_one" = "{count} язык";
+"Languages_few" = "{count} языка";
+"Languages_many" = "{count} языков";
+"Languages_other" = "{count} языка";
+
+"SearchGifs" = "Поиск GIF";
+"SearchStickers" = "Поиск стикеров";
+"SearchEmoji" = "Поиск эмодзи";
+
+"GeneralSettings" = "Общие";
+"General" = "Общие";
+
+"Theme" = "Тема";
+"Themes" = "Темы";
+
+"Background" = "Фон";
+"Backgrounds" = "Фоны";
+
+"ResetToDefault" = "Сбросить настройки";
+"ResetNotifications" = "Сбросить уведомления";
+
+"SearchResults" = "Результаты поиска";
+"NoSearchResults" = "Ничего не найдено";
+
+"LoadingMoreMessages" = "Загрузка сообщений…";
+
+"Disclaimer" = "Отказ от ответственности";
+
+"MessageDelivered" = "Доставлено";
+"MessageRead" = "Прочитано";
+"MessageUnread" = "Непрочитано";

@@ -11,4 +11,4 @@ printf '%s /usr/local/bin/backup-postgres.sh\n' "$BACKUP_CRON" > "$CRONTAB"
 
 # -passthrough-logs keeps script stdout/stderr attached to container logs
 # so Saturn / docker logs see the same output the script writes.
-exec supercronic -passthrough-logs "$CRONTAB"
+exec /usr/local/bin/supercronic -passthrough-logs "$CRONTAB"

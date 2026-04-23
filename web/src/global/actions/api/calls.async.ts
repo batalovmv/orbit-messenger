@@ -200,6 +200,18 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
     return;
   }
 
+  // Check if this is a Saturn SFU call (has sfu_ws_url) vs legacy Colibri
+  const isSfuCall = Boolean((groupCall as any).sfuWsUrl);
+  const callId = groupCall.id;
+
+  if (isSfuCall) {
+    // Saturn SFU path — the actual connection happens in the GroupCall
+    // component via useSfuStreamManager hook. Here we just update state.
+    // The component will call join/leave on mount/unmount.
+    return;
+  }
+
+  // Legacy Colibri path (fallback for older calls)
   const audioElement = getGroupCallAudioElement();
   const audioContext = getGroupCallAudioContext();
 
@@ -207,9 +219,7 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
     return;
   }
 
-  const {
-    currentUserId,
-  } = global;
+  const { currentUserId } = global;
 
   if (!currentUserId) return;
 
@@ -225,7 +235,6 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
 
   if (!result) {
     actions.showNotification({
-      // TODO[lang] Localize error message
       message: 'Failed to join voice chat',
       tabId,
     });

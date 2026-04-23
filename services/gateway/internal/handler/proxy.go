@@ -69,7 +69,7 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		switch strings.ToLower(k) {
 		case "connection", "keep-alive", "transfer-encoding", "te",
 			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate",
-			"x-user-id", "x-user-role", "x-device-id", "x-internal-token":
+			"x-user-id", "x-user-role", "x-device-id", "x-internal-token", "x-trusted-client-ip":
 			return
 		}
 		req.Header.SetBytesKV(key, value)
@@ -92,6 +92,9 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	// Sign the request so downstream services can verify it came from the gateway
 	if len(internalSecret) > 0 && internalSecret[0] != "" {
 		req.Header.Set("X-Internal-Token", internalSecret[0])
+	}
+	if clientIP := c.IP(); clientIP != "" {
+		req.Header.Set("X-Trusted-Client-IP", clientIP)
 	}
 	// Forward request body
 	if body := c.Body(); len(body) > 0 {
@@ -247,6 +250,7 @@ func RegisterAuthProxyRoutes(authGroup fiber.Router, cfg ProxyConfig, middleware
 
 	authGroup.Post("/refresh", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Get("/me", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Get("/users/me/notification-priority", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Post("/logout", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Get("/sessions", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Delete("/sessions/:id", routeHandlers(authProxy, middlewares.Session)...)
@@ -378,6 +382,23 @@ func SetupProxy(app *fiber.App, apiGroup fiber.Router, cfg ProxyConfig) {
 	})
 
 	// User notification settings: proxied to auth service
+	apiGroup.Get("/users/me/notification-priority", func(c *fiber.Ctx) error {
+		proxyPath := sanitizeProxyPath(c.Path())
+		if proxyPath == "" {
+			return response.Error(c, apperror.NotFound("Not found"))
+		}
+		url := cfg.AuthServiceURL + proxyPath
+		if q := c.Request().URI().QueryString(); len(q) > 0 {
+			url += "?" + string(q)
+		}
+		if err := doProxy(c, url, authClient, cfg.FrontendURL, cfg.InternalSecret); err != nil {
+			slog.Error("user notification priority proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Auth service unavailable", "status": 502,
+			})
+		}
+		return nil
+	})
 	apiGroup.Put("/users/me/notification-priority", func(c *fiber.Ctx) error {
 		proxyPath := sanitizeProxyPath(c.Path())
 		if proxyPath == "" {

@@ -87,13 +87,22 @@ func (s *noopBlockedUsersStore) Unblock(context.Context, uuid.UUID, uuid.UUID) e
 	return nil
 }
 
-type noopUserSettingsStore struct{}
+type noopUserSettingsStore struct {
+	getByUserIDFn func(context.Context, uuid.UUID) (*model.UserSettings, error)
+	upsertFn      func(context.Context, *model.UserSettings) error
+}
 
-func (s *noopUserSettingsStore) GetByUserID(context.Context, uuid.UUID) (*model.UserSettings, error) {
+func (s *noopUserSettingsStore) GetByUserID(ctx context.Context, userID uuid.UUID) (*model.UserSettings, error) {
+	if s.getByUserIDFn != nil {
+		return s.getByUserIDFn(ctx, userID)
+	}
 	return &model.UserSettings{}, nil
 }
 
-func (s *noopUserSettingsStore) Upsert(context.Context, *model.UserSettings) error {
+func (s *noopUserSettingsStore) Upsert(ctx context.Context, settings *model.UserSettings) error {
+	if s.upsertFn != nil {
+		return s.upsertFn(ctx, settings)
+	}
 	return nil
 }
 
@@ -149,6 +158,10 @@ func newSettingsApp(pushStore *mockPushSubscriptionStore, notifStore *mockNotifi
 }
 
 func newSettingsAppWithOverride(pushStore *mockPushSubscriptionStore, notifStore *mockNotificationSettingsStore, overrideStore *mockNotificationOverrideStore, internalSecret string) *fiber.App {
+	return newSettingsAppWithStores(pushStore, notifStore, &noopUserSettingsStore{}, overrideStore, internalSecret)
+}
+
+func newSettingsAppWithStores(pushStore *mockPushSubscriptionStore, notifStore *mockNotificationSettingsStore, userSettingsStore *noopUserSettingsStore, overrideStore *mockNotificationOverrideStore, internalSecret string) *fiber.App {
 	app := fiber.New()
 	opts := []service.SettingsServiceOption{}
 	if overrideStore != nil {
@@ -157,7 +170,7 @@ func newSettingsAppWithOverride(pushStore *mockPushSubscriptionStore, notifStore
 	settingsSvc := service.NewSettingsService(
 		&noopPrivacySettingsStore{},
 		&noopBlockedUsersStore{},
-		&noopUserSettingsStore{},
+		userSettingsStore,
 		notifStore,
 		&mockChatStore{},
 		opts...,
@@ -166,6 +179,7 @@ func newSettingsAppWithOverride(pushStore *mockPushSubscriptionStore, notifStore
 	h.Register(app)
 	return app
 }
+
 
 func TestGetInternalPushSubscriptions_RequiresInternalToken(t *testing.T) {
 	app := newSettingsApp(&mockPushSubscriptionStore{}, &mockNotificationSettingsStore{}, "secret")
@@ -488,4 +502,73 @@ func TestUpdateChatNotificationPriority_NoAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
+}
+
+func TestUpdateUserSettings_ReturnsPersistedRow(t *testing.T) {
+	userID := uuid.New()
+	persistedTime := time.Date(2026, 4, 22, 10, 0, 0, 0, time.UTC)
+	var upserted *model.UserSettings
+
+	app := newSettingsAppWithStores(
+		&mockPushSubscriptionStore{},
+		&mockNotificationSettingsStore{},
+		&noopUserSettingsStore{
+			upsertFn: func(_ context.Context, settings *model.UserSettings) error {
+				copied := *settings
+				upserted = &copied
+				return nil
+			},
+			getByUserIDFn: func(_ context.Context, gotUserID uuid.UUID) (*model.UserSettings, error) {
+				if gotUserID != userID {
+					t.Fatalf("unexpected user id: %s", gotUserID)
+				}
+				return &model.UserSettings{
+					UserID:               userID,
+					Theme:                "dark",
+					Language:             "en",
+					FontSize:             18,
+					SendByEnter:          false,
+					DefaultTranslateLang: settingsStrPtr("de"),
+					CreatedAt:            persistedTime,
+					UpdatedAt:            persistedTime.Add(time.Minute),
+					NotifyUsersPreview:   true,
+					NotifyGroupsPreview:  true,
+				}, nil
+			},
+		},
+		nil,
+		"secret",
+	)
+
+	body := bytes.NewBufferString(`{"theme":"dark","language":"en","font_size":18,"send_by_enter":false,"default_translate_lang":"de"}`)
+	req, _ := http.NewRequest(http.MethodPut, "/users/me/settings/appearance", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", userID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+	if upserted == nil || upserted.Theme != "dark" {
+		t.Fatalf("expected upsert before readback, got %+v", upserted)
+	}
+
+	var result model.UserSettings
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !result.UpdatedAt.Equal(persistedTime.Add(time.Minute)) {
+		t.Fatalf("expected persisted updated_at, got %v", result.UpdatedAt)
+	}
+	if result.DefaultTranslateLang == nil || *result.DefaultTranslateLang != "de" {
+		t.Fatalf("expected persisted default translate lang, got %+v", result.DefaultTranslateLang)
+	}
+}
+
+func settingsStrPtr(v string) *string {
+	return &v
 }

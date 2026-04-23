@@ -1,0 +1,16 @@
+@echo off
+REM Switch both LOCAL agents and GLOBAL plugin agents to VIBECODE variant.
+pushd "%~dp0"
+if not exist "agents" mkdir "agents"
+del /Q "agents\*.md" >nul 2>&1
+copy /Y "agents-vibecode\*.md" "agents\" >nul
+echo [VIBECODE] local agents active
+
+copy /Y "%USERPROFILE%\.config\opencode\oh-my-opencode.vibecode.json" "%USERPROFILE%\.config\opencode\oh-my-opencode.json" >nul
+echo [VIBECODE] plugin agents active
+
+REM Start Claude Office visualizer (idempotent — no-op if already running)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.claude\scripts\start-claude-office.ps1"
+
+popd
+opencode

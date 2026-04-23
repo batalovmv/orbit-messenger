@@ -10,7 +10,7 @@ services:
       context: ./scripts/postgres
       dockerfile: Dockerfile.postgres
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5434:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-orbit}
       POSTGRES_USER: ${POSTGRES_USER:-orbit}

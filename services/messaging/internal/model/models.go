@@ -197,7 +197,9 @@ type UserSettings struct {
 	SendByEnter bool      `json:"send_by_enter"`
 	DNDFrom     *string   `json:"dnd_from,omitempty"`
 	DNDUntil    *string   `json:"dnd_until,omitempty"`
-	DefaultTranslateLang *string   `json:"default_translate_lang,omitempty"`
+	DefaultTranslateLang *string `json:"default_translate_lang,omitempty"`
+	CanTranslate         bool    `json:"can_translate"`
+	CanTranslateChats    bool    `json:"can_translate_chats"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	// Global notification defaults per chat type

@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -94,6 +97,19 @@ func (h *UploadHandler) UploadEncrypted(c *fiber.Ctx) error {
 }
 
 // Upload handles simple file upload via multipart/form-data.
+func buildUploadAttemptID(userID uuid.UUID, filename string, size int64) string {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s:%s:%d", userID.String(), filename, size)))
+	return hex.EncodeToString(hash[:16])
+}
+
+func (h *UploadHandler) trustedClientIP(c *fiber.Ctx) string {
+	if token := c.Get("X-Internal-Token"); h.internalSecret != "" && token != "" &&
+		subtle.ConstantTimeCompare([]byte(token), []byte(h.internalSecret)) == 1 {
+		return c.Get("X-Trusted-Client-IP")
+	}
+	return ""
+}
+
 func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 	uid, err := uuid.Parse(c.Get("X-User-ID"))
 	if err != nil {
@@ -129,8 +145,18 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 
 	mediaType := c.FormValue("type", "")
 	isOneTime := c.FormValue("is_one_time", "false") == "true"
+	uploadAttemptID := buildUploadAttemptID(uid, file.Filename, file.Size)
+	auditCtx := &model.UploadAuditContext{
+		UserID:          uid,
+		TrustedClientIP: h.trustedClientIP(c),
+		UserAgent:       c.Get("User-Agent"),
+		Filename:        file.Filename,
+		MimeType:        mimeType,
+		Size:            file.Size,
+		UploadAttemptID: uploadAttemptID,
+	}
 
-	media, err := h.svc.Upload(c.Context(), uid, data, file.Filename, mimeType, mediaType, isOneTime)
+	media, err := h.svc.Upload(c.Context(), uid, data, file.Filename, mimeType, mediaType, isOneTime, auditCtx)
 	if err != nil {
 		return h.mapChunkedError(c, err, "upload")
 	}

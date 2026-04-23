@@ -136,6 +136,8 @@ func (h *SettingsHandler) UpdateUserSettings(c *fiber.Ctx) error {
 		DNDFrom     *string `json:"dnd_from"`
 		DNDUntil             *string `json:"dnd_until"`
 		DefaultTranslateLang *string `json:"default_translate_lang"`
+		CanTranslate         *bool   `json:"can_translate"`
+		CanTranslateChats    *bool   `json:"can_translate_chats"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -153,11 +155,31 @@ func (h *SettingsHandler) UpdateUserSettings(c *fiber.Ctx) error {
 		}
 	}
 
-	us, err := h.settingsSvc.UpdateUserSettings(
+	// Preserve existing translate prefs when the client omits them.
+	existing, err := h.settingsSvc.GetUserSettings(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	canTranslate := existing.CanTranslate
+	if req.CanTranslate != nil {
+		canTranslate = *req.CanTranslate
+	}
+	canTranslateChats := existing.CanTranslateChats
+	if req.CanTranslateChats != nil {
+		canTranslateChats = *req.CanTranslateChats
+	}
+
+	_, err = h.settingsSvc.UpdateUserSettings(
 		c.Context(), uid,
 		req.Theme, req.Language, req.FontSize, req.SendByEnter,
 		req.DNDFrom, req.DNDUntil, req.DefaultTranslateLang,
+		canTranslate, canTranslateChats,
 	)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	us, err := h.settingsSvc.GetUserSettings(c.Context(), uid)
 	if err != nil {
 		return response.Error(c, err)
 	}

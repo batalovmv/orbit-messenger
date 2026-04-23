@@ -7,6 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	AuditActionVirusDetected = "media_upload_virus_detected"
+	AuditTargetTypeUpload    = "upload_attempt"
+)
+
 // Sentinel errors for service layer.
 var (
 	ErrMediaNotFound    = errors.New("media not found")
@@ -110,6 +115,29 @@ type ChunkedUploadMeta struct {
 type Part struct {
 	Number int    `json:"number"`
 	ETag   string `json:"etag"`
+}
+
+type UploadAuditContext struct {
+	UserID          uuid.UUID
+	TrustedClientIP string
+	UserAgent       string
+	Filename        string
+	MimeType        string
+	Size            int64
+	UploadAttemptID string
+}
+
+type VirusDetectionAuditFailure struct {
+	UploadAttemptID string
+	Err             error
+}
+
+func (e *VirusDetectionAuditFailure) Error() string {
+	return "virus detection audit failure: " + e.Err.Error()
+}
+
+func (e *VirusDetectionAuditFailure) Unwrap() error {
+	return e.Err
 }
 
 // SizeLimit returns the max upload size for a given media type.

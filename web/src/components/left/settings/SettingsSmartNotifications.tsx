@@ -1,12 +1,11 @@
-import type { ChangeEvent } from 'react';
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { NotificationMode, NotificationStats } from '../../../api/saturn/methods/notifications';
+import type { NotificationMode } from '../../../api/saturn/methods/notifications';
 
 import type { RegularLangKey } from '../../../types/language';
 
-import { fetchNotificationStats, updateNotificationMode } from '../../../api/saturn/methods/notifications';
+import { getNotificationMode, updateNotificationMode } from '../../../api/saturn/methods/notifications';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
@@ -38,15 +37,15 @@ const SettingsSmartNotifications = ({ isActive, onReset }: OwnProps) => {
     let isCancelled = false;
     (async () => {
       try {
-        const stats = await fetchNotificationStats();
+        const currentMode = await getNotificationMode();
         if (isCancelled) return;
-        if (stats?.mode) {
-          setMode(stats.mode);
+        if (currentMode?.mode) {
+          setMode(currentMode.mode);
         }
-      } catch {
-        // Stats endpoint may not exist yet — use default
       } finally {
-        if (!isCancelled) setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     })();
     return () => { isCancelled = true; };
@@ -58,7 +57,7 @@ const SettingsSmartNotifications = ({ isActive, onReset }: OwnProps) => {
     try {
       await updateNotificationMode(newMode);
     } catch {
-      showNotification({ message: 'Failed to update notification mode' });
+      showNotification({ message: { key: 'SmartNotificationsUpdateFailed' } });
     }
   });
 

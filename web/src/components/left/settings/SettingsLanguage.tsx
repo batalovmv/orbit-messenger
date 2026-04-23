@@ -5,22 +5,19 @@ import {
 import { getActions, withGlobal } from '../../../global';
 
 import type { SharedSettings } from '../../../global/types';
-import type { AccountSettings, LangCode } from '../../../types';
+import type { AccountSettings } from '../../../types';
 import { SettingsScreens } from '../../../types';
 
 import { selectIsCurrentUserPremium } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
-import { oldSetLanguage } from '../../../util/oldLangProvider';
-import {
-  getStoredTranslateLang, ORBIT_TRANSLATE_LANGS, setStoredTranslateLang,
-} from '../../../util/orbitTranslateLang';
+import { loadAndChangeLanguage } from '../../../util/localization';
+import { getUserSettings, updateUserSettings } from '../../../api/saturn/methods/settingsApi';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import ItemPicker, { type ItemPickerOption } from '../../common/pickers/ItemPicker';
 import Checkbox from '../../ui/Checkbox';
@@ -34,16 +31,21 @@ type OwnProps = {
 
 type StateProps = {
   isCurrentUserPremium: boolean;
+  defaultTranslateLang?: string;
+  theme: SharedSettings['theme'];
+  shouldUseSystemTheme: SharedSettings['shouldUseSystemTheme'];
+  messageTextSize: SharedSettings['messageTextSize'];
+  messageSendKeyCombo: SharedSettings['messageSendKeyCombo'];
 } & Pick<AccountSettings, 'canTranslate' | 'canTranslateChats' | 'doNotTranslate'>
 & Pick<SharedSettings, 'language' | 'languages'>;
 
-const LANGUAGE_SCREEN_FALLBACKS = {
-  doNotTranslate: 'Do Not Translate',
-  interfaceLanguage: 'Interface Language',
-  showTranslateButton: 'Show Translate Button',
-  showTranslateChatButton: 'Translate Entire Chats',
-  translateAbout: 'Show translation controls for messages and chats when they are available.',
-} as const;
+const ORBIT_TRANSLATE_LANGS = [
+  { code: 'en', nameKey: 'AiTranslateLangEn' },
+  { code: 'ru', nameKey: 'AiTranslateLangRu' },
+  { code: 'es', nameKey: 'AiTranslateLangEs' },
+  { code: 'de', nameKey: 'AiTranslateLangDe' },
+  { code: 'fr', nameKey: 'AiTranslateLangFr' },
+] as const;
 
 const SettingsLanguage: FC<OwnProps & StateProps> = ({
   isActive,
@@ -53,6 +55,11 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   canTranslate,
   canTranslateChats,
   doNotTranslate,
+  defaultTranslateLang,
+  theme,
+  shouldUseSystemTheme,
+  messageTextSize,
+  messageSendKeyCombo,
   onReset,
 }) => {
   const {
@@ -65,17 +72,10 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(language);
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag();
-  const [translateDefaultLang, setTranslateDefaultLang] = useState<string>(() => getStoredTranslateLang() || 'auto');
-  const newLang = useLang();
+  const [translateDefaultLang, setTranslateDefaultLang] = useState<string>(defaultTranslateLang || 'auto');
+  const lang = useLang();
 
   const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
-
-  const lang = useOldLang();
-  const getLanguageText = useLastCallback((key: string, fallback: string) => {
-    const translation = lang(key);
-
-    return translation === key ? fallback : translation;
-  });
 
   useEffect(() => {
     if (!languages?.length) {
@@ -83,15 +83,39 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     }
   }, [languages]);
 
-  const handleChange = useLastCallback((langCode: string) => {
+  useEffect(() => {
+    setTranslateDefaultLang(defaultTranslateLang || 'auto');
+  }, [defaultTranslateLang]);
+
+  useEffect(() => {
+    let isUnmounted = false;
+
+    void (async () => {
+      const userSettings = await getUserSettings();
+      if (isUnmounted || !userSettings) {
+        return;
+      }
+
+      setSettingOption({
+        defaultTranslateLang: userSettings.default_translate_lang || undefined,
+        canTranslate: Boolean(userSettings.can_translate),
+        canTranslateChats: Boolean(userSettings.can_translate_chats),
+      });
+      setTranslateDefaultLang(userSettings.default_translate_lang || 'auto');
+    })();
+
+    return () => {
+      isUnmounted = true;
+    };
+  }, []);
+
+  const handleChange = useLastCallback(async (langCode: string) => {
     setSelectedLanguage(langCode);
     markIsLoading();
 
-    void oldSetLanguage(langCode as LangCode, () => {
-      unmarkIsLoading();
-
-      setSharedSettingOption({ language: langCode as LangCode });
-    });
+    await loadAndChangeLanguage(langCode);
+    setSharedSettingOption({ language: langCode });
+    unmarkIsLoading();
   });
 
   const options = useMemo(() => {
@@ -109,12 +133,36 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     });
   }, [isLoading, languages, selectedLanguage]);
 
-  const handleShouldTranslateChange = useLastCallback((newValue: boolean) => {
-    setSettingOption({ canTranslate: newValue });
+  const persistTranslatePrefs = useLastCallback(async (overrides: {
+    canTranslate?: boolean;
+    canTranslateChats?: boolean;
+  }) => {
+    const result = await updateUserSettings({
+      theme: shouldUseSystemTheme ? 'auto' : theme,
+      language,
+      fontSize: messageTextSize,
+      sendByEnter: messageSendKeyCombo === 'enter',
+      defaultTranslateLang: translateDefaultLang === 'auto' ? undefined : translateDefaultLang,
+      canTranslate: overrides.canTranslate,
+      canTranslateChats: overrides.canTranslateChats,
+    });
+    return Boolean(result);
   });
 
-  const handleShouldTranslateChatsChange = useLastCallback((newValue: boolean) => {
+  const handleShouldTranslateChange = useLastCallback(async (newValue: boolean) => {
+    setSettingOption({ canTranslate: newValue });
+    const ok = await persistTranslatePrefs({ canTranslate: newValue });
+    if (!ok) {
+      setSettingOption({ canTranslate: !newValue });
+    }
+  });
+
+  const handleShouldTranslateChatsChange = useLastCallback(async (newValue: boolean) => {
     setSettingOption({ canTranslateChats: newValue });
+    const ok = await persistTranslatePrefs({ canTranslateChats: newValue });
+    if (!ok) {
+      setSettingOption({ canTranslateChats: !newValue });
+    }
   });
 
   const handleShouldTranslateChatsClick = useLastCallback(() => {
@@ -147,16 +195,34 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   });
 
   const translateDefaultOptions = useMemo<ItemPickerOption[]>(() => [
-    { value: 'auto', label: newLang('AiTranslateDefaultAuto') },
+    { value: 'auto', label: lang('AiTranslateDefaultAuto') },
     ...ORBIT_TRANSLATE_LANGS.map(({ code, nameKey }) => ({
       value: code,
-      label: newLang(nameKey),
+      label: lang(nameKey),
     } satisfies ItemPickerOption)),
-  ], [newLang]);
+  ], [lang]);
 
-  const handleTranslateDefaultChange = useLastCallback((value: string) => {
+  const handleTranslateDefaultChange = useLastCallback(async (value: string) => {
     setTranslateDefaultLang(value);
-    setStoredTranslateLang(value === 'auto' ? undefined : value);
+
+    const nextDefaultTranslateLang = value === 'auto' ? undefined : value;
+    const result = await updateUserSettings({
+      theme: shouldUseSystemTheme ? 'auto' : theme,
+      language,
+      fontSize: messageTextSize,
+      sendByEnter: messageSendKeyCombo === 'enter',
+      defaultTranslateLang: nextDefaultTranslateLang,
+    });
+
+    if (!result) {
+      setTranslateDefaultLang(defaultTranslateLang || 'auto');
+      return;
+    }
+
+    setSettingOption({
+      defaultTranslateLang: result.default_translate_lang || undefined,
+    });
+    setTranslateDefaultLang(result.default_translate_lang || 'auto');
   });
 
   useHistoryBack({
@@ -169,15 +235,12 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       {IS_TRANSLATION_SUPPORTED && (
         <div className="settings-item">
           <Checkbox
-            label={getLanguageText('ShowTranslateButton', LANGUAGE_SCREEN_FALLBACKS.showTranslateButton)}
+            label={lang('ShowTranslateButton')}
             checked={canTranslate}
             onCheck={handleShouldTranslateChange}
           />
           <Checkbox
-            label={getLanguageText(
-              'ShowTranslateChatButton',
-              LANGUAGE_SCREEN_FALLBACKS.showTranslateChatButton,
-            )}
+            label={lang('ShowTranslateChatButton')}
             checked={canTranslateChatsEnabled}
             disabled={!isCurrentUserPremium}
             rightIcon={!isCurrentUserPremium ? 'lock' : undefined}
@@ -189,17 +252,17 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
               narrow
               onClick={handleDoNotSelectOpen}
             >
-              {getLanguageText('DoNotTranslate', LANGUAGE_SCREEN_FALLBACKS.doNotTranslate)}
+              {lang('DoNotTranslate')}
               <span className="settings-item__current-value">{doNotTranslateText}</span>
             </ListItem>
           )}
           <p className="settings-item-description mb-0 mt-1">
-            {getLanguageText('lng_translate_settings_about', LANGUAGE_SCREEN_FALLBACKS.translateAbout)}
+            {lang('lng_translate_settings_about')}
           </p>
         </div>
       )}
       <div className="settings-item settings-item-picker">
-        <h4 className="settings-item-header">{newLang('AiTranslateDefaultTitle')}</h4>
+        <h4 className="settings-item-header">{lang('AiTranslateDefaultTitle')}</h4>
         <ItemPicker
           items={translateDefaultOptions}
           selectedValue={translateDefaultLang}
@@ -208,11 +271,11 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
           itemInputType="radio"
           className="settings-picker"
         />
-        <p className="settings-item-description mb-0 mt-1">{newLang('AiTranslateDefaultAbout')}</p>
+        <p className="settings-item-description mb-0 mt-1">{lang('AiTranslateDefaultAbout')}</p>
       </div>
       <div className="settings-item settings-item-picker">
         <h4 className="settings-item-header">
-          {getLanguageText('Localization.InterfaceLanguage', LANGUAGE_SCREEN_FALLBACKS.interfaceLanguage)}
+          {lang('Localization.InterfaceLanguage')}
         </h4>
         {options ? (
           <ItemPicker
@@ -234,9 +297,16 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     const {
-      canTranslate, canTranslateChats, doNotTranslate,
+      canTranslate, canTranslateChats, doNotTranslate, defaultTranslateLang,
     } = global.settings.byKey;
-    const { language, languages } = selectSharedSettings(global);
+    const {
+      language,
+      languages,
+      theme,
+      shouldUseSystemTheme,
+      messageTextSize,
+      messageSendKeyCombo,
+    } = selectSharedSettings(global);
 
     const isCurrentUserPremium = selectIsCurrentUserPremium(global);
 
@@ -247,6 +317,11 @@ export default memo(withGlobal<OwnProps>(
       canTranslate,
       canTranslateChats,
       doNotTranslate,
+      defaultTranslateLang,
+      theme,
+      shouldUseSystemTheme,
+      messageTextSize,
+      messageSendKeyCombo,
     };
   },
 )(SettingsLanguage));

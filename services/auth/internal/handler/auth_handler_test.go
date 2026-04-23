@@ -30,15 +30,17 @@ import (
 // --- Mock Stores ---
 
 type mockUserStore struct {
-	users      map[uuid.UUID]*model.User
-	byEmail    map[string]*model.User
-	adminCount int
+	users                    map[uuid.UUID]*model.User
+	byEmail                  map[string]*model.User
+	adminCount               int
+	notificationPriorityMode map[uuid.UUID]string
 }
 
 func newMockUserStore() *mockUserStore {
 	return &mockUserStore{
-		users:   make(map[uuid.UUID]*model.User),
-		byEmail: make(map[string]*model.User),
+		users:                    make(map[uuid.UUID]*model.User),
+		byEmail:                  make(map[string]*model.User),
+		notificationPriorityMode: make(map[uuid.UUID]string),
 	}
 }
 
@@ -109,7 +111,18 @@ func (m *mockUserStore) UpdateTOTP(_ context.Context, id uuid.UUID, secret *stri
 	return nil
 }
 
-func (m *mockUserStore) UpdateNotificationPriorityMode(_ context.Context, _ uuid.UUID, _ string) error {
+func (m *mockUserStore) GetNotificationPriorityMode(_ context.Context, userID uuid.UUID) (string, error) {
+	if mode, ok := m.notificationPriorityMode[userID]; ok {
+		return mode, nil
+	}
+	return "all", nil
+}
+
+func (m *mockUserStore) UpdateNotificationPriorityMode(_ context.Context, userID uuid.UUID, mode string) error {
+	m.notificationPriorityMode[userID] = mode
+	if u, ok := m.users[userID]; ok {
+		u.NotificationPriorityMode = mode
+	}
 	return nil
 }
 
@@ -663,6 +676,27 @@ func TestResetAdmin_WrongKey(t *testing.T) {
 
 // --- helper: bootstrap admin + login, return access token ---
 
+func mustUserIDFromToken(t *testing.T, token string) uuid.UUID {
+	t.Helper()
+	parsed, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("parse token: %v", err)
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		t.Fatal("unexpected token claims type")
+	}
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		t.Fatal("missing sub claim")
+	}
+	userID, err := uuid.Parse(sub)
+	if err != nil {
+		t.Fatalf("parse sub UUID: %v", err)
+	}
+	return userID
+}
+
 func bootstrapAndLogin(t *testing.T, app *fiber.App) string {
 	t.Helper()
 	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
@@ -1113,6 +1147,36 @@ func TestListInvites_HappyPath(t *testing.T) {
 }
 
 // --- Notification Priority Mode tests ---
+
+func TestGetNotificationPriorityMode_HappyPath(t *testing.T) {
+	app, _, userStore := setupTestApp(t)
+	token := bootstrapAndLogin(t, app)
+
+	userID := mustUserIDFromToken(t, token)
+	userStore.notificationPriorityMode[userID] = "smart"
+
+	resp := doRequest(app, "GET", "/users/me/notification-priority", nil, map[string]string{"Authorization": "Bearer " + token})
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+
+	result := parseResponse(resp)
+	if result["mode"] != "smart" {
+		t.Errorf("expected mode=smart, got %v", result["mode"])
+	}
+}
+
+func TestGetNotificationPriorityMode_NoAuth(t *testing.T) {
+	app, _, _ := setupTestApp(t)
+
+	resp := doRequest(app, "GET", "/users/me/notification-priority", nil, nil)
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", resp.StatusCode)
+	}
+}
 
 func TestUpdateNotificationPriorityMode_HappyPath(t *testing.T) {
 	app, _, _ := setupTestApp(t)

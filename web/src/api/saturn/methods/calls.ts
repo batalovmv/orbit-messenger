@@ -325,6 +325,7 @@ export function requestCall(args: {
   gAHash?: Uint8Array;
   isVideo?: boolean;
   chatId?: string;
+  chatMemberCount?: number; // For auto-routing: if > 2, use group mode
 }): Promise<SaturnCall | undefined> {
   // Concurrent-call dedupe: TG action layer dispatches connectToActivePhoneCall
   // twice (once from the requestCall UI handler, once from PhoneCall.tsx mount
@@ -339,12 +340,13 @@ export function requestCall(args: {
 }
 
 async function doRequestCall({
-  user, isVideo, chatId: providedChatId,
+  user, isVideo, chatId: providedChatId, chatMemberCount,
 }: {
   user: ApiUser;
   gAHash?: Uint8Array;
   isVideo?: boolean;
   chatId?: string;
+  chatMemberCount?: number;
 }): Promise<SaturnCall | undefined> {
   // In Saturn, DM chatId !== userId. Callers MUST pass the correct chatId —
   // falling back to user.id silently used to corrupt the backend request and
@@ -364,10 +366,17 @@ async function doRequestCall({
     return undefined;
   }
   const chatId = providedChatId;
+
+  // Auto-routing: group calls for > 2 participants, p2p otherwise.
+  // This logic lives here (action layer) rather than in the UI button
+  // to ensure consistent behavior across all call initiation paths.
+  const memberCount = chatMemberCount ?? 2; // default: assume DM (2 = just the two participants)
+  const callMode = memberCount > 2 ? 'group' : 'p2p';
+
   const call = await createCall({
     chatId,
     type: isVideo ? 'video' : 'voice',
-    mode: 'p2p',
+    mode: callMode,
     memberIds: [user.id],
   });
 

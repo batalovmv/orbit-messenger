@@ -1,7 +1,6 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ApiNotification } from '../../../api/types';
-import type { LangCode } from '../../../types';
 import type { ActionReturnType, GlobalState } from '../../types';
 import type { InAppNotificationBanner } from '../../types';
 
@@ -13,8 +12,8 @@ import {
 } from '../../../util/browser/windowEnvironment';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import generateUniqueId from '../../../util/generateUniqueId';
+import { loadAndChangeLanguage } from '../../../util/localization';
 import { subscribe, unsubscribe } from '../../../util/notifications';
-import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { decryptSessionByCurrentHash } from '../../../util/passcode';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import { hasStoredSession, storeSession } from '../../../util/sessions';
@@ -178,7 +177,7 @@ addCallback((global: GlobalState) => {
 
   const performanceType = selectPerformanceSettings(global);
 
-  void oldSetLanguage(language as LangCode, undefined);
+  void loadAndChangeLanguage(language);
 
   requestMutation(() => {
     document.documentElement.style.setProperty(

@@ -7,9 +7,10 @@ import (
 )
 
 type User struct {
-	ID                uuid.UUID  `json:"id"`
-	Email             string     `json:"email"`
-	PasswordHash      string     `json:"-"`
+	ID                       uuid.UUID  `json:"id"`
+	Email                    string     `json:"email"`
+	PasswordHash             string     `json:"-"`
+	NotificationPriorityMode string     `json:"notification_priority_mode,omitempty"`
 	Phone             *string    `json:"phone,omitempty"`
 	Username          *string    `json:"username,omitempty"`
 	DisplayName       string     `json:"display_name"`

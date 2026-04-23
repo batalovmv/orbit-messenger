@@ -74,6 +74,10 @@ test_*.html
 # === Saturn ===
 .saturn/
 
+# === OpenCode Swarm ===
+.opencode/
+.swarm/
+
 # === Working artifacts (screenshots, AI prompts, temp binaries) ===
 artifacts/
 scripts/import-telegram-stickers/import-stickers-linux

@@ -592,6 +592,18 @@ func generateInviteCode() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// GetNotificationPriorityMode returns the user's persisted notification priority mode.
+func (s *AuthService) GetNotificationPriorityMode(ctx context.Context, userID uuid.UUID) (string, error) {
+	mode, err := s.users.GetNotificationPriorityMode(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", apperror.NotFound("User not found")
+		}
+		return "", fmt.Errorf("get notification priority mode: %w", err)
+	}
+	return mode, nil
+}
+
 // UpdateNotificationPriorityMode updates the user's notification priority mode.
 func (s *AuthService) UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error {
 	if err := s.users.UpdateNotificationPriorityMode(ctx, userID, mode); err != nil {

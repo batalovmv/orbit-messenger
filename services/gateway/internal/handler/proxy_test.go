@@ -11,8 +11,9 @@ import (
 )
 
 type proxyTestResponse struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
+	Method          string `json:"method"`
+	Path            string `json:"path"`
+	TrustedClientIP string `json:"trusted_client_ip,omitempty"`
 }
 
 func TestRegisterAuthProxyRoutes_UsesExpectedMiddlewareBuckets(t *testing.T) {
@@ -80,6 +81,13 @@ func TestRegisterAuthProxyRoutes_UsesExpectedMiddlewareBuckets(t *testing.T) {
 			expectedPath:   "/auth/refresh",
 		},
 		{
+			name:           "notification priority get uses session bucket",
+			method:         http.MethodGet,
+			path:           "/api/v1/auth/users/me/notification-priority",
+			expectedBucket: "session",
+			expectedPath:   "/auth/users/me/notification-priority",
+		},
+		{
 			name:           "fallback uses sensitive bucket",
 			method:         http.MethodGet,
 			path:           "/api/v1/auth/unknown",
@@ -118,6 +126,43 @@ func TestRegisterAuthProxyRoutes_UsesExpectedMiddlewareBuckets(t *testing.T) {
 				t.Fatalf("expected upstream path %q, got %q", tt.expectedPath, payload.Path)
 			}
 		})
+	}
+}
+
+func TestSetupProxy_ForwardsTrustedClientIPToMedia(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(proxyTestResponse{
+			Method:          r.Method,
+			Path:            r.URL.Path,
+			TrustedClientIP: r.Header.Get("X-Trusted-Client-IP"),
+		})
+	}))
+	defer upstream.Close()
+
+	app := fiber.New()
+	apiGroup := app.Group("/api/v1")
+	SetupProxy(app, apiGroup, ProxyConfig{
+		MediaServiceURL: upstream.URL,
+		FrontendURL:     "http://localhost:3000",
+		InternalSecret:  "secret",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/media/test", nil)
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var payload proxyTestResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.TrustedClientIP == "" {
+		t.Fatal("expected trusted client ip header to be forwarded")
 	}
 }
 

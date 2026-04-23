@@ -4,7 +4,6 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import { resolveTranslateLang } from '../../../util/orbitTranslateLang';
 import { clearMessageTranslation, hasMessageTranslation, startMessageTranslation } from './AiTranslateInline';
 
 import type {
@@ -161,6 +160,7 @@ type StateProps = {
   userFullName?: string;
   canGift?: boolean;
   savedDialogId?: string;
+  defaultTranslateLang?: string;
 };
 
 const selection = window.getSelection();
@@ -230,6 +230,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   canGift,
   className,
   savedDialogId,
+  defaultTranslateLang,
   onClose,
   onCloseAnimationEnd,
 }) => {
@@ -625,7 +626,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     // override in Settings → active UI language → 'en'. We deliberately
     // skip the legacy requestMessageTranslation action (Telegram
     // Premium) — Premium isn't part of Orbit's scope.
-    const targetLang = resolveTranslateLang(lang.code);
+    const targetLang = defaultTranslateLang || lang.code.slice(0, 2).toLowerCase() || 'en';
     startMessageTranslation(message.chatId, message.id, targetLang);
     closeMenu();
   });

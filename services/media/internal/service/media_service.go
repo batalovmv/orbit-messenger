@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/metrics"
 	"github.com/mst-corp/orbit/services/media/internal/model"
 	"github.com/mst-corp/orbit/services/media/internal/scanner"
 	"github.com/mst-corp/orbit/services/media/internal/storage"
@@ -29,20 +30,48 @@ const (
 	chunkedKeyPrefix = "chunked:"
 )
 
+type r2Storage interface {
+	Upload(ctx context.Context, key string, body io.Reader, contentType string, size int64) error
+	Delete(ctx context.Context, key string) error
+	PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+	InitMultipartUpload(ctx context.Context, key, contentType string) (string, error)
+	UploadPart(ctx context.Context, key, uploadID string, partNum int, body io.Reader, size int64) (string, error)
+	CompleteMultipartUpload(ctx context.Context, key, uploadID string, parts []storage.CompletedPart) error
+	AbortMultipartUpload(ctx context.Context, key, uploadID string) error
+	GetObject(ctx context.Context, key string) (io.ReadCloser, string, error)
+	GetObjectRange(ctx context.Context, key, rangeHeader string) (*storage.RangeResult, error)
+}
+
 // MediaService orchestrates upload, processing, download, and deletion.
 type MediaService struct {
 	store               store.Store
-	r2                  *storage.R2Client
+	r2                  r2Storage
 	rdb                 *redis.Client
 	nc                  *nats.Conn
 	maxUserStorageBytes int64
 	scanner             scanner.Scanner
 	presignGetURL       func(ctx context.Context, key string, ttl time.Duration) (string, error)
+	auditRetryer        auditRetryer
+	auditMetrics        *auditMetrics
 }
 
 // NewMediaService creates the service.
 func NewMediaService(st store.Store, r2 *storage.R2Client, rdb *redis.Client, nc *nats.Conn) *MediaService {
-	svc := &MediaService{store: st, r2: r2, rdb: rdb, nc: nc}
+	var r2Client r2Storage
+	if r2 != nil {
+		r2Client = r2
+	}
+	return NewMediaServiceWithR2(st, r2Client, rdb, nc)
+}
+
+func NewMediaServiceWithR2(st store.Store, r2 r2Storage, rdb *redis.Client, nc *nats.Conn) *MediaService {
+	svc := &MediaService{
+		store:        st,
+		r2:           r2,
+		rdb:          rdb,
+		nc:           nc,
+		auditRetryer: newAuditRetryer(),
+	}
 	if r2 != nil {
 		svc.presignGetURL = r2.PresignedGetURL
 	}
@@ -56,6 +85,21 @@ func (s *MediaService) WithMaxUserStorageBytes(limit int64) *MediaService {
 
 func (s *MediaService) WithScanner(sc scanner.Scanner) *MediaService {
 	s.scanner = sc
+	return s
+}
+
+func (s *MediaService) WithAuditMetrics(reg *metrics.Registry) *MediaService {
+	s.auditMetrics = newAuditMetrics(reg)
+	if retryer, ok := s.auditRetryer.(*boundedAuditRetryer); ok {
+		retryer.metrics = s.auditMetrics
+	}
+	return s
+}
+
+func (s *MediaService) WithAuditRetryer(retryer auditRetryer) *MediaService {
+	if retryer != nil {
+		s.auditRetryer = retryer
+	}
 	return s
 }
 
@@ -136,7 +180,7 @@ func (s *MediaService) UploadEncrypted(ctx context.Context, uploaderID uuid.UUID
 }
 
 // Upload handles a simple (non-chunked) file upload.
-func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileData []byte, filename, mimeType, mediaType string, isOneTime bool) (*model.Media, error) {
+func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileData []byte, filename, mimeType, mediaType string, isOneTime bool, auditCtx *model.UploadAuditContext) (*model.Media, error) {
 	if mediaType == "" {
 		mediaType = model.DetectMediaType(mimeType)
 	}
@@ -166,8 +210,15 @@ func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileDat
 				"event", "virus_detected", "virus", result.Virus,
 				"filename", filename, "user_id", uploaderID,
 				"size_bytes", len(fileData), "mime_type", mimeType)
+			if auditCtx != nil {
+				mediaID := uuid.New()
+				if err := s.recordVirusDetectionAudit(auditCtx, mediaID, result.Virus); err != nil {
+					return nil, err
+				}
+			}
 			return nil, &apperror.AppError{Code: "virus_detected", Message: "File rejected: malware detected", Status: 422}
 		}
+
 	}
 
 	mediaID := uuid.New()
@@ -219,6 +270,68 @@ func (s *MediaService) Upload(ctx context.Context, uploaderID uuid.UUID, fileDat
 }
 
 // uploadWithAsyncProcessing handles video/GIF: save temp file, insert DB, then process in goroutine.
+func (s *MediaService) recordVirusDetectionAudit(auditCtx *model.UploadAuditContext, mediaID uuid.UUID, clamAVResult string) error {
+	details, err := json.Marshal(map[string]any{
+		"filename":          auditCtx.Filename,
+		"mime_type":         auditCtx.MimeType,
+		"size":              auditCtx.Size,
+		"clamav_result":     clamAVResult,
+		"upload_attempt_id": auditCtx.UploadAttemptID,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal virus detection audit details: %w", err)
+	}
+
+	var ipAddress *string
+	if auditCtx.TrustedClientIP != "" {
+		ipAddress = &auditCtx.TrustedClientIP
+	}
+	var userAgent *string
+	if auditCtx.UserAgent != "" {
+		userAgent = &auditCtx.UserAgent
+	}
+
+	retryer := s.auditRetryer
+	if retryer == nil {
+		retryer = newAuditRetryer()
+	}
+	attempts, appendErr := retryer.run(func(attemptCtx context.Context) error {
+		return s.appendVirusDetectionAudit(attemptCtx, auditCtx, details, ipAddress, userAgent)
+	})
+	if appendErr != nil {
+		slog.Error("virus detection audit persistently failed",
+			"event", "audit_persistent_failure",
+			"media_id", mediaID,
+			"user_id", auditCtx.UserID,
+			"virus_name", clamAVResult,
+			"attempts_count", attempts,
+			"error", appendErr,
+		)
+		return &apperror.AppError{
+			Code:    "audit_unavailable",
+			Message: "Upload service temporarily unavailable, please retry.",
+			Status:  503,
+		}
+	}
+	return nil
+}
+
+func (s *MediaService) appendVirusDetectionAudit(ctx context.Context, auditCtx *model.UploadAuditContext, details []byte, ipAddress, userAgent *string) error {
+	if err := s.store.AppendAuditLog(
+		ctx,
+		auditCtx.UserID,
+		model.AuditActionVirusDetected,
+		model.AuditTargetTypeUpload,
+		auditCtx.UploadAttemptID,
+		details,
+		ipAddress,
+		userAgent,
+	); err != nil {
+		return fmt.Errorf("append virus detection audit log: %w", err)
+	}
+	return nil
+}
+
 func (s *MediaService) uploadWithAsyncProcessing(ctx context.Context, mediaID, uploaderID uuid.UUID,
 	fileData []byte, filename, mimeType, mediaType string, isOneTime bool,
 	processFn func(mediaID uuid.UUID, tmpPath string)) (*model.Media, error) {

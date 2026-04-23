@@ -3,10 +3,10 @@
 import type { LANG_PACKS } from '../../../config';
 import type { ApiOldLangPack, ApiOldLangString, LangPackStringValuePlural } from '../../types';
 
-import readFallbackStrings from '../../../util/data/readFallbackStrings';
+import readFallbackStrings, { SUPPORTED_LANGUAGES } from '../../../util/data/readFallbackStrings';
 
-export async function fetchLangPack() {
-  const fallbackData = await readFallbackStrings();
+export async function fetchLangPack({ langCode }: { langCode?: string } = {}) {
+  const fallbackData = await readFallbackStrings(false, langCode);
 
   return {
     version: fallbackData.langPack.version,
@@ -15,17 +15,23 @@ export async function fetchLangPack() {
   };
 }
 
-export async function fetchLangDifference() {
-  return fetchLangPack();
+export async function fetchLangDifference({ langCode }: { langCode?: string } = {}) {
+  return fetchLangPack({ langCode });
 }
 
 export async function fetchLanguages() {
-  const fallbackData = await readFallbackStrings();
-  return [fallbackData.language];
+  // Enrich bundled language descriptors with string counts from each langpack.
+  const results = await Promise.all(
+    SUPPORTED_LANGUAGES.map(async (lang) => {
+      const data = await readFallbackStrings(false, lang.langCode);
+      return data.language;
+    }),
+  );
+  return results;
 }
 
-export async function fetchLanguage() {
-  const fallbackData = await readFallbackStrings();
+export async function fetchLanguage({ langCode }: { langCode?: string } = {}) {
+  const fallbackData = await readFallbackStrings(false, langCode);
   return fallbackData.language;
 }
 
@@ -39,7 +45,7 @@ export async function oldFetchLangPack({ sourceLangPacks, langCode }: {
   sourceLangPacks: typeof LANG_PACKS;
   langCode: string;
 }): Promise<{ langPack: ApiOldLangPack } | undefined> {
-  const fallbackData = await readFallbackStrings();
+  const fallbackData = await readFallbackStrings(false, langCode);
   const { strings } = fallbackData.langPack;
   const oldPack: ApiOldLangPack = {};
 

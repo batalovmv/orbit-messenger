@@ -1,6 +1,6 @@
 module github.com/mst-corp/orbit/services/calls
 
-go 1.25.0
+go 1.24.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 

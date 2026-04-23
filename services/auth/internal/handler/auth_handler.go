@@ -71,6 +71,7 @@ func (h *AuthHandler) Register(app *fiber.App) {
 
 	// User settings routes (proxied from gateway as /users/me/*)
 	users := app.Group("/users/me", h.requireAuth)
+	users.Get("/notification-priority", h.GetNotificationPriorityMode)
 	users.Put("/notification-priority", h.UpdateNotificationPriorityMode)
 }
 
@@ -509,6 +510,20 @@ func (h *AuthHandler) RevokeInvite(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Invite revoked"})
+}
+
+func (h *AuthHandler) GetNotificationPriorityMode(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, apperror.Unauthorized("Invalid user ID"))
+	}
+
+	mode, err := h.svc.GetNotificationPriorityMode(c.Context(), uid)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"mode": mode})
 }
 
 func (h *AuthHandler) UpdateNotificationPriorityMode(c *fiber.Ctx) error {

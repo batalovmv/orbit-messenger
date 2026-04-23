@@ -1,0 +1,54 @@
+{
+  "agents": {
+    "architect": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.6"
+    },
+    "coder": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.6"
+    },
+    "reviewer": {
+      "model": "VIBECODE_GPT/gpt-5.3-codex-medium"
+    },
+    "test_engineer": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.6"
+    },
+    "explorer": {
+      "model": "VIBECODE_CLAUDE/claude-sonnet-4.6"
+    },
+    "sme": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.7"
+    },
+    "critic": {
+      "model": "VIBECODE_GPT/gpt-5.4-medium"
+    },
+    "critic_sounding_board": {
+      "model": "VIBECODE_GPT/gpt-5.4-medium"
+    },
+    "critic_drift_verifier": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.6"
+    },
+    "docs": {
+      "model": "VIBECODE_CLAUDE/claude-sonnet-4.6"
+    },
+    "designer": {
+      "model": "VIBECODE_CLAUDE/claude-opus-4.6"
+    }
+  },
+  "execution_mode": "balanced",
+  "context_budget": {
+    "enabled": true,
+    "max_injection_tokens": 4000
+  },
+  "curator": {
+    "enabled": true
+  },
+  "guardrails": {
+    "max_tool_calls": 200,
+    "max_duration_minutes": 30,
+    "profiles": {
+      "coder": {
+        "max_tool_calls": 500
+      }
+    }
+  }
+}

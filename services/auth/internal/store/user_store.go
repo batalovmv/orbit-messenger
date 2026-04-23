@@ -19,6 +19,7 @@ type UserStore interface {
 	CreateIfNoAdmins(ctx context.Context, u *model.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	GetNotificationPriorityMode(ctx context.Context, userID uuid.UUID) (string, error)
 	Update(ctx context.Context, u *model.User) error
 	CountAdmins(ctx context.Context) (int, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error
@@ -46,14 +47,14 @@ func (s *userStore) Create(ctx context.Context, u *model.User) error {
 func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, phone, username, display_name, avatar_url, bio,
+		`SELECT id, email, password_hash, notification_priority_mode, phone, username, display_name, avatar_url, bio,
 		        status, custom_status, custom_status_emoji, role, account_type,
 		        is_active, deactivated_at, deactivated_by,
 		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE id = $1`, id,
 	).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
+		&u.ID, &u.Email, &u.PasswordHash, &u.NotificationPriorityMode, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
 		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.TOTPSecret, &u.TOTPEnabled,
@@ -68,14 +69,14 @@ func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, err
 func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	u := &model.User{}
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, password_hash, phone, username, display_name, avatar_url, bio,
+		`SELECT id, email, password_hash, notification_priority_mode, phone, username, display_name, avatar_url, bio,
 		        status, custom_status, custom_status_emoji, role, account_type,
 		        is_active, deactivated_at, deactivated_by,
 		        totp_secret, totp_enabled,
 		        invited_by, invite_code, last_seen_at, created_at, updated_at
 		 FROM users WHERE email = $1`, email,
 	).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
+		&u.ID, &u.Email, &u.PasswordHash, &u.NotificationPriorityMode, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
 		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
 		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
 		&u.TOTPSecret, &u.TOTPEnabled,
@@ -85,6 +86,21 @@ func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, 
 		return nil, nil
 	}
 	return u, err
+}
+
+func (s *userStore) GetNotificationPriorityMode(ctx context.Context, userID uuid.UUID) (string, error) {
+	var mode string
+	err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(notification_priority_mode, 'all') FROM users WHERE id = $1`,
+		userID,
+	).Scan(&mode)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("get notification priority mode %s: %w", userID, pgx.ErrNoRows)
+		}
+		return "", fmt.Errorf("get notification priority mode %s: %w", userID, err)
+	}
+	return mode, nil
 }
 
 func (s *userStore) Update(ctx context.Context, u *model.User) error {

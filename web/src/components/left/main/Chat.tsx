@@ -58,6 +58,11 @@ import { createLocationHash } from '../../../util/routing';
 import { useSelectorSignal } from '../../../hooks/data/useSelector';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useChatContextActions from '../../../hooks/useChatContextActions';
+
+import {
+  type NotificationPriorityOverride,
+  updateChatNotificationPriority,
+} from '../../../api/saturn/methods/notifications';
 import useEnsureMessage from '../../../hooks/useEnsureMessage';
 import useFlag from '../../../hooks/useFlag';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
@@ -66,9 +71,11 @@ import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDepreca
 import useChatListEntry from './hooks/useChatListEntry';
 
 import Avatar from '../../common/Avatar';
-import DeleteChatModal from '../../common/DeleteChatModal';
-import FullNameTitle from '../../common/FullNameTitle';
-import Icon from '../../common/icons/Icon';
+ import DeleteChatModal from '../../common/DeleteChatModal';
+ import FullNameTitle from '../../common/FullNameTitle';
+ import Icon from '../../common/icons/Icon';
+ import NotificationPriorityPickerModal from '../../common/NotificationPriorityPickerModal.async';
+
 import StarIcon from '../../common/icons/StarIcon';
 import LastMessageMeta from '../../common/LastMessageMeta';
 import ListItem from '../../ui/ListItem';
@@ -105,6 +112,7 @@ type StateProps = {
   monoforumChannel?: ApiChat;
   listedTopicIds?: number[];
   isMuted?: boolean;
+  notificationPriorityOverride?: NotificationPriorityOverride;
   user?: ApiUser;
   userStatus?: ApiUserStatus;
   lastMessageSender?: ApiPeer;
@@ -142,6 +150,7 @@ const Chat: FC<OwnProps & StateProps> = ({
   chat,
   monoforumChannel,
   isMuted,
+  notificationPriorityOverride,
   user,
   userStatus,
   lastMessageSender,
@@ -190,15 +199,20 @@ const Chat: FC<OwnProps & StateProps> = ({
     updateChatMutedState,
     openQuickPreview,
     scrollMessageListToBottom,
+    showNotification,
   } = getActions();
 
   const { isMobile } = useAppLayout();
   const [isDeleteModalOpen, openDeleteModal, closeDeleteModal] = useFlag();
   const [isMuteModalOpen, openMuteModal, closeMuteModal] = useFlag();
   const [isChatFolderModalOpen, openChatFolderModal, closeChatFolderModal] = useFlag();
+  const [isNotificationPriorityModalOpen, openNotificationPriorityModal, closeNotificationPriorityModal] = useFlag();
   const [shouldRenderDeleteModal, markRenderDeleteModal, unmarkRenderDeleteModal] = useFlag();
   const [shouldRenderMuteModal, markRenderMuteModal, unmarkRenderMuteModal] = useFlag();
   const [shouldRenderChatFolderModal, markRenderChatFolderModal, unmarkRenderChatFolderModal] = useFlag();
+  const [shouldRenderNotificationPriorityModal,
+    markRenderNotificationPriorityModal,
+    unmarkRenderNotificationPriorityModal] = useFlag();
 
   const { isForum, isForumAsMessages, isMonoforum } = chat || {};
 
@@ -349,6 +363,25 @@ const Chat: FC<OwnProps & StateProps> = ({
     reportMessages({ chatId: chat.id, messageIds: [] });
   });
 
+  const handleOpenNotificationPriority = useLastCallback(() => {
+    if (isAccountFrozen) {
+      openFrozenAccountModal();
+      return;
+    }
+
+    markRenderNotificationPriorityModal();
+    openNotificationPriorityModal();
+  });
+
+  const handleNotificationPriority = useLastCallback(async (priority) => {
+    try {
+      await updateChatNotificationPriority(chatId, priority);
+      closeNotificationPriorityModal();
+    } catch {
+      showNotification({ message: { key: 'NotificationPriorityUpdateFailed' } });
+    }
+  });
+
   const contextActions = useChatContextActions({
     chat,
     user,
@@ -365,6 +398,7 @@ const Chat: FC<OwnProps & StateProps> = ({
     currentUserId,
     isPreview,
     topicIds: listedTopicIds,
+    handleNotificationPriority: handleOpenNotificationPriority,
   });
 
   const isIntersecting = useIsIntersecting(ref, chat ? observeIntersection : undefined);
@@ -517,6 +551,14 @@ const Chat: FC<OwnProps & StateProps> = ({
           chatId={chatId}
         />
       )}
+      {shouldRenderNotificationPriorityModal && (
+        <NotificationPriorityPickerModal
+          isOpen={isNotificationPriorityModalOpen}
+          selectedValue={notificationPriorityOverride}
+          onClose={closeNotificationPriorityModal}
+          onSubmit={handleNotificationPriority}
+        />
+      )}
     </ListItem>
   );
 };
@@ -571,6 +613,7 @@ export default memo(withGlobal<OwnProps>(
     return {
       chat,
       isMuted: getIsChatMuted(chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id)),
+      notificationPriorityOverride: chat.notificationPriorityOverride,
       lastMessageSender,
       draft: selectDraft(global, chatId, MAIN_THREAD_ID),
       isSelected,

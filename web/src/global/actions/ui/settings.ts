@@ -1,13 +1,13 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ActionReturnType, GlobalState } from '../../types';
-import { type LangCode, LeftColumnContent, SettingsScreens } from '../../../types';
+import { type LeftColumnContent, SettingsScreens } from '../../../types';
 
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { IS_IOS } from '../../../util/browser/windowEnvironment';
 import { disableDebugConsole, initDebugConsole } from '../../../util/debugConsole';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { oldSetLanguage, setTimeFormat } from '../../../util/oldLangProvider';
+import { loadAndChangeLanguage, setTimeFormat } from '../../../util/oldLangProvider';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import switchTheme from '../../../util/switchTheme';
 import { updatePeerColors } from '../../../util/theme';
@@ -55,7 +55,7 @@ addCallback((global: GlobalState) => {
   }
 
   if (sharedSettings.language !== oldSharedSettings.language) {
-    oldSetLanguage(sharedSettings.language as LangCode);
+    loadAndChangeLanguage(sharedSettings.language);
   }
 
   if (sharedSettings.timeFormat !== oldSharedSettings.timeFormat) {

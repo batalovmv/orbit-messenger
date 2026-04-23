@@ -1,0 +1,33 @@
+.root {
+  max-width: 26rem;
+}
+
+.container {
+  padding: 1.25rem 1.25rem 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  margin: 0.5rem 0 0;
+  color: var(--color-text-secondary);
+}
+
+.main {
+  padding: 0.75rem 0;
+}
+
+.picker {
+  max-height: 20rem;
+  overflow: auto;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 1.25rem 1.25rem;
+}
