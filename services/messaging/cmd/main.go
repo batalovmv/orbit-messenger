@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -154,7 +154,7 @@ func main() {
 	searchHistoryStore := store.NewSearchHistoryStore(pool)
 	auditStore := store.NewAuditStore(pool)
 	translationStore := store.NewTranslationStore(pool)
-
+	folderStore := store.NewFolderStore(pool)
 
 	aiServiceURL := config.EnvOr("AI_SERVICE_URL", "http://localhost:8085")
 
@@ -182,6 +182,7 @@ func main() {
 	)
 	tenorClient := tenor.NewClientFromEnv(rdb, logger)
 	gifSvc := service.NewGIFService(gifStore, tenorClient, logger)
+	folderSvc := service.NewFolderService(folderStore)
 	pollSvc := service.NewPollService(pollStore, messageStore, chatStore, natsPublisher, logger)
 	chatSvc := service.NewChatService(chatStore, messageStore, natsPublisher, pollSvc, service.WithChatSearchIndexer(searchSvc))
 	scheduledSvc := service.NewScheduledMessageService(
@@ -275,9 +276,10 @@ func main() {
 	gifHandler := handler.NewGIFHandler(gifSvc, logger)
 	pollHandler := handler.NewPollHandler(pollSvc, logger)
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
-	adminSvc := service.NewAdminService(userStore, chatStore, auditStore, natsPublisher)
+	adminSvc := service.NewAdminService(userStore, chatStore, auditStore, natsPublisher, rdb)
 	adminHandler := handler.NewAdminHandler(adminSvc)
 	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
+	folderHandler := handler.NewFolderHandler(folderSvc, logger)
 
 	// Fiber
 	app := fiber.New(fiber.Config{
@@ -298,6 +300,7 @@ func main() {
 	// preventing identity spoofing if the service is reached outside the gateway.
 	api := app.Group("", handler.RequireInternalToken(internalSecret))
 	chatHandler.Register(api)
+	translationHandler.Register(api)
 	msgHandler.Register(api)
 	userHandler.Register(api)
 	inviteHandler.Register(api)
@@ -310,7 +313,7 @@ func main() {
 	pollHandler.Register(api)
 	scheduledHandler.Register(api)
 	adminHandler.Register(api)
-	translationHandler.Register(api)
+	folderHandler.Register(api)
 
 	// Graceful shutdown
 	go func() {

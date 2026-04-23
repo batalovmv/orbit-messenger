@@ -1,6 +1,7 @@
-package middleware
+﻿package middleware
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -65,6 +66,18 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 		if err == nil {
 			var u cachedUser
 			if json.Unmarshal([]byte(cached), &u) == nil {
+				// Check per-user blacklist (deactivated account) — fail-closed
+				blacklisted, blUserErr := checkUserBlacklist(c.Context(), cfg.Redis, u.ID)
+				if blUserErr != nil {
+					slog.Error("JWT user blacklist Redis check failed, rejecting token", "error", blUserErr)
+					return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
+				}
+				if blacklisted {
+					if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+						slog.Error("JWT cache del failed after user blacklist hit", "error", err)
+					}
+					return response.Error(c, apperror.Unauthorized("Account deactivated"))
+				}
 				c.Locals("userID", u.ID) // for rate limiter — cannot be spoofed by client
 				c.Request().Header.Set("X-User-ID", u.ID)
 				c.Request().Header.Set("X-User-Role", u.Role)
@@ -112,11 +125,35 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 			slog.Error("JWT cache write failed", "error", err)
 		}
 
+		// Check per-user blacklist (deactivated account) — fail-closed
+		userBlacklisted, blUserErr := checkUserBlacklist(c.Context(), cfg.Redis, user.ID)
+		if blUserErr != nil {
+			slog.Error("JWT user blacklist Redis check failed, rejecting token", "error", blUserErr)
+			return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
+		}
+		if userBlacklisted {
+			if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+				slog.Error("JWT cache del failed after user blacklist hit", "error", err)
+			}
+			return response.Error(c, apperror.Unauthorized("Account deactivated"))
+		}
+
 		c.Locals("userID", user.ID) // for rate limiter — cannot be spoofed by client
 		c.Request().Header.Set("X-User-ID", user.ID)
 		c.Request().Header.Set("X-User-Role", user.Role)
 		return c.Next()
 	}
+}
+
+// checkUserBlacklist checks if the user has been globally blacklisted (e.g. deactivated).
+// Returns true if blacklisted. Fail-closed: Redis error = treat as blacklisted.
+func checkUserBlacklist(ctx context.Context, rdb *redis.Client, userID string) (bool, error) {
+	key := "jwt_blacklist:user:" + userID
+	exists, err := rdb.Exists(ctx, key).Result()
+	if err != nil {
+		return true, err
+	}
+	return exists > 0, nil
 }
 
 func extractBearerToken(c *fiber.Ctx) string {

@@ -1,12 +1,15 @@
-package service
+﻿package service
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
@@ -18,10 +21,11 @@ type AdminService struct {
 	chats store.ChatStore
 	audit store.AuditStore
 	nats  Publisher
+	redis *redis.Client
 }
 
-func NewAdminService(users store.UserStore, chats store.ChatStore, audit store.AuditStore, nats Publisher) *AdminService {
-	return &AdminService{users: users, chats: chats, audit: audit, nats: nats}
+func NewAdminService(users store.UserStore, chats store.ChatStore, audit store.AuditStore, nats Publisher, rdb *redis.Client) *AdminService {
+	return &AdminService{users: users, chats: chats, audit: audit, nats: nats, redis: rdb}
 }
 
 // ListAllChats returns all chats (for privileged users with SysViewAllChats).
@@ -105,6 +109,13 @@ func (s *AdminService) DeactivateUser(ctx context.Context, actorID, targetID uui
 		map[string]string{"user_id": targetID.String()},
 		nil, actorID.String(),
 	)
+
+	// Invalidate all active JWTs for this user — fail-closed
+	blacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", targetID.String())
+	if err := s.redis.Set(ctx, blacklistKey, "1", 24*time.Hour).Err(); err != nil {
+		slog.Error("failed to write JWT user blacklist", "error", err, "user_id", targetID)
+		return fmt.Errorf("jwt invalidation failed: %w", err)
+	}
 
 	return nil
 }

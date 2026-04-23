@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import (
 	"encoding/json"
@@ -34,4 +34,5 @@ const (
 	AuditInviteCreate       = "invite.create"
 	AuditInviteRevoke       = "invite.revoke"
 	AuditAuditView          = "audit.view"
+	AuditUserListRead       = "user.list_read"
 )
