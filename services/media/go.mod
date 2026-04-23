@@ -1,6 +1,6 @@
 module github.com/mst-corp/orbit/services/media
 
-go 1.24
+go 1.24.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 
@@ -61,8 +61,8 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
