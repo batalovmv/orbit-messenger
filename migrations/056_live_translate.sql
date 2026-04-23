@@ -1,4 +1,4 @@
-﻿-- Live Translate Phase 2: user language preference + translation cache
+-- Live Translate Phase 2: user language preference + translation cache
 
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS default_translate_lang TEXT NULL;
 
