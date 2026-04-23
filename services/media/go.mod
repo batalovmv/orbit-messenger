@@ -1,6 +1,6 @@
 module github.com/mst-corp/orbit/services/media
 
-go 1.24.0
+go 1.25.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 
@@ -18,7 +18,7 @@ require (
 	github.com/nats-io/nats.go v1.37.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.7.3
-	golang.org/x/image v0.38.0
+	golang.org/x/image v0.37.0
 )
 
 require (
