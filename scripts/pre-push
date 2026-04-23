@@ -1,0 +1,26 @@
+#!/bin/sh
+# pre-push hook — Verify all services build before push
+# Place in .git/hooks/pre-push and run: git config core.hooksPath .git/hooks
+
+echo "========================================="
+echo "Running Saturn build verification..."
+echo "========================================="
+
+# Run the verification script
+powershell -ExecutionPolicy Bypass -File "$(git rev-parse --show-toplevel)/scripts/verify-go124.ps1"
+result=$?
+
+echo ""
+if [ $result -ne 0 ]; then
+    echo "========================================="
+    echo "[ABORTED] Build verification failed"
+    echo "========================================="
+    echo "Fix issues before pushing."
+    echo "Run: pwsh scripts/verify-go124.ps1"
+    exit 1
+fi
+
+echo "========================================="
+echo "[OK] All services verified!"
+echo "========================================="
+exit 0
