@@ -8,7 +8,7 @@ import {
 import { addExtraClass } from '../../lib/teact/teact-dom';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
-import type { ApiChatFolder, ApiLimitTypeWithModal, ApiUser } from '../../api/types';
+import type { ApiChatFolder } from '../../api/types';
 import type { TabState } from '../../global/types';
 
 import { BASE_EMOJI_KEYWORD_LANG, DEBUG, FOLDERS_POSITION_LEFT, INACTIVE_MARKER } from '../../config';
@@ -17,10 +17,8 @@ import {
   selectAreFoldersPresent,
   selectCanAnimateInterface,
   selectChatFolder,
-  selectChatMessage,
   selectCurrentMessageList,
   selectIsCurrentUserFrozen,
-  selectIsCurrentUserPremium,
   selectIsForwardModalOpen,
   selectIsMediaViewerOpen,
   selectIsReactionPickerOpen,
@@ -28,7 +26,6 @@ import {
   selectIsServiceChatReady,
   selectPerformanceSettingsValue,
   selectTabState,
-  selectUser,
 } from '../../global/selectors';
 import { selectSharedSettings } from '../../global/selectors/sharedState';
 import { IS_TAURI } from '../../util/browser/globalEnvironment';
@@ -73,18 +70,15 @@ import PaymentModal from '../payment/PaymentModal.async';
 import ReceiptModal from '../payment/ReceiptModal.async';
 import RightColumn from '../right/RightColumn';
 import AttachBotRecipientPicker from './AttachBotRecipientPicker.async';
-import BotTrustModal from './BotTrustModal.async';
+import CompliancePanel from './compliance/CompliancePanel.async';
 import DeleteFolderDialog from './DeleteFolderDialog.async';
 import Dialogs from './Dialogs';
 import DownloadManager from './DownloadManager';
 import DraftRecipientPicker from './DraftRecipientPicker.async';
 import FoldersSidebar from './FoldersSidebar';
 import ForwardRecipientPicker from './ForwardRecipientPicker.async';
-import GameModal from './GameModal';
 import HistoryCalendar from './HistoryCalendar.async';
 import NewContactModal from './NewContactModal.async';
-import PremiumLimitReachedModal from './premium/common/PremiumLimitReachedModal.async';
-import PremiumMainModal from './premium/PremiumMainModal.async';
 import SafeLinkModal from './SafeLinkModal.async';
 import ConfettiContainer from './visualEffects/ConfettiContainer';
 import SnapEffectContainer from './visualEffects/SnapEffectContainer';
@@ -118,21 +112,15 @@ type StateProps = {
   addedCustomEmojiIds?: string[];
   newContactUserId?: string;
   newContactByPhoneNumber?: boolean;
-  openedGame?: TabState['openedGame'];
-  gameTitle?: string;
   isRatePhoneCallModalOpen?: boolean;
-  isPremiumModalOpen?: boolean;
-  botTrustRequest?: TabState['botTrustRequest'];
-  botTrustRequestBot?: ApiUser;
+  isCompliancePanelOpen?: boolean;
   requestedAttachBotInChat?: TabState['requestedAttachBotInChat'];
   requestedDraft?: TabState['requestedDraft'];
-  limitReached?: ApiLimitTypeWithModal;
   deleteFolderDialog?: ApiChatFolder;
   isPaymentModalOpen?: boolean;
   isReceiptModalOpen?: boolean;
   isReactionPickerOpen: boolean;
   isDeleteMessageModalOpen?: boolean;
-  isCurrentUserPremium?: boolean;
   noRightColumnAnimation?: boolean;
   withInterfaceAnimations?: boolean;
   isSynced?: boolean;
@@ -158,7 +146,6 @@ const Main = ({
   safeLinkModalUrl,
   isHistoryCalendarOpen,
   shouldSkipHistoryAnimations,
-  limitReached,
   openedStickerSetShortName,
   openedCustomEmojiSetIds,
   isServiceChatReady,
@@ -169,19 +156,14 @@ const Main = ({
   isPhoneCallActive,
   newContactUserId,
   newContactByPhoneNumber,
-  openedGame,
-  gameTitle,
   isRatePhoneCallModalOpen,
-  botTrustRequest,
-  botTrustRequestBot,
   requestedAttachBotInChat,
   requestedDraft,
-  isPremiumModalOpen,
+  isCompliancePanelOpen,
   isDeleteMessageModalOpen,
   isPaymentModalOpen,
   isReceiptModalOpen,
   isReactionPickerOpen,
-  isCurrentUserPremium,
   deleteFolderDialog,
   isAuthReady,
   isMasterTab,
@@ -208,11 +190,9 @@ const Main = ({
     loadAvailableReactions,
     loadStickerSets,
     loadDiceStickers,
-    loadPremiumGifts,
     loadDefaultTopicIcons,
     loadAddedStickers,
     loadFavoriteStickers,
-    loadDefaultStatusIcons,
     ensureTimeFormat,
     closeStickerSetModal,
     closeCustomEmojiSets,
@@ -228,7 +208,6 @@ const Main = ({
     checkAppVersion,
     openThread,
     toggleLeftColumn,
-    loadRecentEmojiStatuses,
     loadUserCollectibleStatuses,
     updatePageTitle,
     loadTopReactions,
@@ -317,7 +296,6 @@ const Main = ({
       loadAvailableReactions();
       loadUserCollectibleStatuses();
       loadGenericEmojiEffects();
-      loadPremiumGifts();
       loadAvailableEffects();
       loadBirthdayNumbersStickers();
       loadRestrictedEmojiStickers();
@@ -325,15 +303,6 @@ const Main = ({
       loadTimezones();
     }
   }, [currentUserId, isAuthReady, isMasterTab, isSynced, isAppConfigLoaded, isAccountFrozen]);
-
-  // Initial Premium API calls
-  useEffect(() => {
-    if (isMasterTab && isAuthReady && currentUserId
-      && isCurrentUserPremium && isAppConfigLoaded && !isAccountFrozen) {
-      loadDefaultStatusIcons();
-      loadRecentEmojiStatuses();
-    }
-  }, [currentUserId, isAuthReady, isCurrentUserPremium, isMasterTab, isAppConfigLoaded, isAccountFrozen]);
 
   // Language-based API calls
   useEffect(() => {
@@ -569,7 +538,6 @@ const Main = ({
         userId={newContactUserId}
         isByPhoneNumber={newContactByPhoneNumber}
       />
-      <GameModal openedGame={openedGame} gameTitle={gameTitle} />
       <DownloadManager />
       <ConfettiContainer />
       {IS_WAVE_TRANSFORM_SUPPORTED && <WaveContainer />}
@@ -577,15 +545,9 @@ const Main = ({
       <PhoneCall isActive={isPhoneCallActive} />
       <UnreadCount isForAppBadge />
       <RatePhoneCallModal isOpen={isRatePhoneCallModalOpen} />
-      <BotTrustModal
-        bot={botTrustRequestBot}
-        type={botTrustRequest?.type}
-        shouldRequestWriteAccess={botTrustRequest?.shouldRequestWriteAccess}
-      />
       <AttachBotRecipientPicker requestedAttachBotInChat={requestedAttachBotInChat} />
       <MessageListHistoryHandler />
-      <PremiumMainModal isOpen={isPremiumModalOpen} />
-      <PremiumLimitReachedModal limit={limitReached} />
+      <CompliancePanel isOpen={isCompliancePanelOpen} />
       <PaymentModal isOpen={isPaymentModalOpen} onClose={closePaymentModal} />
       <ReceiptModal isOpen={isReceiptModalOpen} onClose={clearReceipt} />
       <DeleteFolderDialog folder={deleteFolderDialog} />
@@ -602,30 +564,25 @@ export default memo(withGlobal<OwnProps>(
     } = global;
 
     const {
-      botTrustRequest,
       requestedAttachBotInChat,
       requestedDraft,
       safeLinkModalUrl,
       openedStickerSetShortName,
       openedCustomEmojiSetIds,
       shouldSkipHistoryAnimations,
-      openedGame,
       isLeftColumnShown,
       historyCalendarSelectedAt,
       newContact,
       ratingPhoneCall,
-      premiumModal,
+      compliancePanel,
       deleteMessageModal,
       isMasterTab,
       payment,
-      limitReachedModal,
       deleteFolderDialogModal,
     } = selectTabState(global);
 
     const { wasTimeFormatSetManually, foldersPosition } = selectSharedSettings(global);
 
-    const gameMessage = openedGame && selectChatMessage(global, openedGame.chatId, openedGame.messageId);
-    const gameTitle = gameMessage?.content.game?.title;
     const { chatId } = selectCurrentMessageList(global) || {};
     const noRightColumnAnimation = !selectPerformanceSettingsValue(global, 'rightColumnAnimations')
       || !selectCanAnimateInterface(global);
@@ -656,16 +613,10 @@ export default memo(withGlobal<OwnProps>(
       addedCustomEmojiIds: global.customEmojis.added.setIds,
       newContactUserId: newContact?.userId,
       newContactByPhoneNumber: newContact?.isByPhoneNumber,
-      openedGame,
-      gameTitle,
       isRatePhoneCallModalOpen: Boolean(ratingPhoneCall),
-      botTrustRequest,
-      botTrustRequestBot: botTrustRequest && selectUser(global, botTrustRequest.botId),
       requestedAttachBotInChat,
-      isCurrentUserPremium: selectIsCurrentUserPremium(global),
-      isPremiumModalOpen: premiumModal?.isOpen,
+      isCompliancePanelOpen: compliancePanel?.isOpen,
       isDeleteMessageModalOpen: Boolean(deleteMessageModal),
-      limitReached: limitReachedModal?.limit,
       isPaymentModalOpen: payment.isPaymentModalOpen,
       isReceiptModalOpen: Boolean(payment.receipt),
       deleteFolderDialog,

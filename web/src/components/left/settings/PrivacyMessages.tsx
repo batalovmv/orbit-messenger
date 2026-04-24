@@ -25,7 +25,6 @@ import useOldLang from '../../../hooks/useOldLang';
 import PaidMessagePrice from '../../common/paidMessage/PaidMessagePrice';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
-import PremiumStatusItem from './PremiumStatusItem';
 import PrivacyLockedOption from './PrivacyLockedOption';
 
 type OwnProps = {
@@ -220,8 +219,6 @@ function PrivacyMessages({
         </div>
       )}
       {canChangeChargeForMessages && selectedValue === 'charge_for_messages' && renderSectionNoPaidMessagesForUsers()}
-      {!isCurrentUserPremium && selectedValue !== 'charge_for_messages'
-        && <PremiumStatusItem premiumSection="message_privacy" />}
     </>
   );
 }

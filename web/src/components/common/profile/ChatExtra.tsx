@@ -21,7 +21,6 @@ import {
   buildStaticMapHash,
   getChatLink,
   getHasAdminRight,
-  isChatAdmin,
   isUserRightBanned,
 } from '../../../global/helpers';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
@@ -66,9 +65,6 @@ import CustomEmoji from '../CustomEmoji';
 import Icon from '../icons/Icon';
 import SafeLink from '../SafeLink';
 import BusinessHours from './BusinessHours';
-import UserBirthday from './UserBirthday';
-
-import useFlag from '../../../hooks/useFlag';
 
 import styles from './ChatExtra.module.scss';
 
@@ -158,7 +154,6 @@ const ChatExtra = ({
     businessLocation,
     businessWorkHours,
     personalChannelMessageId,
-    birthday,
     note,
   } = userFullInfo || {};
   const oldLang = useOldLang();
@@ -459,9 +454,6 @@ const ChatExtra = ({
           <div className="title">{link}</div>
           <span className="subtitle">{oldLang('SetUrlPlaceholder')}</span>
         </ListItem>
-      )}
-      {birthday && (
-        <UserBirthday key={peerId} birthday={birthday} user={user!} isInSettings={isInSettings} />
       )}
       {hasMainMiniApp && (
         <ListItem

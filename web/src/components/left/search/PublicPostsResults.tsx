@@ -15,13 +15,11 @@ import { throttle } from '../../../util/schedulers';
 import { renderMessageSummary } from '../../common/helpers/renderMessageText';
 
 import useLang from '../../../hooks/useLang';
-import useLastCallback from '../../../hooks/useLastCallback';
 
 import NothingFound from '../../common/NothingFound';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Transition from '../../ui/Transition';
 import ChatMessage from './ChatMessage';
-import PublicPostsSearchLauncher from './PublicPostsSearchLauncher.tsx';
 
 export type OwnProps = {
   searchQuery?: string;
@@ -52,15 +50,6 @@ const PublicPostsResults = ({
   const { searchMessagesGlobal } = getActions();
 
   const lang = useLang();
-
-  const handleSearch = useLastCallback(() => {
-    if (!searchQuery) return;
-
-    searchMessagesGlobal({
-      type: 'publicPosts',
-      shouldResetResultsByType: true,
-    });
-  });
 
   const handleLoadMore = useCallback(({ direction }: { direction: LoadMoreDirection }) => {
     if (direction === LoadMoreDirection.Backwards) {
@@ -111,12 +100,7 @@ const PublicPostsResults = ({
       activeKey={shouldShowSearchLauncher || isLoading ? 0 : 1}
     >
       {shouldShowSearchLauncher || isLoading ? (
-        <PublicPostsSearchLauncher
-          searchQuery={searchQuery}
-          searchFlood={searchFlood}
-          onSearch={handleSearch}
-          isLoading={isLoading}
-        />
+        <div className="LeftSearch--content" />
       ) : (
         <div className="LeftSearch--content">
           <InfiniteScroll
