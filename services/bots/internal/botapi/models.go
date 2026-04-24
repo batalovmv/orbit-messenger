@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package botapi
 
 import (
@@ -33,6 +36,34 @@ type SendPhotoRequest struct {
 type SendDocumentRequest struct {
 	ChatID           string          `json:"chat_id"`
 	Caption          string          `json:"caption,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
+type SendVideoRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Caption          string          `json:"caption,omitempty"`
+	Duration         int             `json:"duration,omitempty"`
+	Width            int             `json:"width,omitempty"`
+	Height           int             `json:"height,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
+type SendAudioRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Caption          string          `json:"caption,omitempty"`
+	Duration         int             `json:"duration,omitempty"`
+	Performer        string          `json:"performer,omitempty"`
+	Title            string          `json:"title,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
+type SendVoiceRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Caption          string          `json:"caption,omitempty"`
+	Duration         int             `json:"duration,omitempty"`
 	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
 	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
 }

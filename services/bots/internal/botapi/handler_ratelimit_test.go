@@ -203,6 +203,149 @@ func TestRateLimit_IsPerBot(t *testing.T) {
 	}
 }
 
+func TestSendVideo_AuthPass(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("aaaa0001-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-video-ok": {ID: botID, UserID: uuid.MustParse("aaaa0002-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{
+		"chat_id": "aaaa0003-0000-0000-0000-000000000000",
+	}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-video-ok/sendVideo", body)
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Fatalf("sendVideo auth pass: unexpected status (want 200 or 400, got %d)", resp.StatusCode)
+	}
+}
+
+func TestSendVideo_AuthFail(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{}, "")
+
+	body := map[string]any{"chat_id": "aaaa0003-0000-0000-0000-000000000000"}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/invalid-token/sendVideo", body)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("sendVideo auth fail: expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestSendVideo_RateLimit(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("aaaa0004-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-video-rl": {ID: botID, UserID: uuid.MustParse("aaaa0005-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{"chat_id": "aaaa0006-0000-0000-0000-000000000000"}
+	for i := 0; i < botAPIRateLimitPerSec; i++ {
+		doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-video-rl/sendVideo", body)
+	}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-video-rl/sendVideo", body)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("sendVideo rate limit: expected 429, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" || got == "0" {
+		t.Fatalf("sendVideo rate limit: expected Retry-After header, got %q", got)
+	}
+}
+
+func TestSendAudio_AuthPass(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("bbbb0001-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-audio-ok": {ID: botID, UserID: uuid.MustParse("bbbb0002-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{"chat_id": "bbbb0003-0000-0000-0000-000000000000"}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-audio-ok/sendAudio", body)
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Fatalf("sendAudio auth pass: unexpected status (want 200 or 400, got %d)", resp.StatusCode)
+	}
+}
+
+func TestSendAudio_AuthFail(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{}, "")
+
+	body := map[string]any{"chat_id": "bbbb0003-0000-0000-0000-000000000000"}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/invalid-token/sendAudio", body)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("sendAudio auth fail: expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestSendAudio_RateLimit(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("bbbb0004-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-audio-rl": {ID: botID, UserID: uuid.MustParse("bbbb0005-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{"chat_id": "bbbb0006-0000-0000-0000-000000000000"}
+	for i := 0; i < botAPIRateLimitPerSec; i++ {
+		doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-audio-rl/sendAudio", body)
+	}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-audio-rl/sendAudio", body)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("sendAudio rate limit: expected 429, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" || got == "0" {
+		t.Fatalf("sendAudio rate limit: expected Retry-After header, got %q", got)
+	}
+}
+
+func TestSendVoice_AuthPass(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("cccc0001-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-voice-ok": {ID: botID, UserID: uuid.MustParse("cccc0002-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{"chat_id": "cccc0003-0000-0000-0000-000000000000"}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-voice-ok/sendVoice", body)
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Fatalf("sendVoice auth pass: unexpected status (want 200 or 400, got %d)", resp.StatusCode)
+	}
+}
+
+func TestSendVoice_AuthFail(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{}, "")
+
+	body := map[string]any{"chat_id": "cccc0003-0000-0000-0000-000000000000"}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/invalid-token/sendVoice", body)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("sendVoice auth fail: expected 401, got %d", resp.StatusCode)
+	}
+}
+
+func TestSendVoice_RateLimit(t *testing.T) {
+	rdb, _ := newRedisTestClient(t)
+	server, _ := newBotAPITestServer(t)
+	botID := uuid.MustParse("cccc0004-0000-0000-0000-000000000000")
+	app, _ := newRateLimitTestApp(t, rdb, map[string]*model.Bot{
+		"bot-voice-rl": {ID: botID, UserID: uuid.MustParse("cccc0005-0000-0000-0000-000000000000"), IsActive: true},
+	}, server.URL)
+
+	body := map[string]any{"chat_id": "cccc0006-0000-0000-0000-000000000000"}
+	for i := 0; i < botAPIRateLimitPerSec; i++ {
+		doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-voice-rl/sendVoice", body)
+	}
+	resp := doRateLimitRequest(t, app, http.MethodPost, "/bot/bot-voice-rl/sendVoice", body)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("sendVoice rate limit: expected 429, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Retry-After"); got == "" || got == "0" {
+		t.Fatalf("sendVoice rate limit: expected Retry-After header, got %q", got)
+	}
+}
+
 func TestRateLimit_DisabledWithoutRedisPassesThrough(t *testing.T) {
 	server, callCount := newBotAPITestServer(t)
 	app, _ := newRateLimitTestApp(t, nil, map[string]*model.Bot{

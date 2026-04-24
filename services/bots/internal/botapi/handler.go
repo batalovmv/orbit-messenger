@@ -103,6 +103,9 @@ func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Post("/sendMessage", h.sendMessage)
 	router.Post("/sendPhoto", h.sendPhoto)
 	router.Post("/sendDocument", h.sendDocument)
+	router.Post("/sendVideo", h.sendVideo)
+	router.Post("/sendAudio", h.sendAudio)
+	router.Post("/sendVoice", h.sendVoice)
 	router.Post("/editMessageText", h.editMessageText)
 	router.Post("/deleteMessage", h.deleteMessage)
 	router.Post("/answerCallbackQuery", h.answerCallbackQuery)
@@ -246,6 +249,18 @@ func (h *BotAPIHandler) sendPhoto(c *fiber.Ctx) error {
 
 func (h *BotAPIHandler) sendDocument(c *fiber.Ctx) error {
 	return h.sendMedia(c, "document", "document")
+}
+
+func (h *BotAPIHandler) sendVideo(c *fiber.Ctx) error {
+	return h.sendMedia(c, "video", "video")
+}
+
+func (h *BotAPIHandler) sendAudio(c *fiber.Ctx) error {
+	return h.sendMedia(c, "audio", "audio")
+}
+
+func (h *BotAPIHandler) sendVoice(c *fiber.Ctx) error {
+	return h.sendMedia(c, "voice", "voice")
 }
 
 func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
