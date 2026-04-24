@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	fhwebsocket "github.com/fasthttp/websocket"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -113,6 +115,14 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 			_ = client.Close()
 			return
 		}
+		if _, err := uuid.Parse(callID); err != nil {
+			_ = client.Close()
+			return
+		}
+
+		// Limit client frame size before reading any data to prevent memory
+		// exhaustion from an oversized auth frame.
+		client.SetReadLimit(256 * 1024)
 
 		// Step 1: read the auth frame within sfuAuthFrameTimeout. If the
 		// client never sends one we drop the connection so a misbehaving
@@ -174,6 +184,9 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 			_ = client.Close()
 			return
 		}
+
+		// Limit upstream frame sizes to prevent memory exhaustion from malicious upstream.
+		upstream.SetReadLimit(256 * 1024)
 
 		var once sync.Once
 		closeBoth := func() {
