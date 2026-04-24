@@ -145,6 +145,9 @@ func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 	if err := validator.RequireString(req.Text, "text", 1, 4096); err != nil {
 		return botError(c, err)
 	}
+	if err := ValidateReplyMarkup(req.ReplyMarkup); err != nil {
+		return botError(c, err)
+	}
 
 	chatID, err := uuid.Parse(req.ChatID)
 	if err != nil {
@@ -228,6 +231,9 @@ func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error
 	if replyMarkupRaw != "" {
 		replyMarkup = json.RawMessage(replyMarkupRaw)
 	}
+	if err := ValidateReplyMarkup(replyMarkup); err != nil {
+		return botError(c, err)
+	}
 
 	var replyToID *uuid.UUID
 	if rtID := c.FormValue("reply_to_message_id", ""); rtID != "" {
@@ -285,6 +291,9 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 		return botError(c, err)
 	}
 	if err := validator.RequireString(req.Text, "text", 1, 4096); err != nil {
+		return botError(c, err)
+	}
+	if err := ValidateReplyMarkup(req.ReplyMarkup); err != nil {
 		return botError(c, err)
 	}
 
