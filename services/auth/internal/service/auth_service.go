@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package service
 
 import (
@@ -20,6 +23,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/auth/internal/model"
 	"github.com/mst-corp/orbit/services/auth/internal/store"
 )
@@ -595,6 +599,34 @@ func generateInviteCode() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// AdminListUserSessions returns all sessions for a target user. Gated by SysManageUsers.
+func (s *AuthService) AdminListUserSessions(ctx context.Context, actorRole string, targetID uuid.UUID) ([]model.Session, error) {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
+		return nil, apperror.Forbidden("Insufficient permissions")
+	}
+	return s.sessions.ListByUser(ctx, targetID)
+}
+
+// AdminRevokeSession deletes a specific session for a target user and invalidates their JWTs.
+// Gated by SysManageUsers. Writes JWT blacklist key for the target user.
+func (s *AuthService) AdminRevokeSession(ctx context.Context, actorRole string, targetID, sessionID uuid.UUID) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	if err := s.sessions.DeleteByID(ctx, sessionID, targetID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, store.ErrNotFound) {
+			return apperror.NotFound("Session not found")
+		}
+		return fmt.Errorf("delete session: %w", err)
+	}
+	blacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", targetID.String())
+	if err := s.redis.Set(ctx, blacklistKey, "1", 24*time.Hour).Err(); err != nil {
+		s.logger.Error("failed to write JWT user blacklist after session revoke", "error", err, "user_id", targetID)
+		return fmt.Errorf("jwt invalidation failed: %w", err)
+	}
+	return nil
 }
 
 // GetNotificationPriorityMode returns the user's persisted notification priority mode.

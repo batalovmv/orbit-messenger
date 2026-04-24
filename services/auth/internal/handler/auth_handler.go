@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -68,6 +71,8 @@ func (h *AuthHandler) Register(app *fiber.App) {
 	auth.Post("/invites", h.requireAuth, h.requireAdmin, h.CreateInvite)
 	auth.Get("/invites", h.requireAuth, h.requireAdmin, h.ListInvites)
 	auth.Delete("/invites/:id", h.requireAuth, h.requireAdmin, h.RevokeInvite)
+	auth.Get("/admin/users/:id/sessions", h.requireAuth, h.requireSysManageUsers, h.AdminListUserSessions)
+	auth.Delete("/admin/users/:id/sessions/:sid", h.requireAuth, h.requireSysManageUsers, h.AdminRevokeSession)
 
 	// User settings routes (proxied from gateway as /users/me/*)
 	users := app.Group("/users/me", h.requireAuth)
@@ -109,6 +114,14 @@ func (h *AuthHandler) requireAdmin(c *fiber.Ctx) error {
 	role, _ := c.Locals("user_role").(string)
 	if !permissions.HasSysPermission(role, permissions.SysManageInvites) {
 		return response.Error(c, apperror.Forbidden("Admin access required"))
+	}
+	return c.Next()
+}
+
+func (h *AuthHandler) requireSysManageUsers(c *fiber.Ctx) error {
+	role, _ := c.Locals("user_role").(string)
+	if !permissions.HasSysPermission(role, permissions.SysManageUsers) {
+		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
 	}
 	return c.Next()
 }
@@ -217,7 +230,10 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	if appErr := validator.RequireEmail(req.Email, "email"); appErr != nil {
 		return response.Error(c, appErr)
 	}
-	if appErr := validator.RequireString(req.Password, "password", 1, 72); appErr != nil {
+	if appErr := validator.RequireString(req.Password, "password", 8, 72); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.RequireDigits(req.TOTPCode, "totp_code", 6); appErr != nil {
 		return response.Error(c, appErr)
 	}
 
@@ -476,6 +492,11 @@ func (h *AuthHandler) CreateInvite(c *fiber.Ctx) error {
 	if req.MaxUses <= 0 {
 		req.MaxUses = 1
 	}
+	if req.Email != nil {
+		if appErr := validator.RequireEmail(*req.Email, "email"); appErr != nil {
+			return response.Error(c, appErr)
+		}
+	}
 
 	inv, err := h.svc.CreateInvite(c.Context(), uid, req.Email, req.Role, req.MaxUses, req.ExpiresAt)
 	if err != nil {
@@ -549,4 +570,31 @@ func (h *AuthHandler) UpdateNotificationPriorityMode(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"mode": req.Mode})
+}
+
+func (h *AuthHandler) AdminListUserSessions(c *fiber.Ctx) error {
+	targetID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+	sessions, err := h.svc.AdminListUserSessions(c.Context(), c.Get("X-User-Role"), targetID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, sessions)
+}
+
+func (h *AuthHandler) AdminRevokeSession(c *fiber.Ctx) error {
+	targetID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+	sessionID, err := uuid.Parse(c.Params("sid"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid session ID"))
+	}
+	if err := h.svc.AdminRevokeSession(c.Context(), c.Get("X-User-Role"), targetID, sessionID); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "revoked"})
 }
