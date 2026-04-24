@@ -27,7 +27,7 @@ func makeRefreshCookie(value string, maxAge int) *fiber.Cookie {
 		Value:    value,
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: "Lax",
+		SameSite: "Strict",
 		Path:     "/",
 		MaxAge:   maxAge,
 	}
