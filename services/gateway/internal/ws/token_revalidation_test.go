@@ -39,6 +39,10 @@ func (s *stubRevalidationTarget) Done() <-chan struct{} {
 	return s.done
 }
 
+func (s *stubRevalidationTarget) Context() context.Context {
+	return context.Background()
+}
+
 func TestRunTokenRevalidation_ClosesExpiredToken(t *testing.T) {
 	ticks := make(chan time.Time, 1)
 	closed := make(chan struct{}, 1)

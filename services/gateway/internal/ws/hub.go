@@ -30,6 +30,8 @@ type Conn struct {
 	UserID  string
 	mu      sync.Mutex
 	done    chan struct{}
+	ctx     context.Context
+	cancel  context.CancelFunc
 	sendFn  func(interface{}) error
 	closeFn func(code int, text string) error
 	send    chan interface{}
@@ -91,6 +93,10 @@ func (c *Conn) write(msg interface{}) error {
 
 func (c *Conn) Done() <-chan struct{} {
 	return c.done
+}
+
+func (c *Conn) Context() context.Context {
+	return c.ctx
 }
 
 func (c *Conn) TokenExpiry() time.Time {

@@ -131,10 +131,13 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		// Step 3: Auth success — send confirmation
 		c.WriteJSON(Envelope{Type: "auth_ok", Data: json.RawMessage(`{}`)})
 
+		connCtx, connCancel := context.WithCancel(context.Background())
 		conn := &Conn{
 			WS:          c,
 			UserID:      tokenInfo.UserID,
 			done:        make(chan struct{}),
+			ctx:         connCtx,
+			cancel:      connCancel,
 			tokenExpiry: tokenInfo.ExpiresAt,
 			tokenHash:   &tokenInfo.TokenHash,
 			revalidateFn: func(ctx context.Context) error {
@@ -146,6 +149,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		isFirstConnection := h.Hub.Register(conn)
 		defer func() {
 			isLastConnection := h.Hub.Unregister(conn)
+			conn.cancel()          // cancel connection-scoped context
 			close(conn.done)
 			if isLastConnection {
 				h.publishStatusChange(tokenInfo.UserID, "offline")

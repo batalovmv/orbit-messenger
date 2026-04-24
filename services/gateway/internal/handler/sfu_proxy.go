@@ -58,6 +58,8 @@ type sfuAuthSession struct {
 	tokenHash    *string
 	revalidateFn func(context.Context) error
 	closeOnce    sync.Once
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 func (s *sfuAuthSession) TokenExpiry() time.Time {
@@ -73,6 +75,10 @@ func (s *sfuAuthSession) Revalidate(ctx context.Context) error {
 
 func (s *sfuAuthSession) Done() <-chan struct{} {
 	return s.done
+}
+
+func (s *sfuAuthSession) Context() context.Context {
+	return s.ctx
 }
 
 func (s *sfuAuthSession) Close(code int, text string) error {
@@ -158,6 +164,7 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 		_ = client.SetReadDeadline(time.Time{})
 		_ = client.WriteJSON(map[string]any{"type": "auth_ok", "data": map[string]string{}})
 
+		sessionCtx, sessionCancel := context.WithCancel(context.Background())
 		session := &sfuAuthSession{
 			client:      client,
 			done:        make(chan struct{}),
@@ -166,8 +173,13 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 			revalidateFn: func(ctx context.Context) error {
 				return gatewayws.RevalidateToken(ctx, authClient, cfg.Redis, cfg.AuthServiceURL, af.Data.Token, tokenInfo.TokenHash)
 			},
+			ctx:    sessionCtx,
+			cancel: sessionCancel,
 		}
-		defer close(session.done)
+		defer func() {
+			session.cancel()
+			close(session.done)
+		}()
 		gatewayws.StartTokenRevalidation(session)
 
 		// Step 3: dial the calls service with the resolved user id.

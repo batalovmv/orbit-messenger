@@ -15,6 +15,7 @@ type tokenRevalidationTarget interface {
 	Revalidate(context.Context) error
 	Close(code int, text string) error
 	Done() <-chan struct{}
+	Context() context.Context
 }
 
 func StartTokenRevalidation(target tokenRevalidationTarget) {
@@ -41,7 +42,7 @@ func runTokenRevalidation(
 				return
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), authTimeout)
+			ctx, cancel := context.WithTimeout(target.Context(), authTimeout)
 			err := target.Revalidate(ctx)
 			cancel()
 			if err != nil {
