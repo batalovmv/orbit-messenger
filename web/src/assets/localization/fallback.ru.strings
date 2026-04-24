@@ -1025,3 +1025,17 @@
 "AiUsageEndpointTranscribe" = "Транскрипция голоса";
 "AiUsageEndpointSuggest" = "Предложение ответа";
 "AiUsageEndpointSearch" = "Семантический поиск";
+
+"CustomStatusWorking" = "Работаю";
+"CustomStatusDayOff" = "Выходной";
+"CustomStatusVacation" = "В отпуске";
+"CustomStatusSick" = "Болею";
+"CustomStatusUnavailable" = "Недоступен";
+"CustomStatusClear" = "Убрать статус";
+"CustomStatusPresets" = "Готовые статусы";
+"AiSuggestReply" = "Предложение AI";
+"AI.Summarize" = "Суммировать";
+"AI.Translate" = "Перевести";
+"AI.Transcribe" = "Расшифровать";
+"AI.Processing" = "Обработка...";
+"AI.Error" = "Ошибка AI";
