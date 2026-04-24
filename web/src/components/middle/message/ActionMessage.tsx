@@ -131,7 +131,6 @@ const ActionMessage = ({
   const {
     requestConfetti,
     openMediaViewer,
-    getReceipt,
     checkGiftCode,
     openPremiumModal,
     animateUnreadReaction,
@@ -249,15 +248,6 @@ const ActionMessage = ({
 
   const handleClick = useLastCallback(() => {
     switch (action.type) {
-      case 'paymentSent':
-      case 'paymentRefunded': {
-        getReceipt({
-          chatId: message.chatId,
-          messageId: message.id,
-        });
-        break;
-      }
-
       case 'chatEditPhoto': {
         openMediaViewer({
           chatId: message.chatId,

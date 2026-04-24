@@ -3,7 +3,6 @@ import type { IAlbum } from '../../../../types';
 
 import { EMOJI_SIZES, MESSAGE_CONTENT_CLASS_NAME } from '../../../../config';
 import { getMessageContent } from '../../../../global/helpers';
-import getSingularPaidMedia from './getSingularPaidMedia';
 
 export function buildContentClassName(
   message: ApiMessage,
@@ -44,12 +43,9 @@ export function buildContentClassName(
     hasOutsideReactions?: boolean;
   } = {},
 ) {
-  const { paidMedia } = getMessageContent(message);
-  const { photo: paidMediaPhoto, video: paidMediaVideo } = getSingularPaidMedia(paidMedia);
-
   const content = getMessageContent(message);
   const {
-    photo = paidMediaPhoto, video = paidMediaVideo,
+    photo, video,
     audio, voice, document, contact, location, storyData,
   } = content;
   const text = album?.hasMultipleCaptions ? undefined : getMessageContent(album?.captionMessage || message).text;
@@ -60,7 +56,7 @@ export function buildContentClassName(
   const isInvertibleMedia = photo || (video && !isRoundVideo) || album || webPage;
 
   const classNames = [MESSAGE_CONTENT_CLASS_NAME];
-  const isMedia = storyData || photo || video || location || paidMedia;
+  const isMedia = storyData || photo || video || location;
   const hasText = text || location?.mediaType === 'venue' || isGeoLiveActive || hasFactCheck;
   const isMediaWithNoText = isMedia && !hasText;
   const hasInlineKeyboard = Boolean(message.inlineButtons);

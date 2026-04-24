@@ -92,7 +92,6 @@ import {
   selectNotifyDefaults,
   selectNotifyException,
   selectPeer,
-  selectPeerPaidMessagesStars,
   selectPerformanceSettingsValue,
   selectRequestedDraft,
   selectRequestedDraftFiles,
@@ -122,7 +121,6 @@ import { processMessageInputForCustomEmoji } from '../../util/emoji/customEmojiM
 import { isUserId } from '../../util/entities/ids';
 import { fetchBlob } from '../../util/files';
 import focusEditableElement from '../../util/focusEditableElement';
-import { formatStarsAsIcon } from '../../util/localization/format';
 import { fetch } from '../../util/mediaLoader';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import parseHtmlAsFormattedText from '../../util/parseHtmlAsFormattedText';
@@ -149,7 +147,6 @@ import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 import usePeerColor from '../../hooks/usePeerColor';
-import usePrevious from '../../hooks/usePrevious';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useSchedule from '../../hooks/useSchedule';
 import useSendMessageAction from '../../hooks/useSendMessageAction';
@@ -166,7 +163,6 @@ import useEmojiTooltip from '../middle/composer/hooks/useEmojiTooltip';
 import useInlineBotTooltip from '../middle/composer/hooks/useInlineBotTooltip';
 import useLoadLinkPreview from '../middle/composer/hooks/useLoadLinkPreview';
 import useMentionTooltip from '../middle/composer/hooks/useMentionTooltip';
-import usePaidMessageConfirmation from '../middle/composer/hooks/usePaidMessageConfirmation';
 import useStickerTooltip from '../middle/composer/hooks/useStickerTooltip';
 import useVoiceRecording from '../middle/composer/hooks/useVoiceRecording';
 import useAiSuggestReply from '../middle/composer/hooks/useAiSuggestReply';
@@ -200,10 +196,8 @@ import ResponsiveHoverButton from '../ui/ResponsiveHoverButton';
 import Spinner from '../ui/Spinner';
 import TextTimer from '../ui/TextTimer';
 import Transition from '../ui/Transition';
-import AnimatedCounter from './AnimatedCounter';
 import Avatar from './Avatar';
 import Icon from './icons/Icon';
-import PaymentMessageConfirmDialog from './PaymentMessageConfirmDialog';
 import ReactionAnimatedEmoji from './reactions/ReactionAnimatedEmoji';
 
 import './Composer.scss';
@@ -300,16 +294,13 @@ type StateProps = {
   webPagePreview?: ApiWebPage;
   noWebPage?: boolean;
   isContactRequirePremium?: boolean;
-  paidMessagesStars?: number;
   effect?: ApiAvailableEffect;
   effectReactions?: ApiReaction[];
   areEffectsSupported?: boolean;
   canPlayEffect?: boolean;
   shouldPlayEffect?: boolean;
   maxMessageLength: number;
-  shouldPaidMessageAutoApprove?: boolean;
   isSilentPosting?: boolean;
-  isPaymentMessageConfirmDialogOpen: boolean;
   isAccountFrozen?: boolean;
   isAppConfigLoaded?: boolean;
   insertingPeerIdMention?: string;
@@ -423,7 +414,6 @@ const Composer = ({
   webPagePreview,
   noWebPage,
   isContactRequirePremium,
-  paidMessagesStars,
   effect,
   effectReactions,
   areEffectsSupported,
@@ -431,7 +421,6 @@ const Composer = ({
   shouldPlayEffect,
   maxMessageLength,
   isSilentPosting,
-  isPaymentMessageConfirmDialogOpen,
   isAccountFrozen,
   isAppConfigLoaded,
   insertingPeerIdMention,
@@ -478,7 +467,6 @@ const Composer = ({
   const lang = useLang();
 
   const inputRef = useRef<HTMLDivElement>();
-  const counterRef = useRef<HTMLSpanElement>();
 
   const storyReactionRef = useRef<HTMLButtonElement>();
 
@@ -506,7 +494,12 @@ const Composer = ({
   const { emojiSet, members: groupChatMembers, botCommands: chatBotCommands } = chatFullInfo || {};
   const chatEmojiSetId = emojiSet?.id;
 
-  const canSchedule = !paidMessagesStars && !isMonoforum;
+  const canSchedule = !isMonoforum;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleActionWithPaymentConfirmation = useLastCallback((fn: (...args: any[]) => any, ...args: any[]) => {
+    fn(...args);
+  });
 
   const isSentStoryReactionHeart = sentStoryReaction && isSameReaction(sentStoryReaction, HEART_REACTION);
 
@@ -604,30 +597,14 @@ const Composer = ({
       isChatWithBot,
       isChatWithSelf,
       isInStoryViewer,
-      paidMessagesStars,
+      undefined,
       isInScheduledList,
     ),
-    [chat, chatFullInfo, isChatWithBot, isChatWithSelf, isInStoryViewer, paidMessagesStars, isInScheduledList],
+    [chat, chatFullInfo, isChatWithBot, isChatWithSelf, isInStoryViewer, isInScheduledList],
   );
 
   const isNeedPremium = isContactRequirePremium && isInStoryViewer;
   const isSendTextBlocked = isNeedPremium || !canSendPlainText;
-
-  const messagesCount = useDerivedState(() => {
-    if (hasAttachments) return attachments.length;
-    const messagesInInput = (getHtml() || hasAttachments) ? 1 : 0;
-    if (!isForwarding || !forwardedMessagesCount) return messagesInInput || 1;
-    return forwardedMessagesCount + messagesInInput;
-  }, [getHtml, hasAttachments, attachments, isForwarding, forwardedMessagesCount]);
-  const starsForAllMessages = paidMessagesStars ? messagesCount * paidMessagesStars : 0;
-
-  const {
-    closeConfirmDialog: closeConfirmModalPayForMessage,
-    dialogHandler: paymentMessageConfirmDialogHandler,
-    shouldAutoApprove: shouldPaidMessageAutoApprove,
-    setAutoApprove: setShouldPaidMessageAutoApprove,
-    handleWithConfirmation: handleActionWithPaymentConfirmation,
-  } = usePaidMessageConfirmation(starsForAllMessages, false, 0);
 
   const hasWebPagePreview = !hasAttachments && canAttachEmbedLinks && !noWebPage
     && webPagePreview?.webpageType === 'full';
@@ -1799,13 +1776,6 @@ const Composer = ({
       if (slowModePlaceholder) return slowModePlaceholder;
       if (botKeyboardPlaceholder) return botKeyboardPlaceholder;
       if (inputPlaceholder) return inputPlaceholder;
-      if (paidMessagesStars) {
-        return lang('ComposerPlaceholderPaidMessage', {
-          amount: formatStarsAsIcon(lang, paidMessagesStars, { asFont: true, className: 'placeholder-star-icon' }),
-        }, {
-          withNodes: true,
-        });
-      }
 
       if (isReplying && hasSuggestedPost) {
         return lang('ComposerPlaceholderCaption');
@@ -1838,7 +1808,7 @@ const Composer = ({
     return lang('ComposerPlaceholderNoText');
   }, [
     activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isComposerBlocked,
-    isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth, paidMessagesStars,
+    isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth,
     hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil, user?.canManageBotForumTopics,
   ]);
 
@@ -2030,9 +2000,6 @@ const Composer = ({
 
   const effectEmoji = areEffectsSupported && effect?.emoticon;
 
-  const shouldRenderPaidBadge = Boolean(paidMessagesStars && mainButtonState === MainButtonState.Send);
-  const prevShouldRenderPaidBadge = usePrevious(shouldRenderPaidBadge);
-
   return (
     <div className={fullClassName}>
       {isInMessageList && canAttachMedia && isReady && (
@@ -2090,7 +2057,6 @@ const Composer = ({
         editingMessage={editingMessage}
         onSendWhenOnline={handleSendWhenOnline}
         canScheduleUntilOnline={canScheduleUntilOnline && !isOneTimeMediaEnabled}
-        paidMessagesStars={paidMessagesStars}
       />
       <PollModal
         isOpen={pollModal.isOpen}
@@ -2392,7 +2358,6 @@ const Composer = ({
               onMenuOpen={onAttachMenuOpen}
               onMenuClose={onAttachMenuClose}
               messageListType={messageListType}
-              paidMessagesStars={paidMessagesStars}
             />
           )}
           {isInMessageList && Boolean(botKeyboardMessageId) && (
@@ -2509,27 +2474,6 @@ const Composer = ({
         {onForward && <Icon name="forward" />}
         {isInMessageList && <Icon name="schedule" />}
         {isInMessageList && <Icon name="check" />}
-        <Button
-          className={buildClassName(
-            'paidStarsBadge',
-            shouldRenderPaidBadge && 'visible',
-            prevShouldRenderPaidBadge && !shouldRenderPaidBadge && 'hiding',
-            !prevShouldRenderPaidBadge && !shouldRenderPaidBadge && 'hidden',
-          )}
-          nonInteractive
-          size="tiny"
-          color="stars"
-          pill
-          fluid
-        >
-          <div className="paidStarsBadgeText">
-            <Icon name="star" />
-            <AnimatedCounter
-              ref={counterRef}
-              text={lang.number(starsForAllMessages)}
-            />
-          </div>
-        </Button>
       </Button>
       {effectEmoji && (
         <span className="effect-icon" onClick={handleRemoveEffect}>
@@ -2568,16 +2512,6 @@ const Composer = ({
         />
       )}
       {calendar}
-      <PaymentMessageConfirmDialog
-        isOpen={isPaymentMessageConfirmDialogOpen}
-        onClose={closeConfirmModalPayForMessage}
-        userName={chat ? getPeerTitle(lang, chat) : undefined}
-        messagePriceInStars={paidMessagesStars || 0}
-        messagesCount={messagesCount}
-        shouldAutoApprove={shouldPaidMessageAutoApprove}
-        setAutoApprove={setShouldPaidMessageAutoApprove}
-        confirmHandler={paymentMessageConfirmDialogHandler}
-      />
     </div>
   );
 };
@@ -2594,13 +2528,12 @@ export default memo(withGlobal<OwnProps>(
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const isChatWithUser = chat?.type === 'chatTypePrivate';
     const userFullInfo = peerUserId ? selectUserFullInfo(global, peerUserId) : undefined;
-    const paidMessagesStars = selectPeerPaidMessagesStars(global, chatId);
 
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
     const messageWithActualBotKeyboard = (isChatWithBot || !isChatWithUser)
       && selectNewestMessageWithBotKeyboardButtons(global, chatId, threadId);
     const {
-      shouldSuggestStickers, shouldSuggestCustomEmoji, shouldUpdateStickerSetOrder, shouldPaidMessageAutoApprove,
+      shouldSuggestStickers, shouldSuggestCustomEmoji, shouldUpdateStickerSetOrder,
     } = global.settings.byKey;
     const { language, shouldCollectDebugLogs } = selectSharedSettings(global);
     const tabState = selectTabState(global);
@@ -2753,10 +2686,7 @@ export default memo(withGlobal<OwnProps>(
       canPlayEffect,
       shouldPlayEffect,
       maxMessageLength,
-      paidMessagesStars,
-      shouldPaidMessageAutoApprove,
       isSilentPosting,
-      isPaymentMessageConfirmDialogOpen: tabState.isPaymentMessageConfirmDialogOpen,
       isAccountFrozen,
       isAppConfigLoaded,
       insertingPeerIdMention,

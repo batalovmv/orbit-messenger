@@ -85,7 +85,7 @@ import type {
 import type { WebApp, WebAppModalStateType } from '../../types/webapp';
 import type { SearchResultKey } from '../../util/keys/searchResultKey';
 import type { RegularLangFnParameters } from '../../util/localization';
-import type { ProfileCollectionKey } from '../selectors/payments';
+import type { ProfileCollectionKey } from '../selectors/peers';
 import type { CallbackAction } from './actions';
 import type { InAppNotificationBanner } from './notificationBanners';
 

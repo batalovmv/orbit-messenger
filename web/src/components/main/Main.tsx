@@ -66,8 +66,6 @@ import MessageListHistoryHandler from '../middle/MessageListHistoryHandler';
 import MiddleColumn from '../middle/MiddleColumn';
 import AudioPlayer from '../middle/panes/AudioPlayer';
 import ModalContainer from '../modals/ModalContainer';
-import PaymentModal from '../payment/PaymentModal.async';
-import ReceiptModal from '../payment/ReceiptModal.async';
 import RightColumn from '../right/RightColumn';
 import AttachBotRecipientPicker from './AttachBotRecipientPicker.async';
 import CompliancePanel from './compliance/CompliancePanel.async';
@@ -117,8 +115,6 @@ type StateProps = {
   requestedAttachBotInChat?: TabState['requestedAttachBotInChat'];
   requestedDraft?: TabState['requestedDraft'];
   deleteFolderDialog?: ApiChatFolder;
-  isPaymentModalOpen?: boolean;
-  isReceiptModalOpen?: boolean;
   isReactionPickerOpen: boolean;
   isDeleteMessageModalOpen?: boolean;
   noRightColumnAnimation?: boolean;
@@ -161,8 +157,6 @@ const Main = ({
   requestedDraft,
   isCompliancePanelOpen,
   isDeleteMessageModalOpen,
-  isPaymentModalOpen,
-  isReceiptModalOpen,
   isReactionPickerOpen,
   deleteFolderDialog,
   isAuthReady,
@@ -203,8 +197,6 @@ const Main = ({
     loadContactList,
     loadCustomEmojis,
     loadGenericEmojiEffects,
-    closePaymentModal,
-    clearReceipt,
     checkAppVersion,
     openThread,
     toggleLeftColumn,
@@ -221,7 +213,6 @@ const Main = ({
     loadQuickReplies,
     loadAvailableEffects,
     loadTopBotApps,
-    loadPaidReactionPrivacy,
     loadPasswordInfo,
     loadBotFreezeAppeal,
     loadAllChats,
@@ -290,7 +281,6 @@ const Main = ({
       loadFeaturedEmojiStickers();
       loadSavedReactionTags();
       loadTopBotApps();
-      loadPaidReactionPrivacy();
       loadDefaultTopicIcons();
       loadAnimatedEmojis();
       loadAvailableReactions();
@@ -548,8 +538,6 @@ const Main = ({
       <AttachBotRecipientPicker requestedAttachBotInChat={requestedAttachBotInChat} />
       <MessageListHistoryHandler />
       <CompliancePanel isOpen={isCompliancePanelOpen} />
-      <PaymentModal isOpen={isPaymentModalOpen} onClose={closePaymentModal} />
-      <ReceiptModal isOpen={isReceiptModalOpen} onClose={clearReceipt} />
       <DeleteFolderDialog folder={deleteFolderDialog} />
       <ReactionPicker isOpen={isReactionPickerOpen} />
       <DeleteMessageModal isOpen={isDeleteMessageModalOpen} />
@@ -577,7 +565,6 @@ export default memo(withGlobal<OwnProps>(
       compliancePanel,
       deleteMessageModal,
       isMasterTab,
-      payment,
       deleteFolderDialogModal,
     } = selectTabState(global);
 
@@ -617,8 +604,6 @@ export default memo(withGlobal<OwnProps>(
       requestedAttachBotInChat,
       isCompliancePanelOpen: compliancePanel?.isOpen,
       isDeleteMessageModalOpen: Boolean(deleteMessageModal),
-      isPaymentModalOpen: payment.isPaymentModalOpen,
-      isReceiptModalOpen: Boolean(payment.receipt),
       deleteFolderDialog,
       isMasterTab,
       requestedDraft,

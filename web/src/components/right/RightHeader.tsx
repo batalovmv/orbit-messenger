@@ -15,8 +15,6 @@ import {
 } from '../../global/helpers';
 import {
   selectCanManage,
-  selectCanUseGiftProfileAdminFilter,
-  selectCanUseGiftProfileFilter,
   selectChat,
   selectChatFullInfo,
   selectCurrentGifSearch,
@@ -748,8 +746,8 @@ export default withGlobal<OwnProps>(
       ? tabState.management.byChatId[chatId]?.inviteInfo?.invite : undefined;
 
     const giftProfileFilter = tabState.savedGifts.filter;
-    const canUseGiftFilter = chatId ? selectCanUseGiftProfileFilter(global, chatId) : false;
-    const canUseGiftAdminFilter = chatId ? selectCanUseGiftProfileAdminFilter(global, chatId) : false;
+    const canUseGiftFilter = false;
+    const canUseGiftAdminFilter = false;
 
     return {
       canManage,

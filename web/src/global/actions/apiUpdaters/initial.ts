@@ -12,7 +12,6 @@ import type { RequiredGlobalActions } from '../../index';
 import type { ActionReturnType, GlobalState } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { getShippingError, shouldClosePaymentModal } from '../../../util/getReadableErrorText';
 import { loadAndChangeLanguage } from '../../../util/localization';
 import { getAccountsInfo, getAccountSlotUrl } from '../../../util/multiaccount';
 import { clearWebTokenAuth } from '../../../util/routing';
@@ -93,12 +92,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'error': {
       Object.values(global.byTabId).forEach(({ id: tabId }) => {
-        const paymentShippingError = getShippingError(update.error);
-        if (paymentShippingError) {
-          actions.addPaymentError({ error: paymentShippingError, tabId });
-        } else if (shouldClosePaymentModal(update.error)) {
-          actions.closePaymentModal({ tabId });
-        } else if (actions.showDialog) {
+        if (actions.showDialog) {
           actions.showDialog({ data: update.error, tabId });
         }
       });

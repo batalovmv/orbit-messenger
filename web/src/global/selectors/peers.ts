@@ -6,10 +6,11 @@ import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import { isChatAdmin, isDeletedUser } from '../helpers';
 import { selectChat, selectChatFullInfo, selectIsMonoforumAdmin } from './chats';
-import { type ProfileCollectionKey } from './payments';
 import { selectTabState } from './tabs';
 import { selectPeerProfileColor } from './ui';
 import { selectBot, selectUser, selectUserFullInfo } from './users';
+
+export type ProfileCollectionKey = 'all' | number;
 
 export function selectPeer<T extends GlobalState>(global: T, peerId: string): ApiPeer | undefined {
   return selectUser(global, peerId) || selectChat(global, peerId);

@@ -63,7 +63,6 @@ import type {
   LinkContext,
   PrivacyVisibility,
 } from '../../api/types';
-import type { ApiCredentials } from '../../components/payment/PaymentModal';
 import type { FoldersActions } from '../../hooks/reducers/useFoldersReducer';
 import type { ReducerAction } from '../../hooks/useReducer';
 import type { P2pMessage } from '../../lib/secret-sauce';
@@ -760,16 +759,6 @@ export interface ActionPayloads {
     chatId: string;
     messageId: number;
   } & WithTabId;
-  sendCredentialsInfo: {
-    credentials: ApiCredentials;
-  } & WithTabId;
-  setSmartGlocalCardInfo: {
-    type: string;
-    token: string;
-  } & WithTabId;
-  clearPaymentError: WithTabId | undefined;
-  clearReceipt: WithTabId | undefined;
-
   // stats
   toggleStatistics: WithTabId | undefined;
   toggleMessageStatistics: ({

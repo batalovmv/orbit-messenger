@@ -14,15 +14,15 @@ import type {
   ApiUserFullInfo,
   ApiUserStatus,
 } from '../../api/types';
-import type { ProfileCollectionKey } from '../../global/selectors/payments';
 import type { TabState } from '../../global/types';
+
+type ProfileCollectionKey = 'all' | number;
 import type { AnimationLevel, ProfileState, ProfileTabType, SharedMediaType, ThemeKey, ThreadId } from '../../types';
 import type { RegularLangKey } from '../../types/language';
 import { MAIN_THREAD_ID } from '../../api/types';
 import { AudioOrigin, MediaViewerOrigin, NewChatMembersProgress } from '../../types';
 
 import { MEMBERS_SLICE, PROFILE_SENSITIVE_AREA, SHARED_MEDIA_SLICE, SLIDE_TRANSITION_DURATION } from '../../config';
-import { selectActiveGiftsCollectionId } from '../../global/selectors/payments';
 
 const CONTENT_PANEL_SHOW_DELAY = 300;
 import {
@@ -1085,7 +1085,7 @@ export default memo(withGlobal<OwnProps>(
     const archiveStoryIds = undefined;
 
     const hasGiftsTab = Boolean(peerFullInfo?.starGiftCount) && !isSavedMessages;
-    const activeCollectionId = selectActiveGiftsCollectionId(global, chatId);
+    const activeCollectionId: ProfileCollectionKey = 'all';
 
     const storyAlbums = undefined;
     const selectedStoryAlbumId = 'all' as const;

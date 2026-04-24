@@ -2356,8 +2356,6 @@ addActionHandler('openUrl', (global, actions, payload): ActionReturnType => {
   const isMixedScript = isMixedScriptUrl(urlWithProtocol);
 
   if (!ignoreDeepLinks && isDeepLink(urlWithProtocol)) {
-    actions.closePaymentModal({ tabId });
-
     actions.openTelegramLink({ url, linkContext, tabId });
     return;
   }

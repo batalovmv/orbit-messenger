@@ -148,14 +148,6 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
       break;
     }
 
-    case 'receipt': {
-      const { receiptMessageId } = button;
-      actions.getReceipt({
-        chatId: chat.id, messageId: receiptMessageId, tabId,
-      });
-      break;
-    }
-
     case 'buy': {
       actions.openInvoice({
         type: 'message',

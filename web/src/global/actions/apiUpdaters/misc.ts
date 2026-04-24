@@ -1,5 +1,4 @@
 import type { ActionReturnType } from '../../types';
-import { PaymentStep } from '../../../types';
 
 import { applyLangPackDifference, requestLangPackDifference } from '../../../util/localization';
 import { addActionHandler, setGlobal } from '../../index';
@@ -9,8 +8,6 @@ import {
   addUsers,
   removeBlockedUser,
   replaceWebPage,
-  setConfirmPaymentUrl,
-  setPaymentStep,
   updateFullWebPage,
   updatePoll,
 } from '../../reducers';
@@ -131,14 +128,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
           },
         },
       };
-      setGlobal(global);
-      break;
-
-    case 'updatePaymentVerificationNeeded':
-      Object.values(global.byTabId).forEach(({ id: tabId }) => {
-        global = setConfirmPaymentUrl(global, update.url, tabId);
-        global = setPaymentStep(global, PaymentStep.ConfirmPayment, tabId);
-      });
       setGlobal(global);
       break;
 

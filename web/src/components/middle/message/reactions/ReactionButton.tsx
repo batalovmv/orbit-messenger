@@ -18,14 +18,10 @@ import useContextMenuHandlers from '../../../../hooks/useContextMenuHandlers';
 import useEffectWithPrevDeps from '../../../../hooks/useEffectWithPrevDeps';
 import useLang from '../../../../hooks/useLang';
 import useLastCallback from '../../../../hooks/useLastCallback';
-import usePrevious from '../../../../hooks/usePrevious';
-import useShowTransition from '../../../../hooks/useShowTransition';
 
 import AnimatedCounter from '../../../common/AnimatedCounter';
 import AvatarList from '../../../common/AvatarList';
-import PaidReactionEmoji from '../../../common/reactions/PaidReactionEmoji';
 import ReactionAnimatedEmoji from '../../../common/reactions/ReactionAnimatedEmoji';
-import Sparkles from '../../../common/Sparkles';
 import Button from '../../../ui/Button';
 
 import styles from './ReactionButton.module.scss';
@@ -63,7 +59,6 @@ const ReactionButton = ({
 }: OwnProps) => {
   const { requestWave } = getActions();
   const ref = useRef<HTMLButtonElement>();
-  const counterRef = useRef<HTMLSpanElement>();
 
   const [isBouncing, setIsBouncing] = useState(false);
   const [isCountBumping, setIsCountBumping] = useState(false);
@@ -131,17 +126,6 @@ const ReactionButton = ({
     return () => clearTimeout(timer);
   }, [isBouncing]);
 
-  const prevAmount = usePrevious(reaction.localAmount);
-
-  const {
-    shouldRender: shouldRenderPaidCounter,
-  } = useShowTransition({
-    isOpen: Boolean(reaction.localAmount),
-    ref: counterRef,
-    className: 'slow',
-    withShouldRender: true,
-  });
-
   return (
     <Button
       className={buildClassName(
@@ -161,26 +145,7 @@ const ReactionButton = ({
       onContextMenu={handleContextMenu}
       onClick={handleClick}
     >
-      {reaction.reaction.type === 'paid' ? (
-        <>
-          <Sparkles preset="button" />
-          <PaidReactionEmoji
-            className={styles.animatedEmoji}
-            containerId={containerId}
-            reaction={reaction.reaction}
-            size={REACTION_SIZE}
-            localAmount={reaction.localAmount}
-            observeIntersection={observeIntersection}
-          />
-          {shouldRenderPaidCounter && (
-            <AnimatedCounter
-              ref={counterRef}
-              text={`+${formatIntegerCompact(lang, reaction.localAmount || prevAmount!)}`}
-              className={styles.paidCounter}
-            />
-          )}
-        </>
-      ) : (
+      {reaction.reaction.type !== 'paid' && (
         <ReactionAnimatedEmoji
           className={styles.animatedEmoji}
           containerId={containerId}
