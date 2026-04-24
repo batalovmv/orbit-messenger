@@ -44,16 +44,23 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 	windowSec := 60
 
 	return func(c *fiber.Ctx) error {
-		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
-		// a Fiber local (not a header) so clients cannot spoof another user's bucket.
-		identifier := c.IP()
+		// Identifier priority (highest → lowest):
+		// 1. Custom Identifier func (e.g. per-route key) — never overridden
+		// 2. Authenticated userID from Fiber locals (set by JWT middleware, not spoofable)
+		// 3. Client IP — unauthenticated fallback
+		var identifier string
 		if cfg.Identifier != nil {
 			if customIdentifier := cfg.Identifier(c); customIdentifier != "" {
 				identifier = customIdentifier
 			}
 		}
-		if uid, ok := c.Locals("userID").(string); ok && uid != "" {
-			identifier = uid
+		if identifier == "" {
+			if uid, ok := c.Locals("userID").(string); ok && uid != "" {
+				identifier = uid
+			}
+		}
+		if identifier == "" {
+			identifier = c.IP()
 		}
 
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)
