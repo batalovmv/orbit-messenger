@@ -1,12 +1,17 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/ai/internal/model"
 	"github.com/mst-corp/orbit/services/ai/internal/service"
 )
@@ -50,6 +55,13 @@ func (h *AIHandler) ask(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return response.Error(c, err)
+	}
+	if err := validator.RequireString(req.Prompt, "prompt", 1, 4096); err != nil {
+		return response.Error(c, err)
+	}
+
 	reply, err := h.svc.Ask(c.Context(), userID.String(), req)
 	if err != nil {
 		return response.Error(c, err)
@@ -67,6 +79,16 @@ func (h *AIHandler) summarize(c *fiber.Ctx) error {
 	var req model.SummarizeRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return response.Error(c, err)
+	}
+	if req.TimeRange != "1h" && req.TimeRange != "6h" && req.TimeRange != "24h" && req.TimeRange != "7d" {
+		return response.Error(c, apperror.BadRequest("time_range must be one of: 1h, 6h, 24h, 7d"))
+	}
+	if err := validator.RequireString(req.Language, "language", 2, 10); err != nil {
+		return response.Error(c, err)
 	}
 
 	events, err := h.svc.Summarize(c.Context(), userID.String(), req)
@@ -88,6 +110,24 @@ func (h *AIHandler) translate(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	if len(req.MessageIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("message_ids is required"))
+	}
+	if len(req.MessageIDs) > 50 {
+		return response.Error(c, apperror.BadRequest("message_ids must not exceed 50 items"))
+	}
+	for i, id := range req.MessageIDs {
+		if err := validator.RequireUUID(id, fmt.Sprintf("message_ids[%d]", i)); err != nil {
+			return response.Error(c, err)
+		}
+	}
+	if err := validator.RequireString(req.TargetLanguage, "target_language", 2, 10); err != nil {
+		return response.Error(c, err)
+	}
+	if req.ResponseFormat != "" && req.ResponseFormat != "json_map" {
+		return response.Error(c, apperror.BadRequest("response_format must be empty or \"json_map\""))
+	}
+
 	events, err := h.svc.Translate(c.Context(), userID.String(), req)
 	if err != nil {
 		return response.Error(c, err)
@@ -105,6 +145,10 @@ func (h *AIHandler) suggestReply(c *fiber.Ctx) error {
 	var req model.ReplySuggestRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return response.Error(c, err)
 	}
 
 	suggestions, err := h.svc.SuggestReply(c.Context(), userID.String(), req)
@@ -126,6 +170,10 @@ func (h *AIHandler) transcribe(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	if err := validator.RequireUUID(req.MediaID, "media_id"); err != nil {
+		return response.Error(c, err)
+	}
+
 	result, err := h.svc.Transcribe(c.Context(), userID.String(), req)
 	if err != nil {
 		return response.Error(c, err)
@@ -145,6 +193,15 @@ func (h *AIHandler) search(c *fiber.Ctx) error {
 	var req model.SearchRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if err := validator.RequireString(req.Query, "query", 1, 512); err != nil {
+		return response.Error(c, err)
+	}
+	if req.ChatID != "" {
+		if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+			return response.Error(c, err)
+		}
 	}
 
 	result, err := h.svc.SemanticSearch(c.Context(), "", req)

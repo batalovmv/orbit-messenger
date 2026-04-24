@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -122,6 +125,15 @@ func (h *ConnectorHandler) receiveWebhook(c *fiber.Ctx) error {
 	}
 	correlationKey := firstStringField(payload, "correlation_key")
 	externalEventID := firstStringField(payload, "external_event_id")
+	if len([]rune(eventType)) > 128 {
+		return response.Error(c, apperror.BadRequest("event_type is too long"))
+	}
+	if len([]rune(correlationKey)) > 256 {
+		return response.Error(c, apperror.BadRequest("correlation_key is too long"))
+	}
+	if len([]rune(externalEventID)) > 256 {
+		return response.Error(c, apperror.BadRequest("external_event_id is too long"))
+	}
 
 	if err := h.svc.ProcessInboundWebhook(
 		c.Context(),

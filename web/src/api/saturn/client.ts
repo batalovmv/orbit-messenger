@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { OnApiUpdate } from '../types';
 import type { SaturnErrorResponse, SaturnLoginResponse, SaturnWsMessage } from './types';
 

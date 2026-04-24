@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -7,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"net/url"
 	"strings"
 	"time"
 
@@ -174,6 +178,15 @@ func (h *BotHandler) listBots(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	var ownerID *uuid.UUID
 	if ownerIDParam := strings.TrimSpace(c.Query("owner_id")); ownerIDParam != "" {
@@ -291,6 +304,20 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 		default:
 			return response.Error(c, apperror.BadRequest("menu_button.type must be one of: default, commands, web_app"))
 		}
+	}
+	if req.WebhookURL != nil {
+		u := strings.TrimSpace(*req.WebhookURL)
+		if u == "" {
+			return response.Error(c, apperror.BadRequest("webhook_url must not be blank"))
+		}
+		if len(u) > 2048 {
+			return response.Error(c, apperror.BadRequest("webhook_url is too long"))
+		}
+		parsedURL, parseErr := url.ParseRequestURI(u)
+		if parseErr != nil || parsedURL.Scheme != "https" || parsedURL.Host == "" {
+			return response.Error(c, apperror.BadRequest("webhook_url must be a valid HTTPS URL"))
+		}
+		req.WebhookURL = &u
 	}
 
 	bot, err := h.svc.UpdateBot(c.Context(), userID, getUserRole(c), botID, service.UpdateBotInput{

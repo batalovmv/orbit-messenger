@@ -90,9 +90,11 @@ func (h *BotAPIHandler) checkRateLimit(c *fiber.Ctx, botID string) error {
 	count := int(result[0])
 	ttlSec := int(result[1])
 	if count > botAPIRateLimitPerSec {
-		if ttlSec > 0 {
-			c.Set("Retry-After", strconv.Itoa(ttlSec))
+		retryAfter := ttlSec
+		if retryAfter <= 0 {
+			retryAfter = 1
 		}
+		c.Set("Retry-After", strconv.Itoa(retryAfter))
 		return apperror.TooManyRequests("Bot rate limit exceeded (30 req/sec)")
 	}
 	return nil

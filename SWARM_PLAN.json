@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "title": "Orbit Messenger Phase 3 — Production Polish",
+  "swarm": "default",
+  "current_phase": 1,
+  "phases": [
+    {
+      "id": 1,
+      "name": "Live Translate + i18n fixes",
+      "status": "complete",
+      "tasks": [
+        {
+          "id": "1.1",
+          "phase": 1,
+          "status": "completed",
+          "size": "small",
+          "description": "Remove Premium gate from ShowTranslateChatButton in SettingsLanguage.tsx — canTranslateChatsEnabled should not require isCurrentUserPremium in Orbit build",
+          "depends": [],
+          "files_touched": []
+        },
+        {
+          "id": "1.2",
+          "phase": 1,
+          "status": "completed",
+          "size": "small",
+          "description": "Add missing Russian i18n keys for AI Usage panel endpoints (AiUsageTotalsHeader, AiUsageByFeatureHeader, AiUsagePeriodSince, AiUsageEndpoint*) — already done, verify completeness",
+          "depends": [],
+          "files_touched": []
+        }
+      ]
+    }
+  ],
+  "migration_status": "native",
+  "specMtime": "2026-04-23T12:42:20.419Z",
+  "specHash": "24de093636a77732bb5d5d3a93b8c412d8e4bd29d96a19b5957ccda617e8894c"
+}

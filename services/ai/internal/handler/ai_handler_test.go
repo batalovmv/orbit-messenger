@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -278,5 +281,383 @@ func TestTranslate_BatchTruncationAt50(t *testing.T) {
 	raw50, _ := io.ReadAll(resp50.Body)
 	if strings.Contains(string(raw50), "Too many") {
 		t.Fatalf("50 message_ids should be accepted, got: %s", raw50)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Ask validation tests
+// ---------------------------------------------------------------------------
+
+func TestAsk_MissingChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"prompt":"hello"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestAsk_InvalidChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"chat_id":"not-a-uuid","prompt":"hello"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestAsk_MissingPrompt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"chat_id":"` + uuid.New().String() + `"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestAsk_PromptTooLong(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	longPrompt := strings.Repeat("a", 4097)
+	body := `{"chat_id":"` + uuid.New().String() + `","prompt":"` + longPrompt + `"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Summarize validation tests
+// ---------------------------------------------------------------------------
+
+func TestSummarize_MissingChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"time_range":"1h","language":"ru"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/summarize", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestSummarize_InvalidTimeRange(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"chat_id":"` + uuid.New().String() + `","time_range":"2h","language":"ru"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/summarize", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestSummarize_MissingLanguage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"chat_id":"` + uuid.New().String() + `","time_range":"1h"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/summarize", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SuggestReply validation tests
+// ---------------------------------------------------------------------------
+
+func TestSuggestReply_MissingChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/reply-suggest", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestSuggestReply_InvalidChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"chat_id":"bad"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/reply-suggest", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Transcribe validation tests
+// ---------------------------------------------------------------------------
+
+func TestTranscribe_MissingMediaID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/transcribe", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestTranscribe_InvalidMediaID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"media_id":"not-uuid"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/transcribe", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Search validation tests
+// ---------------------------------------------------------------------------
+
+func TestSearch_MissingQuery(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/search", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestSearch_QueryTooLong(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	longQuery := strings.Repeat("a", 513)
+	body := `{"query":"` + longQuery + `"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/search", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestSearch_InvalidChatID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"query":"hello","chat_id":"bad-uuid"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/search", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Translate additional validation tests
+// ---------------------------------------------------------------------------
+
+func TestTranslate_MissingMessageIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"target_language":"ru"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/translate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+func TestTranslate_InvalidResponseFormat(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("should not reach service")
+	}))
+	defer srv.Close()
+	app := newTranslateApp(t, srv.URL, srv.URL)
+
+	body := `{"message_ids":["` + uuid.New().String() + `"],"target_language":"ru","response_format":"xml"}`
+	req, _ := http.NewRequest(http.MethodPost, "/ai/translate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
 	}
 }

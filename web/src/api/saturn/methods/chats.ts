@@ -1,6 +1,10 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type {
-  ApiChat, ApiChatInviteImporter, ApiMessage, ApiPoll, ApiUser, ApiUserStatus,
+  ApiChat, ApiChatInviteImporter, ApiDraft, ApiMessage, ApiPoll, ApiUser, ApiUserStatus,
 } from '../../types';
+import type { ApiBotCommand } from '../../types';
 import type {
   SaturnChat,
   SaturnChatAvailableReactions,
@@ -11,9 +15,8 @@ import type {
   SaturnUser,
 } from '../types';
 
-import type { ApiBotCommand } from '../../types';
-
 import { ARCHIVED_FOLDER_ID } from '../../../config';
+import { getServerTime } from '../../../util/serverTime';
 import { buildApiChat, buildApiChatFullInfo, buildApiChatMember } from '../apiBuilders/chats';
 import { buildApiMessage, buildApiPoll } from '../apiBuilders/messages';
 import { buildApiUser, buildApiUserStatus } from '../apiBuilders/users';
@@ -50,6 +53,7 @@ export async function fetchChats({
   const lastMessageByChatId: Record<string, number> = {};
   const messages: ApiMessage[] = [];
   const pollsById: Record<string, ApiPoll> = {};
+  const draftsById: Record<string, ApiDraft> = {};
   // TODO: This is an approximation — assumes contiguous sequence_numbers.
   // If messages were deleted, lastReadSeq may be off by the number of deletions.
   // Backend should return last_read_sequence_number directly in the chat list API.
@@ -142,6 +146,14 @@ export async function fetchChats({
         unreadCount: item.unread_count,
       };
     }
+
+    if (item.draft_text) {
+      draftsById[item.id] = {
+        text: { text: item.draft_text },
+        date: item.draft_date ? Math.floor(new Date(item.draft_date).getTime() / 1000) : getServerTime(),
+        isLocal: false,
+      };
+    }
   }
 
   const chatIds = apiChats.map((c) => c.id);
@@ -153,7 +165,7 @@ export async function fetchChats({
     users: apiUsers,
     userStatusesById,
     notifyExceptionById: {} as Record<string, never>,
-    draftsById: {} as Record<string, undefined>,
+    draftsById,
     lastMessageByChatId,
     totalChatCount,
     messages,

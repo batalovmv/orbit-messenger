@@ -1,9 +1,13 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package service
 
 import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -824,4 +828,22 @@ func appendUniqueString(values []string, candidate string) []string {
 		}
 	}
 	return append(values, candidate)
+}
+
+func (s *ChatService) SaveDraft(ctx context.Context, chatID, userID uuid.UUID, text string) error {
+	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return apperror.Forbidden("not a member")
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return s.chats.ClearDraft(ctx, chatID, userID)
+	}
+	if len(text) > 4096 {
+		return apperror.BadRequest("draft too long (max 4096)")
+	}
+	return s.chats.SaveDraft(ctx, chatID, userID, text)
 }

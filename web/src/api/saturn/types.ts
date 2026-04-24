@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Saturn backend response types (JSON shapes from REST API)
 
 export interface SaturnUser {
@@ -46,6 +49,8 @@ export interface SaturnChatListItem extends SaturnChat {
   member_count: number;
   unread_count: number;
   other_user?: SaturnUser;
+  draft_text?: string;
+  draft_date?: string;
 }
 
 export interface SaturnMessageEntity {

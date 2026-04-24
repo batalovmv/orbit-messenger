@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Settings/localization methods for Saturn
 
 import type { LANG_PACKS } from '../../../config';

@@ -463,35 +463,9 @@ addActionHandler('closePremiumModal', (global, actions, payload): ActionReturnTy
   }, tabId);
 });
 
-addActionHandler('openPremiumModal', async (global, actions, payload): Promise<void> => {
-  const {
-    initialSection, fromUserId, isSuccess, isGift, daysAmount, toUserId, gift,
-    tabId = getCurrentTabId(),
-  } = payload || {};
-
-  actions.loadPremiumStickers();
-
-  const result = await callApi('fetchPremiumPromo');
-  if (!result) return;
-
-  global = getGlobal();
-
-  global = updateTabState(global, {
-    premiumModal: {
-      promo: result.promo,
-      initialSection,
-      isOpen: true,
-      fromUserId,
-      toUserId,
-      isGift,
-      daysAmount,
-      isSuccess,
-      gift,
-    },
-  }, tabId);
-  setGlobal(global);
-
-  actions.closeReactionPicker({ tabId });
+addActionHandler('openPremiumModal', (global): ActionReturnType => {
+  // Orbit: Premium is not available in this build
+  return global;
 });
 
 addActionHandler('checkCanSendGift', async (global, actions, payload): Promise<void> => {

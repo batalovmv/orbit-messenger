@@ -213,11 +213,21 @@ export function getAllowedAttachmentOptions(
 
   const isAdmin = isChatAdmin(chat);
 
+  // F-028: Poll visibility used to depend on async chatFullInfo arriving from the server.
+  // Between clean tabs Poll would appear in one and not in the other — whichever tab rendered
+  // first missed the permission load. Suppress Poll in groups until fullInfo resolves so
+  // both tabs see the same menu, then show it once permissions are known.
+  const canAttachPollsResolved = !isStoryReply && !chat.isMonoforum
+    && (chat.type !== 'chatTypePrivate' || isChatWithBot || isSavedMessages)
+    && (
+      isAdmin
+      || chat.type === 'chatTypePrivate'
+      || (Boolean(chatFullInfo) && !isUserRightBanned(chat, 'sendPolls', chatFullInfo))
+    );
+
   return {
     canAttachMedia: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendMedia', chatFullInfo),
-    canAttachPolls: !isStoryReply && !chat.isMonoforum
-      && (isAdmin || !isUserRightBanned(chat, 'sendPolls', chatFullInfo))
-      && (chat.type !== 'chatTypePrivate' || isChatWithBot || isSavedMessages),
+    canAttachPolls: canAttachPollsResolved,
     // Saturn API does not implement checklist/todo messages yet, so exposing the button is a dead-end.
     canAttachToDoLists: false,
     canSendStickers: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendStickers', chatFullInfo),

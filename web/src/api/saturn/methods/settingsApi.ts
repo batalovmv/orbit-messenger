@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Phase 4: Settings, Privacy, Blocked Users, Notifications, Push Subscriptions
 
 import type {

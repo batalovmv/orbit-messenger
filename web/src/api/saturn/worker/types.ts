@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Saturn doesn't use a Web Worker — REST API calls run in the main thread.
 // This file exists for interface compatibility with the gramjs worker pattern.
 

@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -91,7 +94,7 @@ func (h *UserHandler) UpdateProfile(c *fiber.Ctx) error {
 		}
 	}
 	if req.Bio != nil {
-		if vErr := validator.RequireString(*req.Bio, "bio", 0, 500); vErr != nil {
+		if vErr := validator.OptionalString(*req.Bio, "bio", 500); vErr != nil {
 			return response.Error(c, vErr)
 		}
 	}

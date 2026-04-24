@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -152,6 +155,15 @@ func (h *ConnectorHandler) listConnectors(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 50)
 	offset := c.QueryInt("offset", 0)
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	connectors, total, err := h.svc.ListConnectors(c.Context(), limit, offset)
 	if err != nil {
@@ -236,6 +248,9 @@ func (h *ConnectorHandler) updateConnector(c *fiber.Ctx) error {
 	if req.Config != nil {
 		if !json.Valid(*req.Config) {
 			return response.Error(c, apperror.BadRequest("config must be valid JSON"))
+		}
+		if len(*req.Config) > 16*1024 {
+			return response.Error(c, apperror.BadRequest("config must not exceed 16KB"))
 		}
 		cfg := model.JSONB(append([]byte(nil), (*req.Config)...))
 		configValue = &cfg

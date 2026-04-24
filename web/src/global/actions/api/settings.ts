@@ -642,6 +642,19 @@ addActionHandler('loadContentSettings', async (global): Promise<void> => {
   setGlobal(global);
 });
 
+addActionHandler('loadSaturnSettings', async (global): Promise<void> => {
+  const result = await callApi('getUserSettings');
+  if (!result) return;
+
+  global = getGlobal();
+  global = replaceSettings(global, {
+    canTranslate: result.can_translate ?? false,
+    canTranslateChats: result.can_translate_chats ?? true,
+    translationLanguage: result.default_translate_lang,
+  });
+  setGlobal(global);
+});
+
 addActionHandler('updateContentSettings', async (global, actions, payload): Promise<void> => {
   global = replaceSettings(global, { isSensitiveEnabled: payload.isSensitiveEnabled });
   setGlobal(global);

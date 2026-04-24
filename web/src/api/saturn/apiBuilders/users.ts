@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { ApiBotInfo, ApiBotMenuButton } from '../../types';
 import type { ApiUser, ApiUserFullInfo, ApiUserStatus } from '../../types';
 import type { SaturnBot, SaturnBotCommand, SaturnUser } from '../types';

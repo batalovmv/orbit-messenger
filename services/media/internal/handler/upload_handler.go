@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -16,6 +19,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/media/internal/model"
 	"github.com/mst-corp/orbit/services/media/internal/service"
 )
@@ -73,6 +77,14 @@ func (h *UploadHandler) UploadEncrypted(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("X-Media-Type header required"))
 	}
 	declaredFilename := c.Get("X-Media-Filename")
+	if declaredFilename != "" {
+		sanitized, fnErr := validator.SanitizeFilename(declaredFilename, 255)
+		if fnErr == nil {
+			declaredFilename = sanitized
+		} else {
+			declaredFilename = ""
+		}
+	}
 	isOneTime := c.Get("X-Is-One-Time") == "true"
 
 	ciphertext := c.Body()
@@ -125,6 +137,11 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("File too large for simple upload, use chunked upload"))
 	}
 
+	sanitizedFilename, fnErr := validator.SanitizeFilename(file.Filename, 255)
+	if fnErr != nil {
+		return response.Error(c, fnErr)
+	}
+
 	// Read file
 	f, err := file.Open()
 	if err != nil {
@@ -145,18 +162,18 @@ func (h *UploadHandler) Upload(c *fiber.Ctx) error {
 
 	mediaType := c.FormValue("type", "")
 	isOneTime := c.FormValue("is_one_time", "false") == "true"
-	uploadAttemptID := buildUploadAttemptID(uid, file.Filename, file.Size)
+	uploadAttemptID := buildUploadAttemptID(uid, sanitizedFilename, file.Size)
 	auditCtx := &model.UploadAuditContext{
 		UserID:          uid,
 		TrustedClientIP: h.trustedClientIP(c),
 		UserAgent:       c.Get("User-Agent"),
-		Filename:        file.Filename,
+		Filename:        sanitizedFilename,
 		MimeType:        mimeType,
 		Size:            file.Size,
 		UploadAttemptID: uploadAttemptID,
 	}
 
-	media, err := h.svc.Upload(c.Context(), uid, data, file.Filename, mimeType, mediaType, isOneTime, auditCtx)
+	media, err := h.svc.Upload(c.Context(), uid, data, sanitizedFilename, mimeType, mediaType, isOneTime, auditCtx)
 	if err != nil {
 		return h.mapChunkedError(c, err, "upload")
 	}
@@ -185,6 +202,12 @@ func (h *UploadHandler) ChunkedInit(c *fiber.Ctx) error {
 	if req.Filename == "" || req.MimeType == "" || req.TotalSize <= 0 {
 		return response.Error(c, apperror.BadRequest("filename, mime_type, and total_size are required"))
 	}
+
+	sanitizedFilename, fnErr := validator.SanitizeFilename(req.Filename, 255)
+	if fnErr != nil {
+		return response.Error(c, fnErr)
+	}
+	req.Filename = sanitizedFilename
 
 	meta, err := h.svc.InitChunkedUpload(c.Context(), uid, req.Filename, req.MimeType, req.MediaType, req.TotalSize)
 	if err != nil {

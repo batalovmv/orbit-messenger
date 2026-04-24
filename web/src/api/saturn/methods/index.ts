@@ -1,8 +1,12 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type {
   ApiAppConfig,
   ApiChat,
   ApiChatFolder,
   ApiConfig,
+  ApiDraft,
   ApiFormattedText,
   ApiMessage,
   ApiPeer,
@@ -21,20 +25,18 @@ import type { SaturnStickerPack } from '../types';
 
 import { DEFAULT_APP_CONFIG } from '../../../limits';
 import { buildApiStickerSet, getRegisteredAsset } from '../apiBuilders/symbols';
-import { ensureAuth, getBaseUrl, request } from '../client';
+import { ensureAuth, getBaseUrl, request, sendWsMessage } from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+import * as botsApi from './bots';
 import {
-  deleteChat,
   editChatAbout,
   editChatTitle,
   exportChatInviteLink,
   fetchChatInviteInfo,
   joinChat,
-  leaveChat,
 } from './chats';
-import { fetchMessageLink } from './messages';
-import * as botsApi from './bots';
 import * as integrationsApi from './integrations';
+import { fetchMessageLink } from './messages';
 
 export {
   destroy, disconnect, init, setCurrentUser,
@@ -215,8 +217,33 @@ export function fetchSponsoredPeer() {
   return Promise.resolve(undefined);
 }
 
-export function fetchChatFolders() {
-  return Promise.resolve(undefined);
+interface BackendFolder {
+  id: number;
+  title: string;
+  emoticon?: string;
+  color?: number;
+  position: number;
+  included_chat_ids: string[];
+  excluded_chat_ids: string[];
+  pinned_chat_ids: string[];
+}
+
+export async function fetchChatFolders() {
+  try {
+    const folders = await client.request<BackendFolder[]>('GET', '/messaging/folders');
+    const apiFolders: ApiChatFolder[] = folders.map((f) => ({
+      id: f.id,
+      title: { text: f.title },
+      emoticon: f.emoticon,
+      color: f.color,
+      includedChatIds: f.included_chat_ids,
+      excludedChatIds: f.excluded_chat_ids,
+      pinnedChatIds: f.pinned_chat_ids.length ? f.pinned_chat_ids : undefined,
+    }));
+    return apiFolders;
+  } catch {
+    return undefined;
+  }
 }
 
 export function fetchRecommendedChatFolders() {
@@ -227,39 +254,86 @@ export function toggleDialogFilterTags() {
   return Promise.resolve(true);
 }
 
-export function sortChatFolders(folderIds: number[]) {
-  sendApiUpdate({
-    '@type': 'updateChatFoldersOrder',
-    orderedIds: folderIds,
-  });
-
-  return Promise.resolve(true);
+export async function sortChatFolders(folderIds: number[]) {
+  try {
+    await client.request('PUT', '/messaging/folders/order', { folder_ids: folderIds });
+    sendApiUpdate({
+      '@type': 'updateChatFoldersOrder',
+      orderedIds: folderIds,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function editChatFolder({
+export async function editChatFolder({
   id,
   folderUpdate,
 }: {
   id: number;
   folderUpdate: ApiChatFolder;
 }) {
-  sendApiUpdate({
-    '@type': 'updateChatFolder',
-    id,
-    folder: folderUpdate,
-  });
-
-  return Promise.resolve(true);
+  try {
+    const body = {
+      title: folderUpdate.title.text,
+      emoticon: folderUpdate.emoticon ?? '',
+      color: folderUpdate.color,
+      included_chat_ids: folderUpdate.includedChatIds,
+      excluded_chat_ids: folderUpdate.excludedChatIds,
+      pinned_chat_ids: folderUpdate.pinnedChatIds ?? [],
+    };
+    if (id === 0) {
+      const created = await client.request<BackendFolder>('POST', '/messaging/folders', body);
+      const apiFolder: ApiChatFolder = {
+        id: created.id,
+        title: { text: created.title },
+        emoticon: created.emoticon,
+        color: created.color,
+        includedChatIds: created.included_chat_ids,
+        excludedChatIds: created.excluded_chat_ids,
+        pinnedChatIds: created.pinned_chat_ids.length ? created.pinned_chat_ids : undefined,
+      };
+      sendApiUpdate({
+        '@type': 'updateChatFolder',
+        id: created.id,
+        folder: apiFolder,
+      });
+    } else {
+      const updated = await client.request<BackendFolder>('PUT', `/messaging/folders/${id}`, body);
+      const apiFolder: ApiChatFolder = {
+        id: updated.id,
+        title: { text: updated.title },
+        emoticon: updated.emoticon,
+        color: updated.color,
+        includedChatIds: updated.included_chat_ids,
+        excludedChatIds: updated.excluded_chat_ids,
+        pinnedChatIds: updated.pinned_chat_ids.length ? updated.pinned_chat_ids : undefined,
+      };
+      sendApiUpdate({
+        '@type': 'updateChatFolder',
+        id: updated.id,
+        folder: apiFolder,
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function deleteChatFolder(id: number) {
-  sendApiUpdate({
-    '@type': 'updateChatFolder',
-    id,
-    folder: undefined,
-  });
-
-  return Promise.resolve(true);
+export async function deleteChatFolder(id: number) {
+  try {
+    await client.request('DELETE', `/messaging/folders/${id}`);
+    sendApiUpdate({
+      '@type': 'updateChatFolder',
+      id,
+      folder: undefined,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function fetchPinnedDialogs() {
@@ -367,8 +441,8 @@ export function fetchPremiumPromo(): Promise<{ promo: ApiPremiumPromo } | undefi
 export { subscribePush as registerDevice } from './settingsApi';
 export { unsubscribePush as unregisterDevice } from './settingsApi';
 
-export function updateIsOnline() {
-  return Promise.resolve(undefined);
+export function updateIsOnline(isOnline: boolean) {
+  sendWsMessage('set_online', { is_online: isOnline });
 }
 
 export async function fetchSavedChats() {
@@ -607,8 +681,16 @@ export async function findFirstMessageIdAfterDate({
 
 // fetchMembers re-exported from ./chats
 
-export function saveDraft() {
-  return Promise.resolve(undefined);
+export async function saveDraft({
+  chat,
+  draft,
+}: {
+  chat: ApiChat;
+  draft?: ApiDraft;
+}) {
+  const text = draft?.text?.text || '';
+  await request('PATCH', `/chats/${chat.id}/draft`, { text });
+  return true;
 }
 
 export async function fetchWebPagePreview({ text }: {
@@ -1191,11 +1273,11 @@ function resolveRegisteredAsset(kind: string, id: string, isPreview: boolean) {
       ? getRegisteredAsset(id, 'sticker') || getRegisteredAsset(id, 'document')
       : kind === 'avatar'
         ? getRegisteredAsset(id, 'avatar') || getRegisteredAsset(id, 'profile')
-      : kind === 'profile'
-        ? getRegisteredAsset(id, 'profile') || getRegisteredAsset(id, 'avatar')
-      : kind === 'photo'
-        ? getRegisteredAsset(id, 'photo') || getRegisteredAsset(id, 'document')
-      : getRegisteredAsset(id, 'document');
+        : kind === 'profile'
+          ? getRegisteredAsset(id, 'profile') || getRegisteredAsset(id, 'avatar')
+          : kind === 'photo'
+            ? getRegisteredAsset(id, 'photo') || getRegisteredAsset(id, 'document')
+            : getRegisteredAsset(id, 'document');
 
   if (!asset) {
     return undefined;

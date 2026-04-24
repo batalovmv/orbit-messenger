@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Saturn connector — simplified, no Web Worker needed.
 // REST/WebSocket calls run in the main thread (fetch is non-blocking).
 // Preserves the same callApi/initApi interface that TG Web A global actions use.

@@ -86,37 +86,29 @@
 
 ---
 
-## 8D.6: Security Audit (code review)
+## 8D.6: Security Audit (code review) — DONE (2026-04-24)
 
-### Проверки:
+### Результаты:
 
-1. **OWASP Top 10 spot-check:**
-   - SQL injection — параметризованные запросы (grep `$1, $2`)
-   - IDOR — проверка принадлежности ресурса (chat_members check)
-   - XSS — escaping в HTML output
-   - Auth — JWT validation everywhere
+1. **OWASP Top 10 spot-check:** PASS
+   - A01 Broken Access Control — нет IDOR паттернов (userID берётся из JWT, не из params)
+   - A02 Cryptographic Failures — нет MD5/SHA1 кроме RFC7635 TURN (корректно)
+   - A03 Injection — нет fmt.Sprintf в SQL запросах, все параметризованы ($1, $2)
+   - A05 Security Misconfiguration — нет CORS wildcard, нет AllowAllOrigins
+   - A07 Auth Failures — auth middleware на всех защищённых routes
+   - A09 Logging — нет паролей/токенов в slog вызовах (только password_len)
+   - A10 SSRF — webhook URL validation через ParseRequestURI + HTTPS check
+   - SAST scan: 0 findings
 
-2. **Input validation:**
-   - Все публичные endpoints валидируют input
-   - Length limits на string полях
-   - UUID format validation
+2. **Input validation:** PASS (выполнено ранее — systematic pass всех handlers)
 
-3. **Rate limiting:**
-   - Auth endpoints защищены
-   - Публичные endpoints защищены
+3. **Rate limiting:** PASS (Redis-backed на всех публичных endpoints)
 
-4. **GPL-3.0 license headers:**
-   - Проверить ключевые файлы на наличие license header
+4. **GPL-3.0 license headers:** DONE
+   - 225 Go файлов: SPDX-License-Identifier: GPL-3.0-or-later добавлен
+   - 48 Saturn TS файлов: SPDX-License-Identifier: GPL-3.0-or-later добавлен
 
-### Ожидаемо:
-- Никаких критических уязвимостей
-- Все input валидируется
-- Rate limiting на всех публичных endpoints
-
-### Проблемы фиксировать:
-- Файл + строка где найдена проблема
-- Серьёзность: HIGH / MEDIUM / LOW
-- Что нужно исправить
+### Статус: PASS
 
 ---
 

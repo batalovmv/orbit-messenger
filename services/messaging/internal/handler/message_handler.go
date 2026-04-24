@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -6,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -255,7 +259,7 @@ func (h *MessageHandler) SendMessage(c *fiber.Ctx) error {
 	}
 
 	// Input length limits.
-	if len(req.Content) > 4096 {
+	if utf8.RuneCountInString(req.Content) > 4096 {
 		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
 	}
 	if len(req.Entities) > 65536 {
@@ -484,7 +488,7 @@ func (h *MessageHandler) EditMessage(c *fiber.Ctx) error {
 	if req.Content == "" {
 		return response.Error(c, apperror.BadRequest("Content is required"))
 	}
-	if len(req.Content) > 4096 {
+	if utf8.RuneCountInString(req.Content) > 4096 {
 		return response.Error(c, apperror.BadRequest("Content too long (max 4096 characters)"))
 	}
 	if len(req.Entities) > 65536 {

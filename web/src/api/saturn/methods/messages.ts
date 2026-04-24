@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type {
   SaturnMessage,
   SaturnPaginatedResponse,
@@ -1516,7 +1519,10 @@ function detectMediaType(attachment: ApiAttachment) {
   const mime = attachment.mimeType || '';
   if (mime === 'image/gif') return 'gif';
   if (mime.startsWith('image/')) return 'photo';
-  if (mime.startsWith('video/')) return 'video';
-  if (mime.startsWith('audio/')) return 'voice';
+  if (mime.startsWith('video/')) {
+    const { quick } = attachment;
+    if (quick && quick.width > 0 && quick.width === quick.height) return 'videonote';
+    return 'video';
+  }
   return 'file';
 }

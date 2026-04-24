@@ -1,7 +1,11 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
 	"crypto/subtle"
+	"fmt"
 	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
@@ -104,6 +108,18 @@ func (h *CallHandler) CreateCall(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid call mode, must be p2p or group"))
 	}
 
+	if req.Mode == "group" && len(req.MemberIDs) == 0 {
+		return response.Error(c, apperror.BadRequest("member_ids is required for group calls"))
+	}
+	if len(req.MemberIDs) > 50 {
+		return response.Error(c, apperror.BadRequest("member_ids must not exceed 50 items"))
+	}
+	for i, id := range req.MemberIDs {
+		if _, err := uuid.Parse(id); err != nil {
+			return response.Error(c, apperror.BadRequest(fmt.Sprintf("member_ids[%d] is not a valid UUID", i)))
+		}
+	}
+
 	call, err := h.svc.CreateCall(c.Context(), uid, service.CreateCallRequest{
 		ChatID:    chatID,
 		Type:      req.Type,
@@ -199,6 +215,12 @@ func (h *CallHandler) ListCallHistory(c *fiber.Ctx) error {
 
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 50)
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
 
 	calls, nextCursor, hasMore, err := h.svc.ListCallHistory(c.Context(), uid, cursor, limit)
 	if err != nil {
@@ -363,6 +385,13 @@ func (h *CallHandler) RateCall(c *fiber.Ctx) error {
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	if req.Rating < 1 || req.Rating > 5 {
+		return response.Error(c, apperror.BadRequest("rating must be between 1 and 5"))
+	}
+	if len([]rune(req.Comment)) > 1000 {
+		return response.Error(c, apperror.BadRequest("comment is too long"))
 	}
 
 	if err := h.svc.RateCall(c.Context(), callID, uid, req.Rating, req.Comment); err != nil {

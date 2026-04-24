@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Package sfu (directory: internal/webrtc) implements a Pion-based Selective
 // Forwarding Unit for group
 // voice/video calls. Each call_id maps to a Room. Each authenticated user that

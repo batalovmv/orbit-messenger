@@ -281,6 +281,8 @@ export interface ActionPayloads {
   loadContentSettings: undefined;
   updateContentSettings: { isSensitiveEnabled: boolean };
 
+  loadSaturnSettings: undefined;
+
   loadCountryList: {
     langCode?: string;
   };
@@ -2257,6 +2259,12 @@ export interface ActionPayloads {
     gift?: ApiStarGift;
   } & WithTabId) | undefined;
   closePremiumModal: WithTabId | undefined;
+
+  // Orbit: Compliance — privileged read-only access to any chat, every open is audit-logged
+  openCompliancePanel: WithTabId | undefined;
+  closeCompliancePanel: WithTabId | undefined;
+  selectComplianceUser: { userId: string } & WithTabId;
+  selectComplianceChat: { chatId: string } & WithTabId;
 
   openGiftRecipientPicker: WithTabId | undefined;
   closeGiftRecipientPicker: WithTabId | undefined;

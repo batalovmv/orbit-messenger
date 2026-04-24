@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Phase 8A AI service Saturn client — Claude + Whisper integration.
 //
 // Two response shapes:

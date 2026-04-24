@@ -1,4 +1,7 @@
-﻿
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+
 // Saturn stub — toggleAutoTranslation.
 // In our self-hosted environment every chat supports auto-translation;
 // the setting is stored client-side in chat.hasAutoTranslation via the

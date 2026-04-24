@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { ApiInitialArgs, ApiOnProgress, OnApiUpdate } from '../../types';
 import type { MethodArgs, MethodResponse, Methods } from './types';
 

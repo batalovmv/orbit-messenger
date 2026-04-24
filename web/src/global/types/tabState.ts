@@ -576,6 +576,14 @@ export type TabState = {
     onConfirm?: NoneToVoidFunction;
   };
 
+  // Orbit: Compliance-officer panel. Only rendered when global.saturnRole is compliance or superadmin.
+  // userId = user currently drilled into; chatId = chat being read. Every transition is audit-logged server-side.
+  compliancePanel?: {
+    isOpen: boolean;
+    userId?: string;
+    chatId?: string;
+  };
+
   isWebAppsCloseConfirmationModalOpen?: boolean;
 
   isGiftRecipientPickerOpen?: boolean;

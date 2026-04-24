@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Integration presets for MST-specific webhook providers.
 //
 // The generic webhook framework in services/integrations is provider-agnostic
@@ -166,7 +169,38 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     status: 'framework-only',
   },
   {
-    id: 'generic',
+    id: 'alertmanager',
+    type: 'inbound_webhook',
+    displayName: 'Prometheus Alertmanager',
+    description: 'Alerts from Prometheus Alertmanager into #monitoring channel.',
+    defaultConnectorDisplayName: 'MST Monitoring',
+    defaultTemplate: '{{if eq .status "firing"}}🔴{{else}}✅{{end}} [{{.status | toUpper}}] {{.commonLabels.alertname}}\nСервис: {{if .commonLabels.service}}{{.commonLabels.service}}{{else}}{{.commonLabels.instance}}{{end}}\n{{.commonAnnotations.description}}',
+    defaultEventFilter: 'alert.firing,alert.resolved',
+    availableEventTypes: ['alert.firing', 'alert.resolved'],
+    config: {
+      preset_id: 'alertmanager',
+      http_method: 'POST',
+      signature_location: 'header',
+      signature_param_name: 'Authorization',
+      timestamp_param_name: '',
+    },
+    adminInstructions: [
+      '1. Save this connector to get a secret token.',
+      '2. In your environment set:',
+      '   ALERTMANAGER_WEBHOOK_URL=<Webhook URL shown after saving>',
+      '   ALERTMANAGER_WEBHOOK_SECRET=<secret token from step 1>',
+      '3. Restart Alertmanager: docker compose restart alertmanager',
+      '   Alertmanager sends the token as: Authorization: Bearer <secret>',
+      '4. Create a route pointing to your #monitoring channel.',
+      '',
+      'Alertmanager sends POST with Prometheus alert payload.',
+      'Template fields: .status, .commonLabels.alertname, .commonLabels.service,',
+      '.commonAnnotations.summary, .commonAnnotations.description',
+    ].join('\n'),
+     status: 'ready',
+   },
+   {
+     id: 'generic',
     type: 'inbound_webhook',
     displayName: 'Generic webhook',
     description: 'Manual configuration for any provider not listed above.',

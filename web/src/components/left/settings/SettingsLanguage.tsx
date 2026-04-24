@@ -8,7 +8,6 @@ import type { SharedSettings } from '../../../global/types';
 import type { AccountSettings } from '../../../types';
 import { SettingsScreens } from '../../../types';
 
-import { selectIsCurrentUserPremium } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import { loadAndChangeLanguage } from '../../../util/localization';
@@ -30,7 +29,6 @@ type OwnProps = {
 };
 
 type StateProps = {
-  isCurrentUserPremium: boolean;
   defaultTranslateLang?: string;
   theme: SharedSettings['theme'];
   shouldUseSystemTheme: SharedSettings['shouldUseSystemTheme'];
@@ -49,7 +47,6 @@ const ORBIT_TRANSLATE_LANGS = [
 
 const SettingsLanguage: FC<OwnProps & StateProps> = ({
   isActive,
-  isCurrentUserPremium,
   languages,
   language,
   canTranslate,
@@ -66,7 +63,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     loadLanguages,
     setSettingOption,
     setSharedSettingOption,
-    openPremiumModal,
     openSettingsScreen,
   } = getActions();
 
@@ -75,7 +71,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   const [translateDefaultLang, setTranslateDefaultLang] = useState<string>(defaultTranslateLang || 'auto');
   const lang = useLang();
 
-  const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
+  const canTranslateChatsEnabled = canTranslateChats;
 
   useEffect(() => {
     if (!languages?.length) {
@@ -165,14 +161,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     }
   });
 
-  const handleShouldTranslateChatsClick = useLastCallback(() => {
-    if (!isCurrentUserPremium) {
-      openPremiumModal({
-        initialSection: 'translations',
-      });
-    }
-  });
-
   const doNotTranslateText = useMemo(() => {
     if (!IS_TRANSLATION_SUPPORTED || !doNotTranslate.length) {
       return undefined;
@@ -242,9 +230,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
           <Checkbox
             label={lang('ShowTranslateChatButton')}
             checked={canTranslateChatsEnabled}
-            disabled={!isCurrentUserPremium}
-            rightIcon={!isCurrentUserPremium ? 'lock' : undefined}
-            onClickLabel={handleShouldTranslateChatsClick}
             onCheck={handleShouldTranslateChatsChange}
           />
           {(canTranslate || canTranslateChatsEnabled) && (
@@ -308,10 +293,7 @@ export default memo(withGlobal<OwnProps>(
       messageSendKeyCombo,
     } = selectSharedSettings(global);
 
-    const isCurrentUserPremium = selectIsCurrentUserPremium(global);
-
     return {
-      isCurrentUserPremium,
       languages,
       language,
       canTranslate,

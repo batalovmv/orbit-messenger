@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -9,6 +12,7 @@ import (
 
 	"github.com/mst-corp/orbit/pkg/apperror"
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/pkg/validator"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
@@ -50,6 +54,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Put("/chats/:id/protected", h.SetIsProtected)
 	app.Put("/chats/:id/photo", h.UpdateChatPhoto)
 	app.Delete("/chats/:id/photo", h.DeleteChatPhoto)
+	app.Patch("/chats/:id/draft", h.SaveDraft)
 }
 
 func (h *ChatHandler) ListChats(c *fiber.Ctx) error {
@@ -114,6 +119,17 @@ func (h *ChatHandler) CreateChat(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
+	validChatTypes := map[string]bool{"group": true, "supergroup": true}
+	if !validChatTypes[req.Type] {
+		return response.Error(c, apperror.BadRequest("type must be 'group' or 'supergroup'"))
+	}
+	if appErr := validator.RequireString(req.Name, "name", 1, 255); appErr != nil {
+		return response.Error(c, appErr)
+	}
+	if appErr := validator.OptionalString(req.Description, "description", 500); appErr != nil {
+		return response.Error(c, appErr)
+	}
+
 	if len(req.MemberIDs) > 200 {
 		return response.Error(c, apperror.BadRequest("Too many members (max 200)"))
 	}
@@ -161,6 +177,17 @@ func (h *ChatHandler) UpdateChat(c *fiber.Ctx) error {
 	if req.AvatarURL != nil && *req.AvatarURL != "" {
 		normalized := normalizeAvatarURL(*req.AvatarURL)
 		req.AvatarURL = &normalized
+	}
+
+	if req.Name != nil {
+		if appErr := validator.RequireString(*req.Name, "name", 1, 255); appErr != nil {
+			return response.Error(c, appErr)
+		}
+	}
+	if req.Description != nil {
+		if appErr := validator.OptionalString(*req.Description, "description", 500); appErr != nil {
+			return response.Error(c, appErr)
+		}
 	}
 
 	chat, err := h.svc.UpdateChat(c.Context(), chatID, uid, req.Name, req.Description, req.AvatarURL)
@@ -674,4 +701,25 @@ func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
 		return uuid.Nil, apperror.Unauthorized("Invalid user ID")
 	}
 	return id, nil
+}
+
+func (h *ChatHandler) SaveDraft(c *fiber.Ctx) error {
+	uid, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid chat ID"))
+	}
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return response.Error(c, apperror.BadRequest("invalid body"))
+	}
+	if err := h.svc.SaveDraft(c.Context(), chatID, uid, body.Text); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"ok": true})
 }

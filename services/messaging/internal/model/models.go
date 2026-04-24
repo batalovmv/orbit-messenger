@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package model
 
 import (
@@ -57,10 +60,12 @@ type Chat struct {
 
 type ChatListItem struct {
 	Chat
-	LastMessage *Message `json:"last_message,omitempty"`
-	MemberCount int      `json:"member_count"`
-	UnreadCount int      `json:"unread_count"`
-	OtherUser   *User    `json:"other_user,omitempty"`
+	LastMessage *Message   `json:"last_message,omitempty"`
+	MemberCount int        `json:"member_count"`
+	UnreadCount int        `json:"unread_count"`
+	OtherUser   *User      `json:"other_user,omitempty"`
+	DraftText   *string    `json:"draft_text,omitempty"`
+	DraftDate   *time.Time `json:"draft_date,omitempty"`
 }
 
 type ChatMember struct {

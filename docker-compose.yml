@@ -32,7 +32,7 @@ services:
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env} --save 900 1 --save 300 10 --save 60 10000
+    command: redis-server --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env} --save 900 1 --save 300 10 --save 60 10000 --save 60 1 --appendonly yes --appendfsync everysec
     volumes:
       - redis_data:/data
     healthcheck:
@@ -362,6 +362,7 @@ services:
       - "9090:9090"
     volumes:
       - prometheus_data:/prometheus
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
     configs:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml
@@ -371,6 +372,22 @@ services:
       - "--web.enable-lifecycle"
     depends_on:
       - gateway
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--config.expand-env=true"
+    environment:
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}
+      ALERTMANAGER_WEBHOOK_SECRET: ${ALERTMANAGER_WEBHOOK_SECRET:-}
     restart: unless-stopped
 
   # Grafana — local dev only. Auto-provisions the Prometheus datasource and
@@ -418,6 +435,15 @@ configs:
               values:
                 - ${INTERNAL_SECRET}
 
+      alerting:
+        alertmanagers:
+          - static_configs:
+              - targets:
+                  - alertmanager:9093
+
+      rule_files:
+        - /etc/prometheus/rules/*.yml
+
 volumes:
   postgres_data:
   redis_data:
@@ -426,3 +452,4 @@ volumes:
   meili_data:
   clamav_data:
   minio_data:
+  alertmanager_data:

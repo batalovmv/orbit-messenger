@@ -61,6 +61,7 @@ type StateProps = {
   canInstall?: boolean;
   attachBots: GlobalState['attachMenu']['bots'];
   accountsTotalLimit: number;
+  saturnRole?: GlobalState['saturnRole'];
 } & Pick<GlobalState, 'currentUserId' | 'archiveSettings'>;
 
 const LeftSideMenuItems = ({
@@ -72,6 +73,7 @@ const LeftSideMenuItems = ({
   attachBots,
   currentUser,
   accountsTotalLimit,
+  saturnRole,
   onSelectArchived,
   onSelectContacts,
   onSelectSettings,
@@ -86,7 +88,14 @@ const LeftSideMenuItems = ({
     openChatByUsername,
     openUrl,
     openChatWithInfo,
+    openCompliancePanel,
   } = getActions();
+
+  const hasComplianceAccess = saturnRole === 'compliance' || saturnRole === 'superadmin';
+
+  const handleOpenCompliance = useLastCallback(() => {
+    openCompliancePanel();
+  });
   const lang = useLang();
 
   const animationLevelValue = animationLevel !== ANIMATION_LEVEL_MIN
@@ -195,6 +204,14 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuContacts')}
       </MenuItem>
+      {hasComplianceAccess && (
+        <MenuItem
+          icon="lock"
+          onClick={handleOpenCompliance}
+        >
+          {lang('ComplianceOpenPanel')}
+        </MenuItem>
+      )}
       {bots.map((bot) => (
         <AttachBotItem
           bot={bot}
@@ -301,6 +318,7 @@ export default memo(withGlobal<OwnProps>(
       archiveSettings,
       attachBots,
       accountsTotalLimit: selectPremiumLimit(global, 'moreAccounts'),
+      saturnRole: global.saturnRole,
     };
   },
 )(LeftSideMenuItems));

@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package store
 
 import (
@@ -36,12 +39,24 @@ func NewUserStore(pool *pgxpool.Pool) UserStore {
 }
 
 func (s *userStore) Create(ctx context.Context, u *model.User) error {
-	return s.pool.QueryRow(ctx,
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("create user: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // safe after Commit
+
+	if err := tx.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, display_name, role, invited_by, invite_code)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id, status, is_active, totp_enabled, created_at, updated_at`,
 		u.Email, u.PasswordHash, u.DisplayName, u.Role, u.InvitedBy, u.InviteCode,
-	).Scan(&u.ID, &u.Status, &u.IsActive, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Status, &u.IsActive, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		return err
+	}
+	if err := s.installDefaultStickerPacks(ctx, tx, u.ID); err != nil {
+		return fmt.Errorf("create user: install default sticker packs: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
@@ -117,7 +132,13 @@ func (s *userStore) Update(ctx context.Context, u *model.User) error {
 // CreateIfNoAdmins atomically checks that no superadmin/admin exists and inserts the user.
 // Returns ErrAdminExists if a privileged admin already exists (race-safe).
 func (s *userStore) CreateIfNoAdmins(ctx context.Context, u *model.User) error {
-	err := s.pool.QueryRow(ctx,
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("create admin: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // safe after Commit
+
+	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, display_name, role, invited_by, invite_code)
 		 SELECT $1, $2, $3, $4, $5, $6
 		 WHERE NOT EXISTS (SELECT 1 FROM users WHERE role IN ('superadmin', 'admin'))
@@ -130,7 +151,25 @@ func (s *userStore) CreateIfNoAdmins(ctx context.Context, u *model.User) error {
 		}
 		return fmt.Errorf("create admin: %w", err)
 	}
-	return nil
+	if err := s.installDefaultStickerPacks(ctx, tx, u.ID); err != nil {
+		return fmt.Errorf("create admin: install default sticker packs: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *userStore) installDefaultStickerPacks(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO user_installed_stickers (user_id, pack_id, position)
+		 SELECT $1, pack_id::uuid, position
+		 FROM (VALUES
+		     ('5f52fd0a-8c59-4f3b-a9b3-6c26e3e95c51'::uuid, 0),
+		     ('10000000-0000-4000-8000-0000000000a1'::uuid, 1),
+		     ('10000000-0000-4000-8000-0000000000b1'::uuid, 2)
+		 ) AS packs(pack_id, position)
+		 ON CONFLICT (user_id, pack_id) DO NOTHING`,
+		userID,
+	)
+	return err
 }
 
 func (s *userStore) CountAdmins(ctx context.Context) (int, error) {

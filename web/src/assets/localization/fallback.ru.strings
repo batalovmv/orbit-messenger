@@ -761,8 +761,6 @@
 "AiUsageOutputTokens" = "Выходные токены";
 "AiUsageCost" = "Стоимость";
 "AiUsagePeriodFallback" = "За всё время";
-"AiUsageByFeatureHeader" = "По функциям";
-"AiUsageTotalsHeader" = "Итого";
 
 "LinkCopied" = "Ссылка скопирована";
 "TextCopied" = "Текст скопирован";
@@ -986,3 +984,44 @@
 "MessageDelivered" = "Доставлено";
 "MessageRead" = "Прочитано";
 "MessageUnread" = "Непрочитано";
+
+"DeleteChatUser" = "Удалить пользователя из чата";
+"StickersList.EmojiItem" = "Эмодзи";
+"GifsTab2" = "GIF";
+
+"CompliancePanel.Title" = "Панель соответствия";
+"CompliancePanel.ExportChat" = "Экспорт чата";
+"CompliancePanel.ExportUser" = "Экспорт данных пользователя";
+"CompliancePanel.ExportStart" = "Начать экспорт";
+"CompliancePanel.ExportSuccess" = "Экспорт завершён";
+"CompliancePanel.ExportError" = "Ошибка экспорта";
+"CompliancePanel.Sessions" = "Активные сессии";
+"CompliancePanel.RevokeSession" = "Отозвать сессию";
+"CompliancePanel.RevokeAll" = "Отозвать все сессии";
+"AuditLog.Title" = "Журнал аудита";
+"AuditLog.UserListRead" = "Просмотр списка пользователей";
+"AuditLog.DataExport" = "Экспорт данных";
+"AuditLog.UserDeactivated" = "Пользователь деактивирован";
+"AuditLog.SessionRevoked" = "Сессия отозвана";
+"Role.SysAdmin" = "Системный администратор";
+"Role.Compliance" = "Специалист по соответствию";
+"MenuTelegramFeatures" = "Функции Orbit";
+"AiUsageEndpointAsk" = "Спросить @orbit-ai";
+"CompliancePanelTitle" = "Проверка соответствия";
+"ComplianceBannerNotice" = "Привилегированный доступ — каждый открытый чат фиксируется в журнале аудита.";
+"ComplianceAllEmployees" = "Сотрудники";
+"ComplianceSelectEmployee" = "Выберите сотрудника для просмотра его чатов.";
+"ComplianceChatsPending" = "Список чатов появится здесь после запуска эндпоинта экспорта.";
+"ComplianceChatView" = "Чат";
+"ComplianceMessagesPending" = "Сообщения появятся здесь после запуска эндпоинта экспорта.";
+"ComplianceOpenPanel" = "Проверка соответствия";
+"ComplianceExportUser" = "Экспорт данных пользователя (.ndjson)";
+"ComplianceExportChat" = "Экспорт сообщений чата (.ndjson)";
+"AiUsageTotalsHeader" = "Итого (последние 30 дней)";
+"AiUsageByFeatureHeader" = "По функциям";
+"AiUsagePeriodSince" = "С {date}";
+"AiUsageEndpointSummarize" = "Суммаризация чата";
+"AiUsageEndpointTranslate" = "Перевод";
+"AiUsageEndpointTranscribe" = "Транскрипция голоса";
+"AiUsageEndpointSuggest" = "Предложение ответа";
+"AiUsageEndpointSearch" = "Семантический поиск";

@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { ApiGroupCall, ApiMessage } from '../../types';
 import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 

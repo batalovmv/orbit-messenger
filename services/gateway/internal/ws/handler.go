@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package ws
 
 import (
@@ -348,6 +351,23 @@ func (h *Handler) handleClientMessage(conn *Conn, msg []byte) {
 		conn.Send(Envelope{Type: EventPong, Data: json.RawMessage(`{}`)})
 	case EventWebRTCOffer, EventWebRTCAnswer, EventWebRTCICECandidate:
 		h.handleSignalingRelay(conn, cm.Type, cm.Data)
+	case "set_online":
+		h.handleSetOnline(conn, cm.Data)
+	}
+}
+
+func (h *Handler) handleSetOnline(conn *Conn, data json.RawMessage) {
+	var payload struct {
+		IsOnline bool `json:"is_online"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return
+	}
+
+	if payload.IsOnline {
+		h.publishStatusChange(conn.UserID, "online")
+	} else {
+		h.publishStatusChange(conn.UserID, "recently")
 	}
 }
 

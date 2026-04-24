@@ -134,6 +134,9 @@ addActionHandler('sync', (global, actions): ActionReturnType => {
       };
       setGlobal(global);
 
+      // Load Saturn user settings (canTranslate, canTranslateChats, etc.)
+      getActions().loadSaturnSettings();
+
       if (DEBUG) {
         // eslint-disable-next-line no-console
         console.log('>>> FINISH SYNC');
