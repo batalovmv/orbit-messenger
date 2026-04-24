@@ -1,12 +1,17 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package botapi
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +23,17 @@ import (
 	"github.com/mst-corp/orbit/services/bots/internal/model"
 	"github.com/redis/go-redis/v9"
 )
+
+const botAPIRateLimitPerSec = 30
+
+var botRateLimitScript = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {count, ttl}
+`)
 
 type BotService interface {
 	TokenValidator
@@ -61,6 +77,27 @@ func (h *BotAPIHandler) WithUpdateQueue(updateQueue UpdateQueue) *BotAPIHandler 
 	return h
 }
 
+func (h *BotAPIHandler) checkRateLimit(c *fiber.Ctx, botID string) error {
+	if h.redis == nil {
+		return nil // rate limiting disabled if Redis not configured
+	}
+	key := fmt.Sprintf("ratelimit:botapi:%s", botID)
+	result, err := botRateLimitScript.Run(c.Context(), h.redis, []string{key}, 1).Int64Slice()
+	if err != nil {
+		h.logger.Error("bot API rate limiter Redis error", "bot_id", botID, "error", err)
+		return nil // fail-open on Redis error (don't block legitimate traffic)
+	}
+	count := int(result[0])
+	ttlSec := int(result[1])
+	if count > botAPIRateLimitPerSec {
+		if ttlSec > 0 {
+			c.Set("Retry-After", strconv.Itoa(ttlSec))
+		}
+		return apperror.TooManyRequests("Bot rate limit exceeded (30 req/sec)")
+	}
+	return nil
+}
+
 func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Get("/getMe", h.getMe)
 	router.Post("/sendMessage", h.sendMessage)
@@ -87,6 +124,9 @@ func (h *BotAPIHandler) getMe(c *fiber.Ctx) error {
 func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 	bot, err := currentBot(c)
 	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
 		return botError(c, err)
 	}
 
@@ -133,6 +173,9 @@ func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error {
 	bot, err := currentBot(c)
 	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
 		return botError(c, err)
 	}
 
@@ -210,6 +253,9 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 	if err != nil {
 		return botError(c, err)
 	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
 
 	var req EditMessageRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -250,6 +296,9 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 func (h *BotAPIHandler) deleteMessage(c *fiber.Ctx) error {
 	bot, err := currentBot(c)
 	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
 		return botError(c, err)
 	}
 

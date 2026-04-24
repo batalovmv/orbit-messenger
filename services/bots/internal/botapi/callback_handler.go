@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package botapi
 
 import (
@@ -10,6 +13,14 @@ import (
 )
 
 func (h *BotAPIHandler) answerCallbackQuery(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
 	if h.redis == nil {
 		return botError(c, apperror.Internal("Redis is not configured"))
 	}
