@@ -98,7 +98,6 @@ import {
   selectMessageIdsByGroupId,
   selectMessageSummary,
   selectOutgoingStatus,
-  selectPeer,
   selectPerformanceSettingsValue,
   selectPollFromMessage,
   selectReplyMessage,
@@ -175,6 +174,8 @@ import { animateSnap } from '../../main/visualEffects/SnapEffectContainer';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
+import AiTranscribeButton from './AiTranscribeButton';
+import AiTranslateInline from './AiTranslateInline';
 import Album from './Album';
 import AnimatedCustomEmoji from './AnimatedCustomEmoji';
 import AnimatedEmoji from './AnimatedEmoji';
@@ -185,8 +186,6 @@ import DiceWrapper from './dice/DiceWrapper';
 import FactCheck from './FactCheck';
 import Game from './Game';
 import InlineButtons from './InlineButtons';
-import AiTranscribeButton from './AiTranscribeButton';
-import AiTranslateInline from './AiTranslateInline';
 import Location from './Location';
 import MessageAppendix from './MessageAppendix';
 import MessageEffect from './MessageEffect';
@@ -659,7 +658,6 @@ const Message = ({
     handleFocusForwarded,
     handleDocumentGroupSelectAll,
     handleTopicChipClick,
-    handleStoryClick,
   } = useInnerHandlers({
     lang: oldLang,
     selectMessage,
