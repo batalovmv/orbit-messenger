@@ -52,16 +52,32 @@ func NewAuthHandler(svc *service.AuthService, logger *slog.Logger, internalSecre
 	}
 }
 
-func (h *AuthHandler) Register(app *fiber.App) {
+// RateLimitMiddlewares groups the rate limit handlers applied to sensitive auth endpoints.
+type RateLimitMiddlewares struct {
+	Login      fiber.Handler
+	Register   fiber.Handler
+	ResetAdmin fiber.Handler
+}
+
+// orNoop returns h if non-nil, otherwise a pass-through middleware.
+// This allows tests to pass RateLimitMiddlewares{} without panicking.
+func orNoop(h fiber.Handler) fiber.Handler {
+	if h != nil {
+		return h
+	}
+	return func(c *fiber.Ctx) error { return c.Next() }
+}
+
+func (h *AuthHandler) Register(app *fiber.App, rateLimits RateLimitMiddlewares) {
 	auth := app.Group("/auth")
 
 	auth.Post("/bootstrap", h.Bootstrap)
-	auth.Post("/register", h.RegisterUser)
-	auth.Post("/login", h.Login)
+	auth.Post("/register", orNoop(rateLimits.Register), h.RegisterUser)
+	auth.Post("/login", orNoop(rateLimits.Login), h.Login)
 	auth.Post("/logout", h.requireAuth, h.Logout)
 	auth.Post("/refresh", h.Refresh)
 	auth.Get("/me", h.requireAuth, h.GetMe)
-	auth.Post("/reset-admin", h.ResetAdmin)
+	auth.Post("/reset-admin", orNoop(rateLimits.ResetAdmin), h.ResetAdmin)
 	auth.Get("/sessions", h.requireAuth, h.ListSessions)
 	auth.Delete("/sessions/:id", h.requireAuth, h.RevokeSession)
 	auth.Post("/2fa/setup", h.requireAuth, h.Setup2FA)

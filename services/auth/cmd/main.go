@@ -22,6 +22,7 @@ import (
 	"github.com/mst-corp/orbit/pkg/migrator"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/auth/internal/handler"
+	"github.com/mst-corp/orbit/services/auth/internal/middleware"
 	"github.com/mst-corp/orbit/services/auth/internal/service"
 	"github.com/mst-corp/orbit/services/auth/internal/store"
 )
@@ -120,6 +121,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Rate limiting (defense-in-depth — gateway also has limits)
+	loginRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  5,
+		KeyPrefix:  "auth_login",
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
+	})
+	registerRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  10,
+		KeyPrefix:  "auth_register",
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
+	})
+	resetAdminRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  5,
+		KeyPrefix:  "auth_reset_admin",
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
+	})
+
 	// DI
 	userStore := store.NewUserStore(pool)
 	sessionStore := store.NewSessionStore(pool)
@@ -138,6 +159,12 @@ func main() {
 	// Fiber
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
+		// Trust X-Trusted-Client-IP forwarded by the gateway.
+		// Without this, c.IP() returns the gateway's IP for all requests,
+		// collapsing all clients into one rate-limit bucket.
+		ProxyHeader:             "X-Trusted-Client-IP",
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          []string{"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
 	})
 
 	metricsReg := metrics.New("auth")
@@ -155,7 +182,11 @@ func main() {
 		return metricsReg.Handler()(c)
 	})
 
-	authHandler.Register(app)
+	authHandler.Register(app, handler.RateLimitMiddlewares{
+		Login:      loginRateLimit,
+		Register:   registerRateLimit,
+		ResetAdmin: resetAdminRateLimit,
+	})
 
 	// Graceful shutdown
 	go func() {

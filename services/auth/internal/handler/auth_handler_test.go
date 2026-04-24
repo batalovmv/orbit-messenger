@@ -312,7 +312,7 @@ func setupInspectableTestApp(t *testing.T) (*fiber.App, *service.AuthService, *m
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
 	})
-	handler.Register(app)
+	handler.Register(app, RateLimitMiddlewares{})
 
 	return app, svc, userStore, sessionStore
 }
@@ -344,7 +344,7 @@ func setupAdminSessionTestApp(t *testing.T) (*fiber.App, *service.AuthService, *
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
 	})
-	handler.Register(app)
+	handler.Register(app, RateLimitMiddlewares{})
 
 	return app, svc, userStore, sessionStore, rdb
 }
@@ -505,7 +505,7 @@ func TestBootstrap_DisabledWhenSecretEmpty(t *testing.T) {
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg, logger)
 	h := NewAuthHandler(svc, logger, "", "") // empty bootstrap secret
 	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
-	h.Register(app)
+	h.Register(app, RateLimitMiddlewares{})
 
 	resp := doRequest(app, "POST", "/auth/bootstrap", map[string]string{
 		"email":        "admin@orbit.test",
