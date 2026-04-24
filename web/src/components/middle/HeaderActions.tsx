@@ -491,6 +491,7 @@ const HeaderActions: FC<OwnProps & StateProps> = ({
           onSubscribeChannel={handleSubscribeClick}
           onSearchClick={handleSearchClick}
           onAsMessagesClick={handleAsMessagesClick}
+          onAiSummaryClick={handleAiSummaryOpen}
           onClose={handleHeaderMenuClose}
           onCloseAnimationEnd={handleHeaderMenuHide}
         />

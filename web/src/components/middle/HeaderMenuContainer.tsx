@@ -107,6 +107,7 @@ export type OwnProps = {
   onClose: () => void;
   onCloseAnimationEnd: () => void;
   onJoinRequestsClick?: () => void;
+  onAiSummaryClick?: NoneToVoidFunction;
 };
 
 type StateProps = {
@@ -191,6 +192,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
   onAsMessagesClick,
   onClose,
   onCloseAnimationEnd,
+  onAiSummaryClick,
 }) => {
   const {
     updateChatMutedState,
@@ -463,6 +465,11 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
+  const handleAiSummaryClick = useLastCallback(() => {
+    onAiSummaryClick?.();
+    closeMenu();
+  });
+
   const handleStatisticsClick = useLastCallback(() => {
     toggleStatistics();
     setShouldCloseFast(!isRightColumnShown);
@@ -591,6 +598,14 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
               onClick={handleSearch}
             >
               {oldLang('Search')}
+            </MenuItem>
+          )}
+          {isMobile && onAiSummaryClick && (
+            <MenuItem
+              icon="lamp"
+              onClick={handleAiSummaryClick}
+            >
+              {lang('AI.Summarize')}
             </MenuItem>
           )}
           {withForumActions && canCreateTopic && (
