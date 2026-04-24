@@ -496,11 +496,6 @@ const Composer = ({
 
   const canSchedule = !isMonoforum;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleActionWithPaymentConfirmation = useLastCallback((fn: (...args: any[]) => any, ...args: any[]) => {
-    fn(...args);
-  });
-
   const isSentStoryReactionHeart = sentStoryReaction && isSameReaction(sentStoryReaction, HEART_REACTION);
 
   useEffect(processMessageInputForCustomEmoji, [getHtml]);
@@ -1183,7 +1178,7 @@ const Composer = ({
         return;
       }
 
-      handleActionWithPaymentConfirmation(sendAttachments, {
+      sendAttachments({
         attachments,
         sendCompressed,
         sendGrouped,
@@ -1319,7 +1314,7 @@ const Composer = ({
     scheduledAt?: number,
     scheduleRepeatPeriod?: number,
   ) => {
-    handleActionWithPaymentConfirmation(handleSend, isSilent, scheduledAt, scheduleRepeatPeriod);
+    handleSend(isSilent, scheduledAt, scheduleRepeatPeriod);
   });
 
   const handleTodoListCreate = useLastCallback(() => {
@@ -1461,8 +1456,7 @@ const Composer = ({
       forceShowSymbolMenu();
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         cancelForceShowSymbolMenu();
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           { gif, isSilent },
           scheduledAt,
           scheduleRepeatPeriod,
@@ -1473,7 +1467,7 @@ const Composer = ({
         });
       });
     } else {
-      handleActionWithPaymentConfirmation(sendMessage, { messageList: currentMessageList, gif, isSilent });
+      sendMessage({ messageList: currentMessageList, gif, isSilent });
       requestMeasure(() => {
         resetComposer(true);
       });
@@ -1504,8 +1498,7 @@ const Composer = ({
       forceShowSymbolMenu();
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         cancelForceShowSymbolMenu();
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           { sticker, isSilent },
           scheduledAt,
           scheduleRepeatPeriod,
@@ -1516,15 +1509,12 @@ const Composer = ({
         });
       });
     } else {
-      handleActionWithPaymentConfirmation(
-        sendMessage,
-        {
-          messageList: currentMessageList,
-          sticker,
-          isSilent,
-          shouldUpdateStickerSetOrder: shouldUpdateStickerSetOrder && canUpdateStickerSetsOrder,
-        },
-      );
+      sendMessage({
+        messageList: currentMessageList,
+        sticker,
+        isSilent,
+        shouldUpdateStickerSetOrder: shouldUpdateStickerSetOrder && canUpdateStickerSetsOrder,
+      });
       clearDraft({ chatId, threadId, isLocalOnly: true });
 
       requestMeasure(() => {
@@ -1544,8 +1534,7 @@ const Composer = ({
 
     if (isInScheduledList || isScheduleRequested) {
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           {
             id: inlineResult.id,
             queryId: inlineResult.queryId,
@@ -1557,16 +1546,13 @@ const Composer = ({
         );
       });
     } else {
-      handleActionWithPaymentConfirmation(
-        sendInlineBotResult,
-        {
-          id: inlineResult.id,
-          queryId: inlineResult.queryId,
-          threadId,
-          chatId,
-          isSilent,
-        },
-      );
+      sendInlineBotResult({
+        id: inlineResult.id,
+        queryId: inlineResult.queryId,
+        threadId,
+        chatId,
+        isSilent,
+      });
     }
 
     const messageInput = document.querySelector<HTMLDivElement>(editableInputCssSelector);
@@ -1594,8 +1580,7 @@ const Composer = ({
 
     if (isInScheduledList) {
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           { poll },
           scheduledAt,
           scheduleRepeatPeriod,
@@ -1604,10 +1589,7 @@ const Composer = ({
       });
       closePollModal();
     } else {
-      handleActionWithPaymentConfirmation(
-        sendMessage,
-        { messageList: currentMessageList, poll, isSilent: isSilentPosting },
-      );
+      sendMessage({ messageList: currentMessageList, poll, isSilent: isSilentPosting });
       closePollModal();
     }
   });
@@ -1619,8 +1601,7 @@ const Composer = ({
 
     if (isInScheduledList) {
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           { todo },
           scheduledAt,
           scheduleRepeatPeriod,
@@ -1628,10 +1609,7 @@ const Composer = ({
         );
       });
     } else {
-      handleActionWithPaymentConfirmation(
-        sendMessage,
-        { messageList: currentMessageList, todo, isSilent: isSilentPosting },
-      );
+      sendMessage({ messageList: currentMessageList, todo, isSilent: isSilentPosting });
     }
   });
 
@@ -1921,7 +1899,7 @@ const Composer = ({
       entities = customEmojiMessage.entities;
     }
 
-    handleActionWithPaymentConfirmation(sendMessage, { text, entities, isReaction: true });
+    sendMessage({ text, entities, isReaction: true });
     closeReactionPicker();
   });
 
@@ -1946,20 +1924,17 @@ const Composer = ({
   });
 
   const handleSendSilent = useLastCallback(() => {
-    handleActionWithPaymentConfirmation(sendSilent);
+    sendSilent();
   });
 
   const handleSendWhenOnline = useLastCallback(() => {
-    handleActionWithPaymentConfirmation(
-      handleMessageSchedule, {}, SCHEDULED_WHEN_ONLINE, undefined, currentMessageList!, effect?.id,
-    );
+    handleMessageSchedule({}, SCHEDULED_WHEN_ONLINE, undefined, currentMessageList!, effect?.id);
   });
 
   const handleSendScheduledAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
-        handleActionWithPaymentConfirmation(
-          handleMessageSchedule,
+        handleMessageSchedule(
           { sendCompressed, sendGrouped, isInvertedMedia },
           scheduledAt,
           scheduleRepeatPeriod,
@@ -1972,7 +1947,7 @@ const Composer = ({
 
   const handleSendSilentAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
-      handleActionWithPaymentConfirmation(sendSilent, { sendCompressed, sendGrouped, isInvertedMedia });
+      sendSilent({ sendCompressed, sendGrouped, isInvertedMedia });
     },
   );
 

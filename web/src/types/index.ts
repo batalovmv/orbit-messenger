@@ -224,7 +224,6 @@ export enum SettingsScreens {
   PrivacyGroupChatsAllowedContacts,
   PrivacyGroupChatsDeniedContacts,
   PrivacyBlockedUsers,
-  PrivacyNoPaidMessages,
   Performance,
   Folders,
   FoldersCreateFolder,

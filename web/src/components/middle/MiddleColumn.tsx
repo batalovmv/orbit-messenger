@@ -42,7 +42,6 @@ import {
   selectIsMonoforumAdmin,
   selectIsRightColumnShown,
   selectIsUserBlocked,
-  selectPeerPaidMessagesStars,
   selectPinnedIds,
   selectTabState,
   selectTheme,
@@ -828,7 +827,7 @@ export default memo(withGlobal<OwnProps>(
     const userFull = selectUserFullInfo(global, chatId);
 
     const isContactRequirePremium = userFull?.isContactRequirePremium;
-    const paidMessagesStars = selectPeerPaidMessagesStars(global, chatId);
+    const paidMessagesStars = undefined;
     const isAccountFrozen = selectIsCurrentUserFrozen(global);
     const botFreezeAppealId = global.botFreezeAppealId;
     const freezeAppealChat = botFreezeAppealId

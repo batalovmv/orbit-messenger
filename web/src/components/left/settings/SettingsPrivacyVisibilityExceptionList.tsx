@@ -247,8 +247,6 @@ function getCurrentPrivacySettings(global: GlobalState, screen: SettingsScreens)
     case SettingsScreens.PrivacyGroupChatsDeniedContacts:
     case SettingsScreens.PrivacyGroupChatsAllowedContacts:
       return privacy.chatInvite;
-    case SettingsScreens.PrivacyNoPaidMessages:
-      return privacy.noPaidMessages;
   }
 
   return undefined;

@@ -14,15 +14,12 @@ import type {
   ApiGeoPoint,
   ApiGlobalMessageSearchType,
   ApiGroupStatistics,
-  ApiInputInvoice,
   ApiLimitTypeWithModal,
   ApiMessage,
   ApiMissingInvitedUser,
   ApiNewMediaTodo,
   ApiNewPoll,
   ApiNotification,
-  ApiPaymentFormRegular,
-  ApiPaymentStatus,
   ApiPhoneCall,
   ApiPostStatistics,
   ApiPremiumGiftCodeOption,
@@ -30,7 +27,6 @@ import type {
   ApiPremiumSection,
   ApiPreparedInlineMessage,
   ApiReactionWithPaid,
-  ApiReceiptRegular,
   ApiSavedGifts,
   ApiSavedStarGift,
   ApiSearchPostsFlood,
@@ -71,14 +67,12 @@ import type {
   MessageList,
   MiddleSearchParams,
   NewChatMembersProgress,
-  PaymentStep,
   ProfileEditProgress,
   ProfileTabType,
   ResaleGiftsFilterOptions,
   ScrollTargetPosition,
   SettingsScreens,
   SharedMediaType,
-  ShippingOption,
   TabThread,
   ThreadId,
 } from '../../types';
@@ -363,38 +357,6 @@ export type TabState = {
     offsets?: Record<string, string>;
   };
 
-  isPaymentFormLoading?: boolean;
-  payment: {
-    inputInvoice?: ApiInputInvoice;
-    step?: PaymentStep;
-    status?: ApiPaymentStatus;
-    shippingOptions?: ShippingOption[];
-    requestId?: string;
-    form?: ApiPaymentFormRegular;
-    stripeCredentials?: {
-      type: string;
-      id: string;
-    };
-    smartGlocalCredentials?: {
-      type: string;
-      token: string;
-    };
-    receipt?: ApiReceiptRegular;
-    error?: {
-      field?: string;
-      messageKey?: RegularLangFnParameters;
-      descriptionKey?: RegularLangFnParameters;
-    };
-    isPaymentModalOpen?: boolean;
-    isExtendedMedia?: boolean;
-    confirmPaymentUrl?: string;
-    temporaryPassword?: {
-      value: string;
-      validUntil: number;
-    };
-    url?: string;
-    botId?: string;
-  };
   chatCreation?: {
     progress: ChatCreationProgress;
     error?: string;

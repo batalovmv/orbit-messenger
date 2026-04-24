@@ -56,22 +56,6 @@ export function selectPeerStarGiftCollections<T extends GlobalState>(
   return global.starGiftCollections?.byPeerId[peerId];
 }
 
-export function selectPeerPaidMessagesStars<T extends GlobalState>(
-  global: T,
-  peerId: string,
-) {
-  const isChatWithUser = isUserId(peerId);
-  if (isChatWithUser) {
-    const userFullInfo = isChatWithUser ? selectUserFullInfo(global, peerId) : undefined;
-    return userFullInfo?.paidMessagesStars;
-  }
-
-  const chat = selectChat(global, peerId);
-  if (!chat) return undefined;
-  if (isChatAdmin(chat) || selectIsMonoforumAdmin(global, chat.id)) return undefined;
-  return chat.paidMessagesStars;
-}
-
 export function selectPeerHasProfileBackground<T extends GlobalState>(global: T, peerId: string) {
   const peer = selectPeer(global, peerId);
   if (!peer) return false;

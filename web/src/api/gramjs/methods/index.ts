@@ -40,11 +40,7 @@ export * from './phoneCallState';
 
 export * from './stories';
 
-export * from './payments';
-
 export * from './fragment';
-
-export * from './stars';
 
 export * from './forum';
 

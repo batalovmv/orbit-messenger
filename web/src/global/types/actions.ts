@@ -86,7 +86,6 @@ import type {
   MessageListType,
   MiddleSearchParams,
   NewChatMembersProgress,
-  PaymentStep,
   PerformanceType,
   Point,
   ProfileTabType,
@@ -729,36 +728,6 @@ export interface ActionPayloads {
   } & WithTabId;
   resetChatCreation: WithTabId | undefined;
 
-  // payment
-  closePaymentModal: WithTabId | undefined;
-  closeStarsPaymentModal: WithTabId | undefined;
-  resetPaymentStatus: WithTabId | undefined;
-  addPaymentError: {
-    error: TabState['payment']['error'];
-  } & WithTabId;
-  validateRequestedInfo: {
-    requestInfo: any;
-    saveInfo?: boolean;
-  } & WithTabId;
-  setPaymentStep: {
-    step?: PaymentStep;
-  } & WithTabId;
-  sendPaymentForm: {
-    shippingOptionId?: string;
-    saveCredentials?: any;
-    savedCredentialId?: string;
-    tipAmount?: number;
-  } & WithTabId;
-  sendStarPaymentForm: {
-    directInfo?: {
-      formId: string;
-      inputInvoice: ApiInputInvoice;
-    };
-  } & WithTabId;
-  getReceipt: {
-    chatId: string;
-    messageId: number;
-  } & WithTabId;
   // stats
   toggleStatistics: WithTabId | undefined;
   toggleMessageStatistics: ({

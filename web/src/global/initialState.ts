@@ -439,8 +439,6 @@ export const INITIAL_TAB_STATE: TabState = {
 
   pollResults: {},
 
-  payment: {},
-
   notifications: [],
   notificationBanners: [],
 

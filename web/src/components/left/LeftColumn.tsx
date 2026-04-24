@@ -343,10 +343,6 @@ function LeftColumn({
           openSettingsScreen({ screen: SettingsScreens.Language });
           return;
 
-        case SettingsScreens.PrivacyNoPaidMessages:
-          openSettingsScreen({ screen: SettingsScreens.PrivacyMessages });
-          return;
-
         default:
           break;
       }

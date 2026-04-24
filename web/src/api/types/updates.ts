@@ -619,12 +619,6 @@ export type ApiUpdatePaymentVerificationNeeded = {
   url: string;
 };
 
-export type ApiUpdatePaymentStateCompleted = {
-  '@type': 'updatePaymentStateCompleted';
-  paymentState: TabState['payment'];
-  tabId: number;
-};
-
 export type ApiUpdateStarPaymentStateCompleted = {
   '@type': 'updateStarPaymentStateCompleted';
   tabId: number;
@@ -968,7 +962,7 @@ export type ApiUpdate = (
   ApiUpdateServerTimeOffset | ApiUpdateMessageReactions | ApiUpdateSavedReactionTags |
   ApiUpdateGroupCallParticipants | ApiUpdateGroupCallConnection | ApiUpdateGroupCall | ApiUpdateGroupCallStreams |
   ApiUpdateGroupCallConnectionState | ApiUpdateGroupCallLeavePresentation | ApiUpdateGroupCallChatId |
-  ApiUpdatePendingJoinRequests | ApiUpdatePaymentVerificationNeeded | ApiUpdatePaymentStateCompleted |
+  ApiUpdatePendingJoinRequests | ApiUpdatePaymentVerificationNeeded |
   ApiUpdatePhoneCall | ApiUpdatePhoneCallSignalingData | ApiUpdatePhoneCallMediaState |
   ApiUpdatePhoneCallPeerState |
   ApiUpdatePhoneCallConnectionState | ApiUpdatePhoneCallConnectionQuality |

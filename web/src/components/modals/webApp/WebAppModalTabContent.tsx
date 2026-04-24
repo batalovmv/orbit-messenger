@@ -80,8 +80,6 @@ type StateProps = {
   botAppSettings?: ApiBotAppSettings;
   attachBot?: ApiAttachBot;
   theme?: ThemeKey;
-  isPaymentModalOpen?: boolean;
-  paymentStatus?: TabState['payment']['status'];
   modalState?: WebAppModalStateType;
   botAppPermissions?: BotAppPermissions;
 };
@@ -114,8 +112,6 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
   webApp,
   bot,
   theme,
-  isPaymentModalOpen,
-  paymentStatus,
   registerSendEventCallback,
   registerReloadFrameCallback,
   isTransforming,
@@ -131,11 +127,9 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     sendWebViewData,
     toggleAttachBot,
     openTelegramLink,
-    setWebAppPaymentSlug,
     switchBotInline,
     sharePhoneWithBot,
     updateWebApp,
-    resetPaymentStatus,
     openChatWithInfo,
     showNotification,
     openEmojiStatusAccessModal,
@@ -368,23 +362,6 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
       visibilityChangedCallBack(true);
     }
   }, [modalState]);
-
-  useSyncEffect(([prevIsPaymentModalOpen]) => {
-    if (isPaymentModalOpen === prevIsPaymentModalOpen) return;
-    if (webApp?.slug && !isPaymentModalOpen && paymentStatus) {
-      sendEvent({
-        eventType: 'invoice_closed',
-        eventData: {
-          slug: webApp.slug,
-          status: paymentStatus,
-        },
-      });
-      setWebAppPaymentSlug({
-        slug: undefined,
-      });
-      resetPaymentStatus();
-    }
-  }, [isPaymentModalOpen, paymentStatus, sendEvent, webApp?.slug]);
 
   const handleRemoveAttachBot = useLastCallback(() => {
     toggleAttachBot({
@@ -1257,7 +1234,6 @@ export default memo(withGlobal<OwnProps>(
     const botAppSettings = userFullInfo?.botInfo?.appSettings;
     const currentUser = global.currentUserId ? selectUser(global, global.currentUserId) : undefined;
     const theme = selectTheme(global);
-    const { isPaymentModalOpen, status: regularPaymentStatus } = selectTabState(global).payment;
     const botAppPermissions = bot ? selectBotAppPermissions(global, bot.id) : undefined;
 
     return {
@@ -1265,8 +1241,6 @@ export default memo(withGlobal<OwnProps>(
       bot,
       currentUser,
       theme,
-      isPaymentModalOpen,
-      paymentStatus: regularPaymentStatus,
       modalState,
       botAppPermissions,
       botAppSettings,

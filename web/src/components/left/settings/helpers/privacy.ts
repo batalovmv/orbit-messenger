@@ -49,8 +49,6 @@ export function getPrivacyKey(screen: SettingsScreens): ApiPrivacyKey | undefine
       return 'phoneP2P';
     case SettingsScreens.PrivacyAddByPhone:
       return 'addByPhone';
-    case SettingsScreens.PrivacyNoPaidMessages:
-      return 'noPaidMessages';
   }
 
   return undefined;
