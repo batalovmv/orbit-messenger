@@ -384,7 +384,24 @@ func (s *AuthService) Verify2FA(ctx context.Context, userID uuid.UUID, code stri
 		return apperror.BadRequest("Invalid 2FA code")
 	}
 
-	return s.users.UpdateTOTP(ctx, userID, u.TOTPSecret, true)
+	// Atomically enable TOTP and revoke all sessions in one DB transaction.
+	// This closes the TOCTOU window where a concurrent Login could create a new
+	// session between revocation and UpdateTOTP. If the transaction fails, neither
+	// change is persisted — the account stays in the safe pre-2FA state.
+	if err := s.users.EnableTOTPAndRevokeSessions(ctx, userID, *u.TOTPSecret); err != nil {
+		return fmt.Errorf("enable 2fa: %w", err)
+	}
+
+	// Invalidate all existing access tokens via per-user "invalid before" timestamp.
+	// Done after the DB transaction — if this fails, sessions are already revoked and
+	// TOTP is enabled, so the account is secure. Access tokens will expire naturally.
+	invalidateKey := "user_tokens_invalid_before:" + userID.String()
+	if err := s.redis.Set(ctx, invalidateKey, fmt.Sprintf("%d", time.Now().Unix()), s.cfg.AccessTTL).Err(); err != nil {
+		slog.Error("failed to set token invalidation timestamp on 2FA enable", "error", err, "user_id", userID)
+		// Non-fatal: sessions are revoked and TOTP is enabled. Access tokens expire naturally (AccessTTL).
+	}
+
+	return nil
 }
 
 // Disable2FA disables 2FA after password confirmation.

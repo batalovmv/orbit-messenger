@@ -27,6 +27,9 @@ type UserStore interface {
 	CountAdmins(ctx context.Context) (int, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, hash string) error
 	UpdateTOTP(ctx context.Context, id uuid.UUID, secret *string, enabled bool) error
+	// EnableTOTPAndRevokeSessions atomically enables TOTP and deletes all sessions
+	// in a single DB transaction, closing the TOCTOU window between the two operations.
+	EnableTOTPAndRevokeSessions(ctx context.Context, id uuid.UUID, secret string) error
 	UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error
 }
 
@@ -189,6 +192,32 @@ func (s *userStore) UpdateTOTP(ctx context.Context, id uuid.UUID, secret *string
 		secret, enabled, id,
 	)
 	return err
+}
+
+// EnableTOTPAndRevokeSessions atomically enables TOTP and deletes all sessions
+// in a single DB transaction. This closes the TOCTOU window where a concurrent
+// Login could create a new session between revocation and TOTP enable.
+func (s *userStore) EnableTOTPAndRevokeSessions(ctx context.Context, id uuid.UUID, secret string) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("enable totp: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // safe after Commit
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET totp_secret = $1, totp_enabled = true WHERE id = $2`,
+		secret, id,
+	); err != nil {
+		return fmt.Errorf("enable totp: update user: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM sessions WHERE user_id = $1`, id,
+	); err != nil {
+		return fmt.Errorf("enable totp: revoke sessions: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *userStore) UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error {

@@ -115,6 +115,14 @@ func (m *mockUserStore) UpdateTOTP(_ context.Context, id uuid.UUID, secret *stri
 	return nil
 }
 
+func (m *mockUserStore) EnableTOTPAndRevokeSessions(_ context.Context, id uuid.UUID, secret string) error {
+	if u, ok := m.users[id]; ok {
+		u.TOTPSecret = &secret
+		u.TOTPEnabled = true
+	}
+	return nil
+}
+
 func (m *mockUserStore) GetNotificationPriorityMode(_ context.Context, userID uuid.UUID) (string, error) {
 	if mode, ok := m.notificationPriorityMode[userID]; ok {
 		return mode, nil
