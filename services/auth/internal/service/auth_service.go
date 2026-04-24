@@ -561,12 +561,21 @@ func (s *AuthService) createTokenPair(ctx context.Context, userID uuid.UUID, dev
 	refreshStr := hex.EncodeToString(refreshBytes)
 
 	// Store session in DB — device_id stays NULL when no device is registered.
+	// IP/UA may be empty when the request omits headers or the gateway doesn't
+	// forward them; pass NULL instead of "" so the inet column can store it.
+	var ipPtr, uaPtr *string
+	if ip != "" {
+		ipPtr = &ip
+	}
+	if userAgent != "" {
+		uaPtr = &userAgent
+	}
 	sess := &model.Session{
 		UserID:    userID,
 		DeviceID:  deviceID,
 		TokenHash: hashToken(refreshStr),
-		IPAddress: &ip,
-		UserAgent: &userAgent,
+		IPAddress: ipPtr,
+		UserAgent: uaPtr,
 		ExpiresAt: now.Add(s.cfg.RefreshTTL),
 	}
 	if err := s.sessions.Create(ctx, sess); err != nil {

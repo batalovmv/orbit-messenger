@@ -1,7 +1,5 @@
-import BrokenGiftPreview from '../../../assets/broken-gift.svg';
 import QrPlane from '../../../assets/tgs/auth/QrPlane.tgs';
 import BannedDuck from '../../../assets/tgs/BannedDuck.tgs';
-import BrokenGift from '../../../assets/tgs/BrokenGift.tgs';
 import CameraFlip from '../../../assets/tgs/calls/CameraFlip.tgs';
 import HandFilled from '../../../assets/tgs/calls/HandFilled.tgs';
 import HandOutline from '../../../assets/tgs/calls/HandOutline.tgs';
@@ -45,7 +43,6 @@ import SearchPreview from '../../../assets/tgs-previews/Search.svg';
 import PasskeysPreview from '../../../assets/tgs-previews/settings/Passkeys.svg';
 
 export const LOCAL_TGS_PREVIEW_URLS = {
-  BrokenGift: BrokenGiftPreview,
   DuckNothingFound: DuckNothingFoundPreview,
   Search: SearchPreview,
   Passkeys: PasskeysPreview,
@@ -86,7 +83,6 @@ export const LOCAL_TGS_URLS = {
   Report,
   SearchingDuck,
   BannedDuck,
-  BrokenGift,
   CraftProgress,
   Diamond,
   Search,

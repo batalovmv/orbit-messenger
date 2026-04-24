@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_folders_user ON chat_folders(user_id, positi
 
 CREATE TRIGGER trg_chat_folders_updated_at
     BEFORE UPDATE ON chat_folders
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Chats included in or excluded from a folder
 CREATE TABLE IF NOT EXISTS chat_folder_chats (
