@@ -8,17 +8,19 @@
 //   const { remoteStreams, isConnected, join, leave } = useSfuStreamManager(callId);
 //   // remoteStreams passed to video grid components
 
-import { useCallback, useEffect, useRef, useState } from '../../lib/teact/teact';
-import { getAccessToken, getBaseUrl } from '../client';
+import { useCallback, useEffect, useRef, useState } from '../lib/teact/teact';
+import { getAccessToken, getBaseUrl } from '../api/saturn/client';
 import {
-  SfuRemoteTrack,
+  type SfuRemoteTrack,
+  type SfuSession,
   joinSfuCall,
   leaveSfuCall,
   toggleSfuMute,
   toggleSfuVideo,
   toggleSfuScreenShare,
-} from '../secret-sauce/sfu';
+} from '../lib/secret-sauce/sfu';
 import { getGlobal } from '../global';
+import { fetchICEServers } from '../api/saturn/methods/calls';
 
 export interface SfuStreamManager {
   remoteStreams: Map<string, SfuRemoteTrack>;
@@ -42,7 +44,7 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const sessionRef = useRef<ReturnType<typeof joinSfuCall> | null>(null);
+  const sessionRef = useRef<SfuSession | null>(null);
 
   const handleRemoteTrack = useCallback((track: SfuRemoteTrack) => {
     setRemoteStreams((prev) => {
@@ -84,10 +86,18 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
       // For now, default to voice (isVideo: false)
       const isVideo = false;
       const accessToken = getAccessToken();
+      if (!accessToken) {
+        throw new Error('Not authenticated: missing access token');
+      }
       const wsBaseUrl = getBaseUrl().replace(/^http/, 'ws');
 
-      // ICE servers will be fetched via REST after joining
-      const iceServers: RTCIceServer[] = [];
+      // Fetch ICE servers from the calls service so coturn is used for NAT traversal.
+      const iceServersRaw = await fetchICEServers({ callId });
+      const iceServers: RTCIceServer[] = (iceServersRaw || []).map((s) => ({
+        urls: s.urls,
+        username: s.username,
+        credential: s.credential,
+      }));
 
       const session = await joinSfuCall({
         callId,

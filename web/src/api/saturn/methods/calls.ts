@@ -4,7 +4,7 @@
 import type { ApiPhoneCall, ApiUser } from '../../types';
 import type { ApiPhoneCallConnection, ApiCallProtocol } from '../../../lib/secret-sauce';
 import {
-  joinSfuCall, leaveSfuCall, type SfuRemoteTrack,
+  leaveSfuCall,
 } from '../../../lib/secret-sauce/sfu';
 
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
@@ -554,75 +554,14 @@ export async function joinGroupCall(args?: { call?: { id?: string; type?: string
     return undefined;
   }
 
-  // 1. Mark this user as a participant in the DB. The REST hop also fires
-  //    NATS call_participant_joined so the OTHER peers see the new tile
-  //    immediately, even before our WS handshake lands.
+  // Mark this user as a participant in the DB. The REST hop fires
+  // NATS call_participant_joined so other peers see the new tile immediately.
+  // The actual SFU WebSocket connection is managed by useSfuStreamManager in GroupCall.tsx.
   try {
     await request<{ status: string }>('POST', `/calls/${callId}/join`);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[Saturn:calls] join REST failed', e);
-    return undefined;
-  }
-
-  // 2. Pull ICE servers (gateway proxies the same /calls/:id/ice-servers we
-  //    use for p2p) so the SFU's PeerConnection can use coturn.
-  const iceServersRaw = await fetchICEServers({ callId });
-  const iceServers: RTCIceServer[] = (iceServersRaw || []).map((s) => ({
-    urls: s.urls,
-    username: s.username,
-    credential: s.credential,
-  }));
-
-  const accessToken = getAccessToken();
-  if (!accessToken) {
-    // eslint-disable-next-line no-console
-    console.error('[Saturn:calls] joinGroupCall: missing access token');
-    return undefined;
-  }
-
-  const isVideo = args?.isVideo ?? args?.call?.type === 'video';
-
-  try {
-    await joinSfuCall({
-      callId,
-      wsBaseUrl: buildSfuWsBase(),
-      accessToken,
-      iceServers,
-      isVideo: Boolean(isVideo),
-      onRemoteTrack: (track: SfuRemoteTrack) => {
-        remoteSfuStreams.set(track.trackId, track.stream);
-        remoteSfuTrackOwners.set(track.trackId, track.userId);
-        sendApiUpdate({
-          '@type': 'updateGroupCallStreams',
-          userId: track.userId,
-          streamId: track.trackId,
-        } as any);
-      },
-      onRemoteTrackRemoved: (trackId: string) => {
-        const userId = remoteSfuTrackOwners.get(trackId) || '';
-        remoteSfuStreams.delete(trackId);
-        remoteSfuTrackOwners.delete(trackId);
-        sendApiUpdate({
-          '@type': 'updateGroupCallStreams',
-          userId,
-          streamId: trackId,
-        } as any);
-      },
-      onConnectionStateChange: (state) => {
-        // eslint-disable-next-line no-console
-        console.log('[Saturn:calls] SFU connection state:', state);
-      },
-      onError: (err) => {
-        // eslint-disable-next-line no-console
-        console.error('[Saturn:calls] SFU error', err);
-      },
-    });
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('[Saturn:calls] joinSfuCall failed', e);
-    // Best-effort REST rollback so the participant row doesn't linger.
-    try { await request('DELETE', `/calls/${callId}/leave`); } catch { /* ignore */ }
     return undefined;
   }
 

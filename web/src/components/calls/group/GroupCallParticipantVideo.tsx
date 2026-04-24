@@ -43,6 +43,7 @@ type OwnProps = {
   canPin: boolean;
   participant: TypeGroupCallParticipant;
   className?: string;
+  remoteStream?: MediaStream;
 };
 
 type StateProps = {
@@ -59,6 +60,7 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
   participant,
   user,
   chat,
+  remoteStream,
 }) => {
   const lang = useOldLang();
 
@@ -116,8 +118,9 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
 
   const [isHidden, setIsHidden] = useState(!noAnimate);
 
-  const streams = getUserStreams(user?.id || chat!.id);
-  const actualStream = type === 'video' ? streams?.video : streams?.presentation;
+  // Use Saturn SFU stream if provided, otherwise fall back to legacy getUserStreams.
+  const legacyStreams = remoteStream ? undefined : getUserStreams(user?.id || chat!.id);
+  const actualStream = remoteStream ?? (type === 'video' ? legacyStreams?.video : legacyStreams?.presentation);
   const streamRef = useRef(actualStream);
   if (actualStream?.active && actualStream?.getVideoTracks()[0].enabled) {
     streamRef.current = actualStream;

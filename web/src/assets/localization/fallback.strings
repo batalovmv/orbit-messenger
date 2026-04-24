@@ -1352,7 +1352,6 @@
 "AdminPanel.Users" = "Пользователи";
 "AdminPanel.Deactivate" = "Деактивировать";
 "AdminPanel.Sessions" = "Сессии";
-
 "AI.Summarize" = "Суммировать";
 "AI.Translate" = "Перевести";
 "AI.Transcribe" = "Транскрибировать";

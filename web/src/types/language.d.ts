@@ -1118,6 +1118,33 @@ export interface LangPair {
   'ScheduleRepeatMonthly': undefined;
   'ScheduleRepeatYearly': undefined;
   'VoipIncoming': undefined;
+  'CompliancePanel.ExportChat': undefined;
+  'CompliancePanel.ExportUser': undefined;
+  'CompliancePanel.ExportStart': undefined;
+  'CompliancePanel.ExportSuccess': undefined;
+  'CompliancePanel.ExportError': undefined;
+  'CompliancePanel.Sessions': undefined;
+  'CompliancePanel.RevokeSession': undefined;
+  'CompliancePanel.RevokeAll': undefined;
+  'AuditLog.UserListRead': undefined;
+  'AuditLog.DataExport': undefined;
+  'AuditLog.UserDeactivated': undefined;
+  'AuditLog.SessionRevoked': undefined;
+  'AdminPanel.Users': undefined;
+  'AdminPanel.Deactivate': undefined;
+  'AdminPanel.Sessions': undefined;
+  'AI.Summarize': undefined;
+  'AI.Translate': undefined;
+  'AI.Transcribe': undefined;
+  'AI.Processing': undefined;
+  'AI.Error': undefined;
+  'Role.Moderator': undefined;
+  'Role.Compliance': undefined;
+  'Role.HR': undefined;
+  'BlockUser': undefined;
+  'DeleteChatUser': undefined;
+  'StickersList.EmojiItem': undefined;
+  'GifsTab': undefined;
   'TimeJustNow': undefined;
   'MuteForForever': undefined;
   'Common.Done': undefined;
@@ -2195,6 +2222,227 @@ export interface LangPair {
   'ComplianceOpenPanel': undefined;
   'ComplianceExportUser': undefined;
   'ComplianceExportChat': undefined;
+  'AccDescrExpandPanel': undefined;
+  'AccDescrLike': undefined;
+  'AccDescrTopic': undefined;
+  'AddEffectMessageHint': undefined;
+  'AiTranslateExpand': undefined;
+  'AllReactions': undefined;
+  'AmongWinners': undefined;
+  'AnonymousForward': undefined;
+  'AvailableReactions': undefined;
+  'BoostingGiveawayCanceledByPayment': undefined;
+  'BoostingGiveawayHowItWorksIncludeText': undefined;
+  'BoostingGiveawayMsgAllSubsPlural': undefined;
+  'BoostingGiveawayMsgParticipants': undefined;
+  'BoostingGiveawayMsgPrizes': undefined;
+  'BoostingGiveawayMsgWithDivider': undefined;
+  'BoostingGiveawayNotEligible': undefined;
+  'BoostingGiveawayNotEligibleAdmin': undefined;
+  'BoostingGiveawayNotEligibleCountry': undefined;
+  'BoostingGiveawayPrizes': undefined;
+  'BoostingGiveawayResultsMsgAllWinnersReceivedLinks': undefined;
+  'BoostingGiveawayResultsMsgWinnersSelected': undefined;
+  'BoostingGiveawayResultsMsgWinnersTitle': undefined;
+  'BoostingHowItWork': undefined;
+  'BoostingSelectCountry': undefined;
+  'BoostingWinnersDate': undefined;
+  'BotChangeSettings': undefined;
+  'BotDefaultPrivacyPolicy': undefined;
+  'BotEditCommands': undefined;
+  'BotEditIntro': undefined;
+  'BotManageInfo': undefined;
+  'BotPrivacyPolicy': undefined;
+  'BotProfilePermissionEmojiStatus': undefined;
+  'BotProfilePermissionLocation': undefined;
+  'BotRemoveFromMenu': undefined;
+  'BotRemoveFromMenuTitle': undefined;
+  'BotUsers': undefined;
+  'BusinessHoursDayClosed': undefined;
+  'BusinessHoursDayFullOpened': undefined;
+  'BusinessHoursProfile': undefined;
+  'BusinessHoursProfileNowOpen': undefined;
+  'BusinessLocationCopied': undefined;
+  'BusinessProfileLocation': undefined;
+  'ChannelHideMembers': undefined;
+  'ChannelReactions.MaxCount.Info': undefined;
+  'ChannelSignMessagesWithProfile': undefined;
+  'ChannelSignProfilesInfo': undefined;
+  'ChannelStats.ViewsCount': undefined;
+  'ChannelVisibility.Confirm.MakePrivate.Channel': undefined;
+  'Chat.ContextViewAsTopics': undefined;
+  'Chat.EmptyStateIntroFooter': undefined;
+  'Chat.EmptyTopicPlaceholder.Text': undefined;
+  'Chat.EmptyTopicPlaceholder.Title': undefined;
+  'Chat.Giveaway.Info.NotQualified': undefined;
+  'Chat.Giveaway.Info.NotQualifiedMany': undefined;
+  'Chat.Giveaway.Info.OtherChannels': undefined;
+  'Chat.Giveaway.Info.Participating': undefined;
+  'Chat.Giveaway.Info.ParticipatingMany': undefined;
+  'Chat.MessagingRestrictedPlaceholder': undefined;
+  'Chat.MessagingRestrictedPlaceholderAction': undefined;
+  'Chat.PlayOnceVoiceMessageTooltip': undefined;
+  'Chat.Voice.Single.Close': undefined;
+  'ChatList.EmptyTopicsCreate': undefined;
+  'ChatList.EmptyTopicsDescription': undefined;
+  'ChatList.EmptyTopicsTitle': undefined;
+  'ChatList.Filter.InviteLink.IncludeExcludeError': undefined;
+  'ChatList.Mute': undefined;
+  'ChatList.Unmute': undefined;
+  'ChatListFilter.CreateLinkNew': undefined;
+  'Checking': undefined;
+  'ClearHistoryMyNotesMessage': undefined;
+  'ContactsAndPremium': undefined;
+  'Conversation.ContextViewReplies': undefined;
+  'Conversation.StoryForwardTooltip.SavedMessages.One': undefined;
+  'Conversation.SuggestedPhotoTitle': undefined;
+  'CreateTopicTitle': undefined;
+  'DebugMenuEnableLogs': undefined;
+  'DebugSendLogs': undefined;
+  'DeleteAdditionalActions': undefined;
+  'DeleteAllFromUsers': undefined;
+  'DeleteBan': undefined;
+  'DeleteProceedBtn': undefined;
+  'DeleteRestrictUsers': undefined;
+  'DeselectAll': undefined;
+  'DisableReactionsInfo': undefined;
+  'EditTopic': undefined;
+  'EnableAllReactionsInfo': undefined;
+  'EnableSomeReactionsInfo': undefined;
+  'FactCheck': undefined;
+  'FactCheckFooter': undefined;
+  'FilterDeleteAlertLinks': undefined;
+  'FolderLinkButtonJoinPlural': undefined;
+  'FolderLinkButtonRemove': undefined;
+  'FolderLinkButtonRemoveChats': undefined;
+  'FolderLinkHeaderAlready': undefined;
+  'FolderLinkHeaderChatsJoin': undefined;
+  'FolderLinkHeaderChatsQuit': undefined;
+  'FolderLinkPreviewLeft': undefined;
+  'FolderLinkPreviewRight': undefined;
+  'FolderLinkScreen.AlertTextUnavailableBot': undefined;
+  'FolderLinkScreen.AlertTextUnavailablePublicGroup': undefined;
+  'FolderLinkScreen.AlertTextUnavailableUser': undefined;
+  'FolderLinkScreen.LinkActionShare': undefined;
+  'FolderLinkScreen.Title': undefined;
+  'FolderLinkSubtitleRemove': undefined;
+  'FolderLinkTitleAdd': undefined;
+  'FolderLinkTitleAddChats': undefined;
+  'FolderLinkTitleRemove': undefined;
+  'ForumToggleDescription': undefined;
+  'ForwardAnotherChat': undefined;
+  'Group.Management.AddModeratorHelp': undefined;
+  'HashtagSearchPlaceholder': undefined;
+  'JoinedViaFolder': undefined;
+  'KickFromSupergroup': undefined;
+  'Languages': undefined;
+  'LocalTestString': undefined;
+  'Localization.InterfaceLanguage': undefined;
+  'MarkAsRead': undefined;
+  'MaximumReactionsHeader': undefined;
+  'MessageContainsEmojiPack': undefined;
+  'MessageContainsEmojiPacks': undefined;
+  'MessageLockedPremium': undefined;
+  'MessagePremiumUnlock': undefined;
+  'MuteFor.Forever': undefined;
+  'NewTopic': undefined;
+  'NoResult': undefined;
+  'Of': undefined;
+  'OnlyAllowThisReactions': undefined;
+  'OpenMapWith': undefined;
+  'OptionPremiumRequiredMessage': undefined;
+  'PhoneCopied': undefined;
+  'PinToTop': undefined;
+  'PmRead': undefined;
+  'PmReadShowWhen': undefined;
+  'Preview.DeletePhoto': undefined;
+  'Privacy.ProfilePhoto.PublicPhotoInfo': undefined;
+  'Privacy.ProfilePhoto.PublicPhotoSuccess': undefined;
+  'Privacy.ResetPhoto.Confirm': undefined;
+  'PrivacyBioTitle': undefined;
+  'PrivacyBirthdayTitle': undefined;
+  'PrivacyLastSeenPremiumForPremium': undefined;
+  'PrivacyLastSeenPremiumInfoForPremium': undefined;
+  'PrivacyMessagesContactsAndPremium': undefined;
+  'PrivacyPhoneInfo': undefined;
+  'PrivacyPhoneTitle2': undefined;
+  'PrivacyPremium': undefined;
+  'PrivacyVoiceMessagesInfo': undefined;
+  'ProfileBotOpenApp': undefined;
+  'ProfileChannel': undefined;
+  'ProfilePhoto.SetMainPhoto': undefined;
+  'ProfileSendAGift': undefined;
+  'QuotePrivate': undefined;
+  'ReactionsAll': undefined;
+  'ReactionsOff': undefined;
+  'RecoveryEmailSubtitle': undefined;
+  'RemoveQuote': undefined;
+  'RepliesTitle': undefined;
+  'Report': undefined;
+  'Report2CommentOptional': undefined;
+  'ReportSend': undefined;
+  'ReportSpamTitle': undefined;
+  'Reset': undefined;
+  'SavedOpenChat': undefined;
+  'SavedTagFilterByTag': undefined;
+  'SavedTagLabelPlaceholder': undefined;
+  'SavedTagLabelTagText': undefined;
+  'SavedTagReactionsHint2': undefined;
+  'SavedTagRemoveTag': undefined;
+  'SearchAppsMine': undefined;
+  'SearchAppsPopular': undefined;
+  'SearchAsChat': undefined;
+  'SearchEmptyViewTitle': undefined;
+  'SearchHashtagsHint': undefined;
+  'SearchMyMessages': undefined;
+  'SearchPublicPosts': undefined;
+  'SearchThisChat': undefined;
+  'SelectCountries.OK': undefined;
+  'SelectSendAsPeerPremiumHint': undefined;
+  'SendAnotherGift': undefined;
+  'SendWhenOnline': undefined;
+  'SETTINGS': undefined;
+  'Share.Link.Copied': undefined;
+  'SharedContactAdd': undefined;
+  'SharedContactMessage': undefined;
+  'ShowOriginalButton': undefined;
+  'SomeReactions': undefined;
+  'StarsSentTitle': undefined;
+  'StarsSentUndo': undefined;
+  'Stats.Message.PublicShares': undefined;
+  'Stats.MessageTitle': undefined;
+  'Stats.StoryTitle': undefined;
+  'StatusHiddenShow': undefined;
+  'StickerEffects': undefined;
+  'StickersCopy': undefined;
+  'StoryList.ArchivedEmptyState.Title': undefined;
+  'StoryList.SavedEmptyState.Title': undefined;
+  'StoryNotFound': undefined;
+  'StoryReactionsHint': undefined;
+  'StoryRepliesLockedButton': undefined;
+  'SupportStatus': undefined;
+  'TopicClosedByAdmin': undefined;
+  'TwoStepAuth.ConfirmEmailDescription': undefined;
+  'Unlock': undefined;
+  'UnlockPremiumEmojiHint': undefined;
+  'UnlockPremiumEmojiHint2': undefined;
+  'UnpinFromTop': undefined;
+  'UserInfo.CustomPhotoInfo': undefined;
+  'UserInfo.FirstNamePlaceholder': undefined;
+  'UserInfo.LastNamePlaceholder': undefined;
+  'UserInfo.ResetCustomPhoto': undefined;
+  'UserInfo.ResetToOriginalAlertText': undefined;
+  'UserInfo.SetCustomPhoto': undefined;
+  'UserInfo.SuggestPhoto': undefined;
+  'UsernameAlso': undefined;
+  'UsernameCopied': undefined;
+  'UserRestrictionsCanDoUsers': undefined;
+  'VerifyChatInfo': undefined;
+  'VerifyCodesNotifications': undefined;
+  'Video.Unsupported.Mobile': undefined;
+  'VoiceMessagesRestrictedByPrivacy': undefined;
+  'VoipStatusConnecting': undefined;
+  'WebBot.Account.Desclaimer.Desc': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -3742,6 +3990,52 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ExactTextCopied': {
     '0': V;
   };
+  'BoostingGiveawayUsedLinksPlural': {
+    'count': V;
+  };
+  'BoostingSelectUpToWarningCountries': {
+    'count': V;
+  };
+  'Chat.PrivateMessageEditTimestamp.Date': {
+    'date': V;
+  };
+  'Chat.Title.Topic': {
+    'chat': V;
+    'topic': V;
+  };
+  'Chat.Translate.Menu.To': {
+    'language': V;
+  };
+  'Conversation.ContextMenuSendGiftTo': {
+    'user': V;
+  };
+  'DeleteAllFrom': {
+    'user': V;
+  };
+  'ForwardedFrom': {
+    'user': V;
+  };
+  'NoResultFoundFor': {
+    'query': V;
+  };
+  'OpenUrlAlert2': {
+    'url': V;
+  };
+  'PeerInfo.AllowedReactions.MaxCountValue': {
+    'count': V;
+  };
+  'PmReadAt': {
+    'time': V;
+  };
+  'StarsSentText': {
+    'amount': V;
+  };
+  'StorySharedTo': {
+    'peer': V;
+  };
+  'UserInfo.BlockConfirmationTitle': {
+    'user': V;
+  };
 }
 
 export interface LangPairPlural {
@@ -3750,6 +4044,8 @@ export interface LangPairPlural {
   'Chat.DeleteMessagesConfirmation': undefined;
   'lng': undefined;
   'MediaReplaceInvalidError': undefined;
+  'ChannelStats.SharesCount': undefined;
+  'i18n': undefined;
 }
 
 export interface LangPairPluralWithVariables<V = LangVariable> {
@@ -4220,6 +4516,48 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'PdfPageCount': {
+    'count': V;
+  };
+  'Chat.ContextReactionCount': {
+    'count': V;
+  };
+  'Chat.Giveaway.Info.Months': {
+    'count': V;
+  };
+  'Chat.Giveaway.Info.Subscriptions': {
+    'count': V;
+  };
+  'Chat.Pinned.UnpinAll': {
+    'count': V;
+  };
+  'Chat.UnpinAllMessagesConfirmation': {
+    'count': V;
+  };
+  'ChatListFilter.LinkLabelChatCount': {
+    'count': V;
+  };
+  'Conversation.ContextMenuSeen': {
+    'count': V;
+  };
+  'FilterShowMoreChats': {
+    'count': V;
+  };
+  'ForwardedMessageCount': {
+    'count': V;
+  };
+  'LastSeen.HoursAgo': {
+    'count': V;
+  };
+  'LastSeen.MinutesAgo': {
+    'count': V;
+  };
+  'LiveLocationUpdated.MinutesAgo': {
+    'count': V;
+  };
+  'StickerPack.StickerCount': {
+    'count': V;
+  };
+  'VoiceOver.Chat.MessagesSelected': {
     'count': V;
   };
 }
