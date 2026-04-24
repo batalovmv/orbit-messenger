@@ -131,7 +131,7 @@ import { getMessageKey } from '../../../util/keys/messageKey';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
-import { calculateDimensionsForMessageMedia, getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
+import { getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
 import { buildContentClassName } from './helpers/buildContentClassName';
@@ -184,12 +184,9 @@ import ContextMenuContainer from './ContextMenuContainer.async';
 import DiceWrapper from './dice/DiceWrapper';
 import FactCheck from './FactCheck';
 import Game from './Game';
-import Giveaway from './Giveaway';
 import InlineButtons from './InlineButtons';
 import AiTranscribeButton from './AiTranscribeButton';
 import AiTranslateInline from './AiTranslateInline';
-import Invoice from './Invoice';
-import InvoiceMediaPreview from './InvoiceMediaPreview';
 import Location from './Location';
 import MessageAppendix from './MessageAppendix';
 import MessageEffect from './MessageEffect';
@@ -540,9 +537,9 @@ const Message = ({
   const {
     photo, video, audio,
     voice, document, sticker, contact,
-    invoice, location,
-    action, game, storyData, giveaway,
-    giveawayResults, todo, dice,
+    location,
+    action, game, storyData,
+    todo, dice,
   } = getMessageContent(message);
 
   const messageReplyInfo = getMessageReplyInfo(message);
@@ -963,27 +960,13 @@ const Message = ({
     let style = '';
     let reactionsMaxWidth;
 
-    if (!isAlbum && (photo || video || invoice?.extendedMedia)) {
+    if (!isAlbum && (photo || video)) {
       let width: number | undefined;
-      if (photo || video) {
-        const media = (photo || video);
-        if (media && !isRoundVideo) {
-          width = calculateMediaDimensions({
-            media,
-            isOwn,
-            asForwarded,
-            noAvatars,
-            isMobile,
-          }).width;
-        }
-      } else if (invoice?.extendedMedia && (
-        invoice.extendedMedia.width && invoice.extendedMedia.height
-      )) {
-        const { width: previewWidth, height: previewHeight } = invoice.extendedMedia;
-        width = calculateDimensionsForMessageMedia({
-          width: previewWidth,
-          height: previewHeight,
-          fromOwnMessage: isOwn,
+      const media = (photo || video);
+      if (media && !isRoundVideo) {
+        width = calculateMediaDimensions({
+          media,
+          isOwn,
           asForwarded,
           noAvatars,
           isMobile,
@@ -1014,7 +997,7 @@ const Message = ({
       contentWidth, style, reactionsMaxWidth,
     };
   }, [
-    albumLayout, asForwarded, extraPadding, hasSubheader, invoice?.extendedMedia, isAlbum, isMediaWithCommentButton,
+    albumLayout, asForwarded, extraPadding, hasSubheader, isAlbum, isMediaWithCommentButton,
     isMobile, isOwn, noAvatars, photo, sticker, text?.text, video, isRoundVideo,
   ]);
 
@@ -1319,9 +1302,6 @@ const Message = ({
         {todo && (
           <TodoList message={message} todoList={todo} />
         )}
-        {(giveaway || giveawayResults) && (
-          <Giveaway message={message} />
-        )}
         {game && (
           <Game
             message={message}
@@ -1339,13 +1319,6 @@ const Message = ({
             onEffectPlayed={hideDiceEffect}
           />
         )}
-        {invoice?.extendedMedia && (
-          <InvoiceMediaPreview
-            message={message}
-            isConnected={isConnected}
-          />
-        )}
-
         {withVoiceTranscription && (
           <p
             className={buildClassName(
@@ -1379,16 +1352,6 @@ const Message = ({
           </>
         )}
 
-        {invoice && !invoice.extendedMedia && (
-          <Invoice
-            message={message}
-            shouldAffectAppendix={hasCustomAppendix && !hasReactions}
-            isInSelectMode={isInSelectMode}
-            isSelected={isSelected}
-            theme={theme}
-            forcedWidth={contentWidth}
-          />
-        )}
         {location && (
           <Location
             message={message}
@@ -1805,8 +1768,7 @@ const Message = ({
       )}
       <div
         className={buildClassName('message-content-wrapper',
-          contentClassName.includes('text') && 'can-select-text',
-          contentClassName.includes('giveaway') && 'giveaway-result-content')}
+          contentClassName.includes('text') && 'can-select-text')}
       >
         <div
           className={contentClassName}
