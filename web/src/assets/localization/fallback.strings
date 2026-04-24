@@ -1331,6 +1331,38 @@
 "VoipIncoming" = "Incoming call";
 "Years_one" = "{count} year";
 "Years_other" = "{count} years";
+
+"CompliancePanel.Title" = "Панель соответствия";
+"CompliancePanel.ExportChat" = "Экспорт чата";
+"CompliancePanel.ExportUser" = "Экспорт данных пользователя";
+"CompliancePanel.ExportStart" = "Начать экспорт";
+"CompliancePanel.ExportSuccess" = "Экспорт завершён";
+"CompliancePanel.ExportError" = "Ошибка экспорта";
+"CompliancePanel.Sessions" = "Активные сессии";
+"CompliancePanel.RevokeSession" = "Завершить сессию";
+"CompliancePanel.RevokeAll" = "Завершить все сессии";
+
+"AuditLog.Title" = "Журнал аудита";
+"AuditLog.UserListRead" = "Просмотр списка пользователей";
+"AuditLog.DataExport" = "Экспорт данных";
+"AuditLog.UserDeactivated" = "Пользователь деактивирован";
+"AuditLog.SessionRevoked" = "Сессия завершена";
+
+"AdminPanel.Title" = "Панель администратора";
+"AdminPanel.Users" = "Пользователи";
+"AdminPanel.Deactivate" = "Деактивировать";
+"AdminPanel.Sessions" = "Сессии";
+
+"AI.Summarize" = "Суммировать";
+"AI.Translate" = "Перевести";
+"AI.Transcribe" = "Транскрибировать";
+"AI.Processing" = "Обработка...";
+"AI.Error" = "Ошибка AI";
+
+"Role.SysAdmin" = "Системный администратор";
+"Role.Moderator" = "Модератор";
+"Role.Compliance" = "Специалист по комплаенсу";
+"Role.HR" = "HR-специалист";
 "BlockUser" = "Block User";
 "DeleteChatUser" = "Remove User from Chat";
 "StickersList.EmojiItem" = "Emoji";
