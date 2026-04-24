@@ -976,6 +976,44 @@ func (s *MediaService) CompleteChunkedUpload(ctx context.Context, uploadID strin
 		}
 	}
 
+	// ClamAV virus scan for chunked uploads — stream directly from R2 to avoid
+	// loading large files (up to 500 MB) into memory.
+	if s.scanner != nil {
+		scanBody, _, scanErr := s.r2.GetObject(ctx, meta.R2Key)
+		if scanErr != nil {
+			slog.Warn("chunked virus scan: failed to open R2 object for scanning",
+				"event", "chunked_scan_open_error", "key", meta.R2Key, "error", scanErr)
+			// Treat as scan unavailable — reject to be safe.
+			if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
+				slog.Error("cleanup R2 after scan open failure", "key", meta.R2Key, "error", delErr)
+			}
+			return nil, apperror.ServiceUnavailable("File scanning temporarily unavailable, please retry")
+		}
+		scanCtx, scanCancel := context.WithTimeout(ctx, 60*time.Second)
+		result, scanErr := s.scanner.Scan(scanCtx, scanBody, meta.Filename)
+		scanCancel()
+		scanBody.Close()
+		if scanErr != nil {
+			slog.Warn("chunked virus scan failed, rejecting upload",
+				"event", "chunked_scan_error", "error", scanErr,
+				"filename", meta.Filename, "user_id", uploaderID)
+			if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
+				slog.Error("cleanup R2 after scan error", "key", meta.R2Key, "error", delErr)
+			}
+			return nil, apperror.ServiceUnavailable("File scanning temporarily unavailable, please retry")
+		}
+		if result != nil && !result.Clean {
+			slog.Warn("virus detected in chunked upload",
+				"event", "chunked_virus_detected", "virus", result.Virus,
+				"filename", meta.Filename, "user_id", uploaderID,
+				"size_bytes", meta.TotalSize, "mime_type", meta.MimeType)
+			if delErr := s.r2.Delete(ctx, meta.R2Key); delErr != nil {
+				slog.Error("cleanup R2 after virus detection", "key", meta.R2Key, "error", delErr)
+			}
+			return nil, &apperror.AppError{Code: "virus_detected", Message: "File rejected: malware detected", Status: 422}
+		}
+	}
+
 	mediaID, err := uuid.Parse(meta.ID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid upload ID in metadata: %w", err)
