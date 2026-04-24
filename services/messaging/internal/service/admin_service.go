@@ -17,15 +17,16 @@ import (
 )
 
 type AdminService struct {
-	users store.UserStore
-	chats store.ChatStore
-	audit store.AuditStore
-	nats  Publisher
-	redis *redis.Client
+	users    store.UserStore
+	chats    store.ChatStore
+	messages store.MessageStore
+	audit    store.AuditStore
+	nats     Publisher
+	redis    *redis.Client
 }
 
-func NewAdminService(users store.UserStore, chats store.ChatStore, audit store.AuditStore, nats Publisher, rdb *redis.Client) *AdminService {
-	return &AdminService{users: users, chats: chats, audit: audit, nats: nats, redis: rdb}
+func NewAdminService(users store.UserStore, chats store.ChatStore, messages store.MessageStore, audit store.AuditStore, nats Publisher, rdb *redis.Client) *AdminService {
+	return &AdminService{users: users, chats: chats, messages: messages, audit: audit, nats: nats, redis: rdb}
 }
 
 // ListAllChats returns all chats (for privileged users with SysViewAllChats).
@@ -48,12 +49,22 @@ func (s *AdminService) ListAllChats(ctx context.Context, actorID uuid.UUID, acto
 }
 
 // ListAllUsers returns all users (for privileged users with SysManageUsers).
-func (s *AdminService) ListAllUsers(ctx context.Context, actorID uuid.UUID, actorRole, cursor string, limit int) ([]model.User, string, bool, error) {
+func (s *AdminService) ListAllUsers(ctx context.Context, actorID uuid.UUID, actorRole, cursor string, limit int, ip, ua string) ([]model.User, string, bool, error) {
 	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
 		return nil, "", false, apperror.Forbidden("Insufficient permissions")
 	}
 
-	return s.users.ListAllPaginated(ctx, cursor, limit)
+	users, nextCursor, hasMore, err := s.users.ListAllPaginated(ctx, cursor, limit)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("list all users: %w", err)
+	}
+
+	if err := s.writeAudit(ctx, actorID, model.AuditUserListRead, "system", nil,
+		map[string]interface{}{"count": len(users)}, ip, ua); err != nil {
+		return nil, "", false, apperror.Internal("audit log write failed")
+	}
+
+	return users, nextCursor, hasMore, nil
 }
 
 // DeactivateUser sets is_active=false, blacklists sessions, publishes NATS event.
@@ -242,3 +253,37 @@ func (s *AdminService) writeAudit(ctx context.Context, actorID uuid.UUID, action
 }
 
 func strPtr(s string) *string { return &s }
+
+// ExportChatMessages streams all messages for a chat as NDJSON to the writer.
+// Gated by SysExportData. Audit written FIRST (fail-closed).
+func (s *AdminService) ExportChatMessages(ctx context.Context, actorID uuid.UUID, actorRole, chatID string, ip, ua string, writeRow func([]byte) error) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysExportData) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	chatUUID, err := uuid.Parse(chatID)
+	if err != nil {
+		return apperror.BadRequest("Invalid chat ID")
+	}
+	if err := s.writeAudit(ctx, actorID, model.AuditDataExport, "chat", strPtr(chatID),
+		map[string]interface{}{"format": "ndjson"}, ip, ua); err != nil {
+		return apperror.Internal("audit log write failed")
+	}
+	return s.messages.ExportByChatID(ctx, chatUUID, writeRow)
+}
+
+// ExportUserData streams all chats for a user as NDJSON.
+// Gated by SysExportData. Audit written FIRST (fail-closed).
+func (s *AdminService) ExportUserData(ctx context.Context, actorID uuid.UUID, actorRole, targetUserID string, ip, ua string, writeRow func([]byte) error) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysExportData) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	targetUUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return apperror.BadRequest("Invalid user ID")
+	}
+	if err := s.writeAudit(ctx, actorID, model.AuditDataExport, "user", strPtr(targetUserID),
+		map[string]interface{}{"format": "ndjson"}, ip, ua); err != nil {
+		return apperror.Internal("audit log write failed")
+	}
+	return s.chats.ExportByUserID(ctx, targetUUID, writeRow)
+}

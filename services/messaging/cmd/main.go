@@ -276,7 +276,7 @@ func main() {
 	gifHandler := handler.NewGIFHandler(gifSvc, logger)
 	pollHandler := handler.NewPollHandler(pollSvc, logger)
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
-	adminSvc := service.NewAdminService(userStore, chatStore, auditStore, natsPublisher, rdb)
+	adminSvc := service.NewAdminService(userStore, chatStore, messageStore, auditStore, natsPublisher, rdb)
 	adminHandler := handler.NewAdminHandler(adminSvc)
 	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
 	folderHandler := handler.NewFolderHandler(folderSvc, logger)

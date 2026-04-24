@@ -2966,3 +2966,13 @@
 "NotificationPriorityDefault" = "Default";
 "NotificationPriorityTitle" = "Notification Priority";
 "NotificationPriorityAbout" = "Set a priority override for notifications from this chat.";
+"CompliancePanelTitle" = "Compliance Review";
+"ComplianceBannerNotice" = "Privileged access — every chat you open is recorded in the audit log.";
+"ComplianceAllEmployees" = "Employees";
+"ComplianceSelectEmployee" = "Select an employee to review their chats.";
+"ComplianceChatsPending" = "Chat list will appear here once the export endpoint (Phase 2 task 2.3) ships.";
+"ComplianceChatView" = "Chat";
+"ComplianceMessagesPending" = "Messages will appear here once the export endpoint (Phase 2 task 2.3) ships.";
+"ComplianceOpenPanel" = "Compliance Review";
+"ComplianceExportUser" = "Export user data (.ndjson)";
+"ComplianceExportChat" = "Export chat messages (.ndjson)";

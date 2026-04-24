@@ -1,8 +1,12 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package store
 
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -47,6 +51,11 @@ type ChatStore interface {
 	ListAllPaginated(ctx context.Context, cursor string, limit int) ([]model.Chat, string, bool, error)
 	GetCommonChats(ctx context.Context, userA, userB uuid.UUID, limit int) ([]model.Chat, error)
 	GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
+	SaveDraft(ctx context.Context, chatID, userID uuid.UUID, text string) error
+	ClearDraft(ctx context.Context, chatID, userID uuid.UUID) error
+	// ExportByUserID streams all chats the user is a member of as JSON rows.
+	// writeRow is called once per chat with the JSON-encoded bytes (no newline).
+	ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error
 }
 
 type chatStore struct {
@@ -126,6 +135,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 		            (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id), 0
 		        )) as unread_count,
 		       cm.is_pinned, cm.is_muted, cm.is_archived,
+		       cm.draft_text, cm.draft_date,
 		       ou.id, ou.display_name, ou.avatar_url, ou.status, ou.last_seen_at, ou.account_type, ou.username
 		FROM chat_members cm
 		JOIN chats c ON c.id = cm.chat_id
@@ -187,6 +197,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&msgViewedAt, &msgViewedBy,
 			&item.MemberCount, &item.UnreadCount,
 			&item.Chat.IsPinned, &item.Chat.IsMuted, &item.Chat.IsArchived,
+			&item.DraftText, &item.DraftDate,
 			&ouID, &ouDisplayName, &ouAvatarURL, &ouStatus, &ouLastSeenAt, &ouAccountType, &ouUsername,
 		)
 		if err != nil {
@@ -938,4 +949,70 @@ func canonicalOrder(a, b uuid.UUID) (uuid.UUID, uuid.UUID) {
 		return a, b
 	}
 	return b, a
+}
+
+func (s *chatStore) SaveDraft(ctx context.Context, chatID, userID uuid.UUID, text string) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE chat_members SET draft_text = $1, draft_date = NOW() WHERE chat_id = $2 AND user_id = $3`,
+		text, chatID, userID)
+	return err
+}
+
+func (s *chatStore) ClearDraft(ctx context.Context, chatID, userID uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE chat_members SET draft_text = NULL, draft_date = NULL WHERE chat_id = $1 AND user_id = $2`,
+		chatID, userID)
+	return err
+}
+
+// exportChatRow is a minimal projection used for compliance exports.
+type exportChatRow struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (s *chatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error {
+	rows, err := s.pool.Query(ctx,
+		`SELECT c.id, COALESCE(c.name, ''), c.type, c.created_at
+		 FROM chats c
+		 JOIN chat_members cm ON cm.chat_id = c.id
+		 WHERE cm.user_id = $1
+		 ORDER BY c.created_at ASC`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("export chats by user: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id        uuid.UUID
+			title     string
+			chatType  string
+			createdAt string
+		)
+		if err := rows.Scan(&id, &title, &chatType, &createdAt); err != nil {
+			return fmt.Errorf("scan export chat row: %w", err)
+		}
+
+		row := exportChatRow{
+			ID:        id.String(),
+			Title:     title,
+			Type:      chatType,
+			CreatedAt: createdAt,
+		}
+
+		encoded, err := json.Marshal(row)
+		if err != nil {
+			return fmt.Errorf("marshal export chat row: %w", err)
+		}
+		if err := writeRow(encoded); err != nil {
+			return err
+		}
+	}
+
+	return rows.Err()
 }

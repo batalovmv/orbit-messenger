@@ -1,12 +1,15 @@
 ﻿package handler
 
 import (
+	"bufio"
+	"encoding/json"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
@@ -23,10 +26,12 @@ func NewAdminHandler(svc *service.AdminService) *AdminHandler {
 func (h *AdminHandler) Register(app fiber.Router) {
 	admin := app.Group("/admin")
 	admin.Get("/chats", h.ListAllChats)
+	admin.Get("/chats/:id/export", h.ExportChat)
 	admin.Get("/users", h.ListAllUsers)
 	admin.Post("/users/:id/deactivate", h.DeactivateUser)
 	admin.Post("/users/:id/reactivate", h.ReactivateUser)
 	admin.Patch("/users/:id/role", h.ChangeUserRole)
+	admin.Get("/users/:id/export", h.ExportUser)
 	admin.Get("/audit-log", h.GetAuditLog)
 }
 
@@ -61,6 +66,7 @@ func (h *AdminHandler) ListAllUsers(c *fiber.Ctx) error {
 
 	users, nextCursor, hasMore, err := h.svc.ListAllUsers(
 		c.Context(), actorID, getUserRole(c), cursor, limit,
+		c.IP(), c.Get("User-Agent"),
 	)
 	if err != nil {
 		return response.Error(c, err)
@@ -189,4 +195,66 @@ func (h *AdminHandler) GetAuditLog(c *fiber.Ctx) error {
 	}
 
 	return response.Paginated(c, entries, nextCursor, hasMore)
+}
+
+func (h *AdminHandler) ExportChat(c *fiber.Ctx) error {
+	actorID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	actorRole := getUserRole(c)
+	ip := c.IP()
+	ua := c.Get("User-Agent")
+	if !permissions.HasSysPermission(actorRole, permissions.SysExportData) {
+		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
+	}
+	chatID := c.Params("id")
+	c.Set("Content-Type", "application/x-ndjson")
+	c.Set("Content-Disposition", "attachment; filename=\"chat-"+chatID+".ndjson\"")
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		if exportErr := h.svc.ExportChatMessages(c.Context(), actorID, actorRole, chatID,
+			ip, ua,
+			func(row []byte) error {
+				if _, writeErr := w.Write(append(row, '\n')); writeErr != nil {
+					return writeErr
+				}
+				return w.Flush()
+			}); exportErr != nil {
+			errRow, _ := json.Marshal(map[string]string{"error": exportErr.Error()})
+			_, _ = w.Write(append(errRow, '\n'))
+			_ = w.Flush()
+		}
+	})
+	return nil
+}
+
+func (h *AdminHandler) ExportUser(c *fiber.Ctx) error {
+	actorID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	actorRole := getUserRole(c)
+	ip := c.IP()
+	ua := c.Get("User-Agent")
+	if !permissions.HasSysPermission(actorRole, permissions.SysExportData) {
+		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
+	}
+	userID := c.Params("id")
+	c.Set("Content-Type", "application/x-ndjson")
+	c.Set("Content-Disposition", "attachment; filename=\"user-"+userID+".ndjson\"")
+	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
+		if exportErr := h.svc.ExportUserData(c.Context(), actorID, actorRole, userID,
+			ip, ua,
+			func(row []byte) error {
+				if _, writeErr := w.Write(append(row, '\n')); writeErr != nil {
+					return writeErr
+				}
+				return w.Flush()
+			}); exportErr != nil {
+			errRow, _ := json.Marshal(map[string]string{"error": exportErr.Error()})
+			_, _ = w.Write(append(errRow, '\n'))
+			_ = w.Flush()
+		}
+	})
+	return nil
 }

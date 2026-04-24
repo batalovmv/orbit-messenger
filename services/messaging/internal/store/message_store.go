@@ -1,8 +1,12 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package store
 
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -54,6 +58,9 @@ type MessageStore interface {
 	GetMediaByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.MediaAttachment, error)
 	CopyMediaLinks(ctx context.Context, newMessageID uuid.UUID, mediaIDs []string) error
 	ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error)
+	// ExportByChatID streams all non-deleted messages for a chat as JSON rows.
+	// writeRow is called once per message with the JSON-encoded bytes (no newline).
+	ExportByChatID(ctx context.Context, chatID uuid.UUID, writeRow func([]byte) error) error
 }
 
 type messageStore struct {
@@ -527,4 +534,67 @@ func (s *messageStore) CreateForwarded(ctx context.Context, msgs []model.Message
 	}
 
 	return result, nil
+}
+
+// exportMessageRow is a minimal projection used for compliance exports.
+type exportMessageRow struct {
+	ID        string  `json:"id"`
+	ChatID    string  `json:"chat_id"`
+	SenderID  *string `json:"sender_id,omitempty"`
+	Type      string  `json:"type"`
+	Content   *string `json:"content,omitempty"`
+	CreatedAt string  `json:"created_at"`
+}
+
+func (s *messageStore) ExportByChatID(ctx context.Context, chatID uuid.UUID, writeRow func([]byte) error) error {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, chat_id, sender_id, type, content, created_at
+		 FROM messages
+		 WHERE chat_id = $1 AND is_deleted = false
+		 ORDER BY created_at ASC`,
+		chatID,
+	)
+	if err != nil {
+		return fmt.Errorf("export messages by chat: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id        uuid.UUID
+			cid       uuid.UUID
+			senderID  *uuid.UUID
+			msgType   string
+			content   *string
+			createdAt string
+		)
+		if err := rows.Scan(&id, &cid, &senderID, &msgType, &content, &createdAt); err != nil {
+			return fmt.Errorf("scan export row: %w", err)
+		}
+		if err := s.decryptContent(content); err != nil {
+			return fmt.Errorf("decrypt export content: %w", err)
+		}
+
+		row := exportMessageRow{
+			ID:        id.String(),
+			ChatID:    cid.String(),
+			Type:      msgType,
+			Content:   content,
+			CreatedAt: createdAt,
+		}
+		if senderID != nil {
+			sid := senderID.String()
+			row.SenderID = &sid
+		}
+
+		encoded, err := json.Marshal(row)
+		if err != nil {
+			return fmt.Errorf("marshal export row: %w", err)
+		}
+		if err := writeRow(encoded); err != nil {
+			return err
+		}
+	}
+
+	return rows.Err()
 }

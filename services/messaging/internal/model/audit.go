@@ -35,4 +35,5 @@ const (
 	AuditInviteRevoke       = "invite.revoke"
 	AuditAuditView          = "audit.view"
 	AuditUserListRead       = "user.list_read"
+	AuditDataExport         = "data.export"
 )

@@ -1,3 +1,6 @@
+﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 package handler
 
 import (
@@ -239,6 +242,18 @@ func (m *mockChatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UU
 	return nil, nil
 }
 
+func (m *mockChatStore) SaveDraft(ctx context.Context, chatID, userID uuid.UUID, text string) error {
+	return nil
+}
+
+func (m *mockChatStore) ClearDraft(ctx context.Context, chatID, userID uuid.UUID) error {
+	return nil
+}
+
+func (m *mockChatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error {
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Mock MessageStore
 // ---------------------------------------------------------------------------
@@ -400,6 +415,10 @@ func (m *mockMessageStore) CopyMediaLinks(ctx context.Context, newMessageID uuid
 
 func (m *mockMessageStore) ListSharedMedia(ctx context.Context, chatID uuid.UUID, mediaType string, cursor string, limit int) ([]model.SharedMediaItem, string, bool, error) {
 	return nil, "", false, nil
+}
+
+func (m *mockMessageStore) ExportByChatID(ctx context.Context, chatID uuid.UUID, writeRow func([]byte) error) error {
+	return nil
 }
 
 // ---------------------------------------------------------------------------
