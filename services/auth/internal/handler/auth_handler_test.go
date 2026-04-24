@@ -25,6 +25,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/response"
+	"github.com/mst-corp/orbit/services/auth/internal/middleware"
 	"github.com/mst-corp/orbit/services/auth/internal/model"
 	"github.com/mst-corp/orbit/services/auth/internal/service"
 	"github.com/mst-corp/orbit/services/auth/internal/store"
@@ -317,6 +318,44 @@ func setupInspectableTestApp(t *testing.T) (*fiber.App, *service.AuthService, *m
 	return app, svc, userStore, sessionStore
 }
 
+func setupLoginRateLimitTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStore) {
+	t.Helper()
+
+	userStore := newMockUserStore()
+	sessionStore := newMockSessionStore()
+	inviteStore := newMockInviteStore()
+
+	cfg := &service.Config{
+		JWTSecret:     "test-jwt-secret-32-chars-minimum!!",
+		AccessTTL:     15 * time.Minute,
+		RefreshTTL:    720 * time.Hour,
+		TOTPIssuer:    "OrbitTest",
+		AdminResetKey: "test-reset-key",
+		FrontendURL:   "http://localhost:3000",
+	}
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg, logger)
+	handler := NewAuthHandler(svc, logger, "", testBootstrapSecret)
+
+	app := fiber.New(fiber.Config{
+		ErrorHandler: response.FiberErrorHandler,
+	})
+	handler.Register(app, RateLimitMiddlewares{
+		Login: middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+			Redis:      rdb,
+			MaxPerMin:  5,
+			KeyPrefix:  "auth_login",
+			Identifier: middleware.AuthRateLimitIdentifierByIP,
+		}),
+	})
+
+	return app, svc, userStore
+}
+
 func setupAdminSessionTestApp(t *testing.T) (*fiber.App, *service.AuthService, *mockUserStore, *mockSessionStore, *redis.Client) {
 	t.Helper()
 
@@ -358,6 +397,10 @@ func bootstrapHeaders() map[string]string {
 }
 
 func doRequest(app *fiber.App, method, path string, body interface{}, headers map[string]string) *http.Response {
+	return doRequestFromRemoteAddr(app, method, path, body, headers, "")
+}
+
+func doRequestFromRemoteAddr(app *fiber.App, method, path string, body interface{}, headers map[string]string, remoteAddr string) *http.Response {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBytes, _ := json.Marshal(body)
@@ -365,6 +408,9 @@ func doRequest(app *fiber.App, method, path string, body interface{}, headers ma
 	}
 
 	req := httptest.NewRequest(method, path, bodyReader)
+	if remoteAddr != "" {
+		req.RemoteAddr = remoteAddr
+	}
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -544,6 +590,37 @@ func TestLogin_HappyPath(t *testing.T) {
 	}
 	if result["user"] == nil {
 		t.Error("expected user in response")
+	}
+}
+
+func TestLogin_RateLimitedPerIP(t *testing.T) {
+	app, _, _ := setupLoginRateLimitTestApp(t)
+
+	// Bootstrap once, then reuse the same source IP for all login attempts.
+	doRequest(app, "POST", "/auth/bootstrap", map[string]string{
+		"email":        "admin@orbit.test",
+		"password":     "securepassword123",
+		"display_name": "Admin",
+	}, bootstrapHeaders())
+
+	remoteAddr := "198.51.100.10:12345"
+	loginBody := map[string]string{
+		"email":    "admin@orbit.test",
+		"password": "securepassword123",
+	}
+
+	for i := 0; i < 5; i++ {
+		resp := doRequestFromRemoteAddr(app, "POST", "/auth/login", loginBody, nil, remoteAddr)
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("attempt %d: expected 200, got %d: %s", i+1, resp.StatusCode, string(body))
+		}
+	}
+
+	resp := doRequestFromRemoteAddr(app, "POST", "/auth/login", loginBody, nil, remoteAddr)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 429 on 6th attempt, got %d: %s", resp.StatusCode, string(body))
 	}
 }
 
@@ -1363,5 +1440,56 @@ func TestUpdateNotificationPriorityMode_EmptyBody(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestLogin_RateLimit(t *testing.T) {
+	// Setup with real rate limiting
+	userStore := newMockUserStore()
+	sessionStore := newMockSessionStore()
+	inviteStore := newMockInviteStore()
+
+	cfg := &service.Config{
+		JWTSecret:     "test-jwt-secret-32-chars-minimum!!",
+		AccessTTL:     15 * time.Minute,
+		RefreshTTL:    720 * time.Hour,
+		TOTPIssuer:    "OrbitTest",
+		AdminResetKey: "test-reset-key",
+		FrontendURL:   "http://localhost:3000",
+	}
+
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg, logger)
+	h := NewAuthHandler(svc, logger, "", "")
+
+	loginRL := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis:      rdb,
+		MaxPerMin:  5,
+		KeyPrefix:  "auth_login",
+		Identifier: middleware.AuthRateLimitIdentifierByIP,
+	})
+
+	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
+	h.Register(app, RateLimitMiddlewares{Login: loginRL})
+
+	// Make 6 requests — 6th should be 429
+	for i := 1; i <= 6; i++ {
+		resp := doRequest(app, "POST", "/auth/login", map[string]string{
+			"email":    "test@orbit.test",
+			"password": "wrongpassword",
+		}, nil)
+		if i <= 5 {
+			// First 5: should NOT be 429 (may be 401 for wrong credentials)
+			if resp.StatusCode == http.StatusTooManyRequests {
+				t.Fatalf("request %d: got 429 too early", i)
+			}
+		} else {
+			// 6th: must be 429
+			if resp.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("request %d: expected 429, got %d", i, resp.StatusCode)
+			}
+		}
 	}
 }
