@@ -634,7 +634,7 @@ func (s *AuthService) AdminRevokeSession(ctx context.Context, actorRole string, 
 		return fmt.Errorf("delete session: %w", err)
 	}
 	blacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", targetID.String())
-	if err := s.redis.Set(ctx, blacklistKey, "1", 24*time.Hour).Err(); err != nil {
+	if err := s.redis.Set(ctx, blacklistKey, "1", s.cfg.AccessTTL).Err(); err != nil {
 		s.logger.Error("failed to write JWT user blacklist after session revoke", "error", err, "user_id", targetID)
 		return fmt.Errorf("jwt invalidation failed: %w", err)
 	}
