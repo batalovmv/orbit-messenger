@@ -751,6 +751,16 @@ func (s *CallService) RateCall(ctx context.Context, callID, userID uuid.UUID, ra
 	return nil
 }
 
+// IsParticipant returns true if userID is an active (not yet left) participant in callID.
+func (s *CallService) IsParticipant(ctx context.Context, callID, userID uuid.UUID) (bool, error) {
+	ok, err := s.participants.IsParticipant(ctx, callID, userID)
+	if err != nil {
+		s.logger.Error("is participant check", "error", err, "call_id", callID, "user_id", userID)
+		return false, apperror.Internal("check participant")
+	}
+	return ok, nil
+}
+
 // participantUserIDs extracts user ID strings from a slice of participants.
 func participantUserIDs(participants []model.CallParticipant) []string {
 	ids := make([]string, 0, len(participants))

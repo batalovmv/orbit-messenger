@@ -59,6 +59,27 @@ func (h *CallHandler) Register(app fiber.Router) {
 	app.Post("/calls/:id/join", h.JoinGroupCall)
 	app.Delete("/calls/:id/leave", h.LeaveGroupCall)
 	app.Post("/calls/:id/rating", h.RateCall)
+	// Internal: used by gateway to verify call membership before relaying WebRTC signaling.
+	app.Get("/internal/calls/:id/members/:uid", h.CheckCallMembership)
+}
+
+// CheckCallMembership is an internal endpoint used by the gateway to verify
+// that a user is an active participant in a call before relaying signaling.
+// Route: GET /internal/calls/:id/members/:uid
+func (h *CallHandler) CheckCallMembership(c *fiber.Ctx) error {
+	callID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid call id"))
+	}
+	userID, err := uuid.Parse(c.Params("uid"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("invalid user id"))
+	}
+	isMember, err := h.svc.IsParticipant(c.Context(), callID, userID)
+	if err != nil {
+		return response.Error(c, apperror.Internal("membership check failed"))
+	}
+	return c.JSON(fiber.Map{"is_member": isMember})
 }
 
 func getUserID(c *fiber.Ctx) (uuid.UUID, error) {

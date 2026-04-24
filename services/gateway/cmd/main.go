@@ -95,12 +95,18 @@ func main() {
 	}
 
 	// WebSocket Hub
+	internalSecret := config.MustEnv("INTERNAL_SECRET")
+	// Startup guard: callsServiceURL is required for WebRTC signaling IDOR protection.
+	// Without it, checkCallMembership fails closed (denies all signaling), so calls won't work.
+	if callsServiceURL == "" {
+		slog.Error("CALLS_URL not set — WebRTC signaling membership check will deny all relay requests")
+		os.Exit(1)
+	}
 	hub := ws.NewHub()
-	wsHandler := ws.NewHandler(hub, nc)
+	wsHandler := ws.NewHandler(hub, nc, callsServiceURL, internalSecret)
 	defer wsHandler.Close()
 
 	// NATS Subscriber
-	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	pushDispatcher := push.NewDispatcher(push.Config{
 		PublicKey:           vapidPublicKey,
 		PrivateKey:          vapidPrivateKey,

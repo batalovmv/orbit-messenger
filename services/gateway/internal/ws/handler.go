@@ -41,8 +41,10 @@ type ValidatedToken struct {
 
 // Handler manages WebSocket connections and typing debounce.
 type Handler struct {
-	Hub  *Hub
-	NATS *nats.Conn
+	Hub             *Hub
+	NATS            *nats.Conn
+	callsServiceURL string // base URL of the calls service for internal membership checks
+	internalSecret  string // shared secret for X-Internal-Token header
 
 	typingMu       sync.Mutex
 	typingDebounce map[string]time.Time   // key: chatID+userID -> last broadcast
@@ -51,13 +53,15 @@ type Handler struct {
 	done chan struct{}
 }
 
-func NewHandler(hub *Hub, nc *nats.Conn) *Handler {
+func NewHandler(hub *Hub, nc *nats.Conn, callsServiceURL, internalSecret string) *Handler {
 	h := &Handler{
-		Hub:            hub,
-		NATS:           nc,
-		typingDebounce: make(map[string]time.Time),
-		typingTimers:   make(map[string]*time.Timer),
-		done:           make(chan struct{}),
+		Hub:             hub,
+		NATS:            nc,
+		callsServiceURL: callsServiceURL,
+		internalSecret:  internalSecret,
+		typingDebounce:  make(map[string]time.Time),
+		typingTimers:    make(map[string]*time.Timer),
+		done:            make(chan struct{}),
 	}
 	// Periodically clean stale typing entries (#13 memory leak fix)
 	go h.typingCleanupLoop()
@@ -538,6 +542,17 @@ func (h *Handler) handleSignalingRelay(conn *Conn, eventType string, data json.R
 		return
 	}
 
+	// Verify both sender and target are active participants in the call (prevents IDOR).
+	// Fail-closed: if the calls service is unreachable the frame is dropped.
+	memberCtx, memberCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer memberCancel()
+	if !h.checkCallMembership(memberCtx, sd.CallID, conn.UserID) {
+		return
+	}
+	if !h.checkCallMembership(memberCtx, sd.CallID, sd.TargetUserID) {
+		return
+	}
+
 	// Rate limit: reuse per-connection burst limiter (max 10 per 100ms)
 	conn.mu.Lock()
 	now := time.Now()
@@ -567,6 +582,42 @@ func (h *Handler) handleSignalingRelay(conn *Conn, eventType string, data json.R
 	}
 
 	h.Hub.SendToUser(sd.TargetUserID, envelope)
+}
+
+// checkCallMembership verifies via the calls service that userID is an active
+// participant in callID. Returns false on any error (fail-closed).
+// SECURITY: always returns false when callsServiceURL is empty — never fail-open.
+func (h *Handler) checkCallMembership(ctx context.Context, callID, userID string) bool {
+	if h.callsServiceURL == "" {
+		slog.Error("checkCallMembership: callsServiceURL not configured — denying signaling relay")
+		return false
+	}
+	url := fmt.Sprintf("%s/internal/calls/%s/members/%s", h.callsServiceURL, callID, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		slog.Error("checkCallMembership: build request", "error", err)
+		return false
+	}
+	req.Header.Set("X-Internal-Token", h.internalSecret)
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("checkCallMembership: request failed", "error", err, "call_id", callID, "user_id", userID)
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("checkCallMembership: unexpected status", "status", resp.StatusCode, "call_id", callID, "user_id", userID)
+		return false
+	}
+	var result struct {
+		IsMember bool `json:"is_member"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		slog.Error("checkCallMembership: decode response", "error", err)
+		return false
+	}
+	return result.IsMember
 }
 
 func (h *Handler) publishStatusChange(userID, status string) {
