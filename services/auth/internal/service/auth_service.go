@@ -106,6 +106,12 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode, ip, 
 		if u.TOTPSecret == nil || !totp.Validate(totpCode, *u.TOTPSecret) {
 			return nil, nil, apperror.Unauthorized("Invalid 2FA code")
 		}
+		// Prevent replay: mark code as used for 90s (covers ±1 TOTP window)
+		totpUsedKey := fmt.Sprintf("totp_used:%s:%s", u.ID.String(), totpCode)
+		set, redisErr := s.redis.SetNX(ctx, totpUsedKey, "1", 90*time.Second).Result()
+		if redisErr != nil || !set {
+			return nil, nil, apperror.Unauthorized("Invalid 2FA code")
+		}
 	}
 
 	pair, err := s.createTokenPair(ctx, u.ID, nil, ip, userAgent)
@@ -369,6 +375,12 @@ func (s *AuthService) Verify2FA(ctx context.Context, userID uuid.UUID, code stri
 	}
 
 	if !totp.Validate(code, *u.TOTPSecret) {
+		return apperror.BadRequest("Invalid 2FA code")
+	}
+	// Prevent replay during 2FA setup verification
+	totpUsedKey := fmt.Sprintf("totp_used:%s:%s", userID.String(), code)
+	set, redisErr := s.redis.SetNX(ctx, totpUsedKey, "1", 90*time.Second).Result()
+	if redisErr != nil || !set {
 		return apperror.BadRequest("Invalid 2FA code")
 	}
 
