@@ -13,7 +13,6 @@ import renderText from '../../common/helpers/renderText';
 import { getWebpageButtonIcon, getWebpageButtonLangKey } from './helpers/webpageType';
 
 import useDynamicColorListener from '../../../hooks/stickers/useDynamicColorListener';
-import useEnsureStory from '../../../hooks/useEnsureStory';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
@@ -101,9 +100,7 @@ const WebPage = ({
 
   const fullWebPage = webPage?.webpageType === 'full' ? webPage : undefined;
 
-  const { story: storyData, stickers } = fullWebPage || {};
-
-  useEnsureStory(storyData?.peerId, storyData?.id, story);
+  const { stickers } = fullWebPage || {};
 
   const hasCustomColor = stickers?.isWithTextColor || stickers?.documents?.[0]?.shouldUseTextColor;
   const customColor = useDynamicColorListener(stickersRef, undefined, !hasCustomColor);

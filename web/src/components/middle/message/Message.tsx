@@ -24,7 +24,6 @@ import type {
   ApiSavedReactionTag,
   ApiThreadInfo,
   ApiTopic,
-  ApiTypeStory,
   ApiUser,
   ApiWebPage,
 } from '../../../api/types';
@@ -70,7 +69,7 @@ import {
   isSystemBot,
 } from '../../../global/helpers';
 import { getPeerFullTitle } from '../../../global/helpers/peers';
-import { getMessageReplyInfo, getStoryReplyInfo } from '../../../global/helpers/replies';
+import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
   selectActiveDownloads,
   selectAnimatedEmoji,
@@ -143,7 +142,6 @@ import useAppLayout from '../../../hooks/useAppLayout';
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
 import useEffectWithPrevDeps from '../../../hooks/useEffectWithPrevDeps';
 import useEnsureMessage from '../../../hooks/useEnsureMessage';
-import useEnsureStory from '../../../hooks/useEnsureStory';
 import useFlag from '../../../hooks/useFlag';
 import { useOnIntersect } from '../../../hooks/useIntersectionObserver';
 import useLang from '../../../hooks/useLang';
@@ -165,7 +163,6 @@ import CustomEmoji from '../../common/CustomEmoji';
 import Document from '../../common/Document';
 import DotAnimation from '../../common/DotAnimation';
 import EmbeddedMessage from '../../common/embedded/EmbeddedMessage';
-import EmbeddedStory from '../../common/embedded/EmbeddedStory';
 import FakeIcon from '../../common/FakeIcon';
 import Icon from '../../common/icons/Icon';
 import StarIcon from '../../common/icons/StarIcon';
@@ -251,8 +248,6 @@ type StateProps = {
   replyMessageForwardSender?: ApiPeer;
   replyMessageChat?: ApiChat;
   isReplyPrivate?: boolean;
-  replyStory?: ApiTypeStory;
-  storySender?: ApiPeer;
   outgoingStatus?: ApiMessageOutgoingStatus;
   uploadProgress?: number;
   isInDocumentGroup: boolean;
@@ -306,7 +301,6 @@ type StateProps = {
   requestedTranslationLanguage?: string;
   requestedChatTranslationLanguage?: string;
   withAnimatedEffects?: boolean;
-  webPageStory?: ApiTypeStory;
   isConnected: boolean;
   isLoadingComments?: boolean;
   shouldWarnAboutFiles?: boolean;
@@ -376,9 +370,7 @@ const Message = ({
   replyMessageSender,
   replyMessageForwardSender,
   replyMessageChat,
-  replyStory,
   isReplyPrivate,
-  storySender,
   outgoingStatus,
   uploadProgress,
   isInDocumentGroup,
@@ -432,7 +424,6 @@ const Message = ({
   requestedTranslationLanguage,
   requestedChatTranslationLanguage,
   withAnimatedEffects,
-  webPageStory,
   isConnected,
   getIsMessageListReady,
   shouldWarnAboutFiles,
@@ -555,11 +546,9 @@ const Message = ({
   } = getMessageContent(message);
 
   const messageReplyInfo = getMessageReplyInfo(message);
-  const storyReplyInfo = getStoryReplyInfo(message);
 
   const withVoiceTranscription = Boolean(!isTranscriptionHidden && (isTranscriptionError || transcribedText));
 
-  const hasStoryReply = Boolean(storyReplyInfo);
   const hasThread = Boolean(repliesThreadInfo) && messageListType === 'thread';
   const isCustomShape = !withVoiceTranscription && getMessageCustomShape(message);
   const hasAnimatedEmoji = isCustomShape && (animatedEmoji || animatedCustomEmoji);
@@ -598,7 +587,7 @@ const Message = ({
   const hasFactCheck = Boolean(factCheck?.text);
 
   const hasForwardedCustomShape = asForwarded && isCustomShape;
-  const hasSubheader = hasTopicChip || hasMessageReply || hasStoryReply || hasForwardedCustomShape
+  const hasSubheader = hasTopicChip || hasMessageReply || hasForwardedCustomShape
     || Boolean(isShowingSummary && summary?.text);
 
   const selectMessage = useLastCallback((e?: React.MouseEvent<HTMLDivElement, MouseEvent>, groupedId?: string) => {
@@ -690,7 +679,6 @@ const Message = ({
     botSender,
     messageTopic,
     isTranslatingChat: Boolean(requestedChatTranslationLanguage),
-    story: replyStory && 'content' in replyStory ? replyStory : undefined,
     isReplyPrivate,
     isRepliesChat,
     isSavedMessages: isChatWithSelf,
@@ -791,7 +779,6 @@ const Message = ({
   const isInvertedMedia = Boolean(message.isInvertedMedia);
 
   const { replyToMsgId, replyToPeerId } = messageReplyInfo || {};
-  const { peerId: storyReplyPeerId, storyId: storyReplyId } = storyReplyInfo || {};
 
   useEffect(() => {
     if ((sticker?.hasEffect || effect) && ((
@@ -920,12 +907,6 @@ const Message = ({
     replyMessage,
     message.id,
     shouldHideReply || isReplyPrivate,
-  );
-
-  useEnsureStory(
-    storyReplyPeerId || chatId,
-    storyReplyId,
-    replyStory,
   );
 
   useFocusMessageListElement({
@@ -1200,16 +1181,6 @@ const Message = ({
                 observeIntersectionForLoading={observeIntersectionForLoading}
                 observeIntersectionForPlaying={observeIntersectionForPlaying}
                 onClick={handleReplyClick}
-              />
-            )}
-            {hasStoryReply && (
-              <EmbeddedStory
-                story={replyStory}
-                sender={storySender}
-                noUserColors={noUserColors}
-                isProtected={isProtected}
-                observeIntersectionForLoading={observeIntersectionForLoading}
-                onClick={handleStoryClick}
               />
             )}
             {hasSummary && isShowingSummary && !summary?.isPending && (
@@ -1493,7 +1464,6 @@ const Message = ({
         isDownloading={isDownloading}
         isProtected={isProtected}
         theme={theme}
-        story={webPageStory}
         isConnected={isConnected}
         lastPlaybackTimestamp={lastPlaybackTimestamp}
         backgroundEmojiId={messageColorPeer?.color?.backgroundEmojiId}
@@ -2014,7 +1984,6 @@ export default memo(withGlobal<OwnProps>(
     const isAnonymousForwards = isAnonymousForwardsChat(chatId);
     const isGroup = chat && isChatGroup(chat);
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
-    const webPageStory = undefined;
 
     const isForwarding = forwardMessages.messageIds && forwardMessages.messageIds.includes(id);
     const forceSenderName = !isChatWithSelf && isAnonymousOwnMessage(message);
@@ -2029,7 +1998,6 @@ export default memo(withGlobal<OwnProps>(
     const isThreadTop = message.id === threadId;
 
     const { replyToMsgId, replyToPeerId, replyFrom } = getMessageReplyInfo(message) || {};
-    const { peerId: storyReplyPeerId, storyId: _storyReplyId } = getStoryReplyInfo(message) || {};
 
     const shouldHideReply = replyToMsgId && replyToMsgId === threadId;
     const replyMessage = selectReplyMessage(global, message);
@@ -2043,8 +2011,6 @@ export default memo(withGlobal<OwnProps>(
       && !isChatPublic(replyMessageChat)
       && (replyMessageChat.isNotJoined || selectIsChatRestricted(global, replyMessageChat.id));
     const isReplyToTopicStart = replyMessage?.content?.action?.type === 'topicCreate';
-    const replyStory = undefined;
-    const storySender = storyReplyPeerId ? selectPeer(global, storyReplyPeerId) : undefined;
 
     const uploadProgress = selectUploadProgress(global, message);
     const isFocused = messageListType === 'thread' && (
@@ -2147,9 +2113,7 @@ export default memo(withGlobal<OwnProps>(
       replyMessageSender,
       replyMessageForwardSender,
       replyMessageChat,
-      replyStory,
       isReplyPrivate,
-      storySender,
       isInDocumentGroup,
       isProtected: selectIsMessageProtected(global, message),
       isChatProtected: selectIsChatProtected(global, chatId),
@@ -2200,7 +2164,6 @@ export default memo(withGlobal<OwnProps>(
       requestedChatTranslationLanguage,
       hasLinkedChat: Boolean(chatFullInfo?.linkedChatId),
       withAnimatedEffects: selectPerformanceSettingsValue(global, 'stickerEffects'),
-      webPageStory,
       isConnected,
       isLoadingComments: repliesThreadInfo?.isCommentsInfo
         && loadingThread?.loadingChatId === repliesThreadInfo?.originChannelId

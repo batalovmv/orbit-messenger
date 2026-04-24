@@ -25,7 +25,6 @@ import { ChatAnimationTypes } from './useChatAnimationType';
 
 import useMessageMediaHash from '../../../../hooks/media/useMessageMediaHash';
 import useThumbnail from '../../../../hooks/media/useThumbnail';
-import useEnsureStory from '../../../../hooks/useEnsureStory';
 import useLang from '../../../../hooks/useLang';
 import useMedia from '../../../../hooks/useMedia';
 
@@ -80,11 +79,6 @@ export default function useChatListEntry({
 }) {
   const lang = useLang();
   const ref = useRef<HTMLDivElement>();
-
-  const storyData = lastMessage?.content?.storyData;
-  const shouldTryLoadingStory = statefulMediaContent && !statefulMediaContent.story;
-
-  useEnsureStory(shouldTryLoadingStory ? storyData?.peerId : undefined, storyData?.id, statefulMediaContent?.story);
 
   const mediaContent = statefulMediaContent?.story || lastMessage;
   const mediaHasPreview = mediaContent && !getMessageSticker(mediaContent);
