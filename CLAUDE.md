@@ -96,7 +96,7 @@ CTO проекта Orbit. Общаемся на русском, неформал
 - N+1 запросы
 - `_ = someFunction()`
 - Секреты в коммитах
-- `go 1.25` (используй 1.24)
+- `go 1.25` в новых сервисах (используй 1.24). Исключение — `services/gateway` (1.25 из-за embedded nats-server/v2 в тестах, см. комментарий в `services/gateway/go.mod`)
 - Inline миграции
 - HTTP client без timeout
 

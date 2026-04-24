@@ -1,6 +1,9 @@
 module github.com/mst-corp/orbit/services/gateway
 
-go 1.24
+// gateway is the only service on Go 1.25: handler_test.go embeds
+// nats-server/v2 v2.12.7 for WS-over-NATS tests, which requires Go 1.25.
+// All other services stay on 1.24 — see services/*/go.mod.
+go 1.25.0
 
 replace github.com/mst-corp/orbit/pkg => ../../pkg
 

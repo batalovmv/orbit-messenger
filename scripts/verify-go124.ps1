@@ -6,7 +6,12 @@ $GoVersion = "1.24"
 
 Write-Host "=== Saturn Build Verification ===" -ForegroundColor Cyan
 
+# Services pinned to Go 1.24 (Saturn compat).
 $Services = @("gateway", "auth", "messaging", "media", "calls", "ai", "bots", "integrations")
+# Exceptions allowed on Go 1.25 (documented in services/<svc>/go.mod header).
+$GoAllowed = @{
+    "gateway" = "^1\.2[4-5]"  # embedded nats-server/v2 v2.12.7 requires 1.25
+}
 $Failed = @()
 
 foreach ($svc in $Services) {
@@ -22,8 +27,9 @@ foreach ($svc in $Services) {
     $GoDirective = (Get-Content go.mod | Select-String "^go ").ToString().Replace("go ", "").Trim()
     Write-Host "  go $GoDirective" -NoNewline -ForegroundColor Gray
 
-    if ($GoDirective -notmatch "^1\.2[0-4]") {
-        Write-Host " [FAIL] - requires Go 1.25+" -ForegroundColor Red
+    $pattern = if ($GoAllowed.ContainsKey($svc)) { $GoAllowed[$svc] } else { "^1\.2[0-4]" }
+    if ($GoDirective -notmatch $pattern) {
+        Write-Host " [FAIL] - pinned to $pattern" -ForegroundColor Red
         $Failed += $svc
         Pop-Location
         continue
