@@ -421,7 +421,17 @@ func (s *AuthService) Disable2FA(ctx context.Context, userID uuid.UUID, password
 		return apperror.Unauthorized("Invalid password")
 	}
 
-	return s.users.UpdateTOTP(ctx, userID, nil, false)
+	if err := s.users.UpdateTOTP(ctx, userID, nil, false); err != nil {
+		return fmt.Errorf("disable totp: %w", err)
+	}
+
+	// Revoke all sessions so any attacker who had access loses it immediately.
+	if err := s.sessions.DeleteAllByUser(ctx, userID); err != nil {
+		s.logger.Error("failed to revoke sessions on 2fa disable", "error", err, "user_id", userID)
+		// Non-fatal: 2FA is disabled. Sessions expire naturally via AccessTTL.
+	}
+
+	return nil
 }
 
 // ValidateInvite checks if an invite code is valid.
