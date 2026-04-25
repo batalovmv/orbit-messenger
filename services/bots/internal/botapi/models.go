@@ -5,6 +5,7 @@ package botapi
 
 import (
 	"encoding/json"
+	"strings"
 )
 
 type SendMessageRequest struct {
@@ -104,6 +105,27 @@ type EditCaptionRequest struct {
 	ReplyMarkup     json.RawMessage `json:"reply_markup,omitempty"`
 }
 
+// SendMediaGroupRequest sends an album of 2-10 media items as one message.
+// In v1, each item must already exist as a Bot API file_id (no remote URLs,
+// no inline upload). The first item's caption/parse_mode is applied to the
+// album as a whole — TG-style per-item captions would require multi-message
+// fan-out we don't yet support.
+type SendMediaGroupRequest struct {
+	ChatID           string       `json:"chat_id"`
+	Media            []InputMedia `json:"media"`
+	ReplyToMessageID *string      `json:"reply_to_message_id,omitempty"`
+}
+
+// InputMedia is one entry inside SendMediaGroupRequest.Media. Type drives
+// rendering on the messaging side (photo/video/document/audio).
+type InputMedia struct {
+	Type            string          `json:"type"`
+	Media           string          `json:"media"`
+	Caption         string          `json:"caption,omitempty"`
+	ParseMode       string          `json:"parse_mode,omitempty"`
+	CaptionEntities []MessageEntity `json:"caption_entities,omitempty"`
+}
+
 type SendChatActionRequest struct {
 	ChatID string `json:"chat_id"`
 	Action string `json:"action"` // typing|upload_photo|upload_document|upload_video|upload_voice
@@ -173,6 +195,64 @@ type InlineKeyboardButton struct {
 	Text         string `json:"text"`
 	CallbackData string `json:"callback_data,omitempty"`
 	URL          string `json:"url,omitempty"`
+}
+
+// KeyboardButton is a button in a custom (reply) keyboard. Telegram permits
+// either a plain string ("Yes") or an object with extras like
+// request_contact — UnmarshalJSON below normalises both into the same shape.
+type KeyboardButton struct {
+	Text            string `json:"text"`
+	RequestContact  bool   `json:"request_contact,omitempty"`
+	RequestLocation bool   `json:"request_location,omitempty"`
+}
+
+// UnmarshalJSON accepts both the string shorthand and the full object form,
+// matching the Telegram Bot API.
+func (b *KeyboardButton) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		b.Text = s
+		return nil
+	}
+	type alias KeyboardButton
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*b = KeyboardButton(a)
+	return nil
+}
+
+// ReplyKeyboardMarkup represents a custom keyboard rendered above the
+// composer. Used by bot wizards/forms instead of inline keyboards under
+// individual messages.
+type ReplyKeyboardMarkup struct {
+	Keyboard              [][]KeyboardButton `json:"keyboard"`
+	ResizeKeyboard        *bool              `json:"resize_keyboard,omitempty"`
+	OneTimeKeyboard       *bool              `json:"one_time_keyboard,omitempty"`
+	Selective             *bool              `json:"selective,omitempty"`
+	InputFieldPlaceholder string             `json:"input_field_placeholder,omitempty"`
+}
+
+// ReplyKeyboardRemove tells clients to dismiss any active reply keyboard.
+type ReplyKeyboardRemove struct {
+	RemoveKeyboard bool  `json:"remove_keyboard"`
+	Selective      *bool `json:"selective,omitempty"`
+}
+
+// ForceReply makes the next message reply to the bot's message — used by
+// step-by-step prompts when an inline keyboard would feel heavy.
+type ForceReply struct {
+	ForceReply            bool   `json:"force_reply"`
+	InputFieldPlaceholder string `json:"input_field_placeholder,omitempty"`
+	Selective             *bool  `json:"selective,omitempty"`
 }
 
 type Update struct {

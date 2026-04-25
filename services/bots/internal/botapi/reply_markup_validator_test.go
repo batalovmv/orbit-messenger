@@ -167,3 +167,73 @@ func TestValidateReplyMarkup_RejectsOversizedPayload(t *testing.T) {
 		t.Fatal("expected error for oversized payload")
 	}
 }
+
+func TestValidateReplyMarkup_AcceptsKeyboardMarkup(t *testing.T) {
+	payload := []byte(`{"keyboard":[["Yes","No"],["Maybe"]],"resize_keyboard":true,"one_time_keyboard":true}`)
+	if err := ValidateReplyMarkup(payload); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateReplyMarkup_AcceptsKeyboardObjectButtons(t *testing.T) {
+	payload := []byte(`{"keyboard":[[{"text":"Share contact","request_contact":true}]]}`)
+	if err := ValidateReplyMarkup(payload); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateReplyMarkup_RejectsKeyboardEmpty(t *testing.T) {
+	payload := []byte(`{"keyboard":[]}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for empty keyboard")
+	}
+}
+
+func TestValidateReplyMarkup_AcceptsRemoveKeyboard(t *testing.T) {
+	payload := []byte(`{"remove_keyboard":true}`)
+	if err := ValidateReplyMarkup(payload); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateReplyMarkup_RejectsRemoveKeyboardFalse(t *testing.T) {
+	payload := []byte(`{"remove_keyboard":false}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for remove_keyboard=false")
+	}
+}
+
+func TestValidateReplyMarkup_AcceptsForceReply(t *testing.T) {
+	payload := []byte(`{"force_reply":true,"input_field_placeholder":"Reply here"}`)
+	if err := ValidateReplyMarkup(payload); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
+func TestValidateReplyMarkup_RejectsForceReplyFalse(t *testing.T) {
+	payload := []byte(`{"force_reply":false}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for force_reply=false")
+	}
+}
+
+func TestValidateReplyMarkup_RejectsConflictKeyboardAndInline(t *testing.T) {
+	payload := []byte(`{"keyboard":[["A"]],"inline_keyboard":[[{"text":"x","callback_data":"x"}]]}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for keyboard + inline_keyboard combination")
+	}
+}
+
+func TestValidateReplyMarkup_RejectsConflictForceReplyAndKeyboard(t *testing.T) {
+	payload := []byte(`{"force_reply":true,"keyboard":[["A"]]}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for force_reply + keyboard combination")
+	}
+}
+
+func TestValidateReplyMarkup_RejectsKeyboardWithEmptyButtonText(t *testing.T) {
+	payload := []byte(`{"keyboard":[["  "]]}`)
+	if err := ValidateReplyMarkup(payload); err == nil {
+		t.Fatal("expected error for whitespace-only keyboard button")
+	}
+}

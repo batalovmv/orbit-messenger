@@ -174,6 +174,7 @@ func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Post("/sendVideo", h.sendVideo)
 	router.Post("/sendAudio", h.sendAudio)
 	router.Post("/sendVoice", h.sendVoice)
+	router.Post("/sendMediaGroup", h.sendMediaGroup)
 	router.Post("/editMessageText", h.editMessageText)
 	router.Post("/deleteMessage", h.deleteMessage)
 	router.Post("/answerCallbackQuery", h.answerCallbackQuery)
@@ -395,6 +396,121 @@ func (h *BotAPIHandler) sendAudio(c *fiber.Ctx) error {
 
 func (h *BotAPIHandler) sendVoice(c *fiber.Ctx) error {
 	return h.sendMedia(c, "voice", "voice")
+}
+
+const (
+	mediaGroupMin = 2
+	mediaGroupMax = 10
+)
+
+var allowedMediaGroupTypes = map[string]struct{}{
+	"photo": {}, "video": {}, "document": {}, "audio": {},
+}
+
+// sendMediaGroup sends an album of 2-10 already-uploaded media items
+// referenced by file_id. Returns an array of one message (a single
+// messaging row holds the full media_ids set — clients render it as an
+// album). Per-item captions beyond the first are ignored in v1.
+func (h *BotAPIHandler) sendMediaGroup(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req SendMediaGroupRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if len(req.Media) < mediaGroupMin || len(req.Media) > mediaGroupMax {
+		return botError(c, apperror.BadRequest(
+			fmt.Sprintf("media must contain between %d and %d items", mediaGroupMin, mediaGroupMax),
+		))
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
+		return botError(c, err)
+	}
+
+	if h.fileIDCodec == nil {
+		return botError(c, apperror.Internal("File codec not configured"))
+	}
+
+	mediaIDs := make([]string, 0, len(req.Media))
+	for i, item := range req.Media {
+		if _, ok := allowedMediaGroupTypes[item.Type]; !ok {
+			return botError(c, apperror.BadRequest(
+				fmt.Sprintf("media[%d].type must be one of photo|video|document|audio", i),
+			))
+		}
+		if strings.TrimSpace(item.Media) == "" {
+			return botError(c, apperror.BadRequest(
+				fmt.Sprintf("media[%d].media (file_id) is required", i),
+			))
+		}
+
+		mediaID, sourceChatID, decErr := h.fileIDCodec.Decode(item.Media, bot.ID)
+		if decErr != nil {
+			return botError(c, apperror.BadRequest(
+				fmt.Sprintf("media[%d]: invalid file_id", i),
+			))
+		}
+		installed, instErr := h.svc.IsBotInstalled(c.Context(), bot.ID, sourceChatID)
+		if instErr != nil {
+			return botError(c, instErr)
+		}
+		if !installed {
+			return botError(c, apperror.Forbidden(
+				fmt.Sprintf("media[%d]: bot is not installed in the source chat", i),
+			))
+		}
+		mediaIDs = append(mediaIDs, mediaID.String())
+	}
+
+	first := req.Media[0]
+	finalCaption, entities, err := resolveTextAndEntities(first.Caption, first.ParseMode, first.CaptionEntities)
+	if err != nil {
+		return botError(c, err)
+	}
+	entitiesJSON, err := encodeEntities(entities)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	var replyToID *uuid.UUID
+	if req.ReplyToMessageID != nil && strings.TrimSpace(*req.ReplyToMessageID) != "" {
+		parsed, parseErr := uuid.Parse(*req.ReplyToMessageID)
+		if parseErr != nil {
+			return botError(c, apperror.BadRequest("Invalid reply_to_message_id"))
+		}
+		replyToID = &parsed
+	}
+
+	message, err := h.msgClient.SendMessage(
+		c.Context(), bot.UserID, chatID, finalCaption, first.Type,
+		client.SendMessageOptions{
+			ReplyToID: replyToID,
+			Entities:  entitiesJSON,
+			MediaIDs:  mediaIDs,
+		},
+	)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	// Bot API contract: sendMediaGroup returns an array of messages. We hold
+	// them as one DB row with N media_ids, so we surface a single-element
+	// array — keeps clients that iterate result[] working without changes.
+	return botSuccess(c, []any{message})
 }
 
 func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
