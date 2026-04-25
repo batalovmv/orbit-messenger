@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -164,6 +166,17 @@ func SFUProxyHandler(cfg SFUProxyConfig) fiber.Handler {
 		_ = client.SetReadDeadline(time.Time{})
 		_ = client.WriteJSON(map[string]any{"type": "auth_ok", "data": map[string]string{}})
 
+		// Step 2.5: verify the authenticated user is a member of this call.
+		memberCtx, memberCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		isMember, memberErr := checkCallMembership(memberCtx, authClient, cfg.CallsServiceURL, callID, tokenInfo.UserID, cfg.InternalSecret)
+		memberCancel()
+		if memberErr != nil || !isMember {
+			slog.Warn("sfu proxy: membership check failed", "call_id", callID, "user_id", tokenInfo.UserID, "error", memberErr)
+			_ = client.WriteJSON(map[string]any{"type": "error", "data": map[string]string{"message": "not a call member"}})
+			_ = client.Close()
+			return
+		}
+
 		sessionCtx, sessionCancel := context.WithCancel(context.Background())
 		session := &sfuAuthSession{
 			client:      client,
@@ -265,6 +278,42 @@ func toWSScheme(httpURL string) string {
 	default:
 		return httpURL
 	}
+}
+
+// checkCallMembership calls the calls service internal endpoint to verify
+// that userID is a member of callID. Returns (false, nil) when the service
+// responds with is_member=false, and (false, err) on any transport or
+// protocol error.
+func checkCallMembership(ctx context.Context, client *http.Client, callsURL, callID, userID, secret string) (bool, error) {
+	url := fmt.Sprintf("%s/internal/calls/%s/members/%s", callsURL, callID, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("build membership request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", secret)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("membership request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("read membership response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("membership check returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		IsMember bool `json:"is_member"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false, fmt.Errorf("parse membership response: %w", err)
+	}
+	return result.IsMember, nil
 }
 
 func isExpectedClose(err error) bool {
