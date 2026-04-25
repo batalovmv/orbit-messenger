@@ -274,6 +274,7 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 		ClearMenuButton         bool              `json:"clear_menu_button"`
 		WebhookURL              *string           `json:"webhook_url"`
 		IsActive                *bool             `json:"is_active"`
+		ShareUserEmails         *bool             `json:"share_user_emails"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
@@ -351,12 +352,17 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 		ClearMenuButton:         req.ClearMenuButton,
 		WebhookURL:              req.WebhookURL,
 		IsActive:                req.IsActive,
+		ShareUserEmails:         req.ShareUserEmails,
 	})
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	h.logAudit(c.Context(), userID, &botID, "update", c.IP(), c.Get("User-Agent"), map[string]any{"bot_id": botID})
+	auditDetails := map[string]any{"bot_id": botID}
+	if req.ShareUserEmails != nil {
+		auditDetails["share_user_emails"] = *req.ShareUserEmails
+	}
+	h.logAudit(c.Context(), userID, &botID, "update", c.IP(), c.Get("User-Agent"), auditDetails)
 
 	return response.JSON(c, fiber.StatusOK, bot)
 }

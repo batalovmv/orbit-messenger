@@ -58,8 +58,11 @@ type Bot struct {
 	WebhookURL              *string     `json:"webhook_url,omitempty"`
 	WebhookSecretHash       *string     `json:"-"`
 	IsActive                bool        `json:"is_active"`
-	CreatedAt               time.Time   `json:"created_at"`
-	UpdatedAt               time.Time   `json:"updated_at"`
+	// ShareUserEmails opts the bot into receiving the corporate email of
+	// the message author in Update.message.from.email. Defaults to false.
+	ShareUserEmails bool      `json:"share_user_emails"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // BotToken exposes token metadata without the sensitive hash.

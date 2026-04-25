@@ -15,11 +15,12 @@ import (
 )
 
 type WebhookBotInfo struct {
-	BotID      uuid.UUID
-	UserID     uuid.UUID
-	WebhookURL string
-	SecretHash *string
-	Scopes     int64
+	BotID            uuid.UUID
+	UserID           uuid.UUID
+	WebhookURL       string
+	SecretHash       *string
+	Scopes           int64
+	ShareUserEmails  bool
 }
 
 type InstallationStore interface {
@@ -229,7 +230,7 @@ func (s *installationStore) ListByBot(ctx context.Context, botID uuid.UUID) ([]m
 
 func (s *installationStore) ListChatsWithWebhookBots(ctx context.Context, chatID uuid.UUID) ([]WebhookBotInfo, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT bi.bot_id, b.user_id, COALESCE(b.webhook_url, ''), b.webhook_secret_hash, bi.scopes
+		SELECT bi.bot_id, b.user_id, COALESCE(b.webhook_url, ''), b.webhook_secret_hash, bi.scopes, b.share_user_emails
 		FROM bot_installations bi
 		JOIN bots b ON b.id = bi.bot_id
 		WHERE bi.chat_id = $1
@@ -243,7 +244,7 @@ func (s *installationStore) ListChatsWithWebhookBots(ctx context.Context, chatID
 	bots := make([]WebhookBotInfo, 0)
 	for rows.Next() {
 		var info WebhookBotInfo
-		if err := rows.Scan(&info.BotID, &info.UserID, &info.WebhookURL, &info.SecretHash, &info.Scopes); err != nil {
+		if err := rows.Scan(&info.BotID, &info.UserID, &info.WebhookURL, &info.SecretHash, &info.Scopes, &info.ShareUserEmails); err != nil {
 			return nil, fmt.Errorf("scan chat webhook bot: %w", err)
 		}
 		bots = append(bots, info)

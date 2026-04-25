@@ -23,7 +23,7 @@ const botSelectColumns = `
 	b.is_privacy_enabled, b.can_join_groups, b.can_read_all_group_messages,
 	b.menu_button,
 	b.webhook_url, b.webhook_secret_hash,
-	b.is_active, b.created_at, b.updated_at
+	b.is_active, b.share_user_emails, b.created_at, b.updated_at
 `
 
 type BotStore interface {
@@ -73,6 +73,7 @@ func scanBot(scanner botScanner, bot *model.Bot) error {
 		&bot.WebhookURL,
 		&bot.WebhookSecretHash,
 		&bot.IsActive,
+		&bot.ShareUserEmails,
 		&bot.CreatedAt,
 		&bot.UpdatedAt,
 	); err != nil {
@@ -305,14 +306,15 @@ func (s *botStore) Update(ctx context.Context, bot *model.Bot) error {
 		    webhook_url = $11,
 		    webhook_secret_hash = $12,
 		    is_active = $13,
+		    share_user_emails = $14,
 		    updated_at = NOW()
-		WHERE id = $14
+		WHERE id = $15
 	`,
 		bot.Description, bot.ShortDescription, bot.AboutText,
 		bot.IsSystem, bot.IsInline, bot.InlinePlaceholder,
 		bot.IsPrivacyEnabled, bot.CanJoinGroups, bot.CanReadAllGroupMessages,
 		menuButtonJSON,
-		bot.WebhookURL, bot.WebhookSecretHash, bot.IsActive, bot.ID,
+		bot.WebhookURL, bot.WebhookSecretHash, bot.IsActive, bot.ShareUserEmails, bot.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("update bot: %w", err)

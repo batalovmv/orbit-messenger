@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/bots/internal/botapi"
+	"github.com/mst-corp/orbit/services/bots/internal/store"
 )
 
 func TestBuildBotUpdate_PopulatesDocumentForFileMedia(t *testing.T) {
@@ -47,7 +48,7 @@ func TestBuildBotUpdate_PopulatesDocumentForFileMedia(t *testing.T) {
 		SenderID: senderID.String(),
 	}
 	parsed := parseMessagePayload(event.Data)
-	update := buildBotUpdate(chatID, event, parsed, botID, codec)
+	update := buildBotUpdate(chatID, event, parsed, botID, codec, store.UserIdentity{})
 	msg := update.Message
 	if msg == nil {
 		t.Fatal("nil message")
@@ -103,8 +104,8 @@ func TestBuildBotUpdate_MintsDifferentFileIDsPerBot(t *testing.T) {
 
 	botA := uuid.New()
 	botB := uuid.New()
-	updA := buildBotUpdate(chatID, event, parsed, botA, codec)
-	updB := buildBotUpdate(chatID, event, parsed, botB, codec)
+	updA := buildBotUpdate(chatID, event, parsed, botA, codec, store.UserIdentity{})
+	updB := buildBotUpdate(chatID, event, parsed, botB, codec, store.UserIdentity{})
 	if updA.Message.Photo[0].FileID == updB.Message.Photo[0].FileID {
 		t.Fatal("file_id must differ between bots for the same media")
 	}
@@ -127,7 +128,7 @@ func TestBuildBotUpdate_PlainTextHasNoCaption(t *testing.T) {
 	})
 	event := natsEvent{Data: payloadJSON}
 	parsed := parseMessagePayload(event.Data)
-	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec)
+	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec, store.UserIdentity{})
 	if update.Message.Text != "hello world" {
 		t.Fatalf("text=%q", update.Message.Text)
 	}
@@ -136,6 +137,52 @@ func TestBuildBotUpdate_PlainTextHasNoCaption(t *testing.T) {
 	}
 	if update.Message.Document != nil || len(update.Message.Photo) > 0 {
 		t.Fatal("no media should be populated for plain text")
+	}
+}
+
+func TestBuildBotUpdate_PopulatesEmailWhenIdentityProvided(t *testing.T) {
+	chatID := uuid.New()
+	codec := botapi.NewFileIDCodec([]byte("identity-secret"))
+	senderID := uuid.New()
+	payloadJSON, _ := json.Marshal(map[string]any{
+		"id":          uuid.NewString(),
+		"chat_id":     chatID.String(),
+		"sender_id":   senderID.String(),
+		"sender_name": "Carol",
+		"content":     "ping",
+		"type":        "text",
+	})
+	event := natsEvent{Data: payloadJSON}
+	parsed := parseMessagePayload(event.Data)
+	identity := store.UserIdentity{Email: "carol@mst.test"}
+	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec, identity)
+	if update.Message.From == nil {
+		t.Fatal("nil from")
+	}
+	if update.Message.From.Email != "carol@mst.test" {
+		t.Fatalf("email=%q", update.Message.From.Email)
+	}
+}
+
+func TestBuildBotUpdate_OmitsEmailByDefault(t *testing.T) {
+	chatID := uuid.New()
+	codec := botapi.NewFileIDCodec([]byte("identity-default-secret"))
+	payloadJSON, _ := json.Marshal(map[string]any{
+		"id":          uuid.NewString(),
+		"chat_id":     chatID.String(),
+		"sender_id":   uuid.NewString(),
+		"sender_name": "Dan",
+		"content":     "ping",
+		"type":        "text",
+	})
+	event := natsEvent{Data: payloadJSON}
+	parsed := parseMessagePayload(event.Data)
+	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec, store.UserIdentity{})
+	if update.Message.From == nil {
+		t.Fatal("nil from")
+	}
+	if update.Message.From.Email != "" {
+		t.Fatalf("email should be empty when share_user_emails is off, got %q", update.Message.From.Email)
 	}
 }
 
@@ -152,7 +199,7 @@ func TestBuildBotUpdate_PassesEntities(t *testing.T) {
 	})
 	event := natsEvent{Data: payloadJSON}
 	parsed := parseMessagePayload(event.Data)
-	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec)
+	update := buildBotUpdate(chatID, event, parsed, uuid.New(), codec, store.UserIdentity{})
 	if len(update.Message.Entities) != 1 {
 		t.Fatalf("entities=%+v", update.Message.Entities)
 	}

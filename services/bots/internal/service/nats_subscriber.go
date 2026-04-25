@@ -38,6 +38,7 @@ type BotNATSSubscriber struct {
 	webhookWorker *WebhookWorker
 	updateQueue   *UpdateQueue
 	fileIDCodec   *botapi.FileIDCodec
+	userLookup    store.UserLookupStore
 	botFather     BotFatherInterceptor
 	logger        *slog.Logger
 }
@@ -56,6 +57,7 @@ func NewBotNATSSubscriber(
 	webhookWorker *WebhookWorker,
 	updateQueue *UpdateQueue,
 	fileIDCodec *botapi.FileIDCodec,
+	userLookup store.UserLookupStore,
 	logger *slog.Logger,
 ) *BotNATSSubscriber {
 	return &BotNATSSubscriber{
@@ -64,6 +66,7 @@ func NewBotNATSSubscriber(
 		webhookWorker: webhookWorker,
 		updateQueue:   updateQueue,
 		fileIDCodec:   fileIDCodec,
+		userLookup:    userLookup,
 		logger:        logger,
 	}
 }
@@ -159,6 +162,11 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 	// bot-specific file_ids without re-parsing JSON for each delivery.
 	parsed := parseMessagePayload(event.Data)
 
+	// Sender identity is fetched at most once per event, even if multiple
+	// bots in the chat have share_user_emails enabled.
+	var senderIdentity store.UserIdentity
+	identityFetched := false
+
 	for _, info := range bots {
 		if event.SenderID != "" && info.UserID.String() == event.SenderID {
 			continue
@@ -170,7 +178,23 @@ func (s *BotNATSSubscriber) handleEvent(msg *nats.Msg) {
 			continue
 		}
 
-		update := buildBotUpdate(chatID, event, parsed, info.BotID, s.fileIDCodec)
+		var identity store.UserIdentity
+		if info.ShareUserEmails && s.userLookup != nil && event.SenderID != "" {
+			if !identityFetched {
+				if senderUUID, err := uuid.Parse(event.SenderID); err == nil {
+					if got, err := s.userLookup.GetIdentity(ctx, senderUUID); err == nil {
+						senderIdentity = got
+					} else {
+						s.logger.Warn("failed to fetch sender identity for bot update",
+							"sender_id", senderUUID, "error", err)
+					}
+				}
+				identityFetched = true
+			}
+			identity = senderIdentity
+		}
+
+		update := buildBotUpdate(chatID, event, parsed, info.BotID, s.fileIDCodec, identity)
 
 		if info.WebhookURL != "" {
 			secretHash := ""
@@ -236,7 +260,7 @@ func parseMessagePayload(raw json.RawMessage) messagePayload {
 	return p
 }
 
-func buildBotUpdate(chatID uuid.UUID, event natsEvent, payload messagePayload, botID uuid.UUID, codec *botapi.FileIDCodec) botapi.Update {
+func buildBotUpdate(chatID uuid.UUID, event natsEvent, payload messagePayload, botID uuid.UUID, codec *botapi.FileIDCodec, identity store.UserIdentity) botapi.Update {
 	message := &botapi.APIMessage{
 		MessageID: uuid.NewString(),
 		ChatID:    chatID.String(),
@@ -290,6 +314,8 @@ func buildBotUpdate(chatID uuid.UUID, event natsEvent, payload messagePayload, b
 			message.From = &botapi.APIUser{
 				ID:        fromUUID.String(),
 				FirstName: payload.SenderName,
+				Email:     identity.Email,
+				LDAPDN:    identity.LDAPDN,
 			}
 		}
 	}

@@ -43,6 +43,7 @@ type UpdateBotInput struct {
 	ClearMenuButton         bool
 	WebhookURL              *string
 	IsActive                *bool
+	ShareUserEmails         *bool
 }
 
 func NewBotService(
@@ -183,6 +184,9 @@ func (s *BotService) UpdateBot(ctx context.Context, actorID uuid.UUID, actorRole
 	}
 	if input.IsActive != nil {
 		bot.IsActive = *input.IsActive
+	}
+	if input.ShareUserEmails != nil {
+		bot.ShareUserEmails = *input.ShareUserEmails
 	}
 
 	if err := s.bots.Update(ctx, bot); err != nil {
