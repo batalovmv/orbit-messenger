@@ -36,6 +36,12 @@ type BotFatherCallbackHandler interface {
 	UserID() uuid.UUID
 }
 
+// AuditLogger logs bot admin actions. Implementations must be non-fatal.
+type AuditLogger interface {
+	Log(ctx context.Context, entry model.AuditLogEntry) error
+	ListByBot(ctx context.Context, botID uuid.UUID, limit int) ([]model.AuditLogEntry, error)
+}
+
 type BotHandler struct {
 	svc           *service.BotService
 	logger        *slog.Logger
@@ -45,6 +51,7 @@ type BotHandler struct {
 	installations store.InstallationStore
 	encryptionKey []byte
 	botFather     BotFatherCallbackHandler
+	auditStore    AuditLogger
 }
 
 func NewBotHandler(svc *service.BotService, logger *slog.Logger) *BotHandler {
@@ -72,6 +79,12 @@ func (h *BotHandler) SetBotFather(bf BotFatherCallbackHandler) {
 	h.botFather = bf
 }
 
+// WithAuditStore attaches an audit logger to the handler.
+func (h *BotHandler) WithAuditStore(a AuditLogger) *BotHandler {
+	h.auditStore = a
+	return h
+}
+
 func (h *BotHandler) Register(router fiber.Router) {
 	// Static paths before parameterized to avoid Fiber matching "by-user" or "callback" as :id
 	router.Post("/bots/callback", h.sendCallback)
@@ -87,6 +100,7 @@ func (h *BotHandler) Register(router fiber.Router) {
 	router.Get("/bots/:id/commands", h.getCommands)
 	router.Post("/bots/:id/install", h.installBot)
 	router.Delete("/bots/:id/install", h.uninstallBot)
+	router.Get("/bots/:id/audit", h.listBotAudit)
 	router.Get("/chats/:chatId/bots", h.listChatBots)
 }
 
@@ -164,6 +178,8 @@ func (h *BotHandler) createBot(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, err)
 	}
+
+	h.logAudit(c.Context(), userID, &bot.ID, "create", c.IP(), c.Get("User-Agent"), map[string]any{"username": bot.Username})
 
 	return response.JSON(c, fiber.StatusCreated, fiber.Map{
 		"bot":   bot,
@@ -340,6 +356,8 @@ func (h *BotHandler) updateBot(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	h.logAudit(c.Context(), userID, &botID, "update", c.IP(), c.Get("User-Agent"), map[string]any{"bot_id": botID})
+
 	return response.JSON(c, fiber.StatusOK, bot)
 }
 
@@ -360,6 +378,8 @@ func (h *BotHandler) deleteBot(c *fiber.Ctx) error {
 	if err := h.svc.DeleteBot(c.Context(), userID, getUserRole(c), botID); err != nil {
 		return response.Error(c, err)
 	}
+
+	h.logAudit(c.Context(), userID, &botID, "delete", c.IP(), c.Get("User-Agent"), map[string]any{"bot_id": botID})
 
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Bot deleted"})
 }
@@ -384,6 +404,53 @@ func validateBotUsername(username string) error {
 		return apperror.BadRequest("username must contain only letters, numbers, or underscores")
 	}
 	return nil
+}
+
+// logAudit records a bot admin action. Always non-fatal — errors are logged, not returned.
+func (h *BotHandler) logAudit(ctx context.Context, actorID uuid.UUID, botID *uuid.UUID, action, sourceIP, ua string, details map[string]any) {
+	if h.auditStore == nil {
+		return
+	}
+	raw, err := json.Marshal(details)
+	if err != nil {
+		raw = json.RawMessage("{}")
+	}
+	entry := model.AuditLogEntry{
+		ActorID:   actorID,
+		BotID:     botID,
+		Action:    action,
+		Details:   raw,
+		SourceIP:  &sourceIP,
+		UserAgent: &ua,
+	}
+	if err := h.auditStore.Log(ctx, entry); err != nil {
+		h.logger.Error("audit log failed", "error", err, "action", action)
+	}
+}
+
+func (h *BotHandler) listBotAudit(c *fiber.Ctx) error {
+	if err := checkManageBotsPermission(c); err != nil {
+		return response.Error(c, err)
+	}
+	botID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid bot ID"))
+	}
+	limit := c.QueryInt("limit", 50)
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	if h.auditStore == nil {
+		return response.JSON(c, fiber.StatusOK, fiber.Map{"entries": []any{}})
+	}
+	entries, err := h.auditStore.ListByBot(c.Context(), botID, limit)
+	if err != nil {
+		return response.Error(c, apperror.Internal("Failed to fetch audit log"))
+	}
+	if entries == nil {
+		entries = []model.AuditLogEntry{}
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"entries": entries})
 }
 
 func (h *BotHandler) getBotByUserID(c *fiber.Ctx) error {

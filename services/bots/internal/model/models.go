@@ -4,6 +4,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -89,6 +90,18 @@ type BotInstallation struct {
 	IsActive    bool      `json:"is_active"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AuditLogEntry represents a single bot admin action audit record.
+type AuditLogEntry struct {
+	ID        uuid.UUID       `json:"id" db:"id"`
+	ActorID   uuid.UUID       `json:"actor_id" db:"actor_id"`
+	BotID     *uuid.UUID      `json:"bot_id,omitempty" db:"bot_id"`
+	Action    string          `json:"action" db:"action"`
+	Details   json.RawMessage `json:"details" db:"details"`
+	SourceIP  *string         `json:"source_ip,omitempty" db:"source_ip"`
+	UserAgent *string         `json:"user_agent,omitempty" db:"user_agent"`
+	CreatedAt time.Time       `json:"created_at" db:"created_at"`
 }
 
 type CreateBotRequest struct {

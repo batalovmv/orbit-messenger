@@ -91,13 +91,15 @@ func main() {
 	commandStore := store.NewCommandStore(pool)
 	installationStore := store.NewInstallationStore(pool)
 	hrRequestStore := store.NewHRRequestStore(pool)
+	auditStore := store.NewAuditStore(pool)
 	updateQueue := service.NewUpdateQueue(rdb)
 	encryptionKey := orchidCrypto.DeriveKey(botTokenSecret)
 	webhookWorker := service.NewWebhookWorker(rdb, encryptionKey, logger)
 
 	botService := service.NewBotService(botStore, tokenStore, commandStore, installationStore, botTokenSecret)
 	botHandler := handler.NewBotHandler(botService, logger).
-		WithCallbackSupport(rdb, webhookWorker, updateQueue, installationStore, encryptionKey)
+		WithCallbackSupport(rdb, webhookWorker, updateQueue, installationStore, encryptionKey).
+		WithAuditStore(auditStore)
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
 	mediaClient := client.NewMediaClient(mediaServiceURL, internalSecret)
 	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, mediaClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
