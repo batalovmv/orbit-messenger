@@ -8,7 +8,7 @@ import {
 import { getActions, getGlobal, withGlobal } from '../../global';
 
 import type {
-  ApiBotInfo, ApiChat, ApiCountryCode, ApiUserCommonChats, ApiUserFullInfo,
+  ApiBotInfo, ApiChat, ApiCountryCode, ApiUser, ApiUserCommonChats, ApiUserFullInfo,
 } from '../../api/types';
 
 import {
@@ -20,7 +20,7 @@ import {
   isChatWithVerificationCodesBot,
 } from '../../global/helpers';
 import {
-  selectBot, selectChat, selectPeer, selectUserCommonChats, selectUserFullInfo,
+  selectBot, selectChat, selectPeer, selectUser, selectUserCommonChats, selectUserFullInfo,
 } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
@@ -41,6 +41,7 @@ import MiniTable, { type TableEntry } from '../common/MiniTable';
 import Link from '../ui/Link';
 import OptimizedVideo from '../ui/OptimizedVideo';
 import Skeleton from '../ui/placeholder/Skeleton';
+import BotIntroBlock from './BotIntroBlock';
 
 import styles from './MessageListAccountInfo.module.scss';
 
@@ -51,6 +52,7 @@ type OwnProps = {
 
 type StateProps = {
   chat?: ApiChat;
+  botUser?: ApiUser;
   botInfo?: ApiBotInfo;
   isLoadingFullUser?: boolean;
   phoneCodeList?: ApiCountryCode[];
@@ -61,6 +63,7 @@ type StateProps = {
 const MessageListAccountInfo: FC<OwnProps & StateProps> = ({
   chat,
   chatId,
+  botUser,
   botInfo,
   isLoadingFullUser,
   phoneCodeList,
@@ -174,6 +177,9 @@ const MessageListAccountInfo: FC<OwnProps & StateProps> = ({
       {(isBotInfoEmpty && isChatInfoEmpty) && !isLoadingFullUser && !hasMessages && (
         <span>{oldLang('NoMessages')}</span>
       )}
+      {botUser && !hasMessages && (
+        <BotIntroBlock bot={botUser} description={botInfo?.description} />
+      )}
       {botInfo && (
         <div
           className={buildClassName(styles.chatInfo, styles.botBackground)}
@@ -259,6 +265,7 @@ export default memo(withGlobal<OwnProps>(
     const userFullInfo = selectUserFullInfo(global, userId);
     const commonChats = selectUserCommonChats(global, userId);
     const chatBot = selectBot(global, userId);
+    const botUser = chatBot ? selectUser(global, userId) : undefined;
 
     let isLoadingFullUser = false;
     let botInfo;
@@ -272,6 +279,7 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       chat,
+      botUser,
       userFullInfo,
       botInfo,
       isLoadingFullUser,

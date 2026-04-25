@@ -1522,7 +1522,22 @@ const Message = ({
     );
   }
 
-  const handleInlineButtonClick = useLastCallback((button: ApiKeyboardButton) => {
+  const [pendingInlineButtonKey, setPendingInlineButtonKey] = useState<string | undefined>();
+  const pendingInlineButtonTimeoutRef = useRef<number>();
+
+  const handleInlineButtonClick = useLastCallback((button: ApiKeyboardButton, key: string) => {
+    // Show inline spinner while we wait for the bot to answer the callback.
+    // Capped at 5s so a dropped answerCallbackQuery doesn't leave the button
+    // stuck — the same TTL Telegram clients use.
+    if (button.type === 'callback') {
+      setPendingInlineButtonKey(key);
+      if (pendingInlineButtonTimeoutRef.current) {
+        window.clearTimeout(pendingInlineButtonTimeoutRef.current);
+      }
+      pendingInlineButtonTimeoutRef.current = window.setTimeout(() => {
+        setPendingInlineButtonKey(undefined);
+      }, 5000);
+    }
     clickBotInlineButton({
       chatId,
       messageId: message.id,
@@ -1531,7 +1546,7 @@ const Message = ({
     });
   });
 
-  const handleLocalInlineButtonClick = useLastCallback((button: ApiKeyboardButton) => {
+  const handleLocalInlineButtonClick = useLastCallback((button: ApiKeyboardButton, _key: string) => {
     if (button.type === 'openThread') {
       openThread({
         chatId,
@@ -1856,7 +1871,11 @@ const Message = ({
           {withQuickReactionButton && quickReactionPosition === 'in-content' && renderQuickReactionButton()}
         </div>
         {message.inlineButtons && (
-          <InlineButtons inlineButtons={message.inlineButtons} onClick={handleInlineButtonClick} />
+          <InlineButtons
+            inlineButtons={message.inlineButtons}
+            pendingButtonKey={pendingInlineButtonKey}
+            onClick={handleInlineButtonClick}
+          />
         )}
         {additionalInlineButtons && (
           <InlineButtons

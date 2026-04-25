@@ -11,6 +11,7 @@ import useLang from '../../../hooks/useLang';
 
 import CustomEmoji from '../../common/CustomEmoji';
 import Icon from '../../common/icons/Icon';
+import Spinner from '../../ui/Spinner';
 import Button from '../../ui/Button';
 
 import styles from './InlineButtons.module.scss';
@@ -18,12 +19,17 @@ import styles from './InlineButtons.module.scss';
 type OwnProps = {
   className?: string;
   inlineButtons: ApiKeyboardButton[][];
-  onClick: (payload: ApiKeyboardButton) => void;
+  // Key of the row+col currently waiting for a server reply (e.g. callback
+  // answer). The matching button renders disabled with an inline spinner.
+  pendingButtonKey?: string;
+  onClick: (payload: ApiKeyboardButton, key: string) => void;
 };
 
 const ICON_SIZE = 16;
 
-const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
+const InlineButtons = ({
+  className, inlineButtons, pendingButtonKey, onClick,
+}: OwnProps) => {
   const lang = useLang();
 
   const renderIcon = (button: ApiKeyboardButton) => {
@@ -88,30 +94,42 @@ const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
     <div className={buildClassName(styles.root, className)}>
       {inlineButtons.map((row, i) => (
         <div className={styles.row}>
-          {row.map((button, j) => (
-            <Button
-              className={buildClassName(
-                styles.button, button.style?.type && styles[`${button.style.type}Tint`],
-              )}
-              size="tiny"
-              ripple
-              noForcedUpperCase
-              disabled={button.type === 'unsupported' || (button.type === 'suggestedMessage' && button.disabled)}
-              onClick={() => onClick(button)}
-            >
-              {renderIcon(button)}
-              <span className={styles.inlineButtonText}>
-                {button.style?.iconId && (
-                  <CustomEmoji
-                    className={styles.customEmojiIcon}
-                    documentId={button.style.iconId}
-                    size={ICON_SIZE}
-                  />
+          {row.map((button, j) => {
+            const key = `${i}-${j}`;
+            const isPending = pendingButtonKey === key;
+            const isDisabled = button.type === 'unsupported'
+              || (button.type === 'suggestedMessage' && button.disabled)
+              || isPending;
+
+            return (
+              <Button
+                className={buildClassName(
+                  styles.button, button.style?.type && styles[`${button.style.type}Tint`],
                 )}
-                {buttonTexts[i][j]}
-              </span>
-            </Button>
-          ))}
+                size="tiny"
+                ripple
+                noForcedUpperCase
+                disabled={isDisabled}
+                onClick={() => onClick(button, key)}
+              >
+                {isPending ? (
+                  <Spinner color="white" className={styles.spinner} />
+                ) : (
+                  renderIcon(button)
+                )}
+                <span className={styles.inlineButtonText}>
+                  {button.style?.iconId && (
+                    <CustomEmoji
+                      className={styles.customEmojiIcon}
+                      documentId={button.style.iconId}
+                      size={ICON_SIZE}
+                    />
+                  )}
+                  {buttonTexts[i][j]}
+                </span>
+              </Button>
+            );
+          })}
         </div>
       ))}
     </div>

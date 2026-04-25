@@ -66,6 +66,13 @@
   }
 }
 
+.spinner {
+  z-index: 1;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-right: 0.375rem;
+}
+
 .cornerIcon {
   position: absolute;
   top: 0.1875rem;
