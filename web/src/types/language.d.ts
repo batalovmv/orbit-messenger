@@ -2156,6 +2156,12 @@ export interface LangPair {
   'BotEditDisplayNameTooLong': undefined;
   'BotEditInlinePlaceholderTooLong': undefined;
   'BotEditCopiedNotification': undefined;
+  'BotListEmptyTitle': undefined;
+  'BotListEmptySubtitle': undefined;
+  'BotListEmptyCta': undefined;
+  'BotStatusActive': undefined;
+  'BotStatusDisabled': undefined;
+  'BotCardCreated': undefined;
   'ConnectorName': undefined;
   'ConnectorDisplayName': undefined;
   'ConnectorType': undefined;

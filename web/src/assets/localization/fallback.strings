@@ -2938,6 +2938,12 @@
 "BotEditDisplayNameTooLong" = "Слишком длинное название (макс. 64)";
 "BotEditInlinePlaceholderTooLong" = "Макс. 64 символа";
 "BotEditCopiedNotification" = "Скопировано в буфер обмена";
+"BotListEmptyTitle" = "Создайте своего первого бота";
+"BotListEmptySubtitle" = "Боты автоматизируют задачи: уведомления, опросы, интеграции с Jira, HR и не только.";
+"BotListEmptyCta" = "Создать бота";
+"BotStatusActive" = "Активен";
+"BotStatusDisabled" = "Отключён";
+"BotCardCreated" = "Создан";
 "ConnectorName" = "Connector Name";
 "ConnectorDisplayName" = "Display Name";
 "ConnectorType" = "Type";

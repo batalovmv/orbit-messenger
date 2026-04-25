@@ -12,13 +12,16 @@ import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import Icon from '../../common/icons/Icon';
 import RecipientPicker from '../../common/RecipientPicker';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
-import ListItem from '../../ui/ListItem';
 import Spinner from '../../ui/Spinner';
 import BotEditPanel from './BotEditPanel';
+import BotListCard from './BotListCard';
 import CreateBotWizard from './CreateBotWizard';
+
+import styles from './BotListCard.module.scss';
 
 type BotWithToken = SaturnBot & { token?: string };
 
@@ -149,38 +152,40 @@ const SettingsBotManagement = () => {
     );
   }
 
+  const showEmptyState = !isLoading && bots.length === 0;
+
   return (
     <div className="settings-content custom-scroll">
-      <div className="settings-item">
-        <Button onClick={openCreate} color="primary" size="smaller">
-          {lang('CreateBot')}
-        </Button>
-      </div>
+      {!showEmptyState && (
+        <div className="settings-item">
+          <Button onClick={openCreate} color="primary" size="smaller">
+            {lang('CreateBot')}
+          </Button>
+        </div>
+      )}
 
       {isLoading && <Spinner />}
 
-      <div className="settings-main-menu">
-        {bots.map((bot) => (
-          <ListItem
-            key={bot.id}
-            narrow
-            secondaryIcon="next"
-            onClick={() => handleOpenEdit(bot)}
-            contextActions={[{
-              title: lang('DeleteBot'),
-              icon: 'delete',
-              handler: () => handleConfirmDelete(bot.id),
-              destructive: true,
-            }]}
-          >
-            <span className="title">{bot.display_name}</span>
-            <span className="subtitle">
-              @
-              {bot.username}
-            </span>
-          </ListItem>
-        ))}
-      </div>
+      {showEmptyState && (
+        <div className={styles.empty}>
+          <span className={styles.emptyIconBox}>
+            <Icon name="bot-commands-filled" />
+          </span>
+          <h3 className={styles.emptyTitle}>{lang('BotListEmptyTitle')}</h3>
+          <p className={styles.emptySubtitle}>{lang('BotListEmptySubtitle')}</p>
+          <Button color="primary" className={styles.emptyCta} onClick={openCreate}>
+            {lang('BotListEmptyCta')}
+          </Button>
+        </div>
+      )}
+
+      {!showEmptyState && (
+        <div className="settings-main-menu">
+          {bots.map((bot) => (
+            <BotListCard key={bot.id} bot={bot} onClick={handleOpenEdit} />
+          ))}
+        </div>
+      )}
 
       <CreateBotWizard
         isOpen={isCreateOpen}
