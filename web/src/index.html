@@ -12,15 +12,18 @@
   <meta name="description"
     content="Orbit Messenger is a secure corporate messaging app with a focus on privacy and speed.">
   <meta name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
+        content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-title" content="<%= htmlWebpackPlugin.options.appTitle %>">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="<%= htmlWebpackPlugin.options.appTitle %>">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="application-name" content="<%= htmlWebpackPlugin.options.appTitle %>">
-  <meta name="msapplication-TileColor" content="#2b5797">
+  <meta name="msapplication-TileColor" content="#212121">
   <meta name="msapplication-config" content="./browserconfig.xml">
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#212121">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#212121">
   <meta name="google" content="notranslate">
 
   <meta http-equiv="Content-Security-Policy" content="<%= htmlWebpackPlugin.options.csp %>">
@@ -41,7 +44,6 @@
     content="Orbit Messenger is a secure corporate messaging app with a focus on privacy and speed.">
   <meta property="twitter:image" content="./<%= htmlWebpackPlugin.options.mainIcon %>.png">
 
-  <link rel="canonical" href="https://orbit.local/">
   <link rel="apple-touch-icon" sizes="180x180" href="./<%= htmlWebpackPlugin.options.appleIcon %>.png">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
