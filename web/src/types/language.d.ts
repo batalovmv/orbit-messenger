@@ -2146,6 +2146,16 @@ export interface LangPair {
   'BotWizardTokenCopied': undefined;
   'BotWizardDescPlaceholder': undefined;
   'BotWizardCreateFailed': undefined;
+  'BotEditDeepLinkLabel': undefined;
+  'BotEditCopyAria': undefined;
+  'BotEditDescTooLong': undefined;
+  'BotEditShortDescTooLong': undefined;
+  'BotEditAboutTooLong': undefined;
+  'BotEditWebhookInvalid': undefined;
+  'BotEditDisplayNameRequired': undefined;
+  'BotEditDisplayNameTooLong': undefined;
+  'BotEditInlinePlaceholderTooLong': undefined;
+  'BotEditCopiedNotification': undefined;
   'ConnectorName': undefined;
   'ConnectorDisplayName': undefined;
   'ConnectorType': undefined;

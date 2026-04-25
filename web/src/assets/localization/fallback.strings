@@ -2928,6 +2928,16 @@
 "BotWizardTokenCopied" = "Токен скопирован";
 "BotWizardDescPlaceholder" = "Описание (до 256 символов)";
 "BotWizardCreateFailed" = "Не удалось создать бота";
+"BotEditDeepLinkLabel" = "Прямая ссылка";
+"BotEditCopyAria" = "Скопировать";
+"BotEditDescTooLong" = "Слишком длинное описание (макс. 256)";
+"BotEditShortDescTooLong" = "Слишком длинное (макс. 256)";
+"BotEditAboutTooLong" = "Слишком длинное (макс. 120)";
+"BotEditWebhookInvalid" = "URL должен начинаться с https://";
+"BotEditDisplayNameRequired" = "Введите название";
+"BotEditDisplayNameTooLong" = "Слишком длинное название (макс. 64)";
+"BotEditInlinePlaceholderTooLong" = "Макс. 64 символа";
+"BotEditCopiedNotification" = "Скопировано в буфер обмена";
 "ConnectorName" = "Connector Name";
 "ConnectorDisplayName" = "Display Name";
 "ConnectorType" = "Type";

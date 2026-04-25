@@ -1,0 +1,104 @@
+.root {
+  position: relative;
+  height: 100%;
+}
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 6rem;
+}
+
+.section {
+  padding: 0.5rem 1rem 0.75rem;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--color-borders);
+  }
+}
+
+.sectionHeader {
+  margin: 0.5rem 0 0.5rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fieldHelp {
+  margin: 0.125rem 0 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.copyRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  background-color: var(--color-background-secondary);
+  border-radius: 0.5rem;
+}
+
+.copyValue {
+  flex: 1 1 auto;
+  font-family: var(--font-family-monospace, monospace);
+  font-size: 0.75rem;
+  word-break: break-all;
+  color: var(--color-text);
+  user-select: text;
+}
+
+.copyValueBlurred {
+  filter: blur(0.4rem);
+  transition: filter 0.18s ease;
+
+  &:hover,
+  &:focus {
+    filter: none;
+  }
+}
+
+.copyButton {
+  flex: 0 0 auto;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-interactive-element-hover);
+    color: var(--color-primary);
+  }
+}
+
+.charCounter {
+  margin-top: 0.25rem;
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  align-self: flex-end;
+  display: block;
+  text-align: end;
+  padding-right: 0.5rem;
+}
+
+.charCounterError {
+  color: var(--color-error);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+}
