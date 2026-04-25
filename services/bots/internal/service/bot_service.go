@@ -392,6 +392,46 @@ func (s *BotService) ListChatBots(ctx context.Context, chatID uuid.UUID) ([]mode
 	return installations, nil
 }
 
+// ChatBotCommandSet is the per-bot slash command bundle returned by
+// ListChatBotCommands. The composer's slash autocomplete in group chats
+// flattens these into a single suggestion list.
+type ChatBotCommandSet struct {
+	BotID       uuid.UUID          `json:"bot_id"`
+	BotUserID   uuid.UUID          `json:"bot_user_id"`
+	BotUsername string             `json:"bot_username"`
+	Commands    []model.BotCommand `json:"commands"`
+}
+
+// ListChatBotCommands aggregates commands for every active bot in a chat.
+// Bots without commands are omitted to keep the response slim.
+func (s *BotService) ListChatBotCommands(ctx context.Context, chatID uuid.UUID) ([]ChatBotCommandSet, error) {
+	installations, err := s.installations.ListByChat(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf("list chat bots: %w", err)
+	}
+	out := make([]ChatBotCommandSet, 0, len(installations))
+	for _, inst := range installations {
+		if !inst.IsActive {
+			continue
+		}
+		bot, err := s.bots.GetByID(ctx, inst.BotID)
+		if err != nil || bot == nil {
+			continue
+		}
+		cmds, err := s.commands.GetCommands(ctx, inst.BotID)
+		if err != nil || len(cmds) == 0 {
+			continue
+		}
+		out = append(out, ChatBotCommandSet{
+			BotID:       bot.ID,
+			BotUserID:   bot.UserID,
+			BotUsername: bot.Username,
+			Commands:    cmds,
+		})
+	}
+	return out, nil
+}
+
 func (s *BotService) GetBotByUserID(ctx context.Context, userID uuid.UUID) (*model.Bot, error) {
 	bot, err := s.bots.GetByUserID(ctx, userID)
 	if err != nil {

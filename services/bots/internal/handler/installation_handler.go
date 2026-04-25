@@ -44,6 +44,8 @@ func (h *BotHandler) installBot(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	h.logAudit(c.Context(), userID, &botID, "install", c.IP(), c.Get("User-Agent"), map[string]any{"bot_id": botID, "chat_id": chatID})
+
 	return response.JSON(c, fiber.StatusCreated, fiber.Map{
 		"bot_id":       botID,
 		"chat_id":      chatID,
@@ -54,6 +56,10 @@ func (h *BotHandler) installBot(c *fiber.Ctx) error {
 }
 
 func (h *BotHandler) uninstallBot(c *fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
 	if err := checkManageBotsPermission(c); err != nil {
 		return response.Error(c, err)
 	}
@@ -81,6 +87,8 @@ func (h *BotHandler) uninstallBot(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	h.logAudit(c.Context(), userID, &botID, "uninstall", c.IP(), c.Get("User-Agent"), map[string]any{"bot_id": botID})
+
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"message": "Bot uninstalled"})
 }
 
@@ -100,4 +108,22 @@ func (h *BotHandler) listChatBots(c *fiber.Ctx) error {
 	}
 
 	return response.JSON(c, fiber.StatusOK, installations)
+}
+
+// listChatBotCommands returns the slash commands of every bot installed in a
+// chat. It is read-only and intentionally lives outside the admin-gated
+// /chats/:chatId/bots endpoint so any chat member's composer can populate
+// the slash autocomplete tooltip without requiring manage_bots permission.
+func (h *BotHandler) listChatBotCommands(c *fiber.Ctx) error {
+	chatID, err := parseUUIDParam(c, "chatId", "chat ID")
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	commands, err := h.svc.ListChatBotCommands(c.Context(), chatID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
+	return response.JSON(c, fiber.StatusOK, commands)
 }

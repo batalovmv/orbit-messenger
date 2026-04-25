@@ -102,6 +102,7 @@ func (h *BotHandler) Register(router fiber.Router) {
 	router.Delete("/bots/:id/install", h.uninstallBot)
 	router.Get("/bots/:id/audit", h.listBotAudit)
 	router.Get("/chats/:chatId/bots", h.listChatBots)
+	router.Get("/chats/:chatId/bot-commands", h.listChatBotCommands)
 }
 
 func RequireInternalToken(secret string) fiber.Handler {

@@ -230,6 +230,11 @@ export async function fetchFullChat({ id: chatId, chatId: chatIdAlt }: { id?: st
         // Keep the chat reachable even if user hydration fails.
       }
     }
+  } else {
+    // For group/channel chats, aggregate slash commands from every
+    // installed bot so the composer's slash autocomplete can suggest
+    // them without requiring manage_bots permission.
+    loadGroupBotCommands(apiChat);
   }
 
   // Set current user's admin rights and creator flag on chat object
@@ -683,6 +688,45 @@ async function loadBotCommandsForChat(botUserId: string, apiChat: ApiChat) {
       '@type': 'updateChat',
       id: apiChat.id,
       chat: { botCommands },
+      noTopChatsRequest: true,
+    });
+  } catch {
+    // Bot commands loading is non-critical
+  }
+}
+
+async function loadGroupBotCommands(apiChat: ApiChat) {
+  try {
+    const sets = await client.request<Array<{
+      bot_id: string;
+      bot_user_id: string;
+      bot_username: string;
+      commands: Array<{ command: string; description: string }>;
+    }>>('GET', `/chats/${apiChat.id}/bot-commands`);
+    if (!sets?.length) return;
+
+    const botCommands: ApiBotCommand[] = [];
+    for (const set of sets) {
+      for (const cmd of set.commands) {
+        botCommands.push({
+          botId: set.bot_user_id,
+          command: cmd.command,
+          description: cmd.description,
+        });
+      }
+    }
+    if (!botCommands.length) return;
+
+    // ApiChat.botCommands lives on ApiChatFullInfo in the upstream type but
+    // is read off the chat object by both Saturn-side caches and the
+    // composer's command tooltip. The same shape mismatch is tolerated for
+    // DM chats above (loadBotCommandsForChat); we mirror that here.
+    const target = apiChat as ApiChat & { botCommands?: ApiBotCommand[] };
+    target.botCommands = botCommands;
+    sendApiUpdate({
+      '@type': 'updateChat',
+      id: apiChat.id,
+      chat: { botCommands } as Partial<ApiChat>,
       noTopChatsRequest: true,
     });
   } catch {
