@@ -44,6 +44,26 @@ func (s *rateLimitBotService) SetWebhook(ctx context.Context, botID uuid.UUID, w
 	return nil, nil
 }
 
+func (s *rateLimitBotService) UpdateBotProfile(ctx context.Context, botID uuid.UUID, name, description, shortDescription *string) (*model.Bot, error) {
+	for _, bot := range s.bots {
+		if bot.ID == botID {
+			if name != nil {
+				bot.DisplayName = *name
+			}
+			if description != nil {
+				v := *description
+				bot.Description = &v
+			}
+			if shortDescription != nil {
+				v := *shortDescription
+				bot.ShortDescription = &v
+			}
+			return bot, nil
+		}
+	}
+	return nil, model.ErrBotNotFound
+}
+
 func newRateLimitTestApp(t *testing.T, redisClient *redis.Client, bots map[string]*model.Bot, messageServerURL string) (*fiber.App, *int32) {
 	t.Helper()
 

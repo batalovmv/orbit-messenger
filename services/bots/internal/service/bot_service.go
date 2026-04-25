@@ -210,6 +210,49 @@ func (s *BotService) UpdateBot(ctx context.Context, actorID uuid.UUID, actorRole
 	return updated, nil
 }
 
+// UpdateBotProfile updates the bot's public-facing metadata. Used by the Bot
+// API (setMyName / setMyDescription / setMyShortDescription) — auth is the
+// bot's own token, so no actor/role check applies.
+func (s *BotService) UpdateBotProfile(ctx context.Context, botID uuid.UUID, name, description, shortDescription *string) (*model.Bot, error) {
+	bot, err := s.bots.GetByID(ctx, botID)
+	if err != nil {
+		return nil, fmt.Errorf("get bot for profile update: %w", err)
+	}
+	if bot == nil {
+		return nil, apperror.NotFound("Bot not found")
+	}
+
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		if trimmed == "" {
+			return nil, apperror.BadRequest("name must not be blank")
+		}
+		bot.DisplayName = trimmed
+	}
+	if description != nil {
+		bot.Description = normalizeNullableString(*description)
+	}
+	if shortDescription != nil {
+		bot.ShortDescription = normalizeNullableString(*shortDescription)
+	}
+
+	if err := s.bots.Update(ctx, bot); err != nil {
+		if errors.Is(err, model.ErrBotNotFound) {
+			return nil, apperror.NotFound("Bot not found")
+		}
+		return nil, fmt.Errorf("update bot profile: %w", err)
+	}
+
+	updated, err := s.bots.GetByID(ctx, botID)
+	if err != nil {
+		return nil, fmt.Errorf("reload bot after profile update: %w", err)
+	}
+	if updated == nil {
+		return nil, apperror.NotFound("Bot not found")
+	}
+	return updated, nil
+}
+
 // SetBotAvatar updates the bot's avatar URL (stored on the underlying user row).
 func (s *BotService) SetBotAvatar(ctx context.Context, botID uuid.UUID, avatarURL string) error {
 	if strings.TrimSpace(avatarURL) == "" {

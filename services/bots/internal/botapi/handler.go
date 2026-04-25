@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -50,6 +51,10 @@ type BotService interface {
 	IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID) (bool, error)
 	CheckBotScope(ctx context.Context, botID, chatID uuid.UUID, requiredScope int64) error
 	SetWebhook(ctx context.Context, botID uuid.UUID, webhookURL, secretHash *string) (*model.Bot, error)
+	// UpdateBotProfile updates the public-facing fields a bot can change about
+	// itself via the Bot API: display name, description, short description.
+	// Each pointer is only applied when non-nil — passing nil for all is a no-op.
+	UpdateBotProfile(ctx context.Context, botID uuid.UUID, name, description, shortDescription *string) (*model.Bot, error)
 }
 
 // CommandStore manages bot slash commands.
@@ -200,6 +205,13 @@ func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Post("/restrictChatMember", h.restrictChatMember)
 	router.Get("/getFile", h.getFile)
 	router.Get("/file/:file_id", h.downloadFile)
+
+	router.Post("/setMyName", h.setMyName)
+	router.Get("/getMyName", h.getMyName)
+	router.Post("/setMyDescription", h.setMyDescription)
+	router.Get("/getMyDescription", h.getMyDescription)
+	router.Post("/setMyShortDescription", h.setMyShortDescription)
+	router.Get("/getMyShortDescription", h.getMyShortDescription)
 }
 
 func (h *BotAPIHandler) getMe(c *fiber.Ctx) error {
@@ -1287,4 +1299,121 @@ func (h *BotAPIHandler) restrictChatMember(c *fiber.Ctx) error {
 	}
 
 	return botSuccess(c, true)
+}
+
+const (
+	maxBotNameRunes             = 64
+	maxBotDescriptionRunes      = 512
+	maxBotShortDescriptionRunes = 120
+)
+
+// setMyName updates the bot's display name. Telegram allows 1-64 chars.
+func (h *BotAPIHandler) setMyName(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req SetMyNameRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return botError(c, apperror.BadRequest("name is required"))
+	}
+	if utf8.RuneCountInString(name) > maxBotNameRunes {
+		return botError(c, apperror.BadRequest("name is too long (max 64)"))
+	}
+
+	if _, err := h.svc.UpdateBotProfile(c.Context(), bot.ID, &name, nil, nil); err != nil {
+		return botError(c, err)
+	}
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) getMyName(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	return botSuccess(c, fiber.Map{"name": bot.DisplayName})
+}
+
+// setMyDescription updates the long bot description. Empty string clears it.
+func (h *BotAPIHandler) setMyDescription(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req SetMyDescriptionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if utf8.RuneCountInString(req.Description) > maxBotDescriptionRunes {
+		return botError(c, apperror.BadRequest("description is too long (max 512)"))
+	}
+
+	desc := req.Description
+	if _, err := h.svc.UpdateBotProfile(c.Context(), bot.ID, nil, &desc, nil); err != nil {
+		return botError(c, err)
+	}
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) getMyDescription(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	desc := ""
+	if bot.Description != nil {
+		desc = *bot.Description
+	}
+	return botSuccess(c, fiber.Map{"description": desc})
+}
+
+// setMyShortDescription updates the short bot description (used in chat header).
+// Empty string clears it.
+func (h *BotAPIHandler) setMyShortDescription(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req SetMyShortDescriptionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if utf8.RuneCountInString(req.ShortDescription) > maxBotShortDescriptionRunes {
+		return botError(c, apperror.BadRequest("short_description is too long (max 120)"))
+	}
+
+	short := req.ShortDescription
+	if _, err := h.svc.UpdateBotProfile(c.Context(), bot.ID, nil, nil, &short); err != nil {
+		return botError(c, err)
+	}
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) getMyShortDescription(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	short := ""
+	if bot.ShortDescription != nil {
+		short = *bot.ShortDescription
+	}
+	return botSuccess(c, fiber.Map{"short_description": short})
 }

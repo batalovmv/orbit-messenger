@@ -180,6 +180,26 @@ type SetWebhookRequest struct {
 	Secret string `json:"secret,omitempty"`
 }
 
+// SetMyNameRequest is the body of POST /setMyName.
+// language_code is accepted (Bot API compatibility) but not currently
+// stored — Orbit holds a single global bot name.
+type SetMyNameRequest struct {
+	Name         string `json:"name"`
+	LanguageCode string `json:"language_code,omitempty"`
+}
+
+// SetMyDescriptionRequest is the body of POST /setMyDescription.
+type SetMyDescriptionRequest struct {
+	Description  string `json:"description"`
+	LanguageCode string `json:"language_code,omitempty"`
+}
+
+// SetMyShortDescriptionRequest is the body of POST /setMyShortDescription.
+type SetMyShortDescriptionRequest struct {
+	ShortDescription string `json:"short_description"`
+	LanguageCode     string `json:"language_code,omitempty"`
+}
+
 type BotAPIResponse struct {
 	OK          bool   `json:"ok"`
 	Result      any    `json:"result,omitempty"`
