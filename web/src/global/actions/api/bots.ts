@@ -27,7 +27,7 @@ import { debounce } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/saturn';
-import { sendBotCallback } from '../../../api/saturn/methods/bots';
+import { ensureBotFatherChat as apiEnsureBotFatherChat, sendBotCallback } from '../../../api/saturn/methods/bots';
 import { getMainUsername } from '../../helpers';
 import {
   getWebAppKey,
@@ -1446,6 +1446,25 @@ addActionHandler('toggleUserLocationPermission', (global, actions, payload): Act
   global = getGlobal();
   global = updateBotAppPermissions(global, bot.id, { geolocation: isAccessGranted });
   setGlobal(global);
+});
+
+addActionHandler('ensureBotFatherChat', async (): Promise<void> => {
+  // Once per browser session: lazy-create + pin the BotFather DM on first auth.
+  // The backend endpoint is idempotent (returns the existing chat if any),
+  // but we still gate locally to avoid spamming on every reconnect.
+  try {
+    if (sessionStorage.getItem('orbit:botfather_ensured') === '1') return;
+  } catch {
+    // sessionStorage may be disabled (e.g. private mode w/ strict storage). Fall through.
+  }
+  try {
+    await apiEnsureBotFatherChat();
+    try {
+      sessionStorage.setItem('orbit:botfather_ensured', '1');
+    } catch { /* ignore */ }
+  } catch {
+    // Best-effort — not blocking app boot.
+  }
 });
 
 addActionHandler('startBotFatherConversation', async (global, actions, payload): Promise<void> => {

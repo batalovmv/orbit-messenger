@@ -1564,6 +1564,7 @@ export interface ActionPayloads {
   startBotFatherConversation: {
     param: string;
   } & WithTabId;
+  ensureBotFatherChat: undefined;
   loadBotFreezeAppeal: undefined;
   checkUsername: {
     username: string;

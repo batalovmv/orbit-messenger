@@ -218,6 +218,7 @@ const Main = ({
     loadAllChats,
     loadContentSettings,
     loadPromoData,
+    ensureBotFatherChat,
   } = getActions();
 
   if (DEBUG && !DEBUG_isLogged) {
@@ -261,6 +262,7 @@ const Main = ({
       checkAppVersion();
       loadAuthorizations();
       loadPasswordInfo();
+      ensureBotFatherChat();
     }
   }, [currentUserId, isAuthReady, isMasterTab, isSynced]);
 

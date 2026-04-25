@@ -96,3 +96,12 @@ export async function sendBotCallback(
     data,
   });
 }
+
+export type EnsureBotFatherChatResponse = {
+  chat_id: string;
+  system_bot_id: string;
+};
+
+export async function ensureBotFatherChat() {
+  return request<EnsureBotFatherChatResponse>('POST', '/system/botfather/ensure-chat');
+}
