@@ -256,6 +256,85 @@ func TestDeleteBot_SystemBot(t *testing.T) {
 	}
 }
 
+func TestCheckBotUsername_Available(t *testing.T) {
+	botStore := &mockBotStore{
+		getByUsernameFn: func(ctx context.Context, username string) (*model.Bot, error) {
+			return nil, nil
+		},
+	}
+
+	app := newBotHandlerTestApp(botStore, nil)
+	resp := doBotRequest(t, app, http.MethodGet, "/bots/check-username?username=fresh_bot", nil, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-User-Role": "admin",
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]any
+	decodeJSON(t, resp.Body, &body)
+	if body["available"] != true || body["valid"] != true {
+		t.Fatalf("expected available=true valid=true, got %#v", body)
+	}
+}
+
+func TestCheckBotUsername_Taken(t *testing.T) {
+	taken := "datadog_bot"
+	botStore := &mockBotStore{
+		getByUsernameFn: func(ctx context.Context, username string) (*model.Bot, error) {
+			if username != taken {
+				t.Fatalf("unexpected lookup for %q", username)
+			}
+			return &model.Bot{Username: taken}, nil
+		},
+	}
+
+	app := newBotHandlerTestApp(botStore, nil)
+	resp := doBotRequest(t, app, http.MethodGet, "/bots/check-username?username="+taken, nil, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-User-Role": "admin",
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]any
+	decodeJSON(t, resp.Body, &body)
+	if body["available"] != false || body["valid"] != true || body["reason"] != "taken" {
+		t.Fatalf("expected available=false valid=true reason=taken, got %#v", body)
+	}
+}
+
+func TestCheckBotUsername_InvalidFormat(t *testing.T) {
+	app := newBotHandlerTestApp(nil, nil)
+	resp := doBotRequest(t, app, http.MethodGet, "/bots/check-username?username=ab", nil, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-User-Role": "admin",
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]any
+	decodeJSON(t, resp.Body, &body)
+	if body["valid"] != false {
+		t.Fatalf("expected valid=false, got %#v", body)
+	}
+}
+
+func TestCheckBotUsername_Forbidden(t *testing.T) {
+	app := newBotHandlerTestApp(nil, nil)
+	resp := doBotRequest(t, app, http.MethodGet, "/bots/check-username?username=ok_bot", nil, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-User-Role": "member",
+	})
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
 func doBotRequest(t *testing.T, app *fiber.App, method, path string, body any, headers map[string]string) *http.Response {
 	t.Helper()
 

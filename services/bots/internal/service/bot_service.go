@@ -444,6 +444,17 @@ func (s *BotService) GetBotByUserID(ctx context.Context, userID uuid.UUID) (*mod
 	return bot, nil
 }
 
+// LookupBotByUsername returns the bot row for the given username, or nil if no
+// such bot exists. Unlike GetBot, missing rows are not an error — used by the
+// wizard's username availability probe.
+func (s *BotService) LookupBotByUsername(ctx context.Context, username string) (*model.Bot, error) {
+	bot, err := s.bots.GetByUsername(ctx, strings.TrimSpace(username))
+	if err != nil {
+		return nil, fmt.Errorf("lookup bot by username: %w", err)
+	}
+	return bot, nil
+}
+
 func (s *BotService) IsBotInstalled(ctx context.Context, botID, chatID uuid.UUID) (bool, error) {
 	inst, err := s.installations.GetByBotAndChat(ctx, botID, chatID)
 	if err != nil {

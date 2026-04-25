@@ -1,27 +1,26 @@
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
-import type { SaturnBot, SaturnBotCreateResponse } from '../../../api/saturn/types';
+import type { SaturnBot } from '../../../api/saturn/types';
 
 import { copyTextToClipboard } from '../../../util/clipboard';
+import {
+  deleteBot, fetchBots, installBot, rotateToken, updateBot,
+} from '../../../api/saturn/methods/bots';
+import { addChatMembers } from '../../../api/saturn/methods/chats';
 
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import RecipientPicker from '../../common/RecipientPicker';
 import Button from '../../ui/Button';
 import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
-import Modal from '../../ui/Modal';
-import RecipientPicker from '../../common/RecipientPicker';
 import Spinner from '../../ui/Spinner';
-
-import {
-  createBot, deleteBot, fetchBots, installBot, rotateToken, updateBot,
-} from '../../../api/saturn/methods/bots';
-import { addChatMembers } from '../../../api/saturn/methods/chats';
+import CreateBotWizard from './CreateBotWizard';
 
 type BotWithToken = SaturnBot & { token?: string };
 
@@ -37,11 +36,6 @@ const SettingsBotManagement = () => {
   const [deletingBotId, setDeletingBotId] = useState<string | undefined>();
 
   const [isGroupPickerOpen, openGroupPicker, closeGroupPicker] = useFlag(false);
-
-  // Create form
-  const [newUsername, setNewUsername] = useState('');
-  const [newDisplayName, setNewDisplayName] = useState('');
-  const [newDescription, setNewDescription] = useState('');
 
   const loadBots = useLastCallback(async () => {
     markLoading();
@@ -59,27 +53,14 @@ const SettingsBotManagement = () => {
     loadBots();
   }, [loadBots]);
 
-  const handleCreate = useLastCallback(async () => {
-    if (!newUsername.trim() || !newDisplayName.trim()) return;
-    try {
-      const result = await createBot({
-        username: newUsername.trim(),
-        display_name: newDisplayName.trim(),
-        description: newDescription.trim() || undefined,
-      }) as SaturnBotCreateResponse;
+  const handleWizardCreated = useLastCallback((_bot: SaturnBot) => {
+    showNotification({ message: lang('BotCreated') });
+    loadBots();
+  });
 
-      if (result?.bot) {
-        setEditingBot({ ...result.bot, token: result.token });
-        showNotification({ message: lang('BotCreated') });
-        closeCreate();
-        setNewUsername('');
-        setNewDisplayName('');
-        setNewDescription('');
-        loadBots();
-      }
-    } catch (e) {
-      showNotification({ message: String(e) });
-    }
+  const handleWizardInstallRequest = useLastCallback((bot: BotWithToken) => {
+    setEditingBot(bot);
+    openGroupPicker();
   });
 
   const handleDelete = useLastCallback(async () => {
@@ -300,33 +281,20 @@ const SettingsBotManagement = () => {
             }]}
           >
             <span className="title">{bot.display_name}</span>
-            <span className="subtitle">@{bot.username}</span>
+            <span className="subtitle">
+              @
+              {bot.username}
+            </span>
           </ListItem>
         ))}
       </div>
 
-      <Modal isOpen={isCreateOpen} onClose={closeCreate} title={lang('CreateBot')}>
-        <div className="settings-item">
-          <InputText
-            label={lang('BotUsername')}
-            value={newUsername}
-            onChange={(e) => setNewUsername((e.target as HTMLInputElement).value)}
-          />
-          <InputText
-            label={lang('BotDisplayName')}
-            value={newDisplayName}
-            onChange={(e) => setNewDisplayName((e.target as HTMLInputElement).value)}
-          />
-          <InputText
-            label={lang('BotDescription')}
-            value={newDescription}
-            onChange={(e) => setNewDescription((e.target as HTMLInputElement).value)}
-          />
-          <Button onClick={handleCreate} color="primary">
-            {lang('CreateBot')}
-          </Button>
-        </div>
-      </Modal>
+      <CreateBotWizard
+        isOpen={isCreateOpen}
+        onClose={closeCreate}
+        onCreated={handleWizardCreated}
+        onInstallRequest={handleWizardInstallRequest}
+      />
 
       <ConfirmDialog
         isOpen={isDeleteOpen}

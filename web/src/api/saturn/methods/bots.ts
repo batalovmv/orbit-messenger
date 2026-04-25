@@ -1,10 +1,11 @@
 ﻿// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { request } from '../client';
 import type {
   SaturnBot, SaturnBotCommand, SaturnBotCreateResponse, SaturnBotInstallation, SaturnBotMenuButton,
 } from '../types';
+
+import { request } from '../client';
 
 export type UpdateBotPayload = Partial<{
   username: string;
@@ -33,6 +34,17 @@ export async function fetchBot(botId: string) {
 
 export async function createBot(data: { username: string; display_name: string; description?: string }) {
   return request<SaturnBotCreateResponse>('POST', '/bots', data);
+}
+
+export type CheckBotUsernameResponse = {
+  available: boolean;
+  valid: boolean;
+  reason?: 'empty' | 'invalid_format' | 'taken';
+};
+
+export async function checkBotUsername(username: string, signal?: AbortSignal) {
+  const query = encodeURIComponent(username);
+  return request<CheckBotUsernameResponse>('GET', `/bots/check-username?username=${query}`, undefined, { signal });
 }
 
 export async function updateBot(botId: string, data: UpdateBotPayload) {

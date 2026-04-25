@@ -89,6 +89,7 @@ func (h *BotHandler) Register(router fiber.Router) {
 	// Static paths before parameterized to avoid Fiber matching "by-user" or "callback" as :id
 	router.Post("/bots/callback", h.sendCallback)
 	router.Get("/bots/by-user/:userId", h.getBotByUserID)
+	router.Get("/bots/check-username", h.checkBotUsername)
 
 	router.Post("/bots", h.createBot)
 	router.Get("/bots", h.listBots)
@@ -458,6 +459,49 @@ func (h *BotHandler) listBotAudit(c *fiber.Ctx) error {
 		entries = []model.AuditLogEntry{}
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"entries": entries})
+}
+
+// checkBotUsername reports whether a username is well-formed and not yet taken.
+// Powers the live availability check in the bot creation wizard.
+// Always returns 200 with {available, valid, reason?} so the UI can render
+// a hint without juggling HTTP status codes.
+func (h *BotHandler) checkBotUsername(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
+	if err := checkManageBotsPermission(c); err != nil {
+		return response.Error(c, err)
+	}
+
+	username := strings.TrimSpace(c.Query("username"))
+	if err := validateBotUsername(username); err != nil {
+		reason := "invalid_format"
+		if username == "" {
+			reason = "empty"
+		}
+		return response.JSON(c, fiber.StatusOK, fiber.Map{
+			"available": false,
+			"valid":     false,
+			"reason":    reason,
+		})
+	}
+
+	existing, err := h.svc.LookupBotByUsername(c.Context(), username)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	if existing != nil {
+		return response.JSON(c, fiber.StatusOK, fiber.Map{
+			"available": false,
+			"valid":     true,
+			"reason":    "taken",
+		})
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"available": true,
+		"valid":     true,
+	})
 }
 
 func (h *BotHandler) getBotByUserID(c *fiber.Ctx) error {
