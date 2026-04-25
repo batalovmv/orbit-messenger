@@ -23,7 +23,7 @@ func (h *BotAPIHandler) setWebhook(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return botError(c, apperror.BadRequest("Invalid request body"))
 	}
-	if err := validateWebhookURL(req.URL); err != nil {
+	if err := validateWebhookURL(req.URL, h.webhookAllowList); err != nil {
 		return botError(c, err)
 	}
 
@@ -75,7 +75,7 @@ func (h *BotAPIHandler) getWebhookInfo(c *fiber.Ctx) error {
 	})
 }
 
-func validateWebhookURL(raw string) error {
+func validateWebhookURL(raw string, allowList []string) error {
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return apperror.BadRequest("url is required")
@@ -107,5 +107,36 @@ func validateWebhookURL(raw string) error {
 		}
 	}
 
+	// Allow-list check (skip if list is empty — dev mode)
+	if len(allowList) > 0 {
+		if !isHostAllowed(host, allowList) {
+			return apperror.BadRequest("webhook host not in allow-list")
+		}
+	}
+
 	return nil
+}
+
+// isHostAllowed checks if host matches any entry in the allow-list.
+// Entries may be plain hostnames or wildcard patterns like "*.example.com".
+func isHostAllowed(host string, allowList []string) bool {
+	host = strings.ToLower(host)
+	for _, entry := range allowList {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if entry == "" {
+			continue
+		}
+		if strings.HasPrefix(entry, "*.") {
+			// Wildcard: *.example.com matches foo.example.com but NOT example.com
+			suffix := entry[1:] // ".example.com"
+			if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
+				return true
+			}
+		} else {
+			if host == entry {
+				return true
+			}
+		}
+	}
+	return false
 }

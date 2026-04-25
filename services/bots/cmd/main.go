@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -100,6 +101,22 @@ func main() {
 	msgClient := client.NewMessagingClient(messagingServiceURL, internalSecret)
 	mediaClient := client.NewMediaClient(mediaServiceURL, internalSecret)
 	botAPIHandler := botapi.NewBotAPIHandler(botService, msgClient, mediaClient, encryptionKey, logger).WithRedis(rdb).WithUpdateQueue(updateQueue)
+
+	// Webhook allow-list
+	var webhookAllowList []string
+	if raw := config.EnvOr("BOT_WEBHOOK_ALLOWLIST", ""); raw != "" {
+		for _, h := range strings.Split(raw, ",") {
+			if trimmed := strings.TrimSpace(h); trimmed != "" {
+				webhookAllowList = append(webhookAllowList, trimmed)
+			}
+		}
+	}
+	if len(webhookAllowList) == 0 {
+		logger.Warn("BOT_WEBHOOK_ALLOWLIST is not set — all webhook destinations allowed (dev mode)")
+	} else {
+		logger.Info("webhook allow-list configured", "entries", len(webhookAllowList))
+	}
+	botAPIHandler = botAPIHandler.WithWebhookAllowList(webhookAllowList)
 	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
 
 	// Provision BotFather system bot

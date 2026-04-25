@@ -55,14 +55,15 @@ type UpdateQueue interface {
 }
 
 type BotAPIHandler struct {
-	svc           BotService
-	msgClient     *client.MessagingClient
-	mediaClient   *client.MediaClient
-	redis         *redis.Client
-	updateQueue   UpdateQueue
-	commandStore  CommandStore
-	encryptionKey []byte
-	logger        *slog.Logger
+	svc              BotService
+	msgClient        *client.MessagingClient
+	mediaClient      *client.MediaClient
+	redis            *redis.Client
+	updateQueue      UpdateQueue
+	commandStore     CommandStore
+	encryptionKey    []byte
+	logger           *slog.Logger
+	webhookAllowList []string // nil = allow all (dev mode)
 }
 
 func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, mediaClient *client.MediaClient, encryptionKey []byte, logger *slog.Logger) *BotAPIHandler {
@@ -87,6 +88,14 @@ func (h *BotAPIHandler) WithUpdateQueue(updateQueue UpdateQueue) *BotAPIHandler 
 
 func (h *BotAPIHandler) WithCommandStore(cs CommandStore) *BotAPIHandler {
 	h.commandStore = cs
+	return h
+}
+
+// WithWebhookAllowList sets the allowed webhook hostnames.
+// Each entry may be a plain hostname ("mst.local") or a wildcard subdomain ("*.saturn.ac").
+// If list is empty or nil, all hosts are allowed (dev mode).
+func (h *BotAPIHandler) WithWebhookAllowList(list []string) *BotAPIHandler {
+	h.webhookAllowList = list
 	return h
 }
 
