@@ -25,8 +25,18 @@ import (
 )
 
 const botAPIRateLimitPerSec = 30
+const botAPIIPRateLimitPerSec = 60
 
 var botRateLimitScript = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {count, ttl}
+`)
+
+var ipRateLimitScript = redis.NewScript(`
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then
   redis.call('EXPIRE', KEYS[1], ARGV[1])
@@ -97,6 +107,38 @@ func (h *BotAPIHandler) WithCommandStore(cs CommandStore) *BotAPIHandler {
 func (h *BotAPIHandler) WithWebhookAllowList(list []string) *BotAPIHandler {
 	h.webhookAllowList = list
 	return h
+}
+
+// IPRateLimitMiddleware returns a Fiber middleware that enforces a per-IP rate limit
+// of botAPIIPRateLimitPerSec requests per second across all Bot API routes.
+// It is a no-op when Redis is not configured.
+func (h *BotAPIHandler) IPRateLimitMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if h.redis == nil {
+			return c.Next()
+		}
+		ip := c.IP()
+		if ip == "" {
+			return c.Next()
+		}
+		key := fmt.Sprintf("ratelimit:botapi:ip:%s", ip)
+		result, err := ipRateLimitScript.Run(c.Context(), h.redis, []string{key}, 1).Int64Slice()
+		if err != nil {
+			h.logger.Error("bot API IP rate limiter Redis error", "ip", ip, "error", err)
+			return c.Next() // fail-open on Redis error
+		}
+		count := int(result[0])
+		ttlSec := int(result[1])
+		if count > botAPIIPRateLimitPerSec {
+			retryAfter := ttlSec
+			if retryAfter <= 0 {
+				retryAfter = 1
+			}
+			c.Set("Retry-After", strconv.Itoa(retryAfter))
+			return apperror.TooManyRequests("IP rate limit exceeded (60 req/sec)")
+		}
+		return c.Next()
+	}
 }
 
 func (h *BotAPIHandler) checkRateLimit(c *fiber.Ctx, botID string) error {

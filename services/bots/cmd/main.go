@@ -155,7 +155,7 @@ func main() {
 	botHandler.Register(api)
 	handler.NewHRHandler(botService, hrRequestStore, logger).Register(api)
 
-	botAPIGroup := app.Group("/bot/:token", botapi.TokenAuthMiddleware(botService))
+	botAPIGroup := app.Group("/bot/:token", botapi.TokenAuthMiddleware(botService), botAPIHandler.IPRateLimitMiddleware())
 	botAPIHandler.Register(botAPIGroup)
 
 	go func() {
