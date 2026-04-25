@@ -120,7 +120,7 @@ func main() {
 		logger.Info("webhook allow-list configured", "entries", len(webhookAllowList))
 	}
 	botAPIHandler = botAPIHandler.WithWebhookAllowList(webhookAllowList)
-	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, logger)
+	natsSubscriber := service.NewBotNATSSubscriber(nc, installationStore, webhookWorker, updateQueue, botapi.NewFileIDCodec(encryptionKey), logger)
 
 	// Provision BotFather system bot
 	intClient := client.NewIntegrationsClient(integrationsServiceURL, internalSecret)

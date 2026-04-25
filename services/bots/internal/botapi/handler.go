@@ -72,6 +72,7 @@ type BotAPIHandler struct {
 	updateQueue      UpdateQueue
 	commandStore     CommandStore
 	encryptionKey    []byte
+	fileIDCodec      *FileIDCodec
 	logger           *slog.Logger
 	webhookAllowList []string // nil = allow all (dev mode)
 }
@@ -82,6 +83,7 @@ func NewBotAPIHandler(svc BotService, msgClient *client.MessagingClient, mediaCl
 		msgClient:     msgClient,
 		mediaClient:   mediaClient,
 		encryptionKey: encryptionKey,
+		fileIDCodec:   NewFileIDCodec(encryptionKey),
 		logger:        logger,
 	}
 }
@@ -195,6 +197,8 @@ func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Post("/deleteMyCommands", h.deleteMyCommands)
 	router.Post("/banChatMember", h.banChatMember)
 	router.Post("/restrictChatMember", h.restrictChatMember)
+	router.Get("/getFile", h.getFile)
+	router.Get("/file/:file_id", h.downloadFile)
 }
 
 func (h *BotAPIHandler) getMe(c *fiber.Ctx) error {
@@ -278,6 +282,14 @@ func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error
 	}
 	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
 		return botError(c, err)
+	}
+
+	// JSON variant with `<fieldName>: "<file_id>"` reuses an existing media
+	// item without re-uploading bytes. We branch early so multipart parsing
+	// doesn't run on a JSON body.
+	contentType := strings.ToLower(strings.TrimSpace(c.Get("Content-Type")))
+	if strings.HasPrefix(contentType, "application/json") {
+		return h.sendMediaByFileID(c, fieldName, msgType, bot)
 	}
 
 	chatIDStr := c.FormValue("chat_id")

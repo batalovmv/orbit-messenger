@@ -56,6 +56,7 @@ func newRateLimitTestApp(t *testing.T, redisClient *redis.Client, bots map[strin
 		svc:         &rateLimitBotService{bots: bots},
 		msgClient:   msgClient,
 		redis:       redisClient,
+		fileIDCodec: NewFileIDCodec([]byte("rate-limit-test-secret")),
 		logger:      nil,
 		updateQueue: nil,
 	}

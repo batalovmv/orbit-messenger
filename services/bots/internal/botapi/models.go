@@ -182,13 +182,122 @@ type Update struct {
 }
 
 type APIMessage struct {
-	MessageID      string      `json:"message_id"`
-	ChatID         string      `json:"chat_id"`
-	FromID         string      `json:"from_id"`
-	FromName       string      `json:"from_name"`
-	Text           string      `json:"text"`
-	Date           int64       `json:"date"`
-	ReplyToMessage *APIMessage `json:"reply_to_message,omitempty"`
+	MessageID      string          `json:"message_id"`
+	ChatID         string          `json:"chat_id"`
+	FromID         string          `json:"from_id"`
+	FromName       string          `json:"from_name"`
+	From           *APIUser        `json:"from,omitempty"`
+	Chat           *APIChat        `json:"chat,omitempty"`
+	Text           string          `json:"text,omitempty"`
+	Caption        string          `json:"caption,omitempty"`
+	Entities       []OrbitEntity   `json:"entities,omitempty"`
+	CaptionEntities []OrbitEntity  `json:"caption_entities,omitempty"`
+	Document       *APIDocument    `json:"document,omitempty"`
+	Photo          []APIPhotoSize  `json:"photo,omitempty"`
+	Video          *APIVideo       `json:"video,omitempty"`
+	Audio          *APIAudio       `json:"audio,omitempty"`
+	Voice          *APIVoice       `json:"voice,omitempty"`
+	Date           int64           `json:"date"`
+	ReplyToMessage *APIMessage     `json:"reply_to_message,omitempty"`
+}
+
+// APIUser is the Bot API user payload exposed inside Update.message.from.
+type APIUser struct {
+	ID           string `json:"id"`
+	IsBot        bool   `json:"is_bot,omitempty"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name,omitempty"`
+	Username     string `json:"username,omitempty"`
+	LanguageCode string `json:"language_code,omitempty"`
+	// Corporate identity fields, populated only when the bot opted-in via
+	// share_user_emails (migration 065). Defaults to empty for safety.
+	Email  string `json:"email,omitempty"`
+	LDAPDN string `json:"ldap_dn,omitempty"`
+}
+
+// APIChat is the Bot API chat payload.
+type APIChat struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Title string `json:"title,omitempty"`
+}
+
+// APIPhotoSize represents one size of a photo (TG sends an array; we always
+// include the original size and one optional thumbnail).
+type APIPhotoSize struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	FileSize     int64  `json:"file_size,omitempty"`
+}
+
+// APIDocument is the file attachment payload.
+type APIDocument struct {
+	FileID       string        `json:"file_id"`
+	FileUniqueID string        `json:"file_unique_id"`
+	FileName     string        `json:"file_name,omitempty"`
+	MimeType     string        `json:"mime_type,omitempty"`
+	FileSize     int64         `json:"file_size,omitempty"`
+	Thumbnail    *APIPhotoSize `json:"thumbnail,omitempty"`
+}
+
+// APIVideo is the video attachment payload.
+type APIVideo struct {
+	FileID       string        `json:"file_id"`
+	FileUniqueID string        `json:"file_unique_id"`
+	Width        int           `json:"width,omitempty"`
+	Height       int           `json:"height,omitempty"`
+	Duration     int           `json:"duration,omitempty"`
+	MimeType     string        `json:"mime_type,omitempty"`
+	FileSize     int64         `json:"file_size,omitempty"`
+	Thumbnail    *APIPhotoSize `json:"thumbnail,omitempty"`
+}
+
+// APIAudio is the audio attachment payload.
+type APIAudio struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	Duration     int    `json:"duration,omitempty"`
+	Performer    string `json:"performer,omitempty"`
+	Title        string `json:"title,omitempty"`
+	MimeType     string `json:"mime_type,omitempty"`
+	FileSize     int64  `json:"file_size,omitempty"`
+}
+
+// APIVoice is the voice-note attachment payload.
+type APIVoice struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	Duration     int    `json:"duration,omitempty"`
+	MimeType     string `json:"mime_type,omitempty"`
+	FileSize     int64  `json:"file_size,omitempty"`
+}
+
+// APIFile is the response of getFile.
+type APIFile struct {
+	FileID       string `json:"file_id"`
+	FileUniqueID string `json:"file_unique_id"`
+	FileSize     int64  `json:"file_size,omitempty"`
+	FilePath     string `json:"file_path,omitempty"`
+}
+
+// SendDocumentByFileIDRequest accepts a previously-issued file_id (or a
+// publicly-reachable URL) so bots can re-share files without uploading the
+// bytes again. It is also the JSON shape for sendPhoto/sendVideo/sendAudio/
+// sendVoice JSON variants.
+type SendDocumentByFileIDRequest struct {
+	ChatID           string          `json:"chat_id"`
+	Document         string          `json:"document,omitempty"`
+	Photo            string          `json:"photo,omitempty"`
+	Video            string          `json:"video,omitempty"`
+	Audio            string          `json:"audio,omitempty"`
+	Voice            string          `json:"voice,omitempty"`
+	Caption          string          `json:"caption,omitempty"`
+	ParseMode        string          `json:"parse_mode,omitempty"`
+	CaptionEntities  []MessageEntity `json:"caption_entities,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
 }
 
 type CallbackQuery struct {
