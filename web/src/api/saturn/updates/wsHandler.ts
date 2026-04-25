@@ -5,7 +5,9 @@ import type { ApiGroupCall, ApiMessage } from '../../types';
 import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
-import { buildApiMessage, buildApiPoll, getMessageSeqNum } from '../apiBuilders/messages';
+import {
+  buildApiMessage, buildApiPoll, getMessageSeqNum, parseSaturnReplyMarkup,
+} from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
 import { getActiveCallMode, setActiveCallId, setActiveCallMode, setActiveCallPeerId } from '../methods/calls';
 import { sendApiUpdate } from './apiUpdateEmitter';
@@ -230,12 +232,22 @@ function dispatchNewMessage(data: SaturnMessage) {
     apiMsg.isOutgoing = data.sender_id === currentUserId;
   }
 
+  // ForceReply lives on the update, not the message — the reducer uses it to
+  // open a reply prompt in the composer for the recipient (and only them when
+  // selective is set). We compute it here from reply_markup since buildApiMessage
+  // doesn't have the outgoing/userId context.
+  const parsedMarkup = parseSaturnReplyMarkup(data.reply_markup);
+  const shouldForceReply = !apiMsg.isOutgoing && parsedMarkup?.force_reply
+    ? !parsedMarkup.selective || apiMsg.replyInfo !== undefined
+    : false;
+
   sendApiUpdate({
     '@type': 'newMessage',
     chatId: data.chat_id,
     id: apiMsg.id,
     message: apiMsg,
     poll: buildApiPoll(data.poll),
+    shouldForceReply: shouldForceReply || undefined,
   });
 }
 

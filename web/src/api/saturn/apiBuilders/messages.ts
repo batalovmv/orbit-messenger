@@ -12,6 +12,7 @@ import type {
 } from '../../types';
 import type {
   SaturnInlineKeyboardButton,
+  SaturnKeyboardButton,
   SaturnMediaAttachment,
   SaturnMessage,
   SaturnMessageEntity,
@@ -487,26 +488,43 @@ function buildInlineButton(btn: SaturnInlineKeyboardButton): ApiKeyboardButton {
   return { type: 'command', text: btn.text };
 }
 
-function buildReplyKeyboard(markup: SaturnReplyMarkup | string | undefined): ApiReplyKeyboard | undefined {
-  if (!markup) return undefined;
-
-  // Backend may return reply_markup as a JSON string — parse it
-  let parsed: SaturnReplyMarkup;
-  if (typeof markup === 'string') {
-    try {
-      parsed = JSON.parse(markup);
-    } catch {
-      return undefined;
-    }
-  } else {
-    parsed = markup;
+function buildKeyboardButton(btn: SaturnKeyboardButton): ApiKeyboardButton {
+  if (btn.request_contact) {
+    return { type: 'requestPhone', text: btn.text };
   }
+  return { type: 'command', text: btn.text };
+}
 
-  if (!parsed?.inline_keyboard?.length) return undefined;
+export function parseSaturnReplyMarkup(markup: SaturnReplyMarkup | string | undefined): SaturnReplyMarkup | undefined {
+  if (!markup) return undefined;
+  if (typeof markup !== 'string') return markup;
+  try {
+    return JSON.parse(markup) as SaturnReplyMarkup;
+  } catch {
+    return undefined;
+  }
+}
 
-  return {
-    inlineButtons: parsed.inline_keyboard.map((row) => row.map(buildInlineButton)),
-  };
+function buildReplyKeyboard(markup: SaturnReplyMarkup | string | undefined): ApiReplyKeyboard | undefined {
+  const parsed = parseSaturnReplyMarkup(markup);
+  if (!parsed) return undefined;
+
+  const inlineButtons = parsed.inline_keyboard?.length
+    ? parsed.inline_keyboard.map((row) => row.map(buildInlineButton))
+    : undefined;
+  const keyboardButtons = parsed.keyboard?.length
+    ? parsed.keyboard.map((row) => row.map(buildKeyboardButton))
+    : undefined;
+
+  if (!inlineButtons && !keyboardButtons) return undefined;
+
+  const result: ApiReplyKeyboard = {};
+  if (inlineButtons) result.inlineButtons = inlineButtons;
+  if (keyboardButtons) result.keyboardButtons = keyboardButtons;
+  if (parsed.input_field_placeholder) result.keyboardPlaceholder = parsed.input_field_placeholder;
+  if (parsed.one_time_keyboard) result.isKeyboardSingleUse = true;
+  if (parsed.selective) result.isKeyboardSelective = true;
+  return result;
 }
 
 export function buildApiMessage(msg: SaturnMessage): ApiMessage {
@@ -575,6 +593,10 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     groupedId: msg.grouped_id,
     isInAlbum: isInAlbum || undefined,
     inlineButtons: replyMarkup?.inlineButtons,
+    keyboardButtons: replyMarkup?.keyboardButtons,
+    keyboardPlaceholder: replyMarkup?.keyboardPlaceholder,
+    isKeyboardSingleUse: replyMarkup?.isKeyboardSingleUse,
+    isKeyboardSelective: replyMarkup?.isKeyboardSelective,
     viaBotId: msg.via_bot_id,
   };
 }

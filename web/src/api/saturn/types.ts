@@ -68,8 +68,21 @@ export interface SaturnInlineKeyboardButton {
   url?: string;
 }
 
+export interface SaturnKeyboardButton {
+  text: string;
+  request_contact?: boolean;
+  request_location?: boolean;
+}
+
 export interface SaturnReplyMarkup {
   inline_keyboard?: SaturnInlineKeyboardButton[][];
+  keyboard?: SaturnKeyboardButton[][];
+  remove_keyboard?: boolean;
+  force_reply?: boolean;
+  resize_keyboard?: boolean;
+  one_time_keyboard?: boolean;
+  selective?: boolean;
+  input_field_placeholder?: string;
 }
 
 export interface SaturnMessage {
