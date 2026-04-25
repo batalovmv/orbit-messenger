@@ -42,6 +42,13 @@ type BotService interface {
 	SetWebhook(ctx context.Context, botID uuid.UUID, webhookURL, secretHash *string) (*model.Bot, error)
 }
 
+// CommandStore manages bot slash commands.
+type CommandStore interface {
+	SetCommands(ctx context.Context, botID uuid.UUID, commands []model.BotCommand) error
+	GetCommands(ctx context.Context, botID uuid.UUID) ([]model.BotCommand, error)
+	DeleteCommands(ctx context.Context, botID uuid.UUID) error
+}
+
 type UpdateQueue interface {
 	Pop(ctx context.Context, botID uuid.UUID, limit int, timeout time.Duration) ([]Update, error)
 	Ack(botID uuid.UUID, offset int64) error
@@ -53,6 +60,7 @@ type BotAPIHandler struct {
 	mediaClient   *client.MediaClient
 	redis         *redis.Client
 	updateQueue   UpdateQueue
+	commandStore  CommandStore
 	encryptionKey []byte
 	logger        *slog.Logger
 }
@@ -74,6 +82,11 @@ func (h *BotAPIHandler) WithRedis(redisClient *redis.Client) *BotAPIHandler {
 
 func (h *BotAPIHandler) WithUpdateQueue(updateQueue UpdateQueue) *BotAPIHandler {
 	h.updateQueue = updateQueue
+	return h
+}
+
+func (h *BotAPIHandler) WithCommandStore(cs CommandStore) *BotAPIHandler {
+	h.commandStore = cs
 	return h
 }
 
@@ -119,6 +132,18 @@ func (h *BotAPIHandler) Register(router fiber.Router) {
 	router.Post("/forwardMessage", h.forwardMessage)
 	router.Post("/editMessageReplyMarkup", h.editMessageReplyMarkup)
 	router.Post("/editMessageCaption", h.editMessageCaption)
+	router.Get("/getChat", h.getChat)
+	router.Get("/getChatMember", h.getChatMember)
+	router.Get("/getChatAdministrators", h.getChatAdministrators)
+	router.Get("/getChatMemberCount", h.getChatMemberCount)
+	router.Post("/sendChatAction", h.sendChatAction)
+	router.Post("/pinChatMessage", h.pinChatMessage)
+	router.Post("/unpinChatMessage", h.unpinChatMessage)
+	router.Post("/setMyCommands", h.setMyCommands)
+	router.Get("/getMyCommands", h.getMyCommands)
+	router.Post("/deleteMyCommands", h.deleteMyCommands)
+	router.Post("/banChatMember", h.banChatMember)
+	router.Post("/restrictChatMember", h.restrictChatMember)
 }
 
 func (h *BotAPIHandler) getMe(c *fiber.Ctx) error {
@@ -612,4 +637,403 @@ func botError(c *fiber.Ctx, err error) error {
 		Description: "Internal server error",
 		ErrorCode:   http.StatusInternalServerError,
 	})
+}
+
+func (h *BotAPIHandler) getChat(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	chatIDStr := c.Query("chat_id")
+	if err := validator.RequireUUID(chatIDStr, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	chatID, err := uuid.Parse(chatIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeReadChat); err != nil {
+		return botError(c, err)
+	}
+
+	chat, err := h.msgClient.GetChat(c.Context(), bot.UserID, chatID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, chat)
+}
+
+func (h *BotAPIHandler) getChatMember(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	chatIDStr := c.Query("chat_id")
+	if err := validator.RequireUUID(chatIDStr, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	userIDStr := c.Query("user_id")
+	if err := validator.RequireUUID(userIDStr, "user_id"); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(chatIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid user_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeReadChat); err != nil {
+		return botError(c, err)
+	}
+
+	member, err := h.msgClient.GetChatMember(c.Context(), bot.UserID, chatID, userID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, member)
+}
+
+func (h *BotAPIHandler) getChatAdministrators(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	chatIDStr := c.Query("chat_id")
+	if err := validator.RequireUUID(chatIDStr, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	chatID, err := uuid.Parse(chatIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeReadChat); err != nil {
+		return botError(c, err)
+	}
+
+	admins, err := h.msgClient.GetChatAdministrators(c.Context(), bot.UserID, chatID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, admins)
+}
+
+func (h *BotAPIHandler) getChatMemberCount(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	chatIDStr := c.Query("chat_id")
+	if err := validator.RequireUUID(chatIDStr, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	chatID, err := uuid.Parse(chatIDStr)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeReadChat); err != nil {
+		return botError(c, err)
+	}
+
+	count, err := h.msgClient.GetChatMemberCount(c.Context(), bot.UserID, chatID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, count)
+}
+
+func (h *BotAPIHandler) sendChatAction(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req SendChatActionRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if err := validator.RequireString(req.Action, "action", 1, 64); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
+		return botError(c, err)
+	}
+
+	// fire-and-forget: ignore error from typing endpoint
+	_ = h.msgClient.SendChatAction(c.Context(), bot.UserID, chatID, req.Action)
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) pinChatMessage(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req PinChatMessageRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if err := validator.RequireUUID(req.MessageID, "message_id"); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	messageID, err := uuid.Parse(req.MessageID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid message_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
+		return botError(c, err)
+	}
+
+	if err := h.msgClient.PinMessage(c.Context(), bot.UserID, chatID, messageID); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) unpinChatMessage(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req UnpinChatMessageRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if err := validator.RequireUUID(req.MessageID, "message_id"); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	messageID, err := uuid.Parse(req.MessageID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid message_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopePostMessages); err != nil {
+		return botError(c, err)
+	}
+
+	if err := h.msgClient.UnpinMessage(c.Context(), bot.UserID, chatID, messageID); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) setMyCommands(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	if h.commandStore == nil {
+		return botError(c, apperror.Internal("command store not configured"))
+	}
+
+	var req SetMyCommandsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+
+	commands := make([]model.BotCommand, len(req.Commands))
+	for i, item := range req.Commands {
+		commands[i] = model.BotCommand{
+			BotID:       bot.ID,
+			Command:     item.Command,
+			Description: item.Description,
+		}
+	}
+
+	if err := h.commandStore.SetCommands(c.Context(), bot.ID, commands); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) getMyCommands(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	if h.commandStore == nil {
+		return botSuccess(c, []model.BotCommand{})
+	}
+
+	commands, err := h.commandStore.GetCommands(c.Context(), bot.ID)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, commands)
+}
+
+func (h *BotAPIHandler) deleteMyCommands(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	if h.commandStore == nil {
+		return botSuccess(c, true)
+	}
+
+	if err := h.commandStore.DeleteCommands(c.Context(), bot.ID); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) banChatMember(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req BanChatMemberRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if err := validator.RequireUUID(req.UserID, "user_id"); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid user_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeManageMembers); err != nil {
+		return botError(c, err)
+	}
+
+	if err := h.msgClient.BanMember(c.Context(), bot.UserID, chatID, userID); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
+}
+
+func (h *BotAPIHandler) restrictChatMember(c *fiber.Ctx) error {
+	bot, err := currentBot(c)
+	if err != nil {
+		return botError(c, err)
+	}
+	if err := h.checkRateLimit(c, bot.ID.String()); err != nil {
+		return botError(c, err)
+	}
+
+	var req RestrictChatMemberRequest
+	if err := c.BodyParser(&req); err != nil {
+		return botError(c, apperror.BadRequest("Invalid request body"))
+	}
+	if err := validator.RequireUUID(req.ChatID, "chat_id"); err != nil {
+		return botError(c, err)
+	}
+	if err := validator.RequireUUID(req.UserID, "user_id"); err != nil {
+		return botError(c, err)
+	}
+
+	chatID, err := uuid.Parse(req.ChatID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid chat_id"))
+	}
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return botError(c, apperror.BadRequest("Invalid user_id"))
+	}
+
+	if err := h.svc.CheckBotScope(c.Context(), bot.ID, chatID, model.ScopeManageMembers); err != nil {
+		return botError(c, err)
+	}
+
+	if err := h.msgClient.RestrictMember(c.Context(), bot.UserID, chatID, userID, req.PermissionsMask); err != nil {
+		return botError(c, err)
+	}
+
+	return botSuccess(c, true)
 }

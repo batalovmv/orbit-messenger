@@ -15,6 +15,8 @@ const (
 	ScopeReadCommands     int64 = 1 << 1
 	ScopeReceiveCallbacks int64 = 1 << 2
 	ScopeReadMessages     int64 = 1 << 3
+	ScopeReadChat         int64 = 1 << 4
+	ScopeManageMembers    int64 = 1 << 5
 )
 
 var (

@@ -96,6 +96,49 @@ type EditCaptionRequest struct {
 	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
 }
 
+type SendChatActionRequest struct {
+	ChatID string `json:"chat_id"`
+	Action string `json:"action"` // typing|upload_photo|upload_document|upload_video|upload_voice
+}
+
+type PinChatMessageRequest struct {
+	ChatID              string `json:"chat_id"`
+	MessageID           string `json:"message_id"`
+	DisableNotification bool   `json:"disable_notification,omitempty"`
+}
+
+type UnpinChatMessageRequest struct {
+	ChatID    string `json:"chat_id"`
+	MessageID string `json:"message_id"`
+}
+
+type BotCommandItem struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+type SetMyCommandsRequest struct {
+	Commands []BotCommandItem `json:"commands"`
+}
+
+type GetChatMemberRequest struct {
+	ChatID string `json:"chat_id"`
+	UserID string `json:"user_id"`
+}
+
+type BanChatMemberRequest struct {
+	ChatID    string `json:"chat_id"`
+	UserID    string `json:"user_id"`
+	UntilDate *int64 `json:"until_date,omitempty"`
+}
+
+type RestrictChatMemberRequest struct {
+	ChatID          string `json:"chat_id"`
+	UserID          string `json:"user_id"`
+	PermissionsMask int64  `json:"permissions_mask"`
+	UntilDate       *int64 `json:"until_date,omitempty"`
+}
+
 type AnswerCallbackQueryRequest struct {
 	CallbackQueryID string `json:"callback_query_id"`
 	Text            string `json:"text,omitempty"`

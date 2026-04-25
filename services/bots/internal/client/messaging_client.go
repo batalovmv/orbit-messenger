@@ -190,6 +190,75 @@ func (c *MessagingClient) DeleteMessage(ctx context.Context, botUserID, messageI
 	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, nil, nil)
 }
 
+// GetChat fetches chat metadata.
+func (c *MessagingClient) GetChat(ctx context.Context, botUserID, chatID uuid.UUID) (map[string]any, error) {
+	var result map[string]any
+	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("%s/chats/%s", c.baseURL, chatID), botUserID, nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetChatMember fetches a single chat member.
+func (c *MessagingClient) GetChatMember(ctx context.Context, botUserID, chatID, userID uuid.UUID) (map[string]any, error) {
+	var result map[string]any
+	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("%s/chats/%s/members/%s", c.baseURL, chatID, userID), botUserID, nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetChatAdministrators fetches the list of chat admins.
+func (c *MessagingClient) GetChatAdministrators(ctx context.Context, botUserID, chatID uuid.UUID) ([]map[string]any, error) {
+	var result []map[string]any
+	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("%s/chats/%s/admins", c.baseURL, chatID), botUserID, nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// paginatedMembersResponse is the shape returned by GET /chats/:id/members.
+type paginatedMembersResponse struct {
+	Items []map[string]any `json:"items"`
+}
+
+// GetChatMemberCount fetches members and returns the count.
+func (c *MessagingClient) GetChatMemberCount(ctx context.Context, botUserID, chatID uuid.UUID) (int, error) {
+	var result paginatedMembersResponse
+	url := fmt.Sprintf("%s/chats/%s/members?limit=1000", c.baseURL, chatID)
+	if err := c.doJSON(ctx, http.MethodGet, url, botUserID, nil, &result); err != nil {
+		return 0, err
+	}
+	return len(result.Items), nil
+}
+
+// PinMessage pins a message in a chat.
+func (c *MessagingClient) PinMessage(ctx context.Context, botUserID, chatID, messageID uuid.UUID) error {
+	return c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/chats/%s/pin/%s", c.baseURL, chatID, messageID), botUserID, nil, nil)
+}
+
+// UnpinMessage unpins a message in a chat.
+func (c *MessagingClient) UnpinMessage(ctx context.Context, botUserID, chatID, messageID uuid.UUID) error {
+	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/chats/%s/pin/%s", c.baseURL, chatID, messageID), botUserID, nil, nil)
+}
+
+// BanMember removes a member from a chat.
+func (c *MessagingClient) BanMember(ctx context.Context, botUserID, chatID, userID uuid.UUID) error {
+	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/chats/%s/members/%s", c.baseURL, chatID, userID), botUserID, nil, nil)
+}
+
+// RestrictMember updates member permissions using a bitmask.
+func (c *MessagingClient) RestrictMember(ctx context.Context, botUserID, chatID, userID uuid.UUID, permissions int64) error {
+	payload := map[string]any{"permissions": permissions}
+	return c.doJSON(ctx, http.MethodPut, fmt.Sprintf("%s/chats/%s/members/%s/permissions", c.baseURL, chatID, userID), botUserID, payload, nil)
+}
+
+// SendChatAction sends a typing/upload action (fire-and-forget).
+func (c *MessagingClient) SendChatAction(ctx context.Context, botUserID, chatID uuid.UUID, action string) error {
+	payload := map[string]any{"action": action}
+	return c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/chats/%s/typing", c.baseURL, chatID), botUserID, payload, nil)
+}
+
 func (c *MessagingClient) doJSON(ctx context.Context, method, url string, botUserID uuid.UUID, payload any, target any) error {
 	var body io.Reader
 	if payload != nil {
