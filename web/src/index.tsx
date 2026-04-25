@@ -29,8 +29,6 @@ import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
-import updateWebmanifest from './util/updateWebmanifest';
-
 import App from './components/App';
 
 import './assets/fonts/roboto.css';
@@ -91,8 +89,6 @@ async function init() {
   }
 
   requestMutation(() => {
-    updateWebmanifest();
-
     TeactDOM.render(
       <App />,
       document.getElementById('root')!,

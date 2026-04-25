@@ -32,17 +32,27 @@ self.addEventListener('activate', (e) => {
     console.log('ServiceWorker activated');
   }
 
-  // Always clear asset cache on activate to prevent stale chunks after deploy.
-  // clearAssetCache must complete before claiming clients — don't let the timeout skip it.
-  e.waitUntil(
-    clearAssetCache().catch(() => {}).then(() => {
-      return Promise.race([
-        // An attempt to fix freezing UI on iOS
-        pause(ACTIVATE_TIMEOUT),
-        self.clients.claim(),
-      ]);
-    }),
-  );
+  e.waitUntil((async () => {
+    // Navigation Preload kicks off the network fetch in parallel with SW
+    // boot, so cold navigations don't pay the full SW startup latency.
+    // Browsers without support throw — swallow.
+    if (self.registration.navigationPreload) {
+      try {
+        await self.registration.navigationPreload.enable();
+      } catch {
+        // ignore
+      }
+    }
+
+    // Always clear asset cache on activate to prevent stale chunks after deploy.
+    // clearAssetCache must complete before claiming clients — don't let the timeout skip it.
+    await clearAssetCache().catch(() => {});
+    await Promise.race([
+      // An attempt to fix freezing UI on iOS
+      pause(ACTIVATE_TIMEOUT),
+      self.clients.claim(),
+    ]);
+  })());
 });
 
 self.addEventListener('fetch', (e: FetchEvent) => {
