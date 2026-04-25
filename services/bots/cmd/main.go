@@ -92,6 +92,7 @@ func main() {
 	installationStore := store.NewInstallationStore(pool)
 	hrRequestStore := store.NewHRRequestStore(pool)
 	auditStore := store.NewAuditStore(pool)
+	approvalStore := store.NewApprovalStore(pool)
 	updateQueue := service.NewUpdateQueue(rdb)
 	encryptionKey := orchidCrypto.DeriveKey(botTokenSecret)
 	webhookWorker := service.NewWebhookWorker(rdb, encryptionKey, logger)
@@ -154,6 +155,7 @@ func main() {
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	botHandler.Register(api)
 	handler.NewHRHandler(botService, hrRequestStore, logger).Register(api)
+	handler.NewApprovalHandler(botService, approvalStore, logger).Register(api)
 
 	botAPIGroup := app.Group("/bot/:token", botapi.TokenAuthMiddleware(botService), botAPIHandler.IPRateLimitMiddleware())
 	botAPIHandler.Register(botAPIGroup)
