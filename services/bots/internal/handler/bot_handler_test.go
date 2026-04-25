@@ -256,6 +256,76 @@ func TestDeleteBot_SystemBot(t *testing.T) {
 	}
 }
 
+type fakeBotFatherProvisioner struct {
+	chatID    uuid.UUID
+	botID     uuid.UUID
+	err       error
+	gotUserID uuid.UUID
+}
+
+func (f *fakeBotFatherProvisioner) EnsureChat(_ context.Context, userID uuid.UUID) (uuid.UUID, uuid.UUID, error) {
+	f.gotUserID = userID
+	return f.chatID, f.botID, f.err
+}
+
+func TestEnsureBotFatherChat_Success(t *testing.T) {
+	chatID := uuid.New()
+	botID := uuid.New()
+	prov := &fakeBotFatherProvisioner{chatID: chatID, botID: botID}
+
+	app := newBotHandlerTestApp(nil, nil)
+	// re-register handler with provisioner attached
+	svc := service.NewBotService(&mockBotStore{}, &mockTokenStore{}, &mockCommandStore{}, &mockInstallationStore{}, "test-secret")
+	h := NewBotHandler(svc, slog.Default()).WithBotFatherChatProvisioner(prov)
+	app = fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
+	h.Register(app)
+
+	userID := uuid.New()
+	resp := doBotRequest(t, app, http.MethodPost, "/system/botfather/ensure-chat", nil, map[string]string{
+		"X-User-ID":   userID.String(),
+		"X-User-Role": "member",
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]any
+	decodeJSON(t, resp.Body, &body)
+	if body["chat_id"] != chatID.String() {
+		t.Fatalf("expected chat_id=%s, got %#v", chatID, body["chat_id"])
+	}
+	if body["system_bot_id"] != botID.String() {
+		t.Fatalf("expected system_bot_id=%s, got %#v", botID, body["system_bot_id"])
+	}
+	if prov.gotUserID != userID {
+		t.Fatalf("provisioner called with wrong user id: %s vs %s", prov.gotUserID, userID)
+	}
+}
+
+func TestEnsureBotFatherChat_NoProvisioner_500(t *testing.T) {
+	app := newBotHandlerTestApp(nil, nil) // no provisioner attached
+	resp := doBotRequest(t, app, http.MethodPost, "/system/botfather/ensure-chat", nil, map[string]string{
+		"X-User-ID":   uuid.New().String(),
+		"X-User-Role": "member",
+	})
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", resp.StatusCode)
+	}
+}
+
+func TestEnsureBotFatherChat_Unauthorized(t *testing.T) {
+	prov := &fakeBotFatherProvisioner{chatID: uuid.New(), botID: uuid.New()}
+	svc := service.NewBotService(&mockBotStore{}, &mockTokenStore{}, &mockCommandStore{}, &mockInstallationStore{}, "test-secret")
+	h := NewBotHandler(svc, slog.Default()).WithBotFatherChatProvisioner(prov)
+	app := fiber.New(fiber.Config{ErrorHandler: response.FiberErrorHandler})
+	h.Register(app)
+
+	resp := doBotRequest(t, app, http.MethodPost, "/system/botfather/ensure-chat", nil, nil)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
 func TestCheckBotUsername_Available(t *testing.T) {
 	botStore := &mockBotStore{
 		getByUsernameFn: func(ctx context.Context, username string) (*model.Bot, error) {

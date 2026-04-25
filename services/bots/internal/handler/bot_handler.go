@@ -36,6 +36,12 @@ type BotFatherCallbackHandler interface {
 	UserID() uuid.UUID
 }
 
+// BotFatherChatProvisioner lazily creates+pins the BotFather DM for a user.
+// Wraps messaging-client calls so the handler stays HTTP-only.
+type BotFatherChatProvisioner interface {
+	EnsureChat(ctx context.Context, userID uuid.UUID) (chatID uuid.UUID, systemBotID uuid.UUID, err error)
+}
+
 // AuditLogger logs bot admin actions. Implementations must be non-fatal.
 type AuditLogger interface {
 	Log(ctx context.Context, entry model.AuditLogEntry) error
@@ -51,6 +57,7 @@ type BotHandler struct {
 	installations store.InstallationStore
 	encryptionKey []byte
 	botFather     BotFatherCallbackHandler
+	bfProvisioner BotFatherChatProvisioner
 	auditStore    AuditLogger
 }
 
@@ -79,6 +86,13 @@ func (h *BotHandler) SetBotFather(bf BotFatherCallbackHandler) {
 	h.botFather = bf
 }
 
+// WithBotFatherChatProvisioner attaches the lazy-DM provisioner used by the
+// /system/botfather/ensure-chat endpoint.
+func (h *BotHandler) WithBotFatherChatProvisioner(p BotFatherChatProvisioner) *BotHandler {
+	h.bfProvisioner = p
+	return h
+}
+
 // WithAuditStore attaches an audit logger to the handler.
 func (h *BotHandler) WithAuditStore(a AuditLogger) *BotHandler {
 	h.auditStore = a
@@ -104,6 +118,8 @@ func (h *BotHandler) Register(router fiber.Router) {
 	router.Get("/bots/:id/audit", h.listBotAudit)
 	router.Get("/chats/:chatId/bots", h.listChatBots)
 	router.Get("/chats/:chatId/bot-commands", h.listChatBotCommands)
+
+	router.Post("/system/botfather/ensure-chat", h.ensureBotFatherChat)
 }
 
 func RequireInternalToken(secret string) fiber.Handler {
@@ -501,6 +517,29 @@ func (h *BotHandler) checkBotUsername(c *fiber.Ctx) error {
 	return response.JSON(c, fiber.StatusOK, fiber.Map{
 		"available": true,
 		"valid":     true,
+	})
+}
+
+// ensureBotFatherChat lazily creates and pins the BotFather DM for the
+// authenticated user. Idempotent — the underlying messaging endpoint already
+// returns the existing chat when one is found.
+func (h *BotHandler) ensureBotFatherChat(c *fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	if h.bfProvisioner == nil {
+		return response.Error(c, apperror.Internal("BotFather chat provisioner not configured"))
+	}
+
+	chatID, systemBotID, err := h.bfProvisioner.EnsureChat(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, apperror.Internal("ensure botfather chat: "+err.Error()))
+	}
+
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"chat_id":       chatID.String(),
+		"system_bot_id": systemBotID.String(),
 	})
 }
 

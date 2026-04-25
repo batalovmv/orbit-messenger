@@ -133,6 +133,7 @@ func main() {
 	}
 	natsSubscriber.SetBotFather(bf)
 	botHandler.SetBotFather(bf)
+	botHandler.WithBotFatherChatProvisioner(botfather.NewChatProvisioner(bf, msgClient, logger))
 
 	if err := natsSubscriber.Start(); err != nil {
 		logger.Error("failed to start bot nats subscriber", "error", err)

@@ -276,6 +276,88 @@ func (c *MessagingClient) SendChatAction(ctx context.Context, botUserID, chatID 
 	return c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/chats/%s/typing", c.baseURL, chatID), botUserID, payload, nil)
 }
 
+// EnsureDirectChat returns the existing direct chat between two users or
+// creates one. Acts on behalf of asUserID — used by BotFather discovery to
+// open the DM lazily on the user's first login.
+func (c *MessagingClient) EnsureDirectChat(ctx context.Context, asUserID, otherUserID uuid.UUID) (uuid.UUID, error) {
+	payload := map[string]any{"user_id": otherUserID.String()}
+	var result struct {
+		ID uuid.UUID `json:"id"`
+	}
+	url := fmt.Sprintf("%s/chats/direct", c.baseURL)
+	if err := c.doJSONAsUser(ctx, http.MethodPost, url, asUserID, "member", payload, &result); err != nil {
+		return uuid.Nil, err
+	}
+	return result.ID, nil
+}
+
+// SetChatPinned toggles the pin flag of a chat for the given user. Mirrors
+// the existing PATCH /chats/:id/members/me pin behaviour.
+func (c *MessagingClient) SetChatPinned(ctx context.Context, asUserID, chatID uuid.UUID, isPinned bool) error {
+	payload := map[string]any{"is_pinned": isPinned}
+	url := fmt.Sprintf("%s/chats/%s/members/me", c.baseURL, chatID)
+	return c.doJSONAsUser(ctx, http.MethodPatch, url, asUserID, "member", payload, nil)
+}
+
+// doJSONAsUser is doJSON, but the request is attributed to the given user
+// (with the supplied role) instead of the bot's own user ID. Used for actions
+// that messaging interprets in the calling user's context — e.g. ensuring a
+// direct chat exists or pinning a chat for them.
+func (c *MessagingClient) doJSONAsUser(ctx context.Context, method, url string, userID uuid.UUID, role string, payload any, target any) error {
+	var body io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("marshal messaging request: %w", err)
+		}
+		body = bytes.NewReader(raw)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return fmt.Errorf("create messaging request: %w", err)
+	}
+
+	req.Header.Set("X-Internal-Token", c.internalToken)
+	req.Header.Set("X-User-ID", userID.String())
+	req.Header.Set("X-User-Role", role)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("messaging request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read messaging response: %w", err)
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		var apiErr struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(respBody, &apiErr) != nil || strings.TrimSpace(apiErr.Message) == "" {
+			apiErr.Message = strings.TrimSpace(string(respBody))
+		}
+		if apiErr.Message == "" {
+			apiErr.Message = http.StatusText(resp.StatusCode)
+		}
+		return &ClientError{StatusCode: resp.StatusCode, Message: apiErr.Message}
+	}
+
+	if target == nil || len(respBody) == 0 {
+		return nil
+	}
+
+	if err := json.Unmarshal(respBody, target); err != nil {
+		return fmt.Errorf("decode messaging response: %w", err)
+	}
+
+	return nil
+}
+
 func (c *MessagingClient) doJSON(ctx context.Context, method, url string, botUserID uuid.UUID, payload any, target any) error {
 	var body io.Reader
 	if payload != nil {
