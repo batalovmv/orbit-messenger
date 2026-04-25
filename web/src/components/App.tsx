@@ -12,6 +12,7 @@ import { IS_TAURI } from '../util/browser/globalEnvironment';
 import { IS_INSTALL_PROMPT_SUPPORTED, PLATFORM_ENV } from '../util/browser/windowEnvironment';
 import buildClassName from '../util/buildClassName';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
+import { requestPersistentStorage } from '../util/persistentStorage';
 import { ACCOUNT_SLOT, getAccountsInfo, getAccountSlotUrl } from '../util/multiaccount';
 import { hasEncryptedSession } from '../util/passcode';
 import { getInitialLocationHash, parseInitialLocationHash } from '../util/routing';
@@ -75,6 +76,7 @@ const App = ({
     if (IS_INSTALL_PROMPT_SUPPORTED) {
       setupBeforeInstallPrompt();
     }
+    void requestPersistentStorage();
   }, []);
 
   useEffect(() => {

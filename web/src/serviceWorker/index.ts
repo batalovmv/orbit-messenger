@@ -67,6 +67,7 @@ self.addEventListener('fetch', (e: FetchEvent) => {
 
   if (pathname.includes('/share/')) {
     e.respondWith(respondForShare(e));
+    return true;
   }
 
   if (protocol === 'http:' || protocol === 'https:') {

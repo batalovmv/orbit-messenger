@@ -40,7 +40,20 @@ export async function respondWithCache(e: FetchEvent) {
     }
   }
 
-  const remote = await fetch(e.request);
+  let remote: Response;
+  try {
+    remote = await fetch(e.request);
+  } catch {
+    // Offline or network failure with no usable cache entry.
+    // Fall back to the cached app shell for navigation requests so the SPA
+    // boots and shows a controlled offline state instead of the browser's
+    // default error page.
+    if (cache && (e.request.mode === 'navigate' || e.request.destination === 'document')) {
+      const shell = await cache.match('/') || await cache.match(self.registration.scope);
+      if (shell) return shell;
+    }
+    return Response.error();
+  }
 
   if (remote.ok && cache) {
     cache.put(e.request, remote.clone());

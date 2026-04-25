@@ -23,7 +23,7 @@ export async function respondForShare(e: FetchEvent) {
     }
   }
 
-  return Response.redirect('.');
+  return Response.redirect('/');
 }
 
 export function handleClientMessage(e: ExtendableMessageEvent) {
@@ -44,15 +44,19 @@ export function handleClientMessage(e: ExtendableMessageEvent) {
 async function requestShare(data: ShareData, clientId: string) {
   const client = await self.clients.get(clientId);
   if (!client) {
+    READY_CLIENT_DEFERREDS.delete(clientId);
     return;
   }
 
-  await getClientReadyDeferred(clientId);
-
-  client.postMessage({
-    type: 'share',
-    payload: data,
-  });
+  try {
+    await getClientReadyDeferred(clientId);
+    client.postMessage({
+      type: 'share',
+      payload: data,
+    });
+  } finally {
+    READY_CLIENT_DEFERREDS.delete(clientId);
+  }
 }
 
 function getClientReadyDeferred(clientId: string) {
