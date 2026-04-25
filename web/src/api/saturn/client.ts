@@ -40,9 +40,11 @@ let ws: WebSocket | undefined;
 let wsPingInterval: ReturnType<typeof setInterval> | undefined;
 let wsReconnectTimeout: ReturnType<typeof setTimeout> | undefined;
 let wsReconnectDelay = WS_RECONNECT_BASE_MS;
+let wsReconnectFireAt = 0;
 let wsIntentionalClose = false;
 let wsHasConnectedBefore = false;
 let onReconnect: (() => void) | undefined;
+const WS_KICK_COOLDOWN_MS = 5000;
 
 export function init(apiUrl: string, updateCallback: OnApiUpdate) {
   baseUrl = apiUrl.replace(/\/$/, '');
@@ -112,6 +114,12 @@ async function refreshToken(): Promise<void> {
 
     const data: SaturnLoginResponse = await response.json();
     setAccessToken(data.access_token, data.expires_in);
+    // Notify the UI: when refresh races a stale-token request mid-session,
+    // setAccessToken alone leaves Auth components stuck on the loading state
+    // (the apiUpdaters/initial reducer only flips isLoading when an
+    // authorizationState update arrives). Without this, JWT expiry forces
+    // users to hard-reload to escape the spinner.
+    onUpdate?.({ '@type': 'updateAuthorizationState', authorizationState: 'authorizationStateReady' });
   } catch {
     clearAuth();
     onUpdate?.({ '@type': 'updateAuthorizationState', authorizationState: 'authorizationStateWaitPhoneNumber' });
@@ -197,7 +205,14 @@ function kickWsReconnect() {
   }
   // Ignore if the app explicitly disconnected (logout, etc).
   if (wsIntentionalClose) return;
-  // Reset backoff — REST confirms the server is back.
+  // Cooldown: if a reconnect is already due to fire within the next few
+  // seconds, let it run — otherwise REST chatter (which kicks here on every
+  // 200) collapses the backoff to base every time and makes the WS thrash
+  // through stale-token auth retries dozens of times per minute.
+  if (wsReconnectTimeout && wsReconnectFireAt - Date.now() < WS_KICK_COOLDOWN_MS) {
+    return;
+  }
+  // REST confirms the server is back — reset backoff to base before retrying.
   wsReconnectDelay = WS_RECONNECT_BASE_MS;
   if (wsReconnectTimeout) {
     clearTimeout(wsReconnectTimeout);
@@ -308,13 +323,17 @@ export function connectWs() {
 
   wsIntentionalClose = false;
   const wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws';
-  // eslint-disable-next-line no-console
-  console.log('[Saturn WS] Connecting to', wsUrl);
+  if (DEBUG) {
+    // eslint-disable-next-line no-console
+    console.log('[Saturn WS] Connecting to', wsUrl);
+  }
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    // eslint-disable-next-line no-console
-    console.log('[Saturn WS] Connected, sending auth frame');
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.log('[Saturn WS] Connected, sending auth frame');
+    }
     // Send auth frame immediately — token is NOT in URL for security
     ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
@@ -361,8 +380,10 @@ export function connectWs() {
   };
 
   ws.onclose = (event) => {
-    // eslint-disable-next-line no-console
-    console.warn('[Saturn WS] Closed:', event.code, event.reason, 'intentional:', wsIntentionalClose);
+    if (DEBUG) {
+      // eslint-disable-next-line no-console
+      console.warn('[Saturn WS] Closed:', event.code, event.reason, 'intentional:', wsIntentionalClose);
+    }
     stopPing();
     if (!wsIntentionalClose) {
       onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
@@ -414,8 +435,10 @@ function scheduleReconnect() {
   if (wsReconnectTimeout) return;
   // Add ±25% jitter to avoid thundering herd on reconnect
   const jitter = wsReconnectDelay * (0.75 + Math.random() * 0.5);
+  wsReconnectFireAt = Date.now() + jitter;
   wsReconnectTimeout = setTimeout(async () => {
     wsReconnectTimeout = undefined;
+    wsReconnectFireAt = 0;
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX_MS);
     // Ensure token is valid before attempting WS reconnect
     await ensureToken();
