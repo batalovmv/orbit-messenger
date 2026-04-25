@@ -11,7 +11,7 @@ if (DEBUG && IS_SERVICE_WORKER_SUPPORTED) {
 }
 import { formatShareText } from './deeplink';
 import { validateFiles } from './files';
-import { notifyClientReady, playNotifySoundDebounced } from './notifications';
+import { notifyClientReady, playNotifySoundDebounced, subscribe as subscribeToPush } from './notifications';
 
 type WorkerAction = {
   type: string;
@@ -118,6 +118,11 @@ function handleWorkerMessage(e: MessageEvent) {
       // eslint-disable-next-line no-console
       console.warn('[SW] Stale chunk detected after deploy, reloading...');
       window.location.reload();
+      break;
+    case 'pushsubscriptionchange':
+      // Browser rotated/expired the push subscription. Re-run the subscribe
+      // pipeline so the new endpoint is registered with the backend.
+      void subscribeToPush();
       break;
   }
 }

@@ -90,3 +90,49 @@ self.addEventListener('message', (event) => {
   handleNotificationMessage(event);
   handleShareMessage(event);
 });
+
+// Browser-managed push subscriptions can expire or rotate; without a handler
+// here, push delivery silently dies until the user manually re-subscribes.
+// We re-subscribe in the SW (using the previous applicationServerKey, which
+// the browser preserves on the old subscription) and notify any open client
+// to push the new endpoint to the backend. If no client is open, the next
+// `subscribe()` pipeline run on tab open detects the missing subscription
+// and registers the new one through the standard /push/subscribe flow.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const e = event as Event & {
+    oldSubscription?: PushSubscription;
+    newSubscription?: PushSubscription;
+    waitUntil: (p: Promise<unknown>) => void;
+  };
+  e.waitUntil((async () => {
+    try {
+      let next: PushSubscription | null | undefined = e.newSubscription;
+      if (!next) {
+        const applicationServerKey = e.oldSubscription?.options?.applicationServerKey;
+        if (applicationServerKey) {
+          next = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey,
+          });
+        }
+      }
+
+      const clients = await self.clients.matchAll({ type: 'window' });
+      const payload = next ? {
+        endpoint: next.endpoint,
+        keys: next.toJSON().keys,
+      } : undefined;
+      clients.forEach((client) => {
+        client.postMessage({
+          type: 'pushsubscriptionchange',
+          payload,
+        });
+      });
+    } catch (error) {
+      if (DEBUG) {
+        // eslint-disable-next-line no-console
+        console.error('[SW] pushsubscriptionchange handler failed', error);
+      }
+    }
+  })());
+});
