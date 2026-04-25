@@ -1030,9 +1030,13 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'updateMessageSendFailed': {
-      const { chatId, localId, error } = update;
+      const { chatId, localId, error, errorCode } = update;
 
-      if (error.match(/CHAT_SEND_.+?FORBIDDEN/)) {
+      if (errorCode === 'virus_detected') {
+        Object.values(global.byTabId).forEach(({ id: tabId }) => {
+          actions.showNotification({ message: { key: 'FileVirusDetected' }, tabId });
+        });
+      } else if (error.match(/CHAT_SEND_.+?FORBIDDEN/)) {
         Object.values(global.byTabId).forEach(({ id: tabId }) => {
           actions.showAllowedMessageTypesNotification({ chatId, tabId });
         });
@@ -1044,9 +1048,13 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'updateScheduledMessageSendFailed': {
-      const { chatId, localId, error } = update;
+      const { chatId, localId, error, errorCode } = update;
 
-      if (error.match(/CHAT_SEND_.+?FORBIDDEN/)) {
+      if (errorCode === 'virus_detected') {
+        Object.values(global.byTabId).forEach(({ id: tabId }) => {
+          actions.showNotification({ message: { key: 'FileVirusDetected' }, tabId });
+        });
+      } else if (error.match(/CHAT_SEND_.+?FORBIDDEN/)) {
         Object.values(global.byTabId).forEach(({ id: tabId }) => {
           actions.showAllowedMessageTypesNotification({ chatId, tabId });
         });

@@ -651,7 +651,7 @@
 "Reconnecting" = "Переподключение…";
 
 "AttachmentUploadFailed" = "Не удалось загрузить файл";
-"FileVirusDetected" = "Файл отклонён: обнаружен вирус";
+"FileVirusDetected" = "Файл отклонён: обнаружен вирус. Загрузка заблокирована.";
 "VirusDetected" = "Обнаружен вирус";
 "FileTooLarge" = "Файл слишком большой";
 "FileTypeNotAllowed" = "Тип файла не разрешён";

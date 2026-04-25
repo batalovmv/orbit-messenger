@@ -2253,6 +2253,11 @@ export interface LangPair {
   'DoNotTranslate': undefined;
   'LocalizationInterfaceLanguage': undefined;
   'SmartNotificationsUpdateFailed': undefined;
+  'AttachmentUploadFailed': undefined;
+  'FileVirusDetected': undefined;
+  'VirusDetected': undefined;
+  'FileTooLarge': undefined;
+  'FileTypeNotAllowed': undefined;
   'NotificationPriorityDefault': undefined;
   'NotificationPriorityTitle': undefined;
   'NotificationPriorityAbout': undefined;

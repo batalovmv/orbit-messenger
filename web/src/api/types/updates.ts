@@ -364,6 +364,7 @@ export type ApiUpdateMessageSendFailed = {
   chatId: string;
   localId: number;
   error: string;
+  errorCode?: string;
 };
 
 export type ApiUpdateScheduledMessageSendFailed = {
@@ -371,6 +372,7 @@ export type ApiUpdateScheduledMessageSendFailed = {
   chatId: string;
   localId: number;
   error: string;
+  errorCode?: string;
 };
 
 export type ApiUpdateCommonBoxMessages = {

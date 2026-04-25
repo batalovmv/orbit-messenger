@@ -3042,6 +3042,11 @@
 "lng_translate_settings_about" = "Show translation controls for messages and chats when they are available.";
 "LocalizationInterfaceLanguage" = "Interface Language";
 "SmartNotificationsUpdateFailed" = "Failed to update notification settings";
+"AttachmentUploadFailed" = "Failed to upload file";
+"FileVirusDetected" = "File rejected: a virus was detected. The upload was blocked.";
+"VirusDetected" = "Virus detected";
+"FileTooLarge" = "File is too large";
+"FileTypeNotAllowed" = "File type is not allowed";
 "NotificationPriorityDefault" = "Default";
 "NotificationPriorityTitle" = "Notification Priority";
 "NotificationPriorityAbout" = "Set a priority override for notifications from this chat.";

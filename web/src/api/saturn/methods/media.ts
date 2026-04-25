@@ -3,7 +3,7 @@
 
 import type { SaturnMediaAttachment, SaturnPaginatedResponse } from '../types';
 
-import { getAccessToken, getBaseUrl } from '../client';
+import { ApiError, getAccessToken, getBaseUrl } from '../client';
 import { request } from '../client';
 
 const SIMPLE_UPLOAD_LIMIT = 50 * 1024 * 1024;
@@ -118,7 +118,7 @@ function uploadSimpleMedia(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(JSON.parse(xhr.responseText));
       } else {
-        reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+        reject(buildUploadError(xhr.status, xhr.statusText, xhr.responseText));
       }
     };
     xhr.onabort = () => reject(createAbortError());
@@ -171,9 +171,10 @@ export function uploadEncryptedMedia(
     credentials: 'include',
     body: new Blob([ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer], { type: 'application/octet-stream' }),
     signal,
-  }).then((resp) => {
+  }).then(async (resp) => {
     if (!resp.ok) {
-      throw new Error(`Encrypted upload failed: ${resp.status}`);
+      const body = await resp.text().catch(() => '');
+      throw buildUploadError(resp.status, resp.statusText, body);
     }
     return resp.json();
   });
@@ -215,7 +216,8 @@ export async function uploadChunk(
   });
 
   if (!resp.ok) {
-    throw new Error(`Chunk upload failed: ${resp.status}`);
+    const body = await resp.text().catch(() => '');
+    throw buildUploadError(resp.status, resp.statusText, body);
   }
   return resp.json();
 }
@@ -350,4 +352,27 @@ function getFileName(file: File | Blob) {
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+// Backend (services/media) returns AppError-shaped JSON: {code, message, status}.
+// Carry the code so the UI can branch on virus_detected, file_too_large, etc.
+function buildUploadError(status: number, statusText: string, body: string): ApiError {
+  let code = 'unknown';
+  let message = `Upload failed: ${status} ${statusText}`.trim();
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { code?: unknown; error?: unknown; message?: unknown };
+      if (typeof parsed.code === 'string' && parsed.code) {
+        code = parsed.code;
+      } else if (typeof parsed.error === 'string' && parsed.error) {
+        code = parsed.error;
+      }
+      if (typeof parsed.message === 'string' && parsed.message) {
+        message = parsed.message;
+      }
+    } catch {
+      // body wasn't JSON — keep defaults.
+    }
+  }
+  return new ApiError(message, status, code);
 }

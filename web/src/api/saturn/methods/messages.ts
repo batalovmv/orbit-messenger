@@ -488,6 +488,7 @@ async function sendScheduledMessage({
         chatId,
         localId,
         error: error instanceof Error ? error.message : 'Failed to upload media',
+        errorCode: extractErrorCode(error),
       });
       return undefined;
     }
@@ -757,6 +758,7 @@ export async function sendMessage({
         chatId,
         localId,
         error: error instanceof Error ? error.message : 'Failed to upload media',
+        errorCode: extractErrorCode(error),
       });
       return undefined;
     }
@@ -829,6 +831,16 @@ export async function sendMessage({
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+function extractErrorCode(error: unknown): string | undefined {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const value = (error as { code?: unknown }).code;
+    if (typeof value === 'string' && value) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 export async function editMessage({
