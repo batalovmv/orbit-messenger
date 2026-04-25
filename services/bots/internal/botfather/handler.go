@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/mst-corp/orbit/services/bots/internal/client"
 	"github.com/mst-corp/orbit/services/bots/internal/model"
 	"github.com/mst-corp/orbit/services/bots/internal/service"
 )
@@ -175,7 +176,9 @@ func (bf *BotFather) reply(ctx context.Context, chatID uuid.UUID, text string, k
 		replyMarkup = marshalKeyboard(keyboard)
 	}
 
-	if _, err := bf.msgClient.SendMessage(ctx, bf.userID, chatID, text, "text", replyMarkup, nil); err != nil {
+	if _, err := bf.msgClient.SendMessage(ctx, bf.userID, chatID, text, "text", client.SendMessageOptions{
+		ReplyMarkup: replyMarkup,
+	}); err != nil {
 		bf.logger.Error("botfather failed to send message",
 			"error", err,
 			"chat_id", chatID,
@@ -190,7 +193,7 @@ func (bf *BotFather) editMessage(ctx context.Context, messageID uuid.UUID, text 
 		replyMarkup = marshalKeyboard(keyboard)
 	}
 
-	if _, err := bf.msgClient.EditMessage(ctx, bf.userID, messageID, text, replyMarkup); err != nil {
+	if _, err := bf.msgClient.EditMessage(ctx, bf.userID, messageID, text, replyMarkup, nil); err != nil {
 		bf.logger.Error("botfather failed to edit message",
 			"error", err,
 			"message_id", messageID,

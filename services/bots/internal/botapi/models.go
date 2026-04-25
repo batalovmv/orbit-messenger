@@ -10,6 +10,8 @@ import (
 type SendMessageRequest struct {
 	ChatID           string          `json:"chat_id"`
 	Text             string          `json:"text"`
+	ParseMode        string          `json:"parse_mode,omitempty"`
+	Entities         []MessageEntity `json:"entities,omitempty"`
 	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
 	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
 }
@@ -18,6 +20,8 @@ type EditMessageRequest struct {
 	ChatID      string          `json:"chat_id"`
 	MessageID   string          `json:"message_id"`
 	Text        string          `json:"text"`
+	ParseMode   string          `json:"parse_mode,omitempty"`
+	Entities    []MessageEntity `json:"entities,omitempty"`
 	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
 }
 
@@ -73,6 +77,8 @@ type CopyMessageRequest struct {
 	FromChatID       string          `json:"from_chat_id"`
 	MessageID        string          `json:"message_id"`
 	Caption          *string         `json:"caption,omitempty"`
+	ParseMode        string          `json:"parse_mode,omitempty"`
+	CaptionEntities  []MessageEntity `json:"caption_entities,omitempty"`
 	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
 	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
 }
@@ -90,10 +96,12 @@ type EditReplyMarkupRequest struct {
 }
 
 type EditCaptionRequest struct {
-	ChatID      string          `json:"chat_id"`
-	MessageID   string          `json:"message_id"`
-	Caption     string          `json:"caption"`
-	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
+	ChatID          string          `json:"chat_id"`
+	MessageID       string          `json:"message_id"`
+	Caption         string          `json:"caption"`
+	ParseMode       string          `json:"parse_mode,omitempty"`
+	CaptionEntities []MessageEntity `json:"caption_entities,omitempty"`
+	ReplyMarkup     json.RawMessage `json:"reply_markup,omitempty"`
 }
 
 type SendChatActionRequest struct {

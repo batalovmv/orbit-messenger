@@ -48,28 +48,35 @@ func NewMessagingClient(baseURL, internalToken string) *MessagingClient {
 	}
 }
 
+// SendMessageOptions carries optional fields for SendMessage to keep the
+// signature manageable as the Bot API surface grows.
+type SendMessageOptions struct {
+	ReplyMarkup json.RawMessage
+	ReplyToID   *uuid.UUID
+	Entities    json.RawMessage
+	MediaIDs    []string
+}
+
 func (c *MessagingClient) SendMessage(
 	ctx context.Context,
 	botUserID, chatID uuid.UUID,
 	content string,
 	msgType string,
-	replyMarkup json.RawMessage,
-	replyToID *uuid.UUID,
-	mediaIDs ...string,
+	opts SendMessageOptions,
 ) (*MessageResponse, error) {
 	payload := map[string]any{
 		"content":    content,
 		"type":       msgType,
 		"via_bot_id": botUserID.String(),
 	}
-	if len(mediaIDs) > 0 {
-		payload["media_ids"] = mediaIDs
+	if len(opts.MediaIDs) > 0 {
+		payload["media_ids"] = opts.MediaIDs
 	}
-	if len(replyMarkup) > 0 {
+	if len(opts.ReplyMarkup) > 0 {
 		// Bot API clients send reply_markup as a JSON-encoded string (Telegram convention).
 		// If it's a JSON string (starts with '"'), unwrap it so messaging stores a JSON object.
-		rm := json.RawMessage(replyMarkup)
-		if len(rm) > 0 && rm[0] == '"' {
+		rm := opts.ReplyMarkup
+		if rm[0] == '"' {
 			var unwrapped string
 			if err := json.Unmarshal(rm, &unwrapped); err == nil {
 				rm = json.RawMessage(unwrapped)
@@ -77,8 +84,11 @@ func (c *MessagingClient) SendMessage(
 		}
 		payload["reply_markup"] = rm
 	}
-	if replyToID != nil {
-		payload["reply_to_id"] = replyToID.String()
+	if len(opts.Entities) > 0 {
+		payload["entities"] = opts.Entities
+	}
+	if opts.ReplyToID != nil {
+		payload["reply_to_id"] = opts.ReplyToID.String()
 	}
 
 	var result MessageResponse
@@ -94,6 +104,7 @@ func (c *MessagingClient) EditMessage(
 	botUserID, messageID uuid.UUID,
 	content string,
 	replyMarkup json.RawMessage,
+	entities json.RawMessage,
 ) (*MessageResponse, error) {
 	payload := map[string]any{
 		"content": content,
@@ -107,6 +118,9 @@ func (c *MessagingClient) EditMessage(
 			}
 		}
 		payload["reply_markup"] = rm
+	}
+	if len(entities) > 0 {
+		payload["entities"] = entities
 	}
 
 	var result MessageResponse
@@ -165,7 +179,7 @@ func (c *MessagingClient) EditReplyMarkup(ctx context.Context, botUserID, messag
 }
 
 // EditCaption updates the caption (content) and optionally reply_markup of a media message.
-func (c *MessagingClient) EditCaption(ctx context.Context, botUserID, messageID uuid.UUID, caption string, replyMarkup json.RawMessage) (*MessageResponse, error) {
+func (c *MessagingClient) EditCaption(ctx context.Context, botUserID, messageID uuid.UUID, caption string, replyMarkup json.RawMessage, entities json.RawMessage) (*MessageResponse, error) {
 	payload := map[string]any{
 		"content": caption,
 	}
@@ -178,6 +192,9 @@ func (c *MessagingClient) EditCaption(ctx context.Context, botUserID, messageID 
 			}
 		}
 		payload["reply_markup"] = rm
+	}
+	if len(entities) > 0 {
+		payload["entities"] = entities
 	}
 	var result MessageResponse
 	if err := c.doJSON(ctx, http.MethodPatch, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, payload, &result); err != nil {

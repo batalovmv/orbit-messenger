@@ -250,7 +250,20 @@ func (h *BotAPIHandler) sendMessage(c *fiber.Ctx) error {
 		replyToID = &parsed
 	}
 
-	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, req.Text, "text", req.ReplyMarkup, replyToID)
+	finalText, entities, err := resolveTextAndEntities(req.Text, req.ParseMode, req.Entities)
+	if err != nil {
+		return botError(c, err)
+	}
+	entitiesJSON, err := encodeEntities(entities)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, finalText, "text", client.SendMessageOptions{
+		ReplyMarkup: req.ReplyMarkup,
+		ReplyToID:   replyToID,
+		Entities:    entitiesJSON,
+	})
 	if err != nil {
 		return botError(c, err)
 	}
@@ -315,6 +328,22 @@ func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error
 		return botError(c, err)
 	}
 
+	parseMode := c.FormValue("parse_mode", "")
+	var captionEntities []MessageEntity
+	if raw := c.FormValue("caption_entities", ""); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &captionEntities); err != nil {
+			return botError(c, apperror.BadRequest("Invalid caption_entities"))
+		}
+	}
+	finalCaption, entities, err := resolveTextAndEntities(caption, parseMode, captionEntities)
+	if err != nil {
+		return botError(c, err)
+	}
+	entitiesJSON, err := encodeEntities(entities)
+	if err != nil {
+		return botError(c, err)
+	}
+
 	var replyToID *uuid.UUID
 	if rtID := c.FormValue("reply_to_message_id", ""); rtID != "" {
 		parsed, parseErr := uuid.Parse(rtID)
@@ -323,7 +352,12 @@ func (h *BotAPIHandler) sendMedia(c *fiber.Ctx, fieldName, msgType string) error
 		}
 	}
 
-	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, caption, msgType, replyMarkup, replyToID, mediaID)
+	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, finalCaption, msgType, client.SendMessageOptions{
+		ReplyMarkup: replyMarkup,
+		ReplyToID:   replyToID,
+		Entities:    entitiesJSON,
+		MediaIDs:    []string{mediaID},
+	})
 	if err != nil {
 		return botError(c, err)
 	}
@@ -391,7 +425,16 @@ func (h *BotAPIHandler) editMessageText(c *fiber.Ctx) error {
 		return botError(c, apperror.BadRequest("Invalid message_id"))
 	}
 
-	message, err := h.msgClient.EditMessage(c.Context(), bot.UserID, messageID, req.Text, req.ReplyMarkup)
+	finalText, entities, err := resolveTextAndEntities(req.Text, req.ParseMode, req.Entities)
+	if err != nil {
+		return botError(c, err)
+	}
+	entitiesJSON, err := encodeEntities(entities)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	message, err := h.msgClient.EditMessage(c.Context(), bot.UserID, messageID, finalText, req.ReplyMarkup, entitiesJSON)
 	if err != nil {
 		return botError(c, err)
 	}
@@ -486,8 +529,24 @@ func (h *BotAPIHandler) copyMessage(c *fiber.Ctx) error {
 	}
 
 	content := source.Content
-	if req.Caption != nil && strings.TrimSpace(*req.Caption) != "" {
+	captionOverridden := req.Caption != nil && strings.TrimSpace(*req.Caption) != ""
+	if captionOverridden {
 		content = *req.Caption
+	}
+
+	// When the bot supplies a caption override, parse_mode applies to that
+	// override. Otherwise we copy through entities verbatim from the source.
+	var entitiesJSON json.RawMessage
+	if captionOverridden {
+		finalText, entities, parseErr := resolveTextAndEntities(content, req.ParseMode, req.CaptionEntities)
+		if parseErr != nil {
+			return botError(c, parseErr)
+		}
+		content = finalText
+		entitiesJSON, err = encodeEntities(entities)
+		if err != nil {
+			return botError(c, err)
+		}
 	}
 
 	var replyToID *uuid.UUID
@@ -502,7 +561,11 @@ func (h *BotAPIHandler) copyMessage(c *fiber.Ctx) error {
 		replyToID = &parsed
 	}
 
-	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, content, "text", req.ReplyMarkup, replyToID)
+	message, err := h.msgClient.SendMessage(c.Context(), bot.UserID, chatID, content, "text", client.SendMessageOptions{
+		ReplyMarkup: req.ReplyMarkup,
+		ReplyToID:   replyToID,
+		Entities:    entitiesJSON,
+	})
 	if err != nil {
 		return botError(c, err)
 	}
@@ -640,7 +703,16 @@ func (h *BotAPIHandler) editMessageCaption(c *fiber.Ctx) error {
 		return botError(c, apperror.BadRequest("Invalid message_id"))
 	}
 
-	message, err := h.msgClient.EditCaption(c.Context(), bot.UserID, messageID, req.Caption, req.ReplyMarkup)
+	finalCaption, entities, err := resolveTextAndEntities(req.Caption, req.ParseMode, req.CaptionEntities)
+	if err != nil {
+		return botError(c, err)
+	}
+	entitiesJSON, err := encodeEntities(entities)
+	if err != nil {
+		return botError(c, err)
+	}
+
+	message, err := h.msgClient.EditCaption(c.Context(), bot.UserID, messageID, finalCaption, req.ReplyMarkup, entitiesJSON)
 	if err != nil {
 		return botError(c, err)
 	}
