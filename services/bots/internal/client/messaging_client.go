@@ -117,6 +117,75 @@ func (c *MessagingClient) EditMessage(
 	return &result, nil
 }
 
+// GetMessage fetches a single message by ID.
+func (c *MessagingClient) GetMessage(ctx context.Context, botUserID, messageID uuid.UUID) (*MessageResponse, error) {
+	var result MessageResponse
+	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ForwardMessage forwards a message to another chat.
+func (c *MessagingClient) ForwardMessage(ctx context.Context, botUserID, messageID, toChatID uuid.UUID) (*MessageResponse, error) {
+	payload := map[string]any{
+		"message_ids": []string{messageID.String()},
+		"to_chat_id":  toChatID.String(),
+	}
+	var results []MessageResponse
+	if err := c.doJSON(ctx, http.MethodPost, fmt.Sprintf("%s/messages/forward", c.baseURL), botUserID, payload, &results); err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, &ClientError{StatusCode: http.StatusInternalServerError, Message: "forward returned empty result"}
+	}
+	return &results[0], nil
+}
+
+// editReplyMarkupPayload is used to PATCH only reply_markup without sending a content field.
+type editReplyMarkupPayload struct {
+	ReplyMarkup json.RawMessage `json:"reply_markup"`
+}
+
+// EditReplyMarkup updates only the reply_markup of a message (content stays unchanged).
+func (c *MessagingClient) EditReplyMarkup(ctx context.Context, botUserID, messageID uuid.UUID, replyMarkup json.RawMessage) (*MessageResponse, error) {
+	rm := replyMarkup
+	if len(rm) > 0 && rm[0] == '"' {
+		var unwrapped string
+		if err := json.Unmarshal(rm, &unwrapped); err == nil {
+			rm = json.RawMessage(unwrapped)
+		}
+	}
+	payload := editReplyMarkupPayload{ReplyMarkup: rm}
+	var result MessageResponse
+	if err := c.doJSON(ctx, http.MethodPatch, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, payload, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// EditCaption updates the caption (content) and optionally reply_markup of a media message.
+func (c *MessagingClient) EditCaption(ctx context.Context, botUserID, messageID uuid.UUID, caption string, replyMarkup json.RawMessage) (*MessageResponse, error) {
+	payload := map[string]any{
+		"content": caption,
+	}
+	if len(replyMarkup) > 0 {
+		rm := replyMarkup
+		if rm[0] == '"' {
+			var unwrapped string
+			if err := json.Unmarshal(rm, &unwrapped); err == nil {
+				rm = json.RawMessage(unwrapped)
+			}
+		}
+		payload["reply_markup"] = rm
+	}
+	var result MessageResponse
+	if err := c.doJSON(ctx, http.MethodPatch, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, payload, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (c *MessagingClient) DeleteMessage(ctx context.Context, botUserID, messageID uuid.UUID) error {
 	return c.doJSON(ctx, http.MethodDelete, fmt.Sprintf("%s/messages/%s", c.baseURL, messageID), botUserID, nil, nil)
 }

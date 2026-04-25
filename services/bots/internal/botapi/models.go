@@ -68,6 +68,34 @@ type SendVoiceRequest struct {
 	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
 }
 
+type CopyMessageRequest struct {
+	ChatID           string          `json:"chat_id"`
+	FromChatID       string          `json:"from_chat_id"`
+	MessageID        string          `json:"message_id"`
+	Caption          *string         `json:"caption,omitempty"`
+	ReplyMarkup      json.RawMessage `json:"reply_markup,omitempty"`
+	ReplyToMessageID *string         `json:"reply_to_message_id,omitempty"`
+}
+
+type ForwardMessageRequest struct {
+	ChatID     string `json:"chat_id"`
+	FromChatID string `json:"from_chat_id"`
+	MessageID  string `json:"message_id"`
+}
+
+type EditReplyMarkupRequest struct {
+	ChatID      string          `json:"chat_id"`
+	MessageID   string          `json:"message_id"`
+	ReplyMarkup json.RawMessage `json:"reply_markup"`
+}
+
+type EditCaptionRequest struct {
+	ChatID      string          `json:"chat_id"`
+	MessageID   string          `json:"message_id"`
+	Caption     string          `json:"caption"`
+	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
+}
+
 type AnswerCallbackQueryRequest struct {
 	CallbackQueryID string `json:"callback_query_id"`
 	Text            string `json:"text,omitempty"`
