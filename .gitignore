@@ -83,10 +83,7 @@ artifacts/
 scripts/import-telegram-stickers/import-stickers-linux
 
 # === Planning, prompts, audit reports, specs (local-only) ===
-AGENTS.md
-PHASES.md
 audit-reports/
 codex-prompts/
-docs/
 e2e-implementation/
 phase-8-plan/
