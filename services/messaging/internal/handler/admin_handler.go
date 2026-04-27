@@ -2,6 +2,7 @@
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"time"
 
@@ -14,6 +15,14 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
+
+// exportStreamTimeout caps any single NDJSON export at 10 minutes. The
+// stream writer callback runs in a goroutine spawned by fasthttp AFTER
+// ExportUser/ExportChat return, so we cannot reuse fiber's request
+// context — by then `c.Context()` returns nil and any DB pool acquire
+// panics with a nil pointer dereference. Use an independent background
+// context with this hard cap instead.
+const exportStreamTimeout = 10 * time.Minute
 
 type AdminHandler struct {
 	svc *service.AdminService
@@ -218,10 +227,12 @@ func (h *AdminHandler) ExportChat(c *fiber.Ctx) error {
 		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
 	}
 	chatID := c.Params("id")
+	streamCtx, cancel := context.WithTimeout(context.Background(), exportStreamTimeout)
 	c.Set("Content-Type", "application/x-ndjson")
 	c.Set("Content-Disposition", "attachment; filename=\"chat-"+chatID+".ndjson\"")
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-		if exportErr := h.svc.ExportChatMessages(c.Context(), actorID, actorRole, chatID,
+		defer cancel()
+		if exportErr := h.svc.ExportChatMessages(streamCtx, actorID, actorRole, chatID,
 			ip, ua,
 			func(row []byte) error {
 				if _, writeErr := w.Write(append(row, '\n')); writeErr != nil {
@@ -249,10 +260,12 @@ func (h *AdminHandler) ExportUser(c *fiber.Ctx) error {
 		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
 	}
 	userID := c.Params("id")
+	streamCtx, cancel := context.WithTimeout(context.Background(), exportStreamTimeout)
 	c.Set("Content-Type", "application/x-ndjson")
 	c.Set("Content-Disposition", "attachment; filename=\"user-"+userID+".ndjson\"")
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
-		if exportErr := h.svc.ExportUserData(c.Context(), actorID, actorRole, userID,
+		defer cancel()
+		if exportErr := h.svc.ExportUserData(streamCtx, actorID, actorRole, userID,
 			ip, ua,
 			func(row []byte) error {
 				if _, writeErr := w.Write(append(row, '\n')); writeErr != nil {
