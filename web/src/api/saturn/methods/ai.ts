@@ -200,20 +200,61 @@ export async function* summarizeChat(
   }
 }
 
+// HTTP statuses we treat as transient on the AI translator path — the
+// upstream Claude call drops a request occasionally (gateway timeout / bad
+// gateway / generic 500). The pilot QA reproduced "AI temporarily
+// unavailable" exactly once per session, with the immediate manual retry
+// succeeding, which matches this profile. Rate limit (429) and the
+// "API keys not configured" 503 are NOT retried — they will fail again.
+const TRANSLATE_TRANSIENT_HTTP_STATUSES = new Set([500, 502, 504]);
+
+function isTransientTranslateError(err: unknown): boolean {
+  if (!err) return false;
+  const e = err as Error & { status?: number; name?: string };
+  if (e.name === 'AbortError') return false;
+  if (typeof e.status === 'number') {
+    return TRANSLATE_TRANSIENT_HTTP_STATUSES.has(e.status);
+  }
+  // Browser fetch surfaces network drops / DNS failures as TypeError
+  // ("Failed to fetch"); treat those as transient too.
+  return e.name === 'TypeError';
+}
+
+function translateRetryDelay(): Promise<void> {
+  const ms = 1000 + Math.floor(Math.random() * 1000);
+  return new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
 export async function* translateMessages(
   args: AiTranslateRequest,
 ): AsyncGenerator<string, void, void> {
-  const stream = postSseStream('/ai/translate', {
-    message_ids: args.messageIds,
-    chat_id: args.chatId,
-    target_language: args.targetLanguage,
-  });
+  // Single auto-retry on transient pre-stream failures. Once any chunk has
+  // been yielded the caller has already rendered partial output, so a retry
+  // would duplicate text — only the first attempt is eligible.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let yieldedAny = false;
+    try {
+      const stream = postSseStream('/ai/translate', {
+        message_ids: args.messageIds,
+        chat_id: args.chatId,
+        target_language: args.targetLanguage,
+      });
 
-  for await (const frame of stream) {
-    if (frame.type === 'delta') {
-      yield frame.text;
-    } else if (frame.type === 'error') {
-      throw new Error(frame.message);
+      for await (const frame of stream) {
+        if (frame.type === 'delta') {
+          yieldedAny = true;
+          yield frame.text;
+        } else if (frame.type === 'error') {
+          throw new Error(frame.message);
+        }
+      }
+      return;
+    } catch (err) {
+      if (!yieldedAny && attempt === 0 && isTransientTranslateError(err)) {
+        await translateRetryDelay();
+        continue;
+      }
+      throw err;
     }
   }
 }
