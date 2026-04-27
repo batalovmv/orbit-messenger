@@ -114,6 +114,55 @@ import('./data/readStrings').then((mod) => {
   });
 });
 
+/**
+ * Sync the legacy old-lang provider with the new localization system.
+ *
+ * `useOldLang` is still used in dozens of places (notably SettingsHeader,
+ * a couple of dialogs and confirm prompts). Its `langPack` only ever gets
+ * populated by `oldSetLanguage`, which is called only from the auth flow.
+ * After login, every other language switch goes through the modern
+ * `changeLanguage` in `util/localization`, leaving `oldLang(...)` rendering
+ * English fallbacks for the entire session.
+ *
+ * `localization/index.ts` calls this whenever it loads a new pack so the
+ * legacy provider can mirror the strings + flush its translation cache.
+ * Plain strings flow through directly; plural variants are converted to the
+ * `{*Value}` shape the legacy `processTranslation` understands.
+ */
+export function syncFromNewPack(
+  langCode: string,
+  strings: Record<string, unknown>,
+  isRtl?: boolean,
+) {
+  const next: ApiOldLangPack = {};
+  for (const [key, value] of Object.entries(strings)) {
+    if (typeof value === 'string') {
+      next[key] = value;
+    } else if (value && typeof value === 'object' && 'isDeleted' in (value as object)) {
+      // skip
+    } else if (value && typeof value === 'object') {
+      const plural = value as Partial<Record<'zero'|'one'|'two'|'few'|'many'|'other', string>>;
+      next[key] = {
+        zeroValue: plural.zero,
+        oneValue: plural.one,
+        twoValue: plural.two,
+        fewValue: plural.few,
+        manyValue: plural.many,
+        otherValue: plural.other,
+      } as ApiOldLangString;
+    }
+  }
+  langPack = next;
+  currentLangCode = langCode;
+  cache.clear();
+  document.documentElement.lang = langCode;
+  translationFn = createLangFn();
+  translationFn.isRtl = Boolean(isRtl);
+  translationFn.code = langCode.replace('-raw', '') as LangCode;
+  translationFn.timeFormat = currentTimeFormat;
+  runCallbacks();
+}
+
 const {
   addCallback,
   removeCallback,

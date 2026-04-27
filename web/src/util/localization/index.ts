@@ -33,6 +33,7 @@ import { createCallbackManager } from '../callbacks';
 import readFallbackStrings from '../data/readFallbackStrings';
 import { initialEstablishmentPromise, isCurrentTabMaster } from '../establishMultitabRole';
 import { omit, unique } from '../iteratees';
+import { syncFromNewPack as syncOldLangProvider } from '../oldLangProvider';
 import { replaceInStringsWithTeact } from '../replaceWithTeact';
 import { fastRaf } from '../schedulers';
 
@@ -195,6 +196,16 @@ function updateLangPack(newLangPack: LangPack) {
   langPack = newLangPack;
 
   TRANSLATION_CACHE.clear();
+
+  // Mirror the pack into the legacy `oldLangProvider` so `useOldLang(...)`
+  // and bare `oldTranslate(...)` calls (still used in SettingsHeader,
+  // ConfirmDialogs, a few menu actions) follow the active language without
+  // requiring a full migration to the new lang hook.
+  try {
+    syncOldLangProvider(newLangPack.langCode, newLangPack.strings, language?.isRtl);
+  } catch {
+    // Defensive — do not block lang updates if the legacy mirror fails.
+  }
 
   scheduleCallbacks();
 }
