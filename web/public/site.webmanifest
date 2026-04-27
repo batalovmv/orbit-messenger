@@ -7,7 +7,6 @@
     "dir": "ltr",
     "start_url": "/",
     "scope": "/",
-    "gcm_sender_id": "122867383838",
     "categories": ["communication", "business", "productivity"],
     "icons": [
         {

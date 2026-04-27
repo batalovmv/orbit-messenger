@@ -21,9 +21,13 @@
   <meta name="application-name" content="<%= htmlWebpackPlugin.options.appTitle %>">
   <meta name="msapplication-TileColor" content="#212121">
   <meta name="msapplication-config" content="./browserconfig.xml">
+  <!--
+    Single theme-color so the runtime switchTheme() can update it
+    regardless of system color scheme. Media-query variants would
+    override the JS update for users whose OS theme differs from
+    the in-app theme.
+  -->
   <meta name="theme-color" content="#212121">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#212121">
   <meta name="google" content="notranslate">
 
   <meta http-equiv="Content-Security-Policy" content="<%= htmlWebpackPlugin.options.csp %>">
