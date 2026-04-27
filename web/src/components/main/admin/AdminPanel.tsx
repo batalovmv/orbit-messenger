@@ -28,16 +28,17 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
+type AdminTab = 'flags' | 'maintenance' | 'audit';
+
 type StateProps = {
   saturnRole?: GlobalState['saturnRole'];
-  tab?: 'flags' | 'maintenance' | 'audit';
+  tab?: AdminTab;
 };
 
-const TABS: ReadonlyArray<'flags' | 'maintenance' | 'audit'> = ['flags', 'maintenance', 'audit'];
 const AUDIT_PAGE_SIZE = 50;
 const AUDIT_SEARCH_DEBOUNCE_MS = 300;
 
-const tabLangKey = (tab: 'flags' | 'maintenance' | 'audit') => {
+const tabLangKey = (tab: AdminTab) => {
   switch (tab) {
     case 'flags': return 'AdminTabFeatureFlags';
     case 'maintenance': return 'AdminTabMaintenance';
@@ -45,15 +46,25 @@ const tabLangKey = (tab: 'flags' | 'maintenance' | 'audit') => {
   }
 };
 
-const AdminPanel = ({ isOpen, saturnRole, tab = 'flags' }: OwnProps & StateProps) => {
+// Tab visibility mirrors the backend permission split in pkg/permissions:
+// admin/superadmin have SysManageSettings (flags + maintenance) and
+// SysViewAuditLog (audit). compliance is audit-only — no write access to
+// system settings.
+const tabsForRole = (role?: GlobalState['saturnRole']): readonly AdminTab[] => {
+  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'audit'];
+  if (role === 'compliance') return ['audit'];
+  return [];
+};
+
+const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
   const { closeAdminPanel, selectAdminTab } = getActions();
   const lang = useLang();
 
-  // Defense in depth — backend enforces too. The bitmask split (admin vs
-  // compliance vs superadmin) is checked per-action server-side; this gate
-  // just hides the entry point for non-privileged accounts.
-  const hasAccess = saturnRole === 'admin' || saturnRole === 'superadmin' || saturnRole === 'compliance';
+  const visibleTabs = useMemo(() => tabsForRole(saturnRole), [saturnRole]);
+  const hasAccess = visibleTabs.length > 0;
   const shouldRender = Boolean(isOpen && hasAccess);
+
+  const activeTab: AdminTab = tab && visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? 'audit';
 
   const handleClose = useLastCallback(() => closeAdminPanel());
 
@@ -70,13 +81,13 @@ const AdminPanel = ({ isOpen, saturnRole, tab = 'flags' }: OwnProps & StateProps
       hasCloseButton
     >
       <div className={styles.tabs} role="tablist">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             type="button"
             key={t}
             role="tab"
-            aria-selected={tab === t}
-            className={buildClassName(styles.tab, tab === t && styles.tabActive)}
+            aria-selected={activeTab === t}
+            className={buildClassName(styles.tab, activeTab === t && styles.tabActive)}
             onClick={() => selectAdminTab({ tab: t })}
           >
             {lang(tabLangKey(t))}
@@ -84,9 +95,9 @@ const AdminPanel = ({ isOpen, saturnRole, tab = 'flags' }: OwnProps & StateProps
         ))}
       </div>
       <div className={styles.body}>
-        {tab === 'flags' && <FlagsTab />}
-        {tab === 'maintenance' && <MaintenanceTab />}
-        {tab === 'audit' && <AuditTab />}
+        {activeTab === 'flags' && <FlagsTab />}
+        {activeTab === 'maintenance' && <MaintenanceTab />}
+        {activeTab === 'audit' && <AuditTab />}
       </div>
     </Modal>
   );

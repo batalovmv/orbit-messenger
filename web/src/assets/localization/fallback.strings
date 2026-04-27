@@ -532,7 +532,7 @@
 "FilterChannels" = "Channels";
 "NotificationsForChannels" = "Notifications for channels";
 "PhoneOther" = "Other";
-"ContactJoined" = "Contact joined Telegram";
+"ContactJoined" = "Contact joined Orbit";
 "P2PEverybody" = "Everybody";
 "P2PContacts" = "My Contacts";
 "P2PNobody" = "Nobody";
@@ -2989,6 +2989,7 @@
 "AiTranslateDefaultTitle" = "Default translation language";
 "AiTranslateDefaultAbout" = "Used when you tap Translate on a message. \"Auto\" follows your interface language.";
 "AiTranslateDefaultAuto" = "Auto (interface language)";
+"AiTranslateDefaultItem" = "Default ({lang})";
 "AiTranslateLangEn" = "English";
 "AiTranslateLangRu" = "Russian";
 "AiTranslateLangEs" = "Spanish";
@@ -3029,7 +3030,6 @@
 "SmartNotifications" = "Smart Notifications";
 "SmartNotificationsDesc" = "AI prioritizes your notifications based on importance";
 "SmartNotificationsModeSmart" = "Smart";
-"SmartNotificationsModeAll" = "All notifications";
 "SmartNotificationsModeOff" = "Off";
 "NotificationPriorityUrgent" = "Urgent";
 "NotificationPriorityImportant" = "Important";
@@ -3054,9 +3054,10 @@
 "ComplianceBannerNotice" = "Privileged access — every chat you open is recorded in the audit log.";
 "ComplianceAllEmployees" = "Employees";
 "ComplianceSelectEmployee" = "Select an employee to review their chats.";
-"ComplianceChatsPending" = "Chat list will appear here once the export endpoint (Phase 2 task 2.3) ships.";
+"ComplianceChatsPending" = "An interactive chat browser is not available yet. Use the Export button below to download this user's full data as an .ndjson file.";
+"ComplianceExportFailed" = "Export failed. The server returned an error — check messaging service logs.";
 "ComplianceChatView" = "Chat";
-"ComplianceMessagesPending" = "Messages will appear here once the export endpoint (Phase 2 task 2.3) ships.";
+"ComplianceMessagesPending" = "An interactive message viewer is not available yet. Use the Export button below to download this chat as an .ndjson file.";
 "ComplianceOpenPanel" = "Compliance Review";
 "ComplianceExportUser" = "Export user data (.ndjson)";
 "ComplianceExportChat" = "Export chat messages (.ndjson)";

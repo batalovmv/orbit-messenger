@@ -471,6 +471,7 @@
 "TranslateMenuCocoonLinkText" = "наш AI-сервис";
 "Chat.Translate.Menu.To" = "Выбрать язык перевода";
 "AiTranslateDefaultAuto" = "Авто (язык интерфейса)";
+"AiTranslateDefaultItem" = "По умолчанию ({lang})";
 "AiTranslateLangEn" = "Английский";
 "AiTranslateLangRu" = "Русский";
 "AiTranslateLangEs" = "Испанский";
@@ -1011,9 +1012,10 @@
 "ComplianceBannerNotice" = "Привилегированный доступ — каждый открытый чат фиксируется в журнале аудита.";
 "ComplianceAllEmployees" = "Сотрудники";
 "ComplianceSelectEmployee" = "Выберите сотрудника для просмотра его чатов.";
-"ComplianceChatsPending" = "Список чатов появится здесь после запуска эндпоинта экспорта.";
+"ComplianceChatsPending" = "Интерактивный просмотр чатов пока недоступен. Используйте кнопку «Экспорт» ниже, чтобы скачать данные пользователя в формате .ndjson.";
+"ComplianceExportFailed" = "Экспорт не удался. Сервер вернул ошибку — проверьте логи messaging-сервиса.";
 "ComplianceChatView" = "Чат";
-"ComplianceMessagesPending" = "Сообщения появятся здесь после запуска эндпоинта экспорта.";
+"ComplianceMessagesPending" = "Интерактивный просмотр сообщений пока недоступен. Используйте кнопку «Экспорт» ниже, чтобы скачать чат в формате .ndjson.";
 "ComplianceOpenPanel" = "Проверка соответствия";
 "ComplianceExportUser" = "Экспорт данных пользователя (.ndjson)";
 "ComplianceExportChat" = "Экспорт сообщений чата (.ndjson)";
@@ -2696,7 +2698,6 @@
 "ShowSenderNames" = "Показывать имена отправителей";
 "ShowSendersName" = "Показывать имя отправителя";
 "SlowmodeEnabled" = "Медленный режим включён";
-"SmartNotificationsModeAll" = "Все уведомления";
 "SmartNotificationsModeOff" = "Выключено";
 "SmartNotificationsModeSmart" = "Умный режим";
 "SmartNotificationsUpdateFailed" = "Не удалось обновить настройки уведомлений";

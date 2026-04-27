@@ -697,41 +697,10 @@ async function loadBotCommandsForChat(botUserId: string, apiChat: ApiChat) {
   }
 }
 
-async function loadGroupBotCommands(apiChat: ApiChat) {
-  try {
-    const sets = await client.request<Array<{
-      bot_id: string;
-      bot_user_id: string;
-      bot_username: string;
-      commands: Array<{ command: string; description: string }>;
-    }>>('GET', `/chats/${apiChat.id}/bot-commands`);
-    if (!sets?.length) return;
-
-    const botCommands: ApiBotCommand[] = [];
-    for (const set of sets) {
-      for (const cmd of set.commands) {
-        botCommands.push({
-          botId: set.bot_user_id,
-          command: cmd.command,
-          description: cmd.description,
-        });
-      }
-    }
-    if (!botCommands.length) return;
-
-    // ApiChat.botCommands lives on ApiChatFullInfo in the upstream type but
-    // is read off the chat object by both Saturn-side caches and the
-    // composer's command tooltip. The same shape mismatch is tolerated for
-    // DM chats above (loadBotCommandsForChat); we mirror that here.
-    const target = apiChat as ApiChat & { botCommands?: ApiBotCommand[] };
-    target.botCommands = botCommands;
-    sendApiUpdate({
-      '@type': 'updateChat',
-      id: apiChat.id,
-      chat: { botCommands } as Partial<ApiChat>,
-      noTopChatsRequest: true,
-    });
-  } catch {
-    // Bot commands loading is non-critical
-  }
+async function loadGroupBotCommands(_apiChat: ApiChat) {
+  // No-op: the messaging service has no /chats/:id/bot-commands route, and the
+  // pilot does not include the bot-command suggestions feature for groups.
+  // Leaving this as a stub (instead of deleting the caller) preserves the call
+  // site for when a real endpoint ships and avoids a broken-fetch 404 on every
+  // chat open.
 }

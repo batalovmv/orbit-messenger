@@ -2243,7 +2243,6 @@ export interface LangPair {
   'SmartNotifications': undefined;
   'SmartNotificationsDesc': undefined;
   'SmartNotificationsModeSmart': undefined;
-  'SmartNotificationsModeAll': undefined;
   'SmartNotificationsModeOff': undefined;
   'NotificationPriorityUrgent': undefined;
   'NotificationPriorityImportant': undefined;
@@ -2271,6 +2270,7 @@ export interface LangPair {
   'ComplianceOpenPanel': undefined;
   'ComplianceExportUser': undefined;
   'ComplianceExportChat': undefined;
+  'ComplianceExportFailed': undefined;
   'AdminPanelTitle': undefined;
   'AdminOpenPanel': undefined;
   'AdminTabFeatureFlags': undefined;
@@ -4051,6 +4051,9 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'BotAuthSuccessText': {
     'url': V;
+  };
+  'AiTranslateDefaultItem': {
+    'lang': V;
   };
   'AiTranslateSelectedCount': {
     'count': V;

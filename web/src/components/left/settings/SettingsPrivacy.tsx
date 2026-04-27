@@ -223,6 +223,13 @@ const SettingsPrivacy = ({
             </div>
           </ListItem>
         )}
+        {/*
+          Two-Step Verification UI is a Telegram-style SMS+password flow.
+          Orbit uses email/password (and optional TOTP) — there is no SMS
+          channel and no auth wiring for this dialog. Hidden until a native
+          Orbit-shaped 2FA screen lands. See audits/UI-DEAD-BUTTONS-2026-04-27.md.
+        */}
+        {false && (
         <ListItem
           icon="admin"
           narrow
@@ -238,6 +245,7 @@ const SettingsPrivacy = ({
             </span>
           </div>
         </ListItem>
+        )}
         {arePasskeysAvailable && (
           <ListItem
             icon="key"

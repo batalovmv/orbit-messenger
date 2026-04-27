@@ -40,6 +40,7 @@ const CompliancePanel = ({
 }: OwnProps & StateProps) => {
   const {
     closeCompliancePanel, selectComplianceUser, selectComplianceChat, loadContactList,
+    showNotification,
   } = getActions();
 
   const lang = useLang();
@@ -74,7 +75,10 @@ const CompliancePanel = ({
   const handleExportUser = useLastCallback(async () => {
     if (!selectedUserId) return;
     const res = await fetchAdminUserExport(selectedUserId);
-    if (!res.ok || !res.body) return;
+    if (!res.ok || !res.body) {
+      showNotification({ message: { key: 'ComplianceExportFailed' } });
+      return;
+    }
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     while (true) {
@@ -96,7 +100,10 @@ const CompliancePanel = ({
   const handleExportChat = useLastCallback(async () => {
     if (!selectedChatId) return;
     const res = await fetchAdminChatExport(selectedChatId);
-    if (!res.ok || !res.body) return;
+    if (!res.ok || !res.body) {
+      showNotification({ message: { key: 'ComplianceExportFailed' } });
+      return;
+    }
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     while (true) {

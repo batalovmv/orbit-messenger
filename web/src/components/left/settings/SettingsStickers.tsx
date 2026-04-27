@@ -34,7 +34,10 @@ const STICKERS_SCREEN_FALLBACKS = {
   dynamicPackOrder: 'Dynamic pack order',
   dynamicPackOrderInfo: 'Frequently used sticker packs will move to the top of the list.',
   myStickerSets: 'My sticker sets',
-  stickersBotInfo: 'Get more stickers and emoji packs from @stickers.',
+  // The upstream Telegram fallback advertised "@stickers" — that account does
+  // not exist in Orbit. Empty string suppresses the link until/if Orbit ships
+  // its own sticker-store entry point.
+  stickersBotInfo: '',
 } as const;
 
 type OwnProps = {
