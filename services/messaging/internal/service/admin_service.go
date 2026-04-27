@@ -216,9 +216,27 @@ func (s *AdminService) ChangeUserRole(ctx context.Context, actorID, targetID uui
 }
 
 // GetAuditLog returns audit log entries (for privileged users with SysViewAuditLog).
+//
+// RBAC policy for the actor_id filter:
+//   - superadmin and compliance (the auditor role) can filter by any actor.
+//   - admin and lower roles cannot pivot through actor_id to inspect actions
+//     of a strictly more privileged user — that would leak escalation hints
+//     (e.g. an admin discovering what a superadmin or compliance actually does).
+//     They can still see those actions in unfiltered listings; the gate just
+//     prevents targeted enumeration.
 func (s *AdminService) GetAuditLog(ctx context.Context, actorID uuid.UUID, actorRole string, filter store.AuditFilter, ip, ua string) ([]model.AuditEntry, string, bool, error) {
 	if !permissions.HasSysPermission(actorRole, permissions.SysViewAuditLog) {
 		return nil, "", false, apperror.Forbidden("Insufficient permissions")
+	}
+
+	if filter.ActorID != nil && actorRole != "superadmin" && actorRole != "compliance" {
+		target, err := s.users.GetByID(ctx, *filter.ActorID)
+		if err != nil {
+			return nil, "", false, fmt.Errorf("resolve audit actor filter: %w", err)
+		}
+		if target != nil && permissions.SystemRoleRank(target.Role) > permissions.SystemRoleRank(actorRole) {
+			return nil, "", false, apperror.Forbidden("Cannot filter audit log by a more privileged actor")
+		}
 	}
 
 	// Log that someone viewed the audit log

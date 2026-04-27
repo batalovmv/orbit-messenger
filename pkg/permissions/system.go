@@ -22,10 +22,14 @@ const (
 )
 
 // rolePermissions maps each system role to its permission bitmask.
+//
+// admin gets SysManageSettings (feature flags + maintenance mode) and
+// SysViewAuditLog so the AdminPanel UI is functional end-to-end. compliance
+// stays read-only (audit + content), without write access to system settings.
 var rolePermissions = map[string]int64{
 	"superadmin": AllSysPermissions,
 	"compliance": SysViewAllChats | SysReadAllContent | SysViewAuditLog | SysExportData | SysViewBotLogs,
-	"admin":      SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs,
+	"admin":      SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs | SysManageSettings | SysViewAuditLog,
 	"member":     0,
 }
 
