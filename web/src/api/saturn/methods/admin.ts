@@ -1,10 +1,20 @@
 // Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import { ensureAuth, getAccessToken } from '../client';
+
 const API_PREFIX = '/api/v1';
 
-function authHeader(): Record<string, string> {
-  const token = localStorage.getItem('access_token') ?? '';
+// Resolve the current Bearer token from the Saturn auth client. Falls back
+// to the in-memory token (no refresh) when ensureAuth is unavailable so tests
+// that don't initialise the client still work.
+async function authHeader(): Promise<Record<string, string>> {
+  let token: string | undefined;
+  try {
+    token = await ensureAuth();
+  } catch {
+    token = getAccessToken();
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -22,13 +32,13 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
 
 export async function fetchAdminChatExport(chatId: string): Promise<Response> {
   return fetch(`${API_PREFIX}/admin/chats/${chatId}/export?format=json`, {
-    headers: authHeader(),
+    headers: await authHeader(),
   });
 }
 
 export async function fetchAdminUserExport(userId: string): Promise<Response> {
   return fetch(`${API_PREFIX}/admin/users/${userId}/export?format=json`, {
-    headers: authHeader(),
+    headers: await authHeader(),
   });
 }
 
@@ -48,7 +58,7 @@ export type AdminFlag = {
 };
 
 export async function fetchAdminFlags(): Promise<AdminFlag[]> {
-  const res = await fetch(`${API_PREFIX}/admin/feature-flags`, { headers: authHeader() });
+  const res = await fetch(`${API_PREFIX}/admin/feature-flags`, { headers: await authHeader() });
   const body = await jsonOrThrow<{ flags: AdminFlag[] }>(res);
   return body.flags || [];
 }
@@ -60,7 +70,7 @@ export async function setAdminFlag(
 ): Promise<AdminFlag> {
   const res = await fetch(`${API_PREFIX}/admin/feature-flags/${encodeURIComponent(key)}`, {
     method: 'PATCH',
-    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled, metadata: metadata ?? {} }),
   });
   const body = await jsonOrThrow<{ flag: AdminFlag }>(res);
@@ -80,7 +90,7 @@ export type MaintenanceUpdate = {
 export async function setAdminMaintenance(update: MaintenanceUpdate): Promise<AdminFlag> {
   const res = await fetch(`${API_PREFIX}/admin/admin-maintenance`, {
     method: 'POST',
-    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
     body: JSON.stringify(update),
   });
   const body = await jsonOrThrow<{ flag: AdminFlag }>(res);
@@ -102,7 +112,7 @@ export type MaintenanceState = {
 export type SystemConfig = { flags: PublicFlag[]; maintenance: MaintenanceState };
 
 export async function fetchSystemConfig(): Promise<SystemConfig> {
-  const res = await fetch(`${API_PREFIX}/system/config`, { headers: authHeader() });
+  const res = await fetch(`${API_PREFIX}/system/config`, { headers: await authHeader() });
   return jsonOrThrow<SystemConfig>(res);
 }
 
@@ -155,7 +165,7 @@ export async function fetchAuditLog(query: AuditQuery): Promise<AuditPage> {
     }
   }
   const url = `${API_PREFIX}/admin/audit-log${params.toString() ? `?${params.toString()}` : ''}`;
-  const res = await fetch(url, { headers: authHeader() });
+  const res = await fetch(url, { headers: await authHeader() });
   const raw = await jsonOrThrow<{ data?: AuditEntry[]; cursor?: string; has_more?: boolean }>(res);
   return {
     data: raw.data || [],
