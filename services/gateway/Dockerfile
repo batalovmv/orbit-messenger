@@ -1,10 +1,18 @@
-# Stage 1: Build
-FROM golang:1.25-alpine AS builder
+# Stage 1: Test (gates the build — tests must pass before binary is produced)
+# Gateway requires Go 1.25 (embedded nats-server/v2 in tests).
+FROM golang:1.25-alpine AS test
 WORKDIR /build
 COPY pkg/ ./pkg/
 COPY services/gateway/ ./services/gateway/
 WORKDIR /build/services/gateway
 RUN go mod download
+RUN go test ./... -count=1
+
+# Stage 2: Build
+FROM golang:1.25-alpine AS builder
+WORKDIR /build
+COPY --from=test /build /build
+WORKDIR /build/services/gateway
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/main.go
 
 # Stage 2: Run

@@ -1,0 +1,41 @@
+#!/bin/bash
+# Pre-commit drift checks. Install via scripts/install-hooks.sh
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# 1. docs/canon/state.json.last_migration matches max migration on disk
+LAST_MIG=$(ls migrations/ 2>/dev/null | grep -oE '^[0-9]+' | sort -n | tail -1)
+# Portable parser — jq is not always available on dev machines (Windows).
+STATE_MIG=$(grep -oE '"last_migration"[[:space:]]*:[[:space:]]*"[0-9]+"' docs/canon/state.json 2>/dev/null \
+  | grep -oE '[0-9]+' | tail -1)
+if [ -n "$LAST_MIG" ] && [ -n "$STATE_MIG" ] && [ "$LAST_MIG" != "$STATE_MIG" ]; then
+  echo "❌ docs/canon/state.json.last_migration=$STATE_MIG but max migration is $LAST_MIG"
+  echo "   Update docs/canon/state.json and migrations/CHANGELOG.md before committing."
+  exit 1
+fi
+
+# 2. New @ts-ignore / @ts-expect-error must carry a TODO(...) marker
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
+if [ -n "$STAGED" ]; then
+  for f in $STAGED; do
+    [ -f "$f" ] || continue
+    # Look at added lines only (lines starting with + but not +++)
+    added=$(git diff --cached -U0 -- "$f" | grep -E '^\+' | grep -v '^\+\+\+' || true)
+    if echo "$added" | grep -E '@ts-(ignore|expect-error)' | grep -vq 'TODO'; then
+      echo "❌ $f: new @ts-ignore / @ts-expect-error must include a // TODO(...) comment"
+      exit 1
+    fi
+  done
+fi
+
+# 3. Required canonical docs are tracked
+for f in AGENTS.md docs/canon/state.json docs/canon/README.md; do
+  if ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+    echo "❌ $f is not tracked by git"
+    exit 1
+  fi
+done
+
+exit 0

@@ -1,10 +1,17 @@
-# Stage 1: Build
-FROM golang:1.24-alpine AS builder
+# Stage 1: Test (gates the build — tests must pass before binary is produced)
+FROM golang:1.24-alpine AS test
 WORKDIR /build
 COPY pkg/ ./pkg/
 COPY services/auth/ ./services/auth/
 WORKDIR /build/services/auth
 RUN go mod download
+RUN go test ./... -count=1
+
+# Stage 2: Build
+FROM golang:1.24-alpine AS builder
+WORKDIR /build
+COPY --from=test /build /build
+WORKDIR /build/services/auth
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/main.go
 
 # Stage 2: Run
