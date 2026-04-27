@@ -81,6 +81,7 @@ test_*.html
 # === Working artifacts (screenshots, AI prompts, temp binaries) ===
 artifacts/
 scripts/import-telegram-stickers/import-stickers-linux
+.tmp_i18n/
 
 # === Planning, prompts, audit reports, specs (local-only) ===
 audit-reports/

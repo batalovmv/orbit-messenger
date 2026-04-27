@@ -19,7 +19,7 @@
 ## Что в проде
 
 - 8 Go-микросервисов + Meilisearch + web — все на Saturn.ac, auto-deploy с `main`
-- PostgreSQL (миграции до 066), NATS (1 stream `ORBIT`, 24h), Redis (3 префикса), R2
+- PostgreSQL (миграции до 068), NATS (1 stream `ORBIT`, 24h), Redis (3 префикса), R2
 - Frontend: форк Telegram Web A на Teact, TypeScript 5.9 strict, Webpack 5
 
 ### Operator controls (мig 066)

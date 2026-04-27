@@ -2,7 +2,7 @@
   "phase": "8D",
   "last_migration": "068",
   "go_versions": {"gateway": "1.25", "default": "1.24"},
-  "removed_features": ["e2e_signal_protocol", "channels", "superadmin_role"],
+  "removed_features": ["e2e_signal_protocol", "channels", "superadmin_bootstrap"],
   "frontend_framework": "Teact",
   "saturn_components": ["gateway","auth","messaging","media","calls","ai","bots","integrations","meilisearch","web"]
 }

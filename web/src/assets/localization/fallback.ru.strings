@@ -1154,7 +1154,7 @@
 "AttachmentMenuUngroupAllMedia" = "Разгруппировать все медиа";
 "AuthKeepSignedIn" = "Оставаться в системе";
 "AuthSessionsViewAcceptTitle" = "Подтвердить на этом устройстве";
-"AuthTitle" = "Telegram";
+"AuthTitle" = "Orbit";
 "AutoDeleteConfirm" = "Подтвердить";
 "AutodownloadSizeLimitUpTo" = "до {limit}";
 "AvailableReactions" = "Доступные реакции";

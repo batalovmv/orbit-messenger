@@ -438,7 +438,7 @@
 "AuthSessionsViewLocationInfo" = "This location estimate is based on the IP address and may not always be accurate.";
 "AuthSessionsLogOutApplications" = "Disconnect All Websites";
 "AuthKeepSignedIn" = "Keep me signed in";
-"AuthTitle" = "Telegram";
+"AuthTitle" = "Orbit";
 "ClearOtherWebSessionsHelp" = "You can log in on websites that support signing in with Telegram.";
 "AreYouSureWebSessions" = "Are you sure you want to disconnect all websites where you logged in with Telegram?";
 "AutodownloadSizeLimitUpTo" = "up to {limit}";
@@ -3428,3 +3428,12 @@
 "WebBot.Account.Desclaimer.Desc" = "This bot can access your Telegram account";
 "IosInstallBanner.Title" = "Install Orbit on your home screen";
 "IosInstallBanner.Hint" = "Tap Share, then “Add to Home Screen” to use Orbit like a native app.";
+
+// Generic verbs / labels referenced via lang() at runtime. Russian translations
+// already live in fallback.ru.strings; adding the English source so the EN UI
+// doesn't fall back to the literal key text.
+"Confirm" = "Confirm";
+"EditMessage" = "Edit";
+"Hide" = "Hide";
+"Emoji" = "Emoji";
+"SelectAll" = "Select all";

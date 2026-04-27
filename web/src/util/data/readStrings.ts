@@ -69,7 +69,12 @@ function parseLine(line: string) {
 
   try {
     const key = JSON.parse(line.slice(0, separatorIndex));
-    const value = JSON.parse(line.slice(separatorIndex + 1));
+    // Some translations span multiple lines (e.g. PasskeyDeleteText, CocoonDescription).
+    // The .strings format stores those as raw newlines inside the quoted value, but
+    // JSON.parse rejects literal control chars in strings — escape them before parsing
+    // so the multi-line value survives instead of being silently dropped.
+    const rawValue = line.slice(separatorIndex + 1).replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+    const value = JSON.parse(rawValue);
 
     return [key, value];
   } catch (e) {
