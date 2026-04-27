@@ -3402,3 +3402,5 @@
 "VoiceOver.Chat.MessagesSelected_other" = "{count} messages selected";
 "VoipStatusConnecting" = "Connecting...";
 "WebBot.Account.Desclaimer.Desc" = "This bot can access your Telegram account";
+"IosInstallBanner.Title" = "Install Orbit on your home screen";
+"IosInstallBanner.Hint" = "Tap Share, then “Add to Home Screen” to use Orbit like a native app.";

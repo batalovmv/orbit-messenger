@@ -17,9 +17,12 @@ import {
 import { enableStrict, requestMutation } from './lib/fasterdom/fasterdom';
 import { selectChat, selectCurrentMessageList, selectPeerFullInfo, selectTabState } from './global/selectors';
 import { selectSharedSettings } from './global/selectors/sharedState';
+import { installAndroidTapRecovery } from './util/androidTapRecovery';
 import { betterView } from './util/betterView';
 import { IS_TAURI } from './util/browser/globalEnvironment';
 import listenOtherClients from './util/browser/listenOtherClients';
+import { restoreRescuedDrafts } from './util/draftRescue';
+import { installWebVitals } from './util/webVitals';
 import { requestGlobal, subscribeToMultitabBroadcastChannel } from './util/browser/multitab';
 import { establishMultitabRole, subscribeToMasterChange } from './util/establishMultitabRole';
 import { initGlobal } from './util/init';
@@ -42,6 +45,9 @@ if (IS_TAURI) {
   initTauriApi();
   setupTauriListeners();
 }
+
+installAndroidTapRecovery();
+installWebVitals();
 
 init();
 
@@ -68,6 +74,11 @@ async function init() {
 
   await initGlobal();
   getActions().init();
+
+  // Replay drafts that were snapshotted to localStorage right before a
+  // deploy-triggered reload. Must run after `init` (so action handlers are
+  // wired) but before render so the Composer mounts with restored state.
+  restoreRescuedDrafts();
 
   getActions().updateShouldEnableDebugLog();
   getActions().updateShouldDebugExportedSenders();

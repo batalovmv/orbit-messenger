@@ -12,6 +12,7 @@ import { DEBUG } from '../../../config';
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { prepareUpdateRescue } from '../../../util/draftRescue';
 
 import useInterval from '../../../hooks/schedulers/useInterval';
 import useForumPanelRender from '../../../hooks/useForumPanelRender';
@@ -130,7 +131,11 @@ const LeftMain: FC<OwnProps> = ({
         setIsTauriUpdateDownloading(false);
       }
     } else {
-      window.location.reload();
+      // Snapshot active drafts (composer + global state) to localStorage and
+      // best-effort flush global cache to IDB before tearing down the page.
+      // The 250ms grace lets the IDB transaction commit on most devices.
+      prepareUpdateRescue();
+      window.setTimeout(() => window.location.reload(), 250);
     }
   });
 

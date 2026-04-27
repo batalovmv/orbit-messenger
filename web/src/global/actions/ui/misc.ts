@@ -713,8 +713,16 @@ addActionHandler('closeMapModal', (global, actions, payload): ActionReturnType =
   }, tabId);
 });
 
-addActionHandler('checkAppVersion', (global): ActionReturnType => {
-  fetch(`${APP_VERSION_URL}?${Date.now()}`)
+addActionHandler('checkAppVersion', (global, actions, payload): ActionReturnType => {
+  // `force: true` is dispatched from SW when a hashed chunk 404s after deploy:
+  // the version may not yet be visible to the client (CDN propagation), but we
+  // still know the cached app graph is broken — flip the flag immediately.
+  const isForced = Boolean((payload as { force?: boolean } | undefined)?.force);
+  if (isForced && !global.isAppUpdateAvailable) {
+    setGlobal({ ...global, isAppUpdateAvailable: true });
+  }
+
+  fetch(`${APP_VERSION_URL}?${Date.now()}`, { cache: 'no-store' })
     .then((response) => response.text())
     .then((version) => {
       version = version.trim();

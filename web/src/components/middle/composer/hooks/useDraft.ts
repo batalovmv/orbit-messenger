@@ -10,6 +10,7 @@ import { DRAFT_DEBOUNCE, EDITABLE_INPUT_CSS_SELECTOR } from '../../../../config'
 import {
   requestMeasure, requestMutation,
 } from '../../../../lib/fasterdom/fasterdom';
+import { registerComposerFlush } from '../../../../util/draftRescue';
 import focusEditableElement from '../../../../util/focusEditableElement';
 import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
 import { getTextWithEntitiesAsHtml } from '../../../common/helpers/renderTextWithEntities';
@@ -171,6 +172,14 @@ const useDraft = ({
 
   useBackgroundMode(updateDraft);
   useBeforeUnload(updateDraft);
+
+  // Update banner flush hook: an external "deploy detected" reload triggers
+  // prepareUpdateRescue, which calls every registered flush synchronously
+  // before snapshotting drafts to localStorage.
+  useEffect(() => {
+    if (isDisabled) return undefined;
+    return registerComposerFlush(() => updateDraft());
+  }, [isDisabled, updateDraft]);
 };
 
 export default useDraft;

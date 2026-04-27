@@ -1,7 +1,7 @@
 import { getActions, getGlobal } from '../global';
 
-import { DEBUG, DEBUG_MORE, IS_TEST } from '../config';
-import { IS_ANDROID, IS_IOS, IS_SERVICE_WORKER_SUPPORTED } from './browser/windowEnvironment';
+import { DEBUG, DEBUG_MORE } from '../config';
+import { IS_SERVICE_WORKER_SUPPORTED } from './browser/windowEnvironment';
 
 // In development mode, unregister any existing service workers to prevent stale cache
 if (DEBUG && IS_SERVICE_WORKER_SUPPORTED) {
@@ -113,12 +113,19 @@ function handleWorkerMessage(e: MessageEvent) {
         files: validateFiles(payload.files),
       });
       break;
-    case 'staleChunkDetected':
-      // A deploy has invalidated cached JS chunks — reload to get fresh code
+    case 'staleChunkDetected': {
+      // A deploy has invalidated a cached JS chunk. Don't reload immediately —
+      // the user may be mid-composition. Surface the existing update banner
+      // (`isAppUpdateAvailable`) so they can finish typing and click "Update"
+      // when ready; the banner path runs `prepareUpdateRescue` first.
       // eslint-disable-next-line no-console
-      console.warn('[SW] Stale chunk detected after deploy, reloading...');
-      window.location.reload();
+      console.warn('[SW] Stale chunk detected after deploy, showing update banner');
+      const global = getGlobal();
+      if (!global.isAppUpdateAvailable) {
+        dispatch.checkAppVersion?.({ force: true });
+      }
       break;
+    }
     case 'pushsubscriptionchange':
       // Browser rotated/expired the push subscription. Re-run the subscribe
       // pipeline so the new endpoint is registered with the backend.

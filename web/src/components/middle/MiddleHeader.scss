@@ -9,8 +9,8 @@
   align-items: center;
 
   width: 100%;
-  height: var(--header-height);
-  padding-top: 0.25rem;
+  height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+  padding-top: calc(0.25rem + env(safe-area-inset-top, 0px));
   padding-right: max(0.8125rem, env(safe-area-inset-right));
   padding-bottom: 0.25rem;
   padding-left: max(1.4375rem, env(safe-area-inset-left));

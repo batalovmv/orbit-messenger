@@ -2492,6 +2492,8 @@ export interface LangPair {
   'VoiceMessagesRestrictedByPrivacy': undefined;
   'VoipStatusConnecting': undefined;
   'WebBot.Account.Desclaimer.Desc': undefined;
+  'IosInstallBanner.Title': undefined;
+  'IosInstallBanner.Hint': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {

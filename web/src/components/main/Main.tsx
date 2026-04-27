@@ -76,6 +76,7 @@ import DraftRecipientPicker from './DraftRecipientPicker.async';
 import FoldersSidebar from './FoldersSidebar';
 import ForwardRecipientPicker from './ForwardRecipientPicker.async';
 import HistoryCalendar from './HistoryCalendar.async';
+import IosInstallBanner from './IosInstallBanner';
 import NewContactModal from './NewContactModal.async';
 import SafeLinkModal from './SafeLinkModal.async';
 import ConfettiContainer from './visualEffects/ConfettiContainer';
@@ -485,6 +486,12 @@ const Main = ({
     }
 
     updateIcon(false);
+
+    // Proactive deploy detection: check version every time the user comes back
+    // to the tab. Cheap (HEAD-ish text fetch with no-store) and catches the
+    // common "left tab open overnight, deployed at 03:00" case before any
+    // hashed-chunk 404 explodes mid-action.
+    if (isMasterTab) checkAppVersion();
   });
 
   const handleStickerSetModalClose = useLastCallback(() => {
@@ -543,6 +550,7 @@ const Main = ({
       <DeleteFolderDialog folder={deleteFolderDialog} />
       <ReactionPicker isOpen={isReactionPickerOpen} />
       <DeleteMessageModal isOpen={isDeleteMessageModalOpen} />
+      <IosInstallBanner />
     </div>
   );
 };

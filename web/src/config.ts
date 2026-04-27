@@ -61,6 +61,14 @@ export const MEDIA_CACHE_NAME_AVATARS = 'tt-media-avatars';
 export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
+// Hard byte budget across all media caches. Per-bucket fairness applied on top
+// (see util/cacheApi.ts). Picked low enough to not exhaust Saturn-managed PWAs
+// on Android with small storage budgets, but big enough to keep recent media
+// hot. `navigator.storage.estimate()` widens this opportunistically up to 15%
+// of the origin quota.
+export const MEDIA_CACHE_BUDGET_MIN_BYTES = 128 * 1024 * 1024; // 128 MB
+export const MEDIA_CACHE_BUDGET_MAX_BYTES = 512 * 1024 * 1024; // 512 MB
+export const MEDIA_CACHE_BUDGET_DEFAULT_BYTES = 256 * 1024 * 1024; // 256 MB fallback
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
 export const LANG_CACHE_NAME = 'tt-lang-packs-v51';
 export const ASSET_CACHE_NAME = 'tt-assets';

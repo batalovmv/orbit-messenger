@@ -3671,3 +3671,5 @@
 "Stats.StoryTitle" = "Статистика историй";
 "UnlockPremiumEmojiHint" = "Подпишитесь на Premium, чтобы использовать это эмодзи";
 "UnlockPremiumEmojiHint2" = "Подпишитесь на Premium, чтобы разблокировать все эмодзи";
+"IosInstallBanner.Title" = "Установите Orbit на главный экран";
+"IosInstallBanner.Hint" = "Нажмите «Поделиться», затем «На экран Домой» — Orbit будет работать как нативное приложение.";

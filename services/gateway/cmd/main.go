@@ -208,6 +208,12 @@ func main() {
 	apiRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
 		Redis: rdb, MaxPerMin: 600, KeyPrefix: "api",
 	})
+	// RUM beacons (Web Vitals): one envelope per tab visit, but mobile users
+	// can fire visibilitychange repeatedly (background → foreground loops).
+	// 60/min/user is plenty without amplifying noisy clients.
+	rumRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 60, KeyPrefix: "rum",
+	})
 	// AI endpoints are expensive (Claude/Whisper API spend) and already
 	// enforce 20/min/user inside the ai service. Mirror that limit at the
 	// edge so abusive callers get rejected before we pay for a Redis
@@ -275,6 +281,15 @@ func main() {
 	// Stricter per-user limit for AI endpoints — must be registered before
 	// SetupProxy so the middleware applies to apiGroup.All("/ai/*").
 	apiGroup.Use("/ai/*", aiRateLimit)
+
+	// RUM ingestion: gateway accepts Web Vitals beacons from authenticated
+	// tabs and exports them as Prometheus histograms via /metrics. Behind
+	// jwtMW (apiGroup) — only logged-in users contribute, which keeps the
+	// signal clean and rules out anonymous flood.
+	apiGroup.Post("/rum", rumRateLimit, handler.RUMHandler(handler.RUMConfig{
+		Logger:   logger,
+		Registry: metricsReg,
+	}))
 
 	// Setup proxy routes
 	handler.SetupProxy(app, apiGroup, handler.ProxyConfig{

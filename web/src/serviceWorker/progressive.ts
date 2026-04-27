@@ -142,14 +142,33 @@ export async function respondForProgressive(e: FetchEvent) {
   });
 }
 
+const LAST_ACCESS_HEADER = 'X-Last-Access';
+const ACCESS_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
 // We can not cache 206 responses: https://github.com/GoogleChrome/workbox/issues/1644#issuecomment-638741359
 async function fetchFromCache(accountSlot: number | undefined, cacheKey: string) {
   const cacheName = !accountSlot ? MEDIA_PROGRESSIVE_CACHE_NAME : `${MEDIA_PROGRESSIVE_CACHE_NAME}_${accountSlot}`;
   const cache = await self.caches.open(cacheName);
 
+  const arrayBufferKey = `${cacheKey}&type=arrayBuffer`;
+  const headersKey = `${cacheKey}&type=headers`;
+  const headersRequest = new Request(headersKey);
+  const [bodyResponse, headersResponse] = await Promise.all([
+    cache.match(arrayBufferKey),
+    cache.match(headersRequest),
+  ]);
+
+  // Only refresh X-Last-Access on the lightweight headers entry, never on
+  // the multi-MB body. Re-`cache.put`-ing the body Response while a <video>
+  // element is streaming through it causes Chromium to abort the in-flight
+  // stream — random media playback failure under cache pressure.
+  if (headersResponse) {
+    void touchLastAccess(cache, headersRequest, headersResponse);
+  }
+
   return Promise.all([
-    cache.match(`${cacheKey}&type=arrayBuffer`).then((r) => (r ? r.arrayBuffer() : undefined)),
-    cache.match(`${cacheKey}&type=headers`).then((r) => (r ? r.json() : undefined)),
+    bodyResponse ? bodyResponse.arrayBuffer() : Promise.resolve(undefined),
+    headersResponse ? headersResponse.json() : Promise.resolve(undefined),
   ]);
 }
 
@@ -159,10 +178,44 @@ async function saveToCache(
   const cacheName = !accountSlot ? MEDIA_PROGRESSIVE_CACHE_NAME : `${MEDIA_PROGRESSIVE_CACHE_NAME}_${accountSlot}`;
   const cache = await self.caches.open(cacheName);
 
+  // Stamp X-Last-Access so quota/TTL eviction in cacheApi.ts can prune
+  // progressive entries. Also stamp Content-Length so the quota pass can
+  // size the body cheaply via headers — without it, listEntries() would fall
+  // back to `response.clone().blob()`, pulling every chunk into main thread
+  // memory each cycle (OOM under load).
+  const now = Date.now().toString();
   return Promise.all([
-    cache.put(new Request(`${cacheKey}&type=arrayBuffer`), new Response(arrayBuffer)),
-    cache.put(new Request(`${cacheKey}&type=headers`), new Response(JSON.stringify(headers))),
+    cache.put(
+      new Request(`${cacheKey}&type=arrayBuffer`),
+      new Response(arrayBuffer, {
+        headers: {
+          [LAST_ACCESS_HEADER]: now,
+          'Content-Length': String(arrayBuffer.byteLength),
+        },
+      }),
+    ),
+    cache.put(
+      new Request(`${cacheKey}&type=headers`),
+      new Response(JSON.stringify(headers), { headers: { [LAST_ACCESS_HEADER]: now } }),
+    ),
   ]);
+}
+
+async function touchLastAccess(cache: Cache, request: Request, response: Response) {
+  try {
+    const lastAccess = Number(response.headers.get(LAST_ACCESS_HEADER));
+    const now = Date.now();
+    if (lastAccess && now - lastAccess < ACCESS_THROTTLE_MS) return;
+
+    const next = new Headers(response.headers);
+    next.set(LAST_ACCESS_HEADER, now.toString());
+    const refreshed = new Response(response.clone().body, {
+      status: response.status, statusText: response.statusText, headers: next,
+    });
+    await cache.put(request, refreshed);
+  } catch {
+    // best-effort
+  }
 }
 
 export async function requestPart(

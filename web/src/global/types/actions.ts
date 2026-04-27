@@ -964,7 +964,7 @@ export interface ActionPayloads {
   setInstallPrompt: { canInstall: boolean } & WithTabId;
   openLimitReachedModal: { limit: ApiLimitTypeWithModal } & WithTabId;
   closeLimitReachedModal: WithTabId | undefined;
-  checkAppVersion: undefined;
+  checkAppVersion: { force?: boolean } | undefined;
   setGlobalSearchClosing: ({
     isClosing?: boolean;
   } & WithTabId) | undefined;
