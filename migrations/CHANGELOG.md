@@ -205,3 +205,9 @@ Phase 8F HR-бот шаблон: `bot_hr_requests` (bot_id, chat_id, user_id, re
 
 ## 066 — maintenance_mode_and_audit_search (2026-04-27)
 В `feature_flags` добавлен сид `maintenance_mode` (enabled=false, metadata `{message,block_writes}`). Используется одновременно как kill-switch и как баннер «технические работы»: gateway middleware блокирует мутирующие запросы для не-superadmin, фронт показывает баннер. Поиск в `audit_log` остался на ILIKE (объём маленький — см. design memo) — индексы pg_trgm/tsvector отложены до фактического роста.
+
+## 067 — drop_notification_mode_all (2026-04-27)
+**КРИТИЧНО (контракт):** в `users.notification_priority_mode` удалена опция `'all'` из CHECK. Существующие строки `'all'` мигрированы в `'smart'`. Причина: gateway никогда не реализовывал отдельную ветку для `'all'` — она вела себя как `'smart'`, при этом UI рекламировал её как третий режим. Чтобы не плодить псевдо-фичу, остаются только `'smart'` (AI-классификация, killer feature) и `'off'` (выключено). Default остаётся `'smart'`.
+
+## 068 — calls_feature_flags (2026-04-27)
+В `feature_flags` добавлены два сида: `calls_group_enabled` и `calls_screen_share_enabled` (оба `false`). Используются как kill-switch для пилота — group calls и screen share имеют известные UX-пробелы (SFU init flow, track-replace toggle). P2P 1-1 voice/video не зависит от этих флагов — это baseline пилота.
