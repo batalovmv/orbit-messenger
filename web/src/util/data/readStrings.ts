@@ -3,7 +3,27 @@ import { DEBUG } from '../../config';
 export default function readStrings(data: string): Record<string, string> {
   const lines = data.split(/;\r?\n?/);
   const result: Record<string, string> = {};
-  for (const line of lines) {
+  for (const rawLine of lines) {
+    // Strip blank lines and comment-only lines from the *front* of each chunk.
+    // The split above keeps the leading "\n" of any blank line that follows a
+    // closed entry, so a chunk for the next key looks like
+    //   '\n\n// section header\n"NextKey" = "..."'
+    // Without trimming, line.startsWith('"') was false and the entry was
+    // silently dropped — that bug ate dozens of RU translations whose keys
+    // happened to follow a blank line or a comment in fallback.ru.strings
+    // (e.g. Notifications, Language, DataSettings, AiUsageTitle, ...).
+    let line = rawLine;
+    while (line.length > 0 && (line.startsWith('\r') || line.startsWith('\n'))) {
+      line = line.slice(1);
+    }
+    while (line.startsWith('//')) {
+      const eol = line.indexOf('\n');
+      if (eol === -1) { line = ''; break; }
+      line = line.slice(eol + 1);
+      while (line.length > 0 && (line.startsWith('\r') || line.startsWith('\n'))) {
+        line = line.slice(1);
+      }
+    }
     if (!line.startsWith('"')) continue;
     const [key, value] = parseLine(line) || [];
     if (!key || !value) {
