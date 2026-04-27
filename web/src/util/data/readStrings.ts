@@ -73,8 +73,11 @@ function parseLine(line: string) {
     // The .strings format stores those as raw newlines inside the quoted value, but
     // JSON.parse rejects literal control chars in strings — escape them before parsing
     // so the multi-line value survives instead of being silently dropped.
-    const rawValue = line.slice(separatorIndex + 1).replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-    const value = JSON.parse(rawValue);
+    //
+    // Important: only escape inside the JSON-string body. Replacing CR/LF on the
+    // whole value chunk would corrupt cases with whitespace between `=` and the
+    // opening quote, or trailing whitespace after the closing quote.
+    const value = JSON.parse(escapeControlInString(line.slice(separatorIndex + 1)));
 
     return [key, value];
   } catch (e) {
@@ -85,4 +88,41 @@ function parseLine(line: string) {
   }
 
   return undefined;
+}
+
+// Escapes literal CR/LF/TAB characters that appear *inside* the JSON string
+// literal embedded in `chunk`. Whitespace outside the quotes is left alone, and
+// existing escape sequences (\\, \" etc.) are preserved by tracking parity.
+function escapeControlInString(chunk: string): string {
+  let inside = false;
+  let escaped = false;
+  let out = '';
+  for (let i = 0; i < chunk.length; i++) {
+    const ch = chunk[i];
+    if (!inside) {
+      out += ch;
+      if (ch === '"') inside = true;
+      continue;
+    }
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      out += ch;
+      inside = false;
+      continue;
+    }
+    if (ch === '\n') { out += '\\n'; continue; }
+    if (ch === '\r') { out += '\\r'; continue; }
+    if (ch === '\t') { out += '\\t'; continue; }
+    out += ch;
+  }
+  return out;
 }

@@ -1479,11 +1479,11 @@
 "LoginPassword" = "Пароль";
 "LoginPhonePlaceholder" = "Ваш номер телефона";
 "LoginQRCancel" = "Войти по номеру телефона";
-"LoginQRHelp1" = "Откройте Telegram на вашем телефоне";
+"LoginQRHelp1" = "Откройте Orbit на вашем телефоне";
 "LoginQRHelp2" = "Перейдите в **Настройки** > **Устройства** > **Привязать устройство**";
 "LoginQRHelp3" = "Наведите камеру телефона на этот экран для подтверждения входа";
 "LoginQRLogin" = "Войти по QR-коду";
-"LoginQRTitle" = "Войти в Telegram по QR-коду";
+"LoginQRTitle" = "Войти в Orbit по QR-коду";
 "LoginRegisterDesc" = "Введите ваше имя и добавьте фото профиля.";
 "LoginRegisterFirstNamePlaceholder" = "Имя";
 "LoginRegisterLastNamePlaceholder" = "Фамилия";
