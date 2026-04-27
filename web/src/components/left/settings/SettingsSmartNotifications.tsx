@@ -20,7 +20,6 @@ type OwnProps = {
 
 const MODE_OPTIONS: Array<{ value: NotificationMode; labelKey: RegularLangKey; subLabelKey?: RegularLangKey }> = [
   { value: 'smart', labelKey: 'SmartNotificationsModeSmart', subLabelKey: 'SmartNotificationsDesc' },
-  { value: 'all', labelKey: 'SmartNotificationsModeAll' },
   { value: 'off', labelKey: 'SmartNotificationsModeOff' },
 ];
 
@@ -28,7 +27,7 @@ const SettingsSmartNotifications = ({ isActive, onReset }: OwnProps) => {
   const { showNotification } = getActions();
   const lang = useLang();
 
-  const [mode, setMode] = useState<NotificationMode>('all');
+  const [mode, setMode] = useState<NotificationMode>('smart');
   const [isLoading, setIsLoading] = useState(true);
 
   useHistoryBack({ isActive, onBack: onReset });

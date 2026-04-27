@@ -109,7 +109,7 @@ func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, 
 func (s *userStore) GetNotificationPriorityMode(ctx context.Context, userID uuid.UUID) (string, error) {
 	var mode string
 	err := s.pool.QueryRow(ctx,
-		`SELECT COALESCE(notification_priority_mode, 'all') FROM users WHERE id = $1`,
+		`SELECT COALESCE(notification_priority_mode, 'smart') FROM users WHERE id = $1`,
 		userID,
 	).Scan(&mode)
 	if err != nil {

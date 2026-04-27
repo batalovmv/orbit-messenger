@@ -576,9 +576,9 @@ func (h *AuthHandler) UpdateNotificationPriorityMode(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
-	validModes := map[string]bool{"smart": true, "all": true, "off": true}
+	validModes := map[string]bool{"smart": true, "off": true}
 	if !validModes[req.Mode] {
-		return response.Error(c, apperror.BadRequest("mode must be one of: smart, all, off"))
+		return response.Error(c, apperror.BadRequest("mode must be one of: smart, off"))
 	}
 
 	if err := h.svc.UpdateNotificationPriorityMode(c.Context(), uid, req.Mode); err != nil {

@@ -3,7 +3,7 @@
 
 import { request } from '../client';
 
-export type NotificationMode = 'smart' | 'all' | 'off';
+export type NotificationMode = 'smart' | 'off';
 
 export type NotificationPriority = 'urgent' | 'important' | 'normal' | 'low';
 
