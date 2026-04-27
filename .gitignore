@@ -84,6 +84,9 @@ scripts/import-telegram-stickers/import-stickers-linux
 
 # === Planning, prompts, audit reports, specs (local-only) ===
 audit-reports/
+audits/
 codex-prompts/
 e2e-implementation/
 phase-8-plan/
+SPRINT-*.md
+VERIFY-*.md
