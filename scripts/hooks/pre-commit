@@ -16,18 +16,20 @@ if [ -n "$LAST_MIG" ] && [ -n "$STATE_MIG" ] && [ "$LAST_MIG" != "$STATE_MIG" ];
   exit 1
 fi
 
-# 2. New @ts-ignore / @ts-expect-error must carry a TODO(...) marker
-STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
-if [ -n "$STAGED" ]; then
-  for f in $STAGED; do
-    [ -f "$f" ] || continue
-    # Look at added lines only (lines starting with + but not +++)
-    added=$(git diff --cached -U0 -- "$f" | grep -E '^\+' | grep -v '^\+\+\+' || true)
-    if echo "$added" | grep -E '@ts-(ignore|expect-error)' | grep -vq 'TODO'; then
-      echo "❌ $f: new @ts-ignore / @ts-expect-error must include a // TODO(...) comment"
-      exit 1
-    fi
-  done
+# 2. New @ts-ignore / @ts-expect-error must carry a TODO(...) marker.
+# Single git diff with pathspec — avoids per-file loop quirks on Git Bash (Windows).
+# Note: -vF '+++' (fixed string) — on Git Bash GNU grep treats `\+` in BRE as
+# the GNU "one or more" quantifier, so `^\+\+\+` would match any `+`-prefixed line.
+BAD=$(git diff --cached --diff-filter=ACM -U0 -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
+  | grep -E '^\+' \
+  | grep -vF '+++' \
+  | grep -E '@ts-(ignore|expect-error)' \
+  | grep -v 'TODO' \
+  || true)
+if [ -n "$BAD" ]; then
+  echo "❌ New @ts-ignore / @ts-expect-error must include a // TODO(...) marker:"
+  echo "$BAD"
+  exit 1
 fi
 
 # 3. Required canonical docs are tracked
