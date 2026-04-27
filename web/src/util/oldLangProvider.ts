@@ -3,6 +3,17 @@ import { getGlobal } from '../global';
 import type { ApiOldLangPack, ApiOldLangString } from '../api/types';
 import type { LangCode, TimeFormat } from '../types';
 
+type OldPluralFieldKey = 'zeroValue' | 'oneValue' | 'twoValue' | 'fewValue' | 'manyValue' | 'otherValue';
+
+const PLURAL_SUFFIX_TO_OLD_FIELD: Record<string, OldPluralFieldKey> = {
+  zero: 'zeroValue',
+  one: 'oneValue',
+  two: 'twoValue',
+  few: 'fewValue',
+  many: 'manyValue',
+  other: 'otherValue',
+};
+
 import {
   LANG_CACHE_NAME, LANG_PACKS,
 } from '../config';
@@ -105,12 +116,52 @@ const PLURAL_RULES = {
 const cache = new Map<string, string>();
 
 let langPack: ApiOldLangPack | undefined;
-let fallbackStrings: Record<string, string> | undefined;
+let fallbackStrings: Record<string, ApiOldLangString> | undefined;
+
+// Group flat plural fallback entries (`Foo_one`, `Foo_other`, ...) into the
+// nested `ApiOldLangString` shape that `processTranslation` already understands.
+// Without this, plural keys (`LastSeen.MinutesAgo`, `Months`, ...) would only
+// resolve once the new lang pack mirrors into this provider via
+// `syncFromNewPack` — before that the old provider returned the raw key.
+function normalizeFallbackStrings(flat: Record<string, string>): Record<string, ApiOldLangString> {
+  const result: Record<string, ApiOldLangString> = {};
+
+  for (const [rawKey, value] of Object.entries(flat)) {
+    // Anchored to end of key to skip false positives like `Settings_one_click`.
+    const match = rawKey.match(/^(.+)_(zero|one|two|few|many|other)$/);
+
+    if (!match) {
+      const existing = result[rawKey];
+      if (existing && typeof existing === 'object') {
+        // Singular form arrived after some plural variants — keep both.
+        (existing as { value?: string }).value = value;
+      } else {
+        result[rawKey] = value;
+      }
+      continue;
+    }
+
+    const [, baseKey, suffix] = match;
+    const field = PLURAL_SUFFIX_TO_OLD_FIELD[suffix];
+    const existing = result[baseKey];
+
+    if (existing === undefined || typeof existing === 'string') {
+      const next: { value?: string } & Partial<Record<OldPluralFieldKey, string>> = {};
+      if (typeof existing === 'string') next.value = existing;
+      next[field] = value;
+      result[baseKey] = next as ApiOldLangString;
+    } else {
+      (existing as Partial<Record<OldPluralFieldKey, string>>)[field] = value;
+    }
+  }
+
+  return result;
+}
 
 // Load fallback strings for keys not in the remote langPack
 import('./data/readStrings').then((mod) => {
   import('../assets/localization/fallback.strings').then((file) => {
-    fallbackStrings = mod.default(file.default);
+    fallbackStrings = normalizeFallbackStrings(mod.default(file.default));
   });
 });
 

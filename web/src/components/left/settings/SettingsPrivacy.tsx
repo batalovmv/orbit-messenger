@@ -478,7 +478,7 @@ const SettingsPrivacy = ({
         >
           {lang('DeleteAccountIfAwayFor')}
           <span className="settings-item__current-value">
-            {lang('Months', { count: dayOption }, { pluralValue: 1 })}
+            {lang('Months', { count: dayOption }, { pluralValue: Number(dayOption) })}
           </span>
         </ListItem>
       </div>
