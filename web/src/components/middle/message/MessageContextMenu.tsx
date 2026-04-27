@@ -41,10 +41,19 @@ import AvatarList from '../../common/AvatarList';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
+import NestedMenuItem from '../../ui/NestedMenuItem';
 import Skeleton from '../../ui/placeholder/Skeleton';
 import LastEditTimeMenuItem from './LastEditTimeMenuItem';
 import ReactionSelector from './reactions/ReactionSelector';
 import ReadTimeMenuItem from './ReadTimeMenuItem';
+
+const ORBIT_TRANSLATE_LANGS = [
+  { code: 'en', labelKey: 'AiTranslateLangEn' },
+  { code: 'ru', labelKey: 'AiTranslateLangRu' },
+  { code: 'es', labelKey: 'AiTranslateLangEs' },
+  { code: 'de', labelKey: 'AiTranslateLangDe' },
+  { code: 'fr', labelKey: 'AiTranslateLangFr' },
+] as const;
 
 import './MessageContextMenu.scss';
 
@@ -86,6 +95,7 @@ type OwnProps = {
   canHideTranslation?: boolean;
   canShowOriginal?: boolean;
   canSelectLanguage?: boolean;
+  defaultTranslateLang?: string;
   isPrivate?: boolean;
   isCurrentUserPremium?: boolean;
   canDownload?: boolean;
@@ -128,6 +138,7 @@ type OwnProps = {
   onShowSeenBy?: NoneToVoidFunction;
   onShowReactors?: NoneToVoidFunction;
   onTranslate?: NoneToVoidFunction;
+  onTranslateTo?: (langCode: string) => void;
   onHideTranslation?: NoneToVoidFunction;
   onShowOriginal?: NoneToVoidFunction;
   onSelectLanguage?: NoneToVoidFunction;
@@ -183,6 +194,7 @@ const MessageContextMenu: FC<OwnProps> = ({
   canHideTranslation,
   canShowOriginal,
   canSelectLanguage,
+  defaultTranslateLang,
   isDownloading,
   repliesThreadInfo,
   canShowSeenBy,
@@ -223,6 +235,7 @@ const MessageContextMenu: FC<OwnProps> = ({
   onCopyMessages,
   onReactionPickerOpen,
   onTranslate,
+  onTranslateTo,
   onHideTranslation,
   onShowOriginal,
   onSelectLanguage,
@@ -420,9 +433,30 @@ const MessageContextMenu: FC<OwnProps> = ({
           <MenuItem icon="favorite" onClick={onUnfaveSticker}>{oldLang('Stickers.RemoveFromFavorites')}</MenuItem>
         )}
         {canTranslate && (
-          <MenuItem icon="language" onClick={onTranslate}>
+          <NestedMenuItem
+            icon="language"
+            submenu={(
+              <>
+                <MenuItem icon="language" onClick={onTranslate}>
+                  {defaultTranslateLang
+                    ? lang('AiTranslateDefaultItem', { lang: defaultTranslateLang.toUpperCase() })
+                    : lang('AiTranslateDefaultAuto')}
+                </MenuItem>
+                <MenuSeparator size="thin" />
+                {ORBIT_TRANSLATE_LANGS.map(({ code, labelKey }) => (
+                  <MenuItem
+                    key={code}
+                    icon="web"
+                    onClick={() => onTranslateTo?.(code)}
+                  >
+                    {lang(labelKey)}
+                  </MenuItem>
+                ))}
+              </>
+            )}
+          >
             {canHideTranslation ? lang('AiTranslateRetranslate') : lang('TranslateMessage')}
-          </MenuItem>
+          </NestedMenuItem>
         )}
         {canHideTranslation && (
           <MenuItem icon="close" onClick={onHideTranslation}>{lang('AiHideTranslation')}</MenuItem>

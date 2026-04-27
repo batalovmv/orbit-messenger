@@ -631,6 +631,11 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
+  const handleTranslateTo = useLastCallback((langCode: string) => {
+    startMessageTranslation(message.chatId, message.id, langCode);
+    closeMenu();
+  });
+
   const handleHideTranslation = useLastCallback(() => {
     clearMessageTranslation(message.id);
     closeMenu();
@@ -756,6 +761,8 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onShowReactors={handleOpenReactorListModal}
         onReactionPickerOpen={handleReactionPickerOpen}
         onTranslate={handleTranslate}
+        onTranslateTo={handleTranslateTo}
+        defaultTranslateLang={defaultTranslateLang}
         canHideTranslation={canHideTranslation}
         onHideTranslation={handleHideTranslation}
         onShowOriginal={handleShowOriginal}
@@ -901,9 +908,11 @@ export default memo(withGlobal<OwnProps>(
     const canAppendTodoList = message.content.todo?.todo.othersCanAppend
       && message.content.todo?.todo.items?.length < todoItemsMax;
 
-    // @ts-expect-error TODO(phase-8D-cleanup): defaultTranslateLang missing from StateProps return
+    const defaultTranslateLang = global.settings.byKey.defaultTranslateLang;
+
     return {
       threadId,
+      defaultTranslateLang,
       chat,
       availableReactions,
       topReactions,

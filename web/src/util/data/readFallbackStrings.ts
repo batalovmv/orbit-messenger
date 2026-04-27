@@ -55,7 +55,14 @@ function parseStringsFile(fileData: string): LangPack['strings'] {
     }
 
     const clearKey = key.slice(0, lastUnderscore);
-    const knownValue = (strings[clearKey] || {}) as LangPackStringValuePlural;
+    const existing = strings[clearKey];
+    // When a key has both a singular form (`X = "..."`) and plural variants
+    // (`X_one = "..."`), the file order may put the singular first. Promote
+    // it into the plural map under `other` so we don't crash trying to add
+    // properties to a primitive string. Audit 2026-04-27.
+    const knownValue = (typeof existing === 'string'
+      ? { other: existing }
+      : ((existing as LangPackStringValuePlural | undefined) || { other: '' })) as LangPackStringValuePlural;
     knownValue[suffix as keyof LangPackStringValuePlural] = value;
     strings[clearKey] = knownValue;
   });

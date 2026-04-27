@@ -8,8 +8,11 @@ import type { SharedSettings } from '../../../global/types';
 import type { AccountSettings } from '../../../types';
 import { SettingsScreens } from '../../../types';
 
+import type { ApiLanguage } from '../../../api/types';
+
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { SUPPORTED_LANGUAGES } from '../../../util/data/readFallbackStrings';
 import { loadAndChangeLanguage } from '../../../util/localization';
 import { getUserSettings, updateUserSettings } from '../../../api/saturn/methods/settingsApi';
 
@@ -73,10 +76,21 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
 
   const canTranslateChatsEnabled = canTranslateChats;
 
+  // Synchronous fallback to the bundled list. Previously this relied on the
+  // `loadLanguages` action populating SharedState, but on fresh sessions
+  // where the SharedWorker hadn't synced yet the picker stayed stuck on a
+  // spinner (audit 2026-04-27). The bundled list is small (en/ru) and
+  // always available — render it immediately, let `loadLanguages` enrich
+  // string counts later if the action handler does run.
   useEffect(() => {
     if (!languages?.length) {
       loadLanguages();
     }
+  }, [languages]);
+
+  const effectiveLanguages = useMemo<ApiLanguage[]>(() => {
+    if (languages?.length) return languages;
+    return SUPPORTED_LANGUAGES.map((l) => ({ ...l }));
   }, [languages]);
 
   useEffect(() => {
@@ -115,11 +129,11 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
   });
 
   const options = useMemo(() => {
-    if (!languages) return undefined;
+    if (!effectiveLanguages?.length) return undefined;
     const currentLangCode = (window.navigator.language || 'en').toLowerCase();
     const shortLangCode = currentLangCode.substr(0, 2);
 
-    return languages.map(({ langCode, nativeName, name }) => ({
+    return effectiveLanguages.map(({ langCode, nativeName, name }) => ({
       value: langCode,
       label: nativeName,
       subLabel: name,
@@ -127,7 +141,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     } satisfies ItemPickerOption)).sort((a) => {
       return currentLangCode && (a.value === currentLangCode || a.value === shortLangCode) ? -1 : 0;
     });
-  }, [isLoading, languages, selectedLanguage]);
+  }, [isLoading, effectiveLanguages, selectedLanguage]);
 
   const persistTranslatePrefs = useLastCallback(async (overrides: {
     canTranslate?: boolean;
