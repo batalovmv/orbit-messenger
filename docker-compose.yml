@@ -297,6 +297,10 @@ services:
       # dropped into Saturn.ac dashboard. No rebuild needed to swap them in.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-placeholder}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-4-6}
+      ANTHROPIC_CLASSIFY_MODEL: ${ANTHROPIC_CLASSIFY_MODEL:-claude-haiku-4-5}
+      # Optional proxy override — local-only. Production must leave this unset
+      # so calls go directly to https://api.anthropic.com/v1.
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-placeholder}
       WHISPER_MODEL: ${WHISPER_MODEL:-whisper-1}
     depends_on:

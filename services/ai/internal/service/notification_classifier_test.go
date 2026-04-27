@@ -6,6 +6,8 @@ package service
 import (
 	"strings"
 	"testing"
+
+	"github.com/mst-corp/orbit/pkg/metrics"
 )
 
 func TestNotifCacheKey_IncludesUserID(t *testing.T) {
@@ -39,5 +41,39 @@ func TestNotifCacheKey_ShortText(t *testing.T) {
 	key := notifCacheKey("u1", "s1", short)
 	if !strings.HasPrefix(key, "notif:classify:") {
 		t.Fatalf("unexpected key prefix: %s", key)
+	}
+}
+
+func TestClassifierMetrics_NilSafe(t *testing.T) {
+	// Nil receiver must not panic — production may run with metrics disabled.
+	var m *ClassifierMetrics
+	m.recordClassify("rule", "urgent")
+	m.recordDuration("ai", 0.123)
+	m.recordCost(120)
+	m.RecordFeedback("important", "important")
+	m.RecordFeedback("normal", "urgent")
+}
+
+func TestClassifierMetrics_RegistrationAndRecord(t *testing.T) {
+	reg := metrics.New("ai-test")
+	m := NewClassifierMetrics(reg)
+	if m == nil {
+		t.Fatal("expected non-nil metrics handle")
+	}
+	// Sanity: every recorder runs without panicking.
+	m.recordClassify("cache", "low")
+	m.recordClassify("rule", "important")
+	m.recordClassify("ai", "urgent")
+	m.recordDuration("ai", 0.42)
+	m.recordCost(80)
+	m.recordCost(0)  // ignored
+	m.recordCost(-1) // ignored
+	m.RecordFeedback("urgent", "urgent")
+	m.RecordFeedback("normal", "urgent")
+}
+
+func TestNewClassifierMetrics_NilRegistry(t *testing.T) {
+	if got := NewClassifierMetrics(nil); got != nil {
+		t.Fatalf("expected nil when registry is nil, got %v", got)
 	}
 }

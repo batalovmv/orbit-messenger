@@ -46,6 +46,11 @@ func main() {
 	anthropicKey := os.Getenv("ANTHROPIC_API_KEY")
 	anthropicModel := config.EnvOr("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 	classifyModel := config.EnvOr("ANTHROPIC_CLASSIFY_MODEL", "claude-3-haiku-20240307")
+	// Optional override — when set, routes API calls through a proxy
+	// (e.g. http://tokenator/anthropic/v1 for local testing). Empty in
+	// production: must NEVER be set on Saturn — the value is the proxy
+	// vendor's, not ours, and would route private chat content through them.
+	anthropicBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
 	whisperKey := os.Getenv("OPENAI_API_KEY")
 	whisperModel := config.EnvOr("WHISPER_MODEL", "whisper-1")
 
@@ -87,24 +92,36 @@ func main() {
 	// External clients — all tolerant to missing credentials (see client.Configured()).
 	anthropicClient := client.NewAnthropicClient(anthropicKey, anthropicModel, logger)
 	classifyClient := client.NewAnthropicClient(anthropicKey, classifyModel, logger)
+	if anthropicBaseURL != "" {
+		logger.Warn("ANTHROPIC_BASE_URL override is active — DO NOT use this in production",
+			"base_url", anthropicBaseURL)
+		anthropicClient.SetBaseURL(anthropicBaseURL)
+		classifyClient.SetBaseURL(anthropicBaseURL)
+	}
 	whisperClient := client.NewWhisperClient(whisperKey, whisperModel, logger)
 	messagingClient := client.NewMessagingClient(messagingURL, internalSecret)
+
+	// Metrics registry has to be built before the service so the classifier
+	// can record on it from the very first request.
+	metricsReg := metrics.New("ai")
+	classifierMetrics := service.NewClassifierMetrics(metricsReg)
 
 	// Store + service wiring.
 	usageStore := store.NewUsageStore(pool)
 	notificationStore := store.NewNotificationStore(pool)
 	aiService := service.NewAIService(service.AIServiceConfig{
-		Anthropic:       anthropicClient,
-		ClassifyClient:  classifyClient,
-		Whisper:         whisperClient,
-		Messaging:       messagingClient,
-		Usage:           usageStore,
-		Notification:    notificationStore,
-		Redis:           rdb,
-		MediaServiceURL: mediaURL,
-		InternalToken:   internalSecret,
-		Logger:          logger,
-		RateLimitPerMin: 20, // ТЗ §11.8
+		Anthropic:         anthropicClient,
+		ClassifyClient:    classifyClient,
+		Whisper:           whisperClient,
+		Messaging:         messagingClient,
+		Usage:             usageStore,
+		Notification:      notificationStore,
+		Redis:             rdb,
+		MediaServiceURL:   mediaURL,
+		InternalToken:     internalSecret,
+		Logger:            logger,
+		RateLimitPerMin:   20, // ТЗ §11.8
+		ClassifierMetrics: classifierMetrics,
 	})
 
 	aiHandler := handler.NewAIHandler(aiService, logger)
@@ -118,7 +135,6 @@ func main() {
 		WriteBufferSize:   8192,
 	})
 
-	metricsReg := metrics.New("ai")
 	app.Use(metricsReg.HTTPMiddleware())
 
 	app.Get("/health", func(c *fiber.Ctx) error {

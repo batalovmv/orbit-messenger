@@ -30,17 +30,18 @@ import (
 //   - translate provider errors into apperror types the handler layer
 //     understands (503 ai_unavailable, 429 rate_limited, etc.)
 type AIService struct {
-	anthropic       *client.AnthropicClient
-	classifyClient  *client.AnthropicClient
-	whisper         *client.WhisperClient
-	messaging       *client.MessagingClient
-	usage           store.UsageStore
-	notification    store.NotificationStore
-	redis           *redis.Client
-	mediaServiceURL string
-	internalToken   string
-	logger          *slog.Logger
-	rateLimitPerMin int
+	anthropic         *client.AnthropicClient
+	classifyClient    *client.AnthropicClient
+	whisper           *client.WhisperClient
+	messaging         *client.MessagingClient
+	usage             store.UsageStore
+	notification      store.NotificationStore
+	redis             *redis.Client
+	mediaServiceURL   string
+	internalToken     string
+	logger            *slog.Logger
+	rateLimitPerMin   int
+	classifierMetrics *ClassifierMetrics
 }
 
 type AIServiceConfig struct {
@@ -56,6 +57,9 @@ type AIServiceConfig struct {
 	Logger          *slog.Logger
 	// RateLimitPerMin overrides the default 20 req/min/user/endpoint guard.
 	RateLimitPerMin int
+	// ClassifierMetrics is optional — when nil, classification works without
+	// Prometheus instrumentation (used by tests).
+	ClassifierMetrics *ClassifierMetrics
 }
 
 func NewAIService(cfg AIServiceConfig) *AIService {
@@ -68,18 +72,25 @@ func NewAIService(cfg AIServiceConfig) *AIService {
 		rl = 20
 	}
 	return &AIService{
-		anthropic:       cfg.Anthropic,
-		classifyClient:  cfg.ClassifyClient,
-		whisper:         cfg.Whisper,
-		messaging:       cfg.Messaging,
-		usage:           cfg.Usage,
-		notification:    cfg.Notification,
-		redis:           cfg.Redis,
-		mediaServiceURL: cfg.MediaServiceURL,
-		internalToken:   cfg.InternalToken,
-		logger:          logger,
-		rateLimitPerMin: rl,
+		anthropic:         cfg.Anthropic,
+		classifyClient:    cfg.ClassifyClient,
+		whisper:           cfg.Whisper,
+		messaging:         cfg.Messaging,
+		usage:             cfg.Usage,
+		notification:      cfg.Notification,
+		redis:             cfg.Redis,
+		mediaServiceURL:   cfg.MediaServiceURL,
+		internalToken:     cfg.InternalToken,
+		logger:            logger,
+		rateLimitPerMin:   rl,
+		classifierMetrics: cfg.ClassifierMetrics,
 	}
+}
+
+// ClassifierMetrics returns the metrics handle. Used by handlers that need
+// to record events outside the service path (e.g. feedback).
+func (s *AIService) ClassifierMetrics() *ClassifierMetrics {
+	return s.classifierMetrics
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +173,13 @@ func parseTimeRange(raw string) int {
 // ---------------------------------------------------------------------------
 
 func (s *AIService) recordUsageAsync(userID, endpoint, modelName string, inTokens, outTokens int) {
+	costCents := estimateCostCents(modelName, inTokens, outTokens)
+	// Mirror classifier cost into Prometheus so ops can chart cumulative
+	// $$ without scraping postgres. The DB usage_records row is still the
+	// source of truth for per-user accounting.
+	if endpoint == "classify-notification" {
+		s.classifierMetrics.recordCost(costCents)
+	}
 	if s.usage == nil {
 		return
 	}
@@ -171,7 +189,7 @@ func (s *AIService) recordUsageAsync(userID, endpoint, modelName string, inToken
 		Model:        modelName,
 		InputTokens:  inTokens,
 		OutputTokens: outTokens,
-		CostCents:    estimateCostCents(modelName, inTokens, outTokens),
+		CostCents:    costCents,
 		CreatedAt:    time.Now().UTC(),
 	}
 	go func() {

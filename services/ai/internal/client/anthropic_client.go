@@ -62,7 +62,9 @@ func NewAnthropicClient(apiKey, modelName string, logger *slog.Logger) *Anthropi
 	}
 }
 
-// SetBaseURL overrides the API base URL. Intended for testing only.
+// SetBaseURL overrides the API base URL. Used by tests and the optional
+// ANTHROPIC_BASE_URL env override (for local proxy debugging). Production
+// must NOT set the env — see services/ai/cmd/main.go.
 func (c *AnthropicClient) SetBaseURL(url string) {
 	c.baseURL = strings.TrimRight(url, "/")
 }
@@ -348,7 +350,17 @@ func (c *AnthropicClient) consumeStream(ctx context.Context, body io.ReadCloser,
 
 func (c *AnthropicClient) setCommonHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
+	// Anthropic native API authenticates via x-api-key (keys start "sk-ant-").
+	// When the operator routes calls through a third-party proxy for local
+	// testing (ANTHROPIC_BASE_URL override + non-anthropic key prefix like
+	// "sk-fp-"), the proxy uses standard Authorization: Bearer instead.
+	// Pick based on the key shape so we never send Bearer to the real
+	// Anthropic endpoint by accident.
+	if strings.HasPrefix(c.apiKey, "sk-ant-") {
+		req.Header.Set("x-api-key", c.apiKey)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 	req.Header.Set("anthropic-version", anthropicAPIVersion)
 	req.Header.Set("User-Agent", "OrbitMessenger/1.0")
 }

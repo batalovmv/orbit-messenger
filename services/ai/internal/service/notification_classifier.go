@@ -25,22 +25,30 @@ func (s *AIService) ClassifyNotification(
 		return nil, err
 	}
 
+	start := time.Now()
+
 	// Check cache.
 	cacheKey := notifCacheKey(userID, req.SenderID, req.MessageText)
 	if cached, err := s.getNotifCache(ctx, cacheKey); err == nil && cached != nil {
 		cached.Cached = true
+		s.classifierMetrics.recordClassify("cache", cached.Priority)
+		s.classifierMetrics.recordDuration("cache", time.Since(start).Seconds())
 		return cached, nil
 	}
 
 	// Rule-based classification.
 	if result := s.classifyByRules(req); result != nil {
 		s.setNotifCache(ctx, cacheKey, result)
+		s.classifierMetrics.recordClassify("rule", result.Priority)
+		s.classifierMetrics.recordDuration("rule", time.Since(start).Seconds())
 		return result, nil
 	}
 
 	// Claude Haiku fallback.
 	result := s.classifyWithAI(ctx, req)
 	s.setNotifCache(ctx, cacheKey, result)
+	s.classifierMetrics.recordClassify(result.Source, result.Priority)
+	s.classifierMetrics.recordDuration(result.Source, time.Since(start).Seconds())
 	return result, nil
 }
 

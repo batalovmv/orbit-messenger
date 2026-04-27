@@ -111,6 +111,8 @@ func (h *NotificationHandler) notificationFeedback(c *fiber.Ctx) error {
 		return response.Error(c, apperror.Internal(err.Error()))
 	}
 
+	h.svc.ClassifierMetrics().RecordFeedback(req.ClassifiedPriority, req.UserOverride)
+
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
