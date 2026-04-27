@@ -1,9 +1,25 @@
 #Main {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
   height: 100%;
+
   text-align: left;
 
-  &.folders-sidebar-visible {
+  > .main-area {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+
+    @media (min-width: 926px) {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: 100%;
+    }
+  }
+
+  &.folders-sidebar-visible > .main-area {
     grid-template-columns: auto auto 1fr;
   }
 
@@ -13,12 +29,6 @@
 
   @media (max-width: 600px) {
     height: calc(var(--vh, 1vh) * 100);
-  }
-
-  @media (min-width: 926px) {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: 100%;
   }
 }
 

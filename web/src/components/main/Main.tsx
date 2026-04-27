@@ -513,10 +513,13 @@ const Main = ({
 
   return (
     <div ref={containerRef} id="Main" className={className}>
-      <FoldersSidebar isMobile={isMobile} isActive={isFoldersSidebarShown} />
-      <LeftColumn ref={leftColumnRef} isFoldersSidebarShown={isFoldersSidebarShown} />
-      <MiddleColumn leftColumnRef={leftColumnRef} isMobile={isMobile} />
-      <RightColumn isMobile={isMobile} />
+      <MaintenanceBanner />
+      <div className="main-area">
+        <FoldersSidebar isMobile={isMobile} isActive={isFoldersSidebarShown} />
+        <LeftColumn ref={leftColumnRef} isFoldersSidebarShown={isFoldersSidebarShown} />
+        <MiddleColumn leftColumnRef={leftColumnRef} isMobile={isMobile} />
+        <RightColumn isMobile={isMobile} />
+      </div>
       <MediaViewer isOpen={isMediaViewerOpen} />
       <ForwardRecipientPicker isOpen={isForwardModalOpen} />
       <DraftRecipientPicker requestedDraft={requestedDraft} />
@@ -552,7 +555,6 @@ const Main = ({
       <MessageListHistoryHandler />
       <CompliancePanel isOpen={isCompliancePanelOpen} />
       <AdminPanel isOpen={isAdminPanelOpen} />
-      <MaintenanceBanner />
       <DeleteFolderDialog folder={deleteFolderDialog} />
       <ReactionPicker isOpen={isReactionPickerOpen} />
       <DeleteMessageModal isOpen={isDeleteMessageModalOpen} />

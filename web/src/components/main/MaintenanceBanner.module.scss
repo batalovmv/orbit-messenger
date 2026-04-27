@@ -1,13 +1,11 @@
 .banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1500; /* above left/right columns, below modals */
+  position: relative;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  width: 100%;
   padding: 0.5rem 1rem;
   background: linear-gradient(90deg, #ffb84d, #ff9426);
   color: #2b1d05;
