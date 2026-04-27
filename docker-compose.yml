@@ -15,10 +15,14 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-orbit}
       POSTGRES_USER: ${POSTGRES_USER:-orbit}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      R2_ENDPOINT: ${R2_ENDPOINT}
+      # R2/MinIO creds for wal-g (consumed via /etc/wal-g.env.sh by both
+      # archive_command and base-backup runs). For local dev we point at
+      # the in-stack `minio` service rather than the public R2 endpoint.
+      R2_ENDPOINT: ${R2_ENDPOINT_INTERNAL:-http://minio:9000}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
-      R2_BUCKET: ${R2_BUCKET:-orbit-backups}
+      R2_BUCKET: ${R2_BUCKET:-orbit-media}
+      R2_BACKUP_WAL_BUCKET: ${R2_BACKUP_WAL_BUCKET:-orbit-backup-wal}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
@@ -341,7 +345,9 @@ services:
       BACKUP_CRON: ${BACKUP_CRON:-0 */4 * * *}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE}
-      R2_ENDPOINT: ${R2_ENDPOINT}
+      # Inside the docker network we always talk to the in-stack minio.
+      # On Saturn this gets pointed at the real R2 endpoint via env override.
+      R2_ENDPOINT: ${R2_ENDPOINT_INTERNAL:-http://minio:9000}
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       R2_BACKUP_BUCKET: ${R2_BACKUP_BUCKET:-orbit-backups}

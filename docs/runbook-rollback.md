@@ -105,8 +105,10 @@ built-in down migration.
    ```
 
 3. **Restore from backup** — nuclear option. Use
-   [runbook-restore.md](runbook-restore.md). RPO ≈ 4 hours. Only when data is
-   corrupted or options 1–2 are not viable.
+   [runbook-restore.md](runbook-restore.md). RPO ≈ 4 hours via pg_dump cron;
+   if WAL/PITR has been activated per [runbooks/saturn-wal-pitr-enablement.md](runbooks/saturn-wal-pitr-enablement.md)
+   then PITR via [runbooks/pitr-restore.md](runbooks/pitr-restore.md) gives sub-minute RPO.
+   Only when data is corrupted or options 1–2 are not viable.
 
 ### Pre-rollback checklist for migrations
 
@@ -124,6 +126,32 @@ built-in down migration.
 | Saturn redeploy | ~2–3 min |
 | Smoke checks | ~2 min |
 | **Total** | **~7–8 min** |
+
+## Pre-rollback sanity checks (added 2026-04-27)
+
+Before relying on this runbook in an actual incident, confirm the following are healthy:
+
+- `docker exec orbit-postgres-1 psql -U orbit -d orbit -c "SHOW archive_mode;"` returns `on`. If `off`, PITR will not work — see [runbooks/saturn-wal-pitr-enablement.md](runbooks/saturn-wal-pitr-enablement.md).
+- `docker logs --tail 20 orbit-backup-cron-1` shows recent `status=ok` lines, not env-validation errors. If broken, the 4 h pg_dump fallback isn't actually running.
+- Latest backup in R2 is < 4 h old: `aws --endpoint-url $R2_ENDPOINT s3 ls s3://$R2_BACKUP_BUCKET/postgres/ | tail -1`.
+- Saturn dashboard shows all 8 services green BEFORE you push the revert. A revert into a half-broken stack will only deepen the outage.
+
+If any of those fails, fix THAT first, then proceed with rollback.
+
+## Recent prod changes — release-specific smoke checklist
+
+After a rollback or a forward fix, run the smoke checklist from
+[runbook-post-deploy.md](runbook-post-deploy.md). For changes touching the
+PWA/web bundle (e.g. commit `225e95a feat(web): PWA hardening pass`), also
+quickly cycle through:
+
+- [ ] Hard-reload the web app — verify SW activates (`navigator.serviceWorker.getRegistration()` returns one).
+- [ ] Login flow works (no JWT 401 storm post-deploy).
+- [ ] Open a chat, send a message — round-trip in < 1 s.
+- [ ] DevTools → Application → Cache Storage shows `tt-media`, `tt-media-progressive`, `tt-media-avatars`, `tt-assets` (not legacy `tt-cache`).
+- [ ] POST `/api/v1/rum` returns 204 after the page is loaded (auth required).
+- [ ] If anything WebRTC-related changed: run [runbooks/cross-browser-call-test.md](runbooks/cross-browser-call-test.md).
+- [ ] If push-related: run [runbooks/iphone-push-test.md](runbooks/iphone-push-test.md).
 
 ## Escalation
 

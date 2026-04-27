@@ -7,3 +7,10 @@ RUN curl -fL https://github.com/wal-g/wal-g/releases/download/v3.0.8/wal-g-pg-22
 RUN wal-g --version
 COPY wal-g.env.sh /etc/wal-g.env.sh
 COPY setup-archiving.sh /docker-entrypoint-initdb.d/99-setup-archiving.sh
+# Runtime hook that re-applies archive config to existing PGDATA volumes. The
+# official postgres image runs /docker-entrypoint.d/*.sh on every start
+# (between initdb and starting the server), so this is the place for
+# idempotent post-init wiring.
+COPY ensure-archiving.sh /docker-entrypoint.d/00-ensure-archiving.sh
+RUN chmod +x /docker-entrypoint.d/00-ensure-archiving.sh \
+    && chmod +x /docker-entrypoint-initdb.d/99-setup-archiving.sh

@@ -35,6 +35,13 @@ set -euo pipefail
 BACKUP_PREFIX="${BACKUP_PREFIX:-postgres/}"
 TMPDIR="${BACKUP_TMPDIR:-/tmp}"
 
+# The cron container runs as `nobody`, which has no writable home, so gpg's
+# default GNUPGHOME (~/.gnupg) is unwritable. Pin it to a per-run temp dir
+# inside TMPDIR so symmetric encryption can store its session state.
+GNUPGHOME="$(mktemp -d "${TMPDIR}/gnupg.XXXXXX")"
+chmod 700 "$GNUPGHOME"
+export GNUPGHOME
+
 # Fail fast if the passphrase is obviously too weak. A symmetric GPG
 # backup is only as strong as its passphrase.
 if [ "${#BACKUP_ENCRYPTION_PASSPHRASE}" -lt 32 ]; then
@@ -44,7 +51,7 @@ fi
 
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 WORKDIR="$(mktemp -d "${TMPDIR}/orbit-backup.XXXXXX")"
-trap 'rm -rf "$WORKDIR"' EXIT
+trap 'rm -rf "$WORKDIR" "$GNUPGHOME"' EXIT
 
 DUMP_FILE="$WORKDIR/orbit-${TIMESTAMP}.sql.gz.gpg"
 OBJECT_KEY="${BACKUP_PREFIX}orbit-${TIMESTAMP}.sql.gz.gpg"
