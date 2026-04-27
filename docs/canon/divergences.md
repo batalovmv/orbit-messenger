@@ -1,3 +1,17 @@
 # Divergences from TZ / PHASES.md
 
-<!-- TODO: list every place where docs say X but reality is Y (see CLAUDE.md table for starting point) -->
+Где документация говорит X, но реально Y. **НЕ реализуй буквально по ТЗ — сверяйся с этой таблицей.**
+
+| Документ / план | Что написано | Реальность |
+|-----------------|--------------|------------|
+| Phase 7 | Signal Protocol E2E между клиентами | **Откачено.** Только AES-256-GCM at-rest (shared package `crypto`). Compliance-модель: администрация имеет полный доступ к переписке. |
+| TZ-ORBIT-MESSENGER.md | Глобальные роли `superadmin` / `compliance` | **Не реализовано.** Только chat-level RBAC через `permissions` bitmask. |
+| TZ-ORBIT-MESSENGER.md | Channels (broadcast-каналы как в Telegram) | **Удалены.** Migration `035` дропнула таблицы и связанные сущности. |
+| Phase 8D | 4 NATS streams (events / messages / presence / calls) | **1 stream `ORBIT`** с 24h retention, subject-routing внутри. |
+| Phase 8D | 5 Redis keys (jwt_cache, jwt_blacklist, ratelimit, presence, sessions) | **3 prefixes:** `jwt_cache`, `jwt_blacklist`, `ratelimit`. Presence/sessions — иначе. |
+| CLAUDE.md (старый) | "go 1.25 запрещено в новых сервисах" | **Исключение:** `services/gateway` на 1.25 из-за embedded `nats-server/v2` в тестах. Все остальные — 1.24. |
+| TZ-ORBIT-MESSENGER.md | Architecture v2.0 ссылается на channels/superadmin | Считай эти разделы устаревшими; см. `architecture.md`. |
+
+## Правило поддержки
+
+При обнаружении нового расхождения — **обнови эту таблицу в том же PR**, который зафиксировал разрыв в коде.
