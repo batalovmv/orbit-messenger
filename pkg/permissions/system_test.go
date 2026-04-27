@@ -51,7 +51,7 @@ func TestSystemRolePermissions_Superadmin(t *testing.T) {
 
 func TestSystemRolePermissions_Compliance(t *testing.T) {
 	got := SystemRolePermissions("compliance")
-	expected := SysViewAllChats | SysReadAllContent | SysViewAuditLog | SysExportData
+	expected := SysViewAllChats | SysReadAllContent | SysViewAuditLog | SysExportData | SysViewBotLogs
 	if got != expected {
 		t.Fatalf("compliance should get %d, got %d", expected, got)
 	}
@@ -59,7 +59,7 @@ func TestSystemRolePermissions_Compliance(t *testing.T) {
 
 func TestSystemRolePermissions_Admin(t *testing.T) {
 	got := SystemRolePermissions("admin")
-	expected := SysManageUsers | SysManageInvites | SysManageContent
+	expected := SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs
 	if got != expected {
 		t.Fatalf("admin should get %d, got %d", expected, got)
 	}
@@ -98,7 +98,7 @@ func TestHasSysPermission_SuperadminHasAll(t *testing.T) {
 
 func TestHasSysPermission_ComplianceReadOnly(t *testing.T) {
 	// Should have
-	should := []int64{SysViewAllChats, SysReadAllContent, SysViewAuditLog, SysExportData}
+	should := []int64{SysViewAllChats, SysReadAllContent, SysViewAuditLog, SysExportData, SysViewBotLogs}
 	for _, bit := range should {
 		if !HasSysPermission("compliance", bit) {
 			t.Errorf("compliance should have permission bit %d", bit)
@@ -114,7 +114,7 @@ func TestHasSysPermission_ComplianceReadOnly(t *testing.T) {
 }
 
 func TestHasSysPermission_AdminManageOnly(t *testing.T) {
-	should := []int64{SysManageUsers, SysManageInvites, SysManageContent}
+	should := []int64{SysManageUsers, SysManageInvites, SysManageContent, SysManageBots, SysManageIntegrations, SysViewBotLogs}
 	for _, bit := range should {
 		if !HasSysPermission("admin", bit) {
 			t.Errorf("admin should have permission bit %d", bit)
