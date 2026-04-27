@@ -68,7 +68,9 @@ import AudioPlayer from '../middle/panes/AudioPlayer';
 import ModalContainer from '../modals/ModalContainer';
 import RightColumn from '../right/RightColumn';
 import AttachBotRecipientPicker from './AttachBotRecipientPicker.async';
+import AdminPanel from './admin/AdminPanel.async';
 import CompliancePanel from './compliance/CompliancePanel.async';
+import MaintenanceBanner from './MaintenanceBanner';
 import DeleteFolderDialog from './DeleteFolderDialog.async';
 import Dialogs from './Dialogs';
 import DownloadManager from './DownloadManager';
@@ -113,6 +115,7 @@ type StateProps = {
   newContactByPhoneNumber?: boolean;
   isRatePhoneCallModalOpen?: boolean;
   isCompliancePanelOpen?: boolean;
+  isAdminPanelOpen?: boolean;
   requestedAttachBotInChat?: TabState['requestedAttachBotInChat'];
   requestedDraft?: TabState['requestedDraft'];
   deleteFolderDialog?: ApiChatFolder;
@@ -157,6 +160,7 @@ const Main = ({
   requestedAttachBotInChat,
   requestedDraft,
   isCompliancePanelOpen,
+  isAdminPanelOpen,
   isDeleteMessageModalOpen,
   isReactionPickerOpen,
   deleteFolderDialog,
@@ -547,6 +551,8 @@ const Main = ({
       <AttachBotRecipientPicker requestedAttachBotInChat={requestedAttachBotInChat} />
       <MessageListHistoryHandler />
       <CompliancePanel isOpen={isCompliancePanelOpen} />
+      <AdminPanel isOpen={isAdminPanelOpen} />
+      <MaintenanceBanner />
       <DeleteFolderDialog folder={deleteFolderDialog} />
       <ReactionPicker isOpen={isReactionPickerOpen} />
       <DeleteMessageModal isOpen={isDeleteMessageModalOpen} />
@@ -573,6 +579,7 @@ export default memo(withGlobal<OwnProps>(
       newContact,
       ratingPhoneCall,
       compliancePanel,
+      adminPanel,
       deleteMessageModal,
       isMasterTab,
       deleteFolderDialogModal,
@@ -613,6 +620,7 @@ export default memo(withGlobal<OwnProps>(
       isRatePhoneCallModalOpen: Boolean(ratingPhoneCall),
       requestedAttachBotInChat,
       isCompliancePanelOpen: compliancePanel?.isOpen,
+      isAdminPanelOpen: adminPanel?.isOpen,
       isDeleteMessageModalOpen: Boolean(deleteMessageModal),
       deleteFolderDialog,
       isMasterTab,

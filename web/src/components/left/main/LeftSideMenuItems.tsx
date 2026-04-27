@@ -89,12 +89,17 @@ const LeftSideMenuItems = ({
     openUrl,
     openChatWithInfo,
     openCompliancePanel,
+    openAdminPanel,
   } = getActions();
 
   const hasComplianceAccess = saturnRole === 'compliance' || saturnRole === 'superadmin';
+  const hasAdminAccess = saturnRole === 'admin' || saturnRole === 'superadmin';
 
   const handleOpenCompliance = useLastCallback(() => {
     openCompliancePanel();
+  });
+  const handleOpenAdmin = useLastCallback(() => {
+    openAdminPanel({ tab: 'flags' });
   });
   const lang = useLang();
 
@@ -210,6 +215,14 @@ const LeftSideMenuItems = ({
           onClick={handleOpenCompliance}
         >
           {lang('ComplianceOpenPanel')}
+        </MenuItem>
+      )}
+      {hasAdminAccess && (
+        <MenuItem
+          icon="admin"
+          onClick={handleOpenAdmin}
+        >
+          {lang('AdminOpenPanel')}
         </MenuItem>
       )}
       {bots.map((bot) => (

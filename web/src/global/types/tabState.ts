@@ -546,6 +546,14 @@ export type TabState = {
     chatId?: string;
   };
 
+  // Orbit: Admin operations panel. Feature flags, maintenance banner, audit log search.
+  // Only rendered when saturnRole is admin/superadmin (subset of features depend on the
+  // exact bitmask — backend is the source of truth, the panel is just a wrapper).
+  adminPanel?: {
+    isOpen: boolean;
+    tab?: 'flags' | 'maintenance' | 'audit';
+  };
+
   isWebAppsCloseConfirmationModalOpen?: boolean;
 
   isGiftRecipientPickerOpen?: boolean;

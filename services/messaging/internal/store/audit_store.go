@@ -22,6 +22,11 @@ type AuditStore interface {
 }
 
 // AuditFilter defines query parameters for listing audit log entries.
+//
+// Q is a free-text search applied with ILIKE across action, target_type,
+// target_id, the joined actor display name, and the JSONB-as-text rendering
+// of details. At 150 users on-prem this is fast enough without a tsvector
+// or pg_trgm index; revisit if the table grows past ~100k rows.
 type AuditFilter struct {
 	ActorID    *uuid.UUID
 	Action     *string
@@ -29,6 +34,7 @@ type AuditFilter struct {
 	TargetID   *string
 	Since      *time.Time
 	Until      *time.Time
+	Q          string
 	Cursor     string
 	Limit      int
 }
@@ -100,6 +106,20 @@ func (s *auditStore) List(ctx context.Context, filter AuditFilter) ([]model.Audi
 		args = append(args, filter.Cursor)
 		argIdx++
 	}
+	if q := strings.TrimSpace(filter.Q); q != "" {
+		// Free-text search across denormalised audit columns + joined actor
+		// display name + the JSONB-as-text rendering of details. ILIKE is
+		// sufficient at 150-user scale (see audit_store doc); the parameter
+		// is bound, not interpolated, so this is injection-safe.
+		pattern := "%" + escapeLike(q) + "%"
+		conditions = append(conditions, fmt.Sprintf(
+			"(a.action ILIKE $%d OR a.target_type ILIKE $%d OR a.target_id ILIKE $%d "+
+				"OR COALESCE(u.display_name,'') ILIKE $%d OR a.details::text ILIKE $%d "+
+				"OR host(a.ip_address) ILIKE $%d)",
+			argIdx, argIdx, argIdx, argIdx, argIdx, argIdx))
+		args = append(args, pattern)
+		argIdx++
+	}
 
 	where := ""
 	if len(conditions) > 0 {
@@ -151,4 +171,12 @@ func (s *auditStore) List(ctx context.Context, filter AuditFilter) ([]model.Audi
 	}
 
 	return entries, cursor, hasMore, nil
+}
+
+// escapeLike escapes the three characters that have meaning inside an SQL
+// LIKE/ILIKE pattern (\, %, _). The result is then wrapped with %…% by the
+// caller so user input cannot smuggle wildcards.
+func escapeLike(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }

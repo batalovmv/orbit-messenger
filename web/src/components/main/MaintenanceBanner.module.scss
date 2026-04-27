@@ -1,0 +1,37 @@
+.banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1500; /* above left/right columns, below modals */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(90deg, #ffb84d, #ff9426);
+  color: #2b1d05;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.text {
+  flex-shrink: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}

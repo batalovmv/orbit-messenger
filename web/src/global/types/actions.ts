@@ -2225,6 +2225,14 @@ export interface ActionPayloads {
   selectComplianceUser: { userId: string } & WithTabId;
   selectComplianceChat: { chatId: string } & WithTabId;
 
+  // Orbit: Admin operations — feature flags, maintenance banner, audit log search.
+  openAdminPanel: ({ tab?: 'flags' | 'maintenance' | 'audit' } & WithTabId) | undefined;
+  closeAdminPanel: WithTabId | undefined;
+  selectAdminTab: { tab: 'flags' | 'maintenance' | 'audit' } & WithTabId;
+
+  // Orbit: refresh /system/config (maintenance banner + auth-exposed flags).
+  refreshSaturnSystemConfig: WithTabId | undefined;
+
   openGiftRecipientPicker: WithTabId | undefined;
   closeGiftRecipientPicker: WithTabId | undefined;
 

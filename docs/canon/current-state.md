@@ -19,8 +19,15 @@
 ## Что в проде
 
 - 8 Go-микросервисов + Meilisearch + web — все на Saturn.ac, auto-deploy с `main`
-- PostgreSQL (миграции до 065), NATS (1 stream `ORBIT`, 24h), Redis (3 префикса), R2
+- PostgreSQL (миграции до 066), NATS (1 stream `ORBIT`, 24h), Redis (3 префикса), R2
 - Frontend: форк Telegram Web A на Teact, TypeScript 5.9 strict, Webpack 5
+
+### Operator controls (мig 066)
+
+- **Feature flags**: `pkg/featureflags/registry.go` — единый реестр известных ключей с уровнем экспозиции (`unauth/auth/admin/server_only`) и safety class. Админский CRUD: `PATCH /api/v1/admin/feature-flags/:key` (gate `SysManageSettings`, audit fail-closed). Клиент полит `/system/config` (auth) и `/public/system/config` (без JWT) с TTL-кэшем 30s в messaging.
+- **Maintenance banner**: одна строка в `feature_flags(maintenance_mode)`. Метаданные `{message, block_writes, since, updated_by}`. Gateway middleware (`services/gateway/internal/middleware/maintenance.go`) при `block_writes=true` отклоняет POST/PUT/PATCH/DELETE с 503+`Retry-After` для не-superadmin; superadmin проходит сквозь. Веб-баннер рисуется через `MaintenanceBanner.tsx` поверх Main.
+- **Audit log search**: `audit_store.AuditFilter.Q` — ILIKE по `action / target_type / target_id / actor.display_name / details::text / ip`. Backslash/`%`/`_` экранируются. На 150-user pilot хватает; pg_trgm/tsvector — отложено.
+- **Утечка operator metadata**: `MaintenanceState` (full) с `since/updated_by` идёт ТОЛЬКО в админский `/admin/feature-flags`. Public + auth `/system/config` отдают `PublicMaintenanceState` (active/message/block_writes only). Locked test: `TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata`.
 
 ## Открытые направления Phase 8D
 

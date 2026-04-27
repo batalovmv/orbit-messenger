@@ -133,6 +133,24 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	return nil
 }
 
+// PublicSystemConfigProxy returns a handler that proxies the unauthenticated
+// system config (maintenance state + unauth-exposure flags) from messaging
+// without requiring a JWT. Used by the web client's pre-login shell to show
+// the "технические работы" banner on the login screen.
+func PublicSystemConfigProxy(messagingURL, frontendURL string) fiber.Handler {
+	client := &fasthttp.Client{ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second}
+	return func(c *fiber.Ctx) error {
+		url := strings.TrimRight(messagingURL, "/") + "/public/system/config"
+		if err := doProxy(c, url, client, frontendURL); err != nil {
+			slog.Error("public system config proxy error", "error", err, "url", url)
+			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+				"error": "service_unavailable", "message": "Messaging service unavailable", "status": 502,
+			})
+		}
+		return nil
+	}
+}
+
 // PublicInviteProxy returns a handler that proxies invite info requests without JWT.
 func PublicInviteProxy(messagingURL, frontendURL string) fiber.Handler {
 	client := &fasthttp.Client{ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second}

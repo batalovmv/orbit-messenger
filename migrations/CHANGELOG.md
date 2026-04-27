@@ -202,3 +202,6 @@ Phase 8F HR-бот шаблон: `bot_hr_requests` (bot_id, chat_id, user_id, re
 
 ## 065 — bot_share_user_emails (2026-04-25)
 В `bots` добавлено `share_user_emails BOOLEAN default false`. Opt-in: владелец бота явно разрешает инжект `user.email` в `Update.from`. Дефолт false для безопасности — существующие боты не меняют поведение.
+
+## 066 — maintenance_mode_and_audit_search (2026-04-27)
+В `feature_flags` добавлен сид `maintenance_mode` (enabled=false, metadata `{message,block_writes}`). Используется одновременно как kill-switch и как баннер «технические работы»: gateway middleware блокирует мутирующие запросы для не-superadmin, фронт показывает баннер. Поиск в `audit_log` остался на ILIKE (объём маленький — см. design memo) — индексы pg_trgm/tsvector отложены до фактического роста.

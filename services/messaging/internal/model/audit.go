@@ -36,4 +36,11 @@ const (
 	AuditAuditView          = "audit.view"
 	AuditUserListRead       = "user.list_read"
 	AuditDataExport         = "data.export"
+
+	// Feature flag / maintenance mode (added in mig 066).
+	AuditFeatureFlagList   = "feature_flag.list"
+	AuditFeatureFlagSet    = "feature_flag.set"
+	AuditMaintenanceEnable = "maintenance.enable"
+	AuditMaintenanceUpdate = "maintenance.update"
+	AuditMaintenanceDisable = "maintenance.disable"
 )

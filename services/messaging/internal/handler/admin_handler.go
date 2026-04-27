@@ -185,6 +185,15 @@ func (h *AdminHandler) GetAuditLog(c *fiber.Ctx) error {
 			filter.Until = &t
 		}
 	}
+	// Free-text search across action / target / actor name / details. Cap at
+	// 200 chars — long inputs are almost certainly mistakes (paste of a JWT
+	// token, etc.) and would slow the ILIKE scan with no hit.
+	if q := c.Query("q"); q != "" {
+		if len(q) > 200 {
+			q = q[:200]
+		}
+		filter.Q = q
+	}
 
 	entries, nextCursor, hasMore, err := h.svc.GetAuditLog(
 		c.Context(), actorID, getUserRole(c), filter,

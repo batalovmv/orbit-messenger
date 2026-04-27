@@ -155,6 +155,7 @@ func main() {
 	auditStore := store.NewAuditStore(pool)
 	translationStore := store.NewTranslationStore(pool)
 	folderStore := store.NewFolderStore(pool)
+	featureFlagStore := store.NewFeatureFlagStore(pool)
 
 	aiServiceURL := config.EnvOr("AI_SERVICE_URL", "http://localhost:8085")
 
@@ -278,6 +279,8 @@ func main() {
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
 	adminSvc := service.NewAdminService(userStore, chatStore, messageStore, auditStore, natsPublisher, rdb)
 	adminHandler := handler.NewAdminHandler(adminSvc)
+	featureFlagSvc := service.NewFeatureFlagService(featureFlagStore, auditStore)
+	featureFlagHandler := handler.NewFeatureFlagHandler(featureFlagSvc)
 	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
 	folderHandler := handler.NewFolderHandler(folderSvc, logger)
 
@@ -294,6 +297,11 @@ func main() {
 	})
 
 	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
+
+	// Public unauthenticated config — mounted off the app root, NOT inside
+	// the X-Internal-Token group, so the gateway can proxy it without JWT.
+	// Hardened by the gateway with rate limiting before reaching this point.
+	featureFlagHandler.RegisterPublic(app)
 
 	// Register routes behind internal token middleware.
 	// X-User-ID is only trusted when X-Internal-Token is valid,
@@ -313,6 +321,7 @@ func main() {
 	pollHandler.Register(api)
 	scheduledHandler.Register(api)
 	adminHandler.Register(api)
+	featureFlagHandler.Register(api)
 	folderHandler.Register(api)
 
 	// Graceful shutdown

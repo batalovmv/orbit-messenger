@@ -266,6 +266,13 @@ func main() {
 		Redis: rdb, MaxPerMin: 20, KeyPrefix: "invite",
 	})
 	app.Get("/api/v1/chats/invite/:hash", inviteRateLimit, handler.PublicInviteProxy(messagingServiceURL, frontendURL))
+	// Unauthenticated system config — maintenance banner + unauth-safe flags.
+	// Cheap, idempotent, no PII; the messaging service caches behind it. Rate
+	// limit reuses the API limiter via per-IP keying (low-traffic by design).
+	publicConfigRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+		Redis: rdb, MaxPerMin: 60, KeyPrefix: "system-config",
+	})
+	app.Get("/api/v1/public/system/config", publicConfigRateLimit, handler.PublicSystemConfigProxy(messagingServiceURL, frontendURL))
 	app.All("/api/v1/bot/:token", handler.PublicBotAPIProxy(botsURL, frontendURL))
 	app.All("/api/v1/bot/:token/*", handler.PublicBotAPIProxy(botsURL, frontendURL))
 	// Accept both POST (default Orbit-native, InsightFlow/ASA presets) and
@@ -276,7 +283,11 @@ func main() {
 	// API group with JWT + rate limiting
 	// Note: media GET routes are handled by apiGroup.All("/media/*") in SetupProxy,
 	// which applies JWT middleware and forwards X-Internal-Token to the media service.
-	apiGroup := app.Group("/api/v1", jwtMW, apiRateLimit)
+	maintenanceMW := middleware.MaintenanceMiddleware(middleware.MaintenanceConfig{
+		MessagingURL: messagingServiceURL,
+		PollInterval: 10 * time.Second,
+	})
+	apiGroup := app.Group("/api/v1", jwtMW, maintenanceMW, apiRateLimit)
 
 	// Stricter per-user limit for AI endpoints — must be registered before
 	// SetupProxy so the middleware applies to apiGroup.All("/ai/*").

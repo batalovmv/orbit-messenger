@@ -89,6 +89,13 @@ export type GlobalState = {
   connectionState?: ApiUpdateConnectionStateType;
   currentUserId?: string;
   saturnRole?: 'superadmin' | 'compliance' | 'admin' | 'member';
+  // Orbit: short-lived snapshot of /system/config — maintenance banner state
+  // and the auth-exposed feature flags. Refreshed on a poll (see actions/api/saturnSystem).
+  saturnSystem?: {
+    maintenance: { active: boolean; message?: string; blockWrites?: boolean };
+    flags: Record<string, boolean>;
+    fetchedAt: number;
+  };
   isSyncing?: boolean;
   isAppConfigLoaded?: boolean;
   isAppUpdateAvailable?: boolean;

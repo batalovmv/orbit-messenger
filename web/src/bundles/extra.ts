@@ -14,6 +14,7 @@ export { default as MinimizedWebAppModal } from '../components/modals/webApp/Min
 export { default as AttachBotInstallModal } from '../components/modals/attachBotInstall/AttachBotInstallModal';
 export { default as DeleteFolderDialog } from '../components/main/DeleteFolderDialog';
 export { default as CompliancePanel } from '../components/main/compliance/CompliancePanel';
+export { default as AdminPanel } from '../components/main/admin/AdminPanel';
 export { default as StatusPickerMenu } from '../components/left/main/StatusPickerMenu';
 export { default as SuggestedStatusModal } from '../components/modals/suggestedStatus/SuggestedStatusModal';
 export { default as DeleteAccountModal } from '../components/modals/deleteAccount/DeleteAccountModal';
