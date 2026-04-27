@@ -1,6 +1,6 @@
 # Web TypeScript Debt — Phase 8D
 
-22 `@ts-expect-error TODO(phase-8D-cleanup)` markers in 13 files.
+20 `@ts-expect-error TODO(phase-8D-cleanup)` markers in 12 files.
 Tracked here so they don't drift into "forgotten" status. Pre-commit hook
 allows them only with the `TODO(...)` marker — see `.git/hooks/pre-commit`.
 
@@ -42,12 +42,10 @@ narrowing issue. Fix with `new Uint8Array(buffer.buffer)` or explicit cast.
 
 - `CompliancePanel.tsx:85, 107`
 
-### Misc (5)
+### Misc (3)
 
-- `defaultTranslateLang` missing from `StateProps` return — `ContextMenuContainer.tsx:904`
 - `tabId` not in `startBot` payload type — `actions/api/bots.ts:510`
 - Mock spread type mismatch — `actions/api/settings.test.ts:62`
-- `loadAndChangeLanguage` not exported from `oldLangProvider` — `actions/ui/settings.ts:10`
 - Handler signature mismatch (undefined arg) — `useChatContextActions.ts:181`
 
 ## How to clear

@@ -78,8 +78,14 @@ export function useViewTransition(): ViewTransitionController {
       isReady = true;
       setTransitionState('animating');
     }).catch((e: unknown) => {
-      // eslint-disable-next-line no-console
-      console.error('View transition error', e, types?.getTypes());
+      // AbortError is expected when we call transition.skipTransition() below
+      // after the SKIP_TIMEOUT — log it as debug, only treat other errors as
+      // genuine failures.
+      const isAborted = e instanceof DOMException && e.name === 'AbortError';
+      if (!isAborted) {
+        // eslint-disable-next-line no-console
+        console.error('View transition error', e, types?.getTypes());
+      }
       setTransitionState('skipped');
       requestMutation(() => {
         cleanUp(types);
