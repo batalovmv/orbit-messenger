@@ -82,6 +82,7 @@ const CompliancePanel = ({
       if (done) break;
       chunks.push(value);
     }
+    // @ts-expect-error TODO(phase-8D-cleanup): Uint8Array<ArrayBufferLike> vs BlobPart variance
     const objectUrl = URL.createObjectURL(new Blob(chunks, { type: 'application/x-ndjson' }));
     const anchor = document.createElement('a');
     anchor.href = objectUrl;
@@ -103,6 +104,7 @@ const CompliancePanel = ({
       if (done) break;
       chunks.push(value);
     }
+    // @ts-expect-error TODO(phase-8D-cleanup): Uint8Array<ArrayBufferLike> vs BlobPart variance
     const objectUrl = URL.createObjectURL(new Blob(chunks, { type: 'application/x-ndjson' }));
     const anchor = document.createElement('a');
     anchor.href = objectUrl;

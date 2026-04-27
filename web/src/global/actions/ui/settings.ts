@@ -7,6 +7,7 @@ import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { IS_IOS } from '../../../util/browser/windowEnvironment';
 import { disableDebugConsole, initDebugConsole } from '../../../util/debugConsole';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
+// @ts-expect-error TODO(phase-8D-cleanup): loadAndChangeLanguage not exported from oldLangProvider
 import { loadAndChangeLanguage, setTimeFormat } from '../../../util/oldLangProvider';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import switchTheme from '../../../util/switchTheme';

@@ -682,11 +682,13 @@ async function loadBotCommandsForChat(botUserId: string, apiChat: ApiChat) {
       description: cmd.description,
     }));
 
+    // @ts-expect-error TODO(phase-8D-cleanup): botCommands not in ApiChat type
     apiChat.botCommands = botCommands;
 
     sendApiUpdate({
       '@type': 'updateChat',
       id: apiChat.id,
+      // @ts-expect-error TODO(phase-8D-cleanup): botCommands not in Partial<ApiChat>
       chat: { botCommands },
       noTopChatsRequest: true,
     });

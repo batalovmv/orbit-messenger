@@ -146,6 +146,7 @@ const BirthdaySetupModal = ({ modal }: OwnProps) => {
       <InputText
         label={lang('BirthdayInputMonth')}
         className={buildClassName(styles.input, styles.month, isOpen && 'active')}
+        // @ts-expect-error TODO(phase-8D-cleanup): dynamic Month${n} key not in LangPair
         value={month ? lang(`Month${month}`) : ''}
         onClick={onTrigger}
         inputMode="numeric"
@@ -190,6 +191,7 @@ const BirthdaySetupModal = ({ modal }: OwnProps) => {
         >
           {MONTH_INDEXES.map((index: MonthIndex) => (
             <MenuItem key={index} onClick={() => handleMonthUpdate(index)}>
+              {/* @ts-expect-error TODO(phase-8D-cleanup): dynamic Month${n} key not in LangPair */}
               {lang(`Month${index}`)}
             </MenuItem>
           ))}

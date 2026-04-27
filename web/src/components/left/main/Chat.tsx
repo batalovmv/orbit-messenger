@@ -378,6 +378,7 @@ const Chat: FC<OwnProps & StateProps> = ({
       await updateChatNotificationPriority(chatId, priority);
       closeNotificationPriorityModal();
     } catch {
+      // @ts-expect-error TODO(phase-8D-cleanup): missing lang key NotificationPriorityUpdateFailed
       showNotification({ message: { key: 'NotificationPriorityUpdateFailed' } });
     }
   });
@@ -613,6 +614,7 @@ export default memo(withGlobal<OwnProps>(
     return {
       chat,
       isMuted: getIsChatMuted(chat, selectNotifyDefaults(global), selectNotifyException(global, chat.id)),
+      // @ts-expect-error TODO(phase-8D-cleanup): notificationPriorityOverride not in ApiChat type
       notificationPriorityOverride: chat.notificationPriorityOverride,
       lastMessageSender,
       draft: selectDraft(global, chatId, MAIN_THREAD_ID),

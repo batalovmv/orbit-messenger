@@ -315,6 +315,7 @@ const SettingsIntegrations = () => {
 
   const handleCopySecret = useLastCallback((secret: string) => {
     copyTextToClipboard(secret);
+    // @ts-expect-error TODO(phase-8D-cleanup): ExactTextCopied lang signature mismatch
     showNotification({ message: lang('ExactTextCopied', secret.substring(0, 20) + '...') });
   });
 

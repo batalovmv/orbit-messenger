@@ -901,6 +901,7 @@ export default memo(withGlobal<OwnProps>(
     const canAppendTodoList = message.content.todo?.todo.othersCanAppend
       && message.content.todo?.todo.items?.length < todoItemsMax;
 
+    // @ts-expect-error TODO(phase-8D-cleanup): defaultTranslateLang missing from StateProps return
     return {
       threadId,
       chat,

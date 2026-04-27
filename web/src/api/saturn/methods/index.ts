@@ -230,8 +230,8 @@ interface BackendFolder {
 
 export async function fetchChatFolders() {
   try {
-    const folders = await client.request<BackendFolder[]>('GET', '/messaging/folders');
-    const apiFolders: ApiChatFolder[] = folders.map((f) => ({
+    const folders = await request<BackendFolder[]>('GET', '/messaging/folders');
+    const apiFolders: ApiChatFolder[] = folders.map((f: BackendFolder) => ({
       id: f.id,
       title: { text: f.title },
       emoticon: f.emoticon,
@@ -256,7 +256,7 @@ export function toggleDialogFilterTags() {
 
 export async function sortChatFolders(folderIds: number[]) {
   try {
-    await client.request('PUT', '/messaging/folders/order', { folder_ids: folderIds });
+    await request('PUT', '/messaging/folders/order', { folder_ids: folderIds });
     sendApiUpdate({
       '@type': 'updateChatFoldersOrder',
       orderedIds: folderIds,
@@ -284,7 +284,7 @@ export async function editChatFolder({
       pinned_chat_ids: folderUpdate.pinnedChatIds ?? [],
     };
     if (id === 0) {
-      const created = await client.request<BackendFolder>('POST', '/messaging/folders', body);
+      const created = await request<BackendFolder>('POST', '/messaging/folders', body);
       const apiFolder: ApiChatFolder = {
         id: created.id,
         title: { text: created.title },
@@ -300,7 +300,7 @@ export async function editChatFolder({
         folder: apiFolder,
       });
     } else {
-      const updated = await client.request<BackendFolder>('PUT', `/messaging/folders/${id}`, body);
+      const updated = await request<BackendFolder>('PUT', `/messaging/folders/${id}`, body);
       const apiFolder: ApiChatFolder = {
         id: updated.id,
         title: { text: updated.title },
@@ -324,7 +324,7 @@ export async function editChatFolder({
 
 export async function deleteChatFolder(id: number) {
   try {
-    await client.request('DELETE', `/messaging/folders/${id}`);
+    await request('DELETE', `/messaging/folders/${id}`);
     sendApiUpdate({
       '@type': 'updateChatFolder',
       id,

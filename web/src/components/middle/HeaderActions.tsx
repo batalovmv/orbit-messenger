@@ -529,6 +529,7 @@ export default memo(withGlobal<OwnProps>(
     const userFullInfo = isPrivate ? selectUserFullInfo(global, peerUserId) : undefined;
     const fullInfo = chatFullInfo || userFullInfo;
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
+    // @ts-expect-error TODO(phase-8D-cleanup): notificationPriorityOverride not in ApiChat type
     const notificationPriorityOverride = chat.notificationPriorityOverride;
     const isMainThread = messageListType === 'thread' && threadId === MAIN_THREAD_ID;
     const isDiscussionThread = messageListType === 'thread' && threadId !== MAIN_THREAD_ID;

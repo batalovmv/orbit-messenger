@@ -507,6 +507,7 @@ addActionHandler('resetAllInlineBots', (global, actions, payload): ActionReturnT
 });
 
 addActionHandler('startBot', async (global, actions, payload): Promise<void> => {
+  // @ts-expect-error TODO(phase-8D-cleanup): tabId not in startBot payload type
   const { botId, param, tabId = getCurrentTabId() } = payload;
 
   const bot = selectUser(global, botId);

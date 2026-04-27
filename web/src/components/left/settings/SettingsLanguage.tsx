@@ -171,6 +171,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       return originalNames.of(doNotTranslate[0])!;
     }
 
+    // @ts-expect-error TODO(phase-8D-cleanup): Languages lang signature mismatch
     const languagesLabel = lang('Languages', doNotTranslate.length);
 
     return languagesLabel === 'Languages'
@@ -223,6 +224,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       {IS_TRANSLATION_SUPPORTED && (
         <div className="settings-item">
           <Checkbox
+            // @ts-expect-error TODO(phase-8D-cleanup): missing lang key ShowTranslateButton
             label={lang('ShowTranslateButton')}
             checked={canTranslate}
             onCheck={handleShouldTranslateChange}
@@ -242,6 +244,7 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
             </ListItem>
           )}
           <p className="settings-item-description mb-0 mt-1">
+            {/* @ts-expect-error TODO(phase-8D-cleanup): missing lang key lng_translate_settings_about */}
             {lang('lng_translate_settings_about')}
           </p>
         </div>

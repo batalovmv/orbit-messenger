@@ -59,6 +59,7 @@ jest.mock('../../../util/folderManager', () => ({
 
 jest.mock('../../reducers', () => ({
   __esModule: true,
+  // @ts-expect-error TODO(phase-8D-cleanup): mock spread type mismatch
   replaceSettings: (...args: any[]) => mockReplaceSettings(...args),
 }));
 

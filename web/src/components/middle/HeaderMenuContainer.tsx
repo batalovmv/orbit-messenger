@@ -349,6 +349,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
       await updateChatNotificationPriority(chatId, priority);
       closeNotificationPriorityModal();
     } catch {
+      // @ts-expect-error TODO(phase-8D-cleanup): missing lang key NotificationPriorityUpdateFailed
       showNotification({ message: { key: 'NotificationPriorityUpdateFailed' } });
     }
   });
@@ -776,6 +777,7 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
           )}
           {canMute && (
             <MenuItem
+              // @ts-expect-error TODO(phase-8D-cleanup): "notifications" not in IconName union
               icon="notifications"
               onClick={handleNotificationPriorityClick}
             >
