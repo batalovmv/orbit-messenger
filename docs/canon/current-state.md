@@ -26,6 +26,8 @@
 
 См. memory `project_audit_2026_04_26.md` и `audits/FIX-PLAN.md` — 3 CRITICAL + 9 HIGH + 107 IMPORTANT findings, план разнесён по спринтам.
 
+Известный долг: [`ts-debt.md`](ts-debt.md) — 22 `@ts-expect-error TODO(phase-8D-cleanup)` в 13 web-файлах, плюс ~298 stylelint warnings. TS-долг разгрести до Phase 9; lint — non-blocking, отдельным треком.
+
 Параллельные backlog'и (deferred): WAL/PITR полный (`project_wal_pitr_backlog.md`), Smart Notifications (`project_smart_notifications_backlog.md`), SFU для group calls.
 
 ## Источники правды (вне этого файла)
