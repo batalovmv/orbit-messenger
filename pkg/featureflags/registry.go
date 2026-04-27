@@ -55,8 +55,10 @@ type Definition struct {
 // introduce a new flag — random keys written to the DB will be ignored
 // by the public/auth config endpoints (admin can still see them).
 const (
-	KeyE2EDirectMessages = "e2e_dm_enabled"
-	KeyMaintenanceMode   = "maintenance_mode"
+	KeyE2EDirectMessages   = "e2e_dm_enabled"
+	KeyMaintenanceMode     = "maintenance_mode"
+	KeyCallsGroupEnabled   = "calls_group_enabled"
+	KeyCallsScreenShare    = "calls_screen_share_enabled"
 )
 
 // Registry is the immutable list of known flags. Adding a new flag means
@@ -75,6 +77,22 @@ var Registry = []Definition{
 		Description: "System-wide maintenance mode. When on, the web client shows a banner; if metadata.block_writes=true the gateway also blocks mutating requests for non-superadmin users.",
 		Exposure:    ExposureUnauth,
 		Class:       ClassControl,
+	},
+	{
+		Key:     KeyCallsGroupEnabled,
+		Default: false,
+		Description: "Enable group voice/video calls (SFU mode). Off for the pilot — the SFU backend is " +
+			"production-ready but the group-call init UX has known gaps. P2P 1-1 calls remain available regardless of this flag.",
+		Exposure: ExposureAuth,
+		Class:    ClassRiskyFeature,
+	},
+	{
+		Key:     KeyCallsScreenShare,
+		Default: false,
+		Description: "Enable screen sharing in calls. Off for the pilot — the toggle UI is not fully wired up to the " +
+			"WebRTC track-replace path. Independent of calls_group_enabled (P2P 1-1 screen share is also gated here).",
+		Exposure: ExposureAuth,
+		Class:    ClassRiskyFeature,
 	},
 }
 
