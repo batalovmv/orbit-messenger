@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -30,6 +32,7 @@ type R2Client struct {
 	presigner *s3.PresignClient
 	bucket    string
 	publicURL string
+	endpoint  string // raw internal endpoint, used to fail-close public-policy on prod
 }
 
 // NewR2Client creates an S3-compatible client for R2 or MinIO.
@@ -67,7 +70,33 @@ func NewR2Client(endpoint, accessKey, secretKey, bucket, publicEndpoint string) 
 		presigner: s3.NewPresignClient(presignClient),
 		bucket:    bucket,
 		publicURL: publicEndpoint,
+		endpoint:  endpoint,
 	}, nil
+}
+
+// isLocalEndpoint returns true when the S3 endpoint clearly points at a
+// developer-local MinIO (or equivalent) instance. Anything else — Cloudflare
+// R2, AWS S3, a self-hosted prod cluster — is treated as production for the
+// purpose of refusing dangerous bucket-wide policies.
+func isLocalEndpoint(rawEndpoint string) bool {
+	if rawEndpoint == "" {
+		return false
+	}
+	u, err := url.Parse(rawEndpoint)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "" {
+		// No scheme — fall back to a substring check so configs like
+		// "minio:9000" without scheme don't get classified as prod.
+		host = strings.SplitN(rawEndpoint, ":", 2)[0]
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "::1", "minio", "host.docker.internal":
+		return true
+	}
+	return false
 }
 
 // Upload stores a file in R2.
@@ -235,7 +264,14 @@ func (r *R2Client) AbortMultipartUpload(ctx context.Context, key, uploadID strin
 }
 
 // EnsureBucket creates the bucket if it doesn't exist (for local dev with MinIO)
-// and sets a public-read policy so browser can fetch sticker/media assets directly.
+// and — only on local/dev endpoints — sets a public-read policy so the browser
+// can fetch sticker/media assets without a presigned URL.
+//
+// In production (Cloudflare R2 / AWS S3 / any non-local endpoint) the
+// public-read policy applies to every object in the bucket, including private
+// user attachments. Audit 2026-04-26 (CRITICAL #3) caught this footgun. We now
+// fail startup if R2_APPLY_PUBLIC_POLICY=true is set against a prod endpoint —
+// no env-flag knob can re-enable the dangerous path.
 func (r *R2Client) EnsureBucket(ctx context.Context) error {
 	_, err := r.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &r.bucket})
 	if err != nil {
@@ -250,7 +286,16 @@ func (r *R2Client) EnsureBucket(ctx context.Context) error {
 		return nil
 	}
 
-	// Set public-read policy for dev (MinIO). In production R2 handles this via dashboard.
+	if !isLocalEndpoint(r.endpoint) {
+		slog.Error("refusing to apply public bucket policy on non-local endpoint",
+			"bucket", r.bucket,
+			"endpoint", r.endpoint,
+			"hint", "R2_APPLY_PUBLIC_POLICY is local-dev only; configure CDN/public-asset access at the provider level instead")
+		return fmt.Errorf("r2: refusing to apply public-read policy on non-local endpoint %q (bucket=%s) — set R2_APPLY_PUBLIC_POLICY=false in production", r.endpoint, r.bucket)
+	}
+
+	// Local MinIO: set public-read so the browser can pull stickers/avatars
+	// directly during development. Production endpoints never reach this line.
 	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, r.bucket)
 	_, err = r.client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
 		Bucket: &r.bucket,
@@ -260,7 +305,7 @@ func (r *R2Client) EnsureBucket(ctx context.Context) error {
 		slog.Error("failed to apply R2 public bucket policy", "bucket", r.bucket, "error", err)
 		return fmt.Errorf("put bucket policy %s: %w", r.bucket, err)
 	}
-	slog.Info("applied R2 public bucket policy", "bucket", r.bucket)
+	slog.Info("applied R2 public bucket policy", "bucket", r.bucket, "endpoint", r.endpoint)
 
 	return nil
 }
