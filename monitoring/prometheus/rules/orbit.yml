@@ -125,3 +125,21 @@ groups:
         annotations:
           summary: "Web push delivery failure rate >1%"
           description: "Push delivery failure rate is {{ $value | humanizePercentage }} over the last 5 min (threshold: 1%). Check VAPID config, APNs/FCM provider status, and gateway logs."
+
+      # Catches the failure mode the rate-based alert above silently misses:
+      # if VAPID env vars are empty at gateway startup, the dispatcher's
+      # Enabled() check returns false and EVERY send path early-returns nil
+      # without incrementing orbit_push_attempts_total. Numerator stays at 0,
+      # denominator stays at 0, and PushDeliveryFailureRate evaluates to 0/0
+      # → never fires. The 2026-04-28 incident showed this can persist for
+      # months. The gauge is set once at startup, so 5 min of "0" means the
+      # gateway is currently disabled — not a transient.
+      - alert: PushDispatcherDisabled
+        expr: orbit_push_dispatcher_enabled == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: gateway
+        annotations:
+          summary: "Gateway push dispatcher is disabled"
+          description: "VAPID env vars are missing on gateway — all web push (incl. cross-device read-sync) silently no-ops. Check VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/MESSAGING_URL on orbit-gateway and restart."

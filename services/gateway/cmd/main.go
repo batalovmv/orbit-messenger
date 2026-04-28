@@ -116,6 +116,15 @@ func main() {
 		"Web push delivery attempts grouped by outcome (ok / fail / stale).",
 		"result",
 	)
+	// Day 5.1 VAPID hardening: surface dispatcher state as a gauge so prod
+	// dashboards/alerts can flag "push has been silently broken for hours".
+	// Stays at 0 forever if VAPID env vars are missing — pre-Day 5.1 we only
+	// had a startup WARN that nobody noticed. Alert rule lives in
+	// monitoring/prometheus/rules/orbit.yml.
+	pushDispatcherEnabledGauge := metricsReg.Gauge(
+		"orbit_push_dispatcher_enabled",
+		"1 if the gateway push dispatcher has VAPID + messaging URL configured at startup, 0 otherwise.",
+	)
 
 	// NATS Subscriber
 	pushDispatcher := push.NewDispatcher(push.Config{
@@ -127,8 +136,20 @@ func main() {
 		Logger:              logger,
 		AttemptsCounter:     pushAttemptsCounter,
 	})
-	if !pushDispatcher.Enabled() {
-		slog.Warn("web push dispatcher disabled: missing VAPID configuration")
+	if pushDispatcher.Enabled() {
+		pushDispatcherEnabledGauge.WithLabelValues().Set(1)
+	} else {
+		pushDispatcherEnabledGauge.WithLabelValues().Set(0)
+		// ERROR (not WARN): pre-Day 5.1 incident on 2026-04-28 showed that a
+		// WARN-level startup line is invisible in prod log noise — VAPID env
+		// vars were empty for an unknown duration and push (incl. Day 4b
+		// cross-device read-sync) silently no-op'd. Loud line + the gauge
+		// above ensure this is surfaced quickly next time.
+		slog.Error("web push dispatcher disabled: missing VAPID configuration — all web push will silently no-op",
+			"vapid_public_set", vapidPublicKey != "",
+			"vapid_private_set", vapidPrivateKey != "",
+			"messaging_url_set", messagingServiceURL != "",
+		)
 	}
 
 	subscriber := ws.NewSubscriber(hub, nc, messagingServiceURL, internalSecret, rdb, pushDispatcher)
