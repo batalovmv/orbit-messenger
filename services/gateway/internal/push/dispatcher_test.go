@@ -406,6 +406,46 @@ func TestDispatcher_NilCounter_NoOp(t *testing.T) {
 	}
 }
 
+// TestDispatcher_Enabled_ContractMatrix locks in the contract that main.go's
+// startup gauge wiring relies on: Enabled() returns true ONLY when all three
+// inputs (public/private VAPID + messaging URL) are non-empty. The 2026-04-28
+// VAPID-missing incident showed why this matters — gateway startup uses this
+// boolean to set orbit_push_dispatcher_enabled, which feeds the
+// PushDispatcherDisabled alert. Drift here = silent push outage.
+func TestDispatcher_Enabled_ContractMatrix(t *testing.T) {
+	cases := []struct {
+		name                                                string
+		publicKey, privateKey, messagingURL                 string
+		want                                                bool
+	}{
+		{"all set", "p", "k", "http://messaging", true},
+		{"missing public", "", "k", "http://messaging", false},
+		{"missing private", "p", "", "http://messaging", false},
+		{"missing messaging url", "p", "k", "", false},
+		{"all empty", "", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := NewDispatcher(Config{
+				PublicKey:           tc.publicKey,
+				PrivateKey:          tc.privateKey,
+				MessagingServiceURL: tc.messagingURL,
+				InternalSecret:      "secret",
+				Logger:              slog.Default(),
+			})
+			if got := d.Enabled(); got != tc.want {
+				t.Errorf("Enabled() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+	// Nil receiver — defensive (Hub passes a fresh dispatcher; tests sometimes
+	// pass nil explicitly).
+	var nilD *Dispatcher
+	if nilD.Enabled() {
+		t.Error("nil dispatcher must report disabled")
+	}
+}
+
 func readCounter(t *testing.T, vec *prometheus.CounterVec, label string) float64 {
 	t.Helper()
 	c, err := vec.GetMetricWithLabelValues(label)

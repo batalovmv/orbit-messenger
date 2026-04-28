@@ -95,6 +95,25 @@ Sanity-check rate limiting: hit `/api/v1/auth/login` from two different real cli
 
 ---
 
+## 3a. Push pre-flight (Day 5.1 Push Inspector)
+
+Before sinking 30 minutes into iPhone Stage-1-through-7, verify the gateway push dispatcher itself is alive. The **2026-04-28** incident showed VAPID env vars can silently disappear and push will no-op for an unbounded time without surfacing.
+
+1. Open Orbit web → menu → Администрирование → Push Inspector tab.
+2. Type your own email (or UUID), leave title/body empty, click **Send test push**.
+3. Expected:
+   - 200 response with `device_count >= 1, sent >= 1, status: "ok"`.
+   - Native OS toast appears within ~2 s.
+4. If 503 "Push dispatcher disabled on gateway" → VAPID env not picked up:
+   - Saturn → orbit-gateway → Environment Variables → confirm `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBSCRIBER_EMAIL` all set with non-empty values.
+   - Restart orbit-gateway.
+   - Re-check startup logs — line `web push dispatcher disabled: missing VAPID configuration` (ERROR level) must NOT appear.
+5. Confirm the gauge: `orbit_push_dispatcher_enabled` should be `1` (Prometheus query, or scrape `/metrics` with `X-Internal-Token`). Anything else for ≥5 min and `PushDispatcherDisabled` alert fires.
+
+Only proceed to §3 once the inspector returns `status: ok` for a self-test.
+
+---
+
 ## 3. iPhone real-device push test
 
 Follow `iphone-push-test.md` literally. Use the pilot URL (HTTPS), not localhost.
