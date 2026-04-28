@@ -120,16 +120,18 @@ func TestCanAccess_RegressionMatrix(t *testing.T) {
 		t.Fatalf("create media: %v", err)
 	}
 
-	// Message in chat A linking the media.
-	mustExec(`INSERT INTO messages (id, chat_id, sender_id, type)
-	          VALUES ($1, $2, $3, 'photo')`, msgAID, chatAID, uploaderID)
+	// Message in chat A linking the media. sequence_number is per-chat unique
+	// with no DB default in the live schema; we pass 1 explicitly because the
+	// chat is fresh.
+	mustExec(`INSERT INTO messages (id, chat_id, sender_id, type, sequence_number)
+	          VALUES ($1, $2, $3, 'photo', 1)`, msgAID, chatAID, uploaderID)
 	mustExec(`INSERT INTO message_media (message_id, media_id, position) VALUES ($1, $2, 0)`,
 		msgAID, mediaID)
 
 	// Forwarded copy in chat B linking the same media — exercises
 	// the "user belongs to any chat that contains the media" path.
-	mustExec(`INSERT INTO messages (id, chat_id, sender_id, type, is_forwarded, forwarded_from)
-	          VALUES ($1, $2, $3, 'photo', true, $3)`, msgBID, chatBID, uploaderID)
+	mustExec(`INSERT INTO messages (id, chat_id, sender_id, type, sequence_number, is_forwarded, forwarded_from)
+	          VALUES ($1, $2, $3, 'photo', 1, true, $3)`, msgBID, chatBID, uploaderID)
 	mustExec(`INSERT INTO message_media (message_id, media_id, position) VALUES ($1, $2, 0)`,
 		msgBID, mediaID)
 
