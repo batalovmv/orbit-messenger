@@ -271,6 +271,13 @@ func (s *MediaStore) GetUserStorageBytes(ctx context.Context, userID uuid.UUID) 
 // published once (audit 2026-04-26 CRITICAL #2). Forwarded media linked to
 // multiple chats grants access if the user belongs to any of them.
 func (s *MediaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
+	if userID == uuid.Nil {
+		// Defence in depth: MediaService.ensurePresignAccess already rejects
+		// unauthenticated callers, but if a future caller reaches the store
+		// directly we must not silently grant access to a "uploader_id IS NULL"
+		// or otherwise corrupted row.
+		return false, nil
+	}
 	var ok bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT EXISTS(
