@@ -308,3 +308,84 @@ func TestExportUser_AuthFail(t *testing.T) {
 		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, raw)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Welcome flow (mig 069) — admin handlers
+// ---------------------------------------------------------------------------
+
+// TestSetChatDefaultStatus_AdminGate — non-admin (role=member) must get 403.
+// The service rejects, but we also exercise the handler-level body parse +
+// chat-id validation along the way.
+func TestSetChatDefaultStatus_AdminGate(t *testing.T) {
+	actorID := uuid.New()
+	chatID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	app := newAdminApp(&mockAdminUserStore{}, &mockAdminAuditStore{}, rdb)
+
+	body := bytes.NewBufferString(`{"is_default":true,"default_join_order":1}`)
+	req, _ := http.NewRequest(http.MethodPut,
+		"/admin/chats/"+chatID.String()+"/default-status", body)
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "member")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403 for non-admin, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// TestBackfillDefaultMemberships_AdminGate — same shape as above, on the
+// system-wide backfill endpoint.
+func TestBackfillDefaultMemberships_AdminGate(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	app := newAdminApp(&mockAdminUserStore{}, &mockAdminAuditStore{}, rdb)
+	req, _ := http.NewRequest(http.MethodPost, "/admin/default-chats/backfill", nil)
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "member")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403 for non-admin, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// TestSetChatDefaultStatus_BadChatID — handler rejects malformed UUID with
+// 400 before reaching the service.
+func TestSetChatDefaultStatus_BadChatID(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	app := newAdminApp(&mockAdminUserStore{}, &mockAdminAuditStore{}, rdb)
+	req, _ := http.NewRequest(http.MethodPut, "/admin/chats/not-a-uuid/default-status",
+		bytes.NewBufferString(`{"is_default":true}`))
+	req.Header.Set("X-User-ID", uuid.NewString())
+	req.Header.Set("X-User-Role", "admin")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad chat id, got %d", resp.StatusCode)
+	}
+}

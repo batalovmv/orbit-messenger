@@ -47,6 +47,7 @@ func (h *ChatHandler) Register(app fiber.Router) {
 	app.Patch("/chats/:id/members/:userId", h.UpdateMemberRole)
 	app.Get("/chats/:id/members/:userId", h.GetMember)
 	app.Get("/internal/chats/:id/member-ids", h.GetMemberIDs)
+	app.Post("/internal/users/:id/join-default-chats", h.JoinUserToDefaults)
 	app.Get("/chats/:id/admins", h.GetAdmins)
 	app.Put("/chats/:id/permissions", h.UpdateDefaultPermissions)
 	app.Put("/chats/:id/members/:userId/permissions", h.UpdateMemberPermissions)
@@ -545,6 +546,33 @@ func (h *ChatHandler) GetMembers(c *fiber.Ctx) error {
 	}
 
 	return response.Paginated(c, members, nextCursor, hasMore)
+}
+
+// JoinUserToDefaults runs the welcome-flow backfill for a single user.
+// Internal-only — auth.Register calls this right after a successful
+// registration. Blocked from public traffic by the gateway proxy not
+// forwarding /internal/* routes; double-checked by the X-Internal-Token
+// guard so a stray request bypassing the gateway still gets a 401.
+func (h *ChatHandler) JoinUserToDefaults(c *fiber.Ctx) error {
+	if err := requireInternalRequest(c, h.internalSecret); err != nil {
+		return response.Error(c, err)
+	}
+	userID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+	chatIDs, err := h.svc.JoinUserToDefaults(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	out := make([]string, 0, len(chatIDs))
+	for _, cid := range chatIDs {
+		out = append(out, cid.String())
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"user_id":  userID.String(),
+		"chat_ids": out,
+	})
 }
 
 // GetMemberIDs returns just the user IDs of a chat (internal-only, for gateway fanout).

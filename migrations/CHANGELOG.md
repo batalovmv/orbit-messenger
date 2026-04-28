@@ -211,3 +211,6 @@ Phase 8F HR-бот шаблон: `bot_hr_requests` (bot_id, chat_id, user_id, re
 
 ## 068 — calls_feature_flags (2026-04-27)
 В `feature_flags` добавлены два сида: `calls_group_enabled` и `calls_screen_share_enabled` (оба `false`). Используются как kill-switch для пилота — group calls и screen share имеют известные UX-пробелы (SFU init flow, track-replace toggle). P2P 1-1 voice/video не зависит от этих флагов — это baseline пилота.
+
+## 069 — default_chats_for_new_users (2026-04-28)
+Welcome flow: в `chats` добавлены `is_default_for_new_users BOOLEAN NOT NULL default false` + `default_join_order INT NOT NULL default 0` + partial index `idx_chats_default_for_new_users(default_join_order) WHERE is_default_for_new_users=true`. Авто-добавляет нового invited юзера в чаты с флагом=true (вызывается auth.Register после успешного user create через POST /internal/users/:id/join-default-chats к messaging). Admin может ручным backfill добавить уже существующих юзеров. Idempotent через ON CONFLICT (chat_id,user_id) DO NOTHING. Default OFF для всех существующих чатов — поведение не меняется до ручного флипа в AdminPanel.
