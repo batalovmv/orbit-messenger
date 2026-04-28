@@ -256,6 +256,7 @@ type mockMessageStore struct {
 	unpinFn                func(ctx context.Context, chatID, msgID uuid.UUID) error
 	unpinAllFn             func(ctx context.Context, chatID uuid.UUID) error
 	updateReadPointerFn    func(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error
+	getReadStateFn         func(ctx context.Context, chatID, userID uuid.UUID) (int64, int64, error)
 	createForwardedFn      func(ctx context.Context, msgs []model.Message) ([]model.Message, error)
 }
 
@@ -344,6 +345,13 @@ func (m *mockMessageStore) UpdateReadPointer(ctx context.Context, chatID, userID
 		return m.updateReadPointerFn(ctx, chatID, userID, lastReadMsgID)
 	}
 	return nil
+}
+
+func (m *mockMessageStore) GetReadState(ctx context.Context, chatID, userID uuid.UUID) (int64, int64, error) {
+	if m.getReadStateFn != nil {
+		return m.getReadStateFn(ctx, chatID, userID)
+	}
+	return 0, 0, nil
 }
 func (m *mockMessageStore) CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error) {
 	if m.createForwardedFn != nil {

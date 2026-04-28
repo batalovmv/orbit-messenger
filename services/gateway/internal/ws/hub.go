@@ -26,9 +26,15 @@ var (
 
 // Conn represents a single WebSocket connection.
 type Conn struct {
-	WS      *websocket.Conn
-	UserID  string
-	mu      sync.Mutex
+	WS *websocket.Conn
+	// UserID identifies the authenticated user. SessionID identifies a single
+	// device/tab so events that originate on this connection (e.g. read receipts
+	// the user just performed locally) can be excluded from the cross-device
+	// fanout. SessionID is opaque, generated client-side at app start; if the
+	// client does not supply one, the auth handler assigns a server-side UUID.
+	UserID    string
+	SessionID string
+	mu        sync.Mutex
 	done    chan struct{}
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -279,6 +285,35 @@ func (h *Hub) SendToUser(userID string, msg interface{}) {
 				// Disconnect instead of silently dropping fanout frames. Until TASK-46
 				// lands JetStream replay, a slow client may briefly miss events and
 				// must reconnect to resync from the HTTP history endpoints.
+				go func(conn *Conn) {
+					if closeErr := conn.Close(closeCodePolicyViolation, "slow consumer"); closeErr != nil {
+						slog.Warn("ws: slow consumer close failed", "user_id", userID, "error", closeErr)
+					}
+				}(c)
+				continue
+			}
+			slog.Error("ws: send error", "user_id", userID, "error", err)
+		}
+	}
+}
+
+// SendToUserExceptSession fans out to every connection for userID except the
+// one whose SessionID matches excludeSessionID. Used for cross-device sync
+// events (read receipts, future typing/draft sync) where the originating
+// device must not receive its own echo. excludeSessionID == "" sends to all.
+func (h *Hub) SendToUserExceptSession(userID, excludeSessionID string, msg interface{}) {
+	h.mu.RLock()
+	src := h.conns[userID]
+	snapshot := make([]*Conn, len(src))
+	copy(snapshot, src)
+	h.mu.RUnlock()
+
+	for _, c := range snapshot {
+		if excludeSessionID != "" && c.SessionID == excludeSessionID {
+			continue
+		}
+		if err := c.Send(msg); err != nil {
+			if errors.Is(err, errSendQueueFull) || errors.Is(err, errConnClosed) {
 				go func(conn *Conn) {
 					if closeErr := conn.Close(closeCodePolicyViolation, "slow consumer"); closeErr != nil {
 						slog.Warn("ws: slow consumer close failed", "user_id", userID, "error", closeErr)

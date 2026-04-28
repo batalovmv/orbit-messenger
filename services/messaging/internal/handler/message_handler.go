@@ -673,7 +673,18 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid last_read_message_id"))
 	}
 
-	if err := h.svc.MarkRead(c.Context(), chatID, uid, msgID); err != nil {
+	// Optional X-Session-ID (opaque, client-generated per tab) lets the gateway
+	// exclude the originating connection from the cross-device read-sync fanout
+	// so the user's own device that just marked-read does not receive its own
+	// echo. Length-capped to keep a malformed/oversized header from blowing up
+	// downstream payloads; an empty value disables exclusion (and is still a
+	// valid request — just means the client opted out of the optimisation).
+	sessionID := strings.TrimSpace(c.Get("X-Session-ID"))
+	if len(sessionID) > 128 {
+		sessionID = sessionID[:128]
+	}
+
+	if err := h.svc.MarkRead(c.Context(), chatID, uid, msgID, sessionID); err != nil {
 		return response.Error(c, err)
 	}
 

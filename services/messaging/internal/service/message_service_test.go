@@ -702,3 +702,111 @@ func TestDeleteMessage_ExMemberCannotDeleteOwnMessage(t *testing.T) {
 	err := svc.DeleteMessage(context.Background(), msgID, userID)
 	msgAssertAppError(t, err, 403)
 }
+
+// ---------------------------------------------------------------------------
+// MarkRead — read-sync NATS publish
+// ---------------------------------------------------------------------------
+
+// TestMarkRead_PublishesReadSyncToOriginatingUser locks the wire format of the
+// new orbit.user.<userID>.read_sync event so future refactors can't silently
+// drop a field the gateway/frontend depend on (chat_id, last_read_seq_num,
+// unread_count, origin_session_id).
+func TestMarkRead_PublishesReadSyncToOriginatingUser(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	msgID := uuid.New()
+	const sessionID = "tab-abc-123"
+
+	rec := &RecordingPublisher{}
+	cs := groupChatStore(chatID)
+	ms := &mockMessageStore{
+		updateReadPointerFn: func(_ context.Context, _, _, _ uuid.UUID) error { return nil },
+		getReadStateFn: func(_ context.Context, gotChat, gotUser uuid.UUID) (int64, int64, error) {
+			if gotChat != chatID || gotUser != userID {
+				t.Fatalf("GetReadState called with wrong ids: chat=%s user=%s", gotChat, gotUser)
+			}
+			return 42, 0, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	if err := svc.MarkRead(context.Background(), chatID, userID, msgID, sessionID); err != nil {
+		t.Fatalf("MarkRead: %v", err)
+	}
+
+	syncEvents := rec.FindByEvent("read_sync")
+	if len(syncEvents) != 1 {
+		t.Fatalf("expected 1 read_sync event, got %d", len(syncEvents))
+	}
+	ev := syncEvents[0]
+
+	wantSubject := "orbit.user." + userID.String() + ".read_sync"
+	if ev.Subject != wantSubject {
+		t.Errorf("subject: got %q, want %q", ev.Subject, wantSubject)
+	}
+	if len(ev.MemberIDs) != 1 || ev.MemberIDs[0] != userID.String() {
+		t.Errorf("MemberIDs should contain only the originating user, got %v", ev.MemberIDs)
+	}
+	if ev.SenderID != userID.String() {
+		t.Errorf("SenderID: got %q, want %q", ev.SenderID, userID.String())
+	}
+
+	payload, ok := ev.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("payload is not map: %T", ev.Data)
+	}
+	if got := payload["chat_id"]; got != chatID.String() {
+		t.Errorf("payload.chat_id: got %v, want %s", got, chatID)
+	}
+	if got := payload["last_read_message_id"]; got != msgID.String() {
+		t.Errorf("payload.last_read_message_id: got %v, want %s", got, msgID)
+	}
+	if got, want := payload["last_read_seq_num"], int64(42); got != want {
+		t.Errorf("payload.last_read_seq_num: got %v, want %d", got, want)
+	}
+	if got, want := payload["unread_count"], int64(0); got != want {
+		t.Errorf("payload.unread_count: got %v, want %d", got, want)
+	}
+	if got := payload["origin_session_id"]; got != sessionID {
+		t.Errorf("payload.origin_session_id: got %v, want %s", got, sessionID)
+	}
+	if _, has := payload["read_at"]; !has {
+		t.Error("payload missing read_at timestamp")
+	}
+
+	// Cross-user receipt event must still fire alongside, on the chat-scoped
+	// subject. If we ever break this, other members' "Alice read X" indicators
+	// will silently stop updating.
+	receiptEvents := rec.FindByEvent("messages_read")
+	if len(receiptEvents) != 1 {
+		t.Fatalf("expected 1 messages_read event, got %d", len(receiptEvents))
+	}
+	if receiptEvents[0].Subject != "orbit.chat."+chatID.String()+".messages.read" {
+		t.Errorf("receipt subject: got %q, want orbit.chat.%s.messages.read",
+			receiptEvents[0].Subject, chatID)
+	}
+}
+
+// TestMarkRead_NotMemberRejected guards the IsMember gate so the new GetReadState
+// call cannot leak unread_count to a non-member who slipped past auth.
+func TestMarkRead_NotMemberRejected(t *testing.T) {
+	chatID := uuid.New()
+	userID := uuid.New()
+	msgID := uuid.New()
+
+	rec := &RecordingPublisher{}
+	cs := &mockChatStore{
+		isMemberFn: func(_ context.Context, _, _ uuid.UUID) (bool, string, error) {
+			return false, "", nil
+		},
+	}
+	ms := &mockMessageStore{}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	err := svc.MarkRead(context.Background(), chatID, userID, msgID, "")
+	msgAssertAppError(t, err, 403)
+
+	if len(rec.Events) != 0 {
+		t.Errorf("non-member must not trigger any publish, got %d events", len(rec.Events))
+	}
+}

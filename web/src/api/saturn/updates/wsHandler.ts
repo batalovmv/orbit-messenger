@@ -56,6 +56,9 @@ async function handleWsMessage(msg: SaturnWsMessage) {
     case 'messages_read':
       handleMessagesRead(msg.data);
       break;
+    case 'read_sync':
+      handleReadSync(msg.data);
+      break;
     case 'typing':
       handleTyping(msg.data);
       break;
@@ -341,6 +344,46 @@ async function handleMessagesRead(data: Record<string, unknown>) {
         unreadCount: 0,
       },
       noTopChatsRequest: true,
+    });
+  }
+}
+
+// handleReadSync processes orbit.user.<userID>.read_sync — a self-only event
+// emitted by messaging after MarkRead so other tabs/devices of the same user
+// can prune their notifications and refresh chat read state without an extra
+// fetch. Gateway already excluded our originating connection by SessionID
+// before fanning this out, so receiving it here means the action came from a
+// different device.
+function handleReadSync(data: Record<string, unknown>) {
+  const chatId = data.chat_id as string;
+  const lastReadSeqNum = data.last_read_seq_num as number | undefined;
+  const unreadCount = data.unread_count as number | undefined;
+
+  if (!chatId || typeof lastReadSeqNum !== 'number') return;
+
+  // Update the chat's inbox read state so the unread badge clears immediately
+  // on this device. Mirrors the inbox branch of handleMessagesRead, but the
+  // count comes from the backend (post-MarkRead snapshot) instead of being
+  // assumed zero.
+  sendApiUpdate({
+    '@type': 'updateChat',
+    id: chatId,
+    chat: {},
+    readState: {
+      lastReadInboxMessageId: lastReadSeqNum,
+      unreadCount: typeof unreadCount === 'number' ? unreadCount : 0,
+    },
+    noTopChatsRequest: true,
+  });
+
+  // Tell the service worker to close any push notifications for this chat up
+  // to and including the just-read message. The SW handler is keyed off
+  // sequence_number, so we must pass last_read_seq_num — the UUID-shaped
+  // last_read_message_id from the API would not match notification.data.messageId.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.controller?.postMessage({
+      type: 'closeMessageNotifications',
+      payload: { chatId, lastReadInboxMessageId: lastReadSeqNum },
     });
   }
 }

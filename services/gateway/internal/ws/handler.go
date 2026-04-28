@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,12 +104,21 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		}
 
 		var authData struct {
-			Token string `json:"token"`
+			Token     string `json:"token"`
+			SessionID string `json:"session_id"`
 		}
 		if err := json.Unmarshal(cm.Data, &authData); err != nil || authData.Token == "" {
 			c.WriteJSON(Envelope{Type: "error", Data: json.RawMessage(`{"message":"missing token"}`)})
 			c.Close()
 			return
+		}
+		// Generate a server-side session ID if the client did not supply one.
+		// Older clients that haven't been updated still work; they just don't
+		// participate in origin-session exclusion (they will receive their own
+		// echoes, which is harmless for closeNotifications-style handlers).
+		sessionID := strings.TrimSpace(authData.SessionID)
+		if sessionID == "" {
+			sessionID = uuid.NewString()
 		}
 
 		// Clear the auth-frame read deadline before the HTTP call to auth service,
@@ -135,6 +145,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 		conn := &Conn{
 			WS:          c,
 			UserID:      tokenInfo.UserID,
+			SessionID:   sessionID,
 			done:        make(chan struct{}),
 			ctx:         connCtx,
 			cancel:      connCancel,
