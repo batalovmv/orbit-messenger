@@ -16,6 +16,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -41,6 +42,13 @@ type Config struct {
 	Logger              *slog.Logger
 	HTTPClient          HTTPClient
 	TTL                 int
+	// AttemptsCounter, when set, gets one Inc() per push attempt, labelled by
+	// outcome: "ok" (delivered), "fail" (terminal failure after retries), or
+	// "stale" (410/404 from the provider — subscription deleted, not a delivery
+	// failure). The counter is registered by the caller so the Dispatcher
+	// stays decoupled from the metrics registry and re-creating a Dispatcher
+	// in tests does not double-register.
+	AttemptsCounter *prometheus.CounterVec
 }
 
 type Dispatcher struct {
@@ -54,6 +62,7 @@ type Dispatcher struct {
 	ttl                 int
 	sendNotificationFn  func(ctx context.Context, payload []byte, sub *webpush.Subscription, opts *webpush.Options) (*http.Response, error)
 	sleepFn             func(time.Duration)
+	attemptsCounter     *prometheus.CounterVec
 }
 
 type PushSubscription struct {
@@ -83,6 +92,7 @@ func NewDispatcher(cfg Config) *Dispatcher {
 		logger:              logger,
 		ttl:                 cfg.TTL,
 		sleepFn:             time.Sleep,
+		attemptsCounter:     cfg.AttemptsCounter,
 	}
 	if dispatcher.subscriber == "" {
 		dispatcher.subscriber = defaultSubscriber
@@ -301,8 +311,10 @@ func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscrip
 			if err := d.deleteSubscription(userID, subscription.Endpoint); err != nil {
 				d.logger.Warn("delete stale push subscription failed", "error", err, "user_id", userID)
 			}
+			d.recordAttempt("stale")
 			return nil
 		case err == nil && statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices:
+			d.recordAttempt("ok")
 			return nil
 		}
 
@@ -319,8 +331,19 @@ func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscrip
 		d.sleepFn(time.Duration(1<<(attempt-1)) * 100 * time.Millisecond)
 	}
 
+	d.recordAttempt("fail")
 	d.logger.Warn("web push delivery failed", "error", lastErr, "user_id", userID, "endpoint", subscription.Endpoint)
 	return lastErr
+}
+
+// recordAttempt bumps the per-outcome counter when a metrics counter was wired
+// in. It is a no-op when AttemptsCounter is nil (unit tests, services that
+// chose not to instrument).
+func (d *Dispatcher) recordAttempt(result string) {
+	if d == nil || d.attemptsCounter == nil {
+		return
+	}
+	d.attemptsCounter.WithLabelValues(result).Inc()
 }
 
 func (d *Dispatcher) sendNotification(ctx context.Context, payload []byte, sub *webpush.Subscription, opts *webpush.Options) (*http.Response, error) {

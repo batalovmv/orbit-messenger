@@ -14,6 +14,8 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 type mockHTTPClient struct {
@@ -286,6 +288,135 @@ func TestDispatcher_SendCallToUsers_NoSubscriptionsIsNoop(t *testing.T) {
 	if err := dispatcher.SendCallToUsers([]string{userID}, []byte(`{"type":"call_incoming"}`)); err != nil {
 		t.Fatalf("SendCallToUsers returned error: %v", err)
 	}
+}
+
+// TestDispatcher_AttemptsCounter_TallyByOutcome covers the per-outcome push
+// metric: every send must Inc() exactly one of {ok, fail, stale}, regardless of
+// retries. Day 1 alerting wires PushDeliveryFailureRate against this counter.
+func TestDispatcher_AttemptsCounter_TallyByOutcome(t *testing.T) {
+	subOK := "https://push.example/ok"
+	subStale := "https://push.example/stale"
+	subFail := "https://push.example/fail"
+
+	type pushReq struct {
+		userID string
+	}
+
+	cases := []struct {
+		name           string
+		userID         string
+		endpoint       string
+		statusFromAPNS int
+		wantLabel      string
+	}{
+		{"ok", "11111111-1111-1111-1111-111111111111", subOK, http.StatusCreated, "ok"},
+		{"stale_410", "22222222-2222-2222-2222-222222222222", subStale, http.StatusGone, "stale"},
+		{"fail_after_retries", "33333333-3333-3333-3333-333333333333", subFail, http.StatusServiceUnavailable, "fail"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			counter := prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_push_attempts_total"},
+				[]string{"result"},
+			)
+
+			client := &mockHTTPClient{
+				doFn: func(req *http.Request) (*http.Response, error) {
+					switch req.Method {
+					case http.MethodGet:
+						body := `[{"endpoint":"` + tc.endpoint + `","p256dh":"k","auth":"a"}]`
+						return jsonResponse(http.StatusOK, body), nil
+					case http.MethodDelete:
+						return emptyResponse(http.StatusNoContent), nil
+					default:
+						t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+						return nil, nil
+					}
+				},
+			}
+
+			dispatcher := NewDispatcher(Config{
+				PublicKey:           "public",
+				PrivateKey:          "private",
+				Subscriber:          "mailto:test@example.com",
+				MessagingServiceURL: "http://messaging",
+				InternalSecret:      "secret",
+				HTTPClient:          client,
+				Logger:              slog.Default(),
+				AttemptsCounter:     counter,
+			})
+			dispatcher.sleepFn = func(time.Duration) {}
+			dispatcher.sendNotificationFn = func(context.Context, []byte, *webpush.Subscription, *webpush.Options) (*http.Response, error) {
+				return emptyResponse(tc.statusFromAPNS), nil
+			}
+
+			_ = dispatcher.SendToUser(tc.userID, []byte(`{"title":"Orbit"}`))
+			_ = pushReq{userID: tc.userID}
+
+			if got := readCounter(t, counter, tc.wantLabel); got != 1 {
+				t.Fatalf("counter %q = %v, want 1", tc.wantLabel, got)
+			}
+
+			// And every other label must stay at zero — one outcome per send.
+			for _, other := range []string{"ok", "fail", "stale"} {
+				if other == tc.wantLabel {
+					continue
+				}
+				if got := readCounter(t, counter, other); got != 0 {
+					t.Fatalf("counter %q expected 0, got %v", other, got)
+				}
+			}
+		})
+	}
+}
+
+// TestDispatcher_NilCounter_NoOp guards the "metrics not wired" path so unit
+// tests and any future caller that omits AttemptsCounter do not panic.
+func TestDispatcher_NilCounter_NoOp(t *testing.T) {
+	userID := "44444444-4444-4444-4444-444444444444"
+	client := &mockHTTPClient{
+		doFn: func(req *http.Request) (*http.Response, error) {
+			switch req.Method {
+			case http.MethodGet:
+				return jsonResponse(http.StatusOK, `[{"endpoint":"https://push.example/x","p256dh":"k","auth":"a"}]`), nil
+			default:
+				t.Fatalf("unexpected request: %s %s", req.Method, req.URL.String())
+				return nil, nil
+			}
+		},
+	}
+
+	dispatcher := NewDispatcher(Config{
+		PublicKey:           "public",
+		PrivateKey:          "private",
+		Subscriber:          "mailto:test@example.com",
+		MessagingServiceURL: "http://messaging",
+		InternalSecret:      "secret",
+		HTTPClient:          client,
+		Logger:              slog.Default(),
+		// AttemptsCounter intentionally nil
+	})
+	dispatcher.sendNotificationFn = func(context.Context, []byte, *webpush.Subscription, *webpush.Options) (*http.Response, error) {
+		return emptyResponse(http.StatusCreated), nil
+	}
+
+	if err := dispatcher.SendToUser(userID, []byte(`{"title":"Orbit"}`)); err != nil {
+		t.Fatalf("SendToUser with nil counter must not error: %v", err)
+	}
+}
+
+func readCounter(t *testing.T, vec *prometheus.CounterVec, label string) float64 {
+	t.Helper()
+	c, err := vec.GetMetricWithLabelValues(label)
+	if err != nil {
+		t.Fatalf("get counter %q: %v", label, err)
+	}
+	var m dto.Metric
+	if err := c.Write(&m); err != nil {
+		t.Fatalf("write counter %q: %v", label, err)
+	}
+	return m.GetCounter().GetValue()
 }
 
 func jsonResponse(status int, body string) *http.Response {
