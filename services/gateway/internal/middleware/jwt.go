@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -46,6 +47,59 @@ func extractJTI(token string) string {
 	}
 	jti, _ := claims["jti"].(string)
 	return jti
+}
+
+// extractIAT parses the JWT iat (issued-at) claim without verifying the
+// signature. Returns 0 + false on any parse error or missing claim. Callers
+// must treat 0 as "older than any threshold" — same semantics as
+// auth.ValidateAccessToken which uses int64(iat) <= threshold and so
+// rejects tokens with missing iat against a non-zero threshold.
+func extractIAT(token string) (int64, bool) {
+	parser := jwt.NewParser()
+	parsed, _, err := parser.ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		return 0, false
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, false
+	}
+	iat, ok := claims["iat"].(float64)
+	if !ok {
+		return 0, false
+	}
+	return int64(iat), true
+}
+
+// checkTokenInvalidatedByReset reports whether the token's iat is older than
+// the per-user "tokens invalid before" threshold written by auth.ResetAdmin
+// (and any future flow that wants to revoke ALL access tokens of a user).
+//
+// auth.ValidateAccessToken already enforces this on every /auth/me call, but
+// the gateway JWT cache (CacheTTL = 30s) short-circuits cache-hits without
+// round-tripping to auth — so a cache entry created seconds before a password
+// reset would keep authenticating for the rest of the TTL window. Mirroring
+// the per-jti blacklist pattern (Day 5.2), this check runs alongside on every
+// gateway auth path: cache-hit, cache-miss, and the WS revalidation tick.
+//
+// Fail-closed on Redis error. Unparseable threshold value → fail-open (treat
+// as no-op) to avoid bricking auth on a typo'd Redis key, mirroring auth's
+// own Sscanf-ignores-error behaviour. Missing JWT iat → reject (same as auth).
+func checkTokenInvalidatedByReset(ctx context.Context, rdb *redis.Client, userID, token string) (bool, error) {
+	invalidateKey := "user_tokens_invalid_before:" + userID
+	val, err := rdb.Get(ctx, invalidateKey).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	var threshold int64
+	if _, scanErr := fmt.Sscanf(val, "%d", &threshold); scanErr != nil {
+		return false, nil
+	}
+	iat, _ := extractIAT(token)
+	return iat <= threshold, nil
 }
 
 // JWTMiddleware validates JWT by calling the auth service /auth/me and caching the result.
@@ -116,6 +170,20 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 					}
 					return response.Error(c, apperror.Unauthorized("Account deactivated"))
 				}
+				// Per-user tokens-invalid-before threshold (set by auth.ResetAdmin).
+				// Mirrors the per-jti pattern: gateway cache otherwise honours a
+				// stale token for up to CacheTTL after password reset.
+				resetInvalid, riErr := checkTokenInvalidatedByReset(c.Context(), cfg.Redis, u.ID, token)
+				if riErr != nil {
+					slog.Error("JWT tokens-invalid-before Redis check failed, rejecting token", "error", riErr)
+					return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
+				}
+				if resetInvalid {
+					if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+						slog.Error("JWT cache del failed after tokens-invalid-before hit", "error", err)
+					}
+					return response.Error(c, apperror.Unauthorized("Token has been revoked"))
+				}
 				c.Locals("userID", u.ID) // for rate limiter — cannot be spoofed by client
 				c.Request().Header.Set("X-User-ID", u.ID)
 				c.Request().Header.Set("X-User-Role", u.Role)
@@ -185,6 +253,22 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 				slog.Error("JWT cache del failed after user blacklist hit", "error", err)
 			}
 			return response.Error(c, apperror.Unauthorized("Account deactivated"))
+		}
+
+		// Per-user tokens-invalid-before threshold (set by auth.ResetAdmin).
+		// Defends against the race where ResetAdmin fires between our /auth/me
+		// call and the cache write — without this, the just-written cache entry
+		// would happily serve the now-revoked token until CacheTTL expires.
+		resetInvalid, riErr := checkTokenInvalidatedByReset(c.Context(), cfg.Redis, user.ID, token)
+		if riErr != nil {
+			slog.Error("JWT tokens-invalid-before Redis check failed, rejecting token", "error", riErr)
+			return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
+		}
+		if resetInvalid {
+			if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+				slog.Error("JWT cache del failed after tokens-invalid-before hit", "error", err)
+			}
+			return response.Error(c, apperror.Unauthorized("Token has been revoked"))
 		}
 
 		c.Locals("userID", user.ID) // for rate limiter — cannot be spoofed by client

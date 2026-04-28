@@ -1538,6 +1538,7 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [x] Welcome flow: default-chats backfill for new invited users (mig 069 + admin endpoints + 11 tests + AdminPanel tab + per-chat ManageGroup switcher) (#10/#11/#15)
 - [x] Cross-device read-receipt sync (WS + silent-push fallback, see `docs/canon/current-state.md`) (#13/#14)
 - [x] Day 5.1 Admin Push Inspector — admin test-push with per-device delivery report; timeout hierarchy 12s/10s/5s, ctx.Err() guards, audit-first-fail-closed; surfaced+fixed pre-existing prod VAPID env issue (#16)
+- [x] Day 5.2 Admin Sessions tab — list/revoke any user's sessions; per-jti blacklist closes gateway cache window; audit-first; WS force-close via NATS `orbit.session.*.revoked` (#18)
 
 **Backup:**
 - [x] PostgreSQL: Saturn.ac managed Hourly backups (RPO = 1h) — enabled via UI
