@@ -305,3 +305,85 @@ func (s *AdminService) ExportUserData(ctx context.Context, actorID uuid.UUID, ac
 	}
 	return s.chats.ExportByUserID(ctx, targetUUID, writeRow)
 }
+
+// SetChatDefaultStatus flips the welcome-flow flag on a chat. Gated by
+// SysManageSettings — both 'admin' and 'superadmin' have this. Audit row
+// is written first so a partial settings change always shows up in the
+// audit feed.
+//
+// joinOrder is preserved on the row regardless of isDefault so an admin can
+// re-arrange the order without losing their slot when temporarily flipping
+// the flag off; the partial index only includes rows where the flag is true,
+// so non-default rows do not pay a planner cost for the join_order value.
+func (s *AdminService) SetChatDefaultStatus(ctx context.Context, actorID uuid.UUID, actorRole string, chatID uuid.UUID, isDefault bool, joinOrder int, ip, ua string) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageSettings) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	if joinOrder < 0 || joinOrder > 1_000_000 {
+		return apperror.BadRequest("default_join_order must be in [0, 1000000]")
+	}
+
+	if err := s.writeAudit(ctx, actorID, model.AuditChatDefaultStatusSet, "chat", strPtr(chatID.String()),
+		map[string]interface{}{
+			"is_default":          isDefault,
+			"default_join_order":  joinOrder,
+		}, ip, ua); err != nil {
+		return apperror.Internal("audit log write failed")
+	}
+
+	if err := s.chats.SetChatDefaultStatus(ctx, chatID, isDefault, joinOrder); err != nil {
+		return fmt.Errorf("set chat default status: %w", err)
+	}
+	return nil
+}
+
+// BackfillDefaultMemberships joins every existing user to every chat marked
+// is_default_for_new_users=true. Manual operator action only — never wired
+// to the flag-flip itself. Gated by SysManageSettings.
+//
+// For each freshly-inserted membership we publish a chat_member_added event
+// so already-connected web clients reconcile without a manual refresh. The
+// actor on the NATS event is the registering admin (the operator running
+// the backfill), to match the audit row.
+func (s *AdminService) BackfillDefaultMemberships(ctx context.Context, actorID uuid.UUID, actorRole, ip, ua string) (int, error) {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageSettings) {
+		return 0, apperror.Forbidden("Insufficient permissions")
+	}
+
+	if err := s.writeAudit(ctx, actorID, model.AuditDefaultChatsBackfill, "system", nil, nil, ip, ua); err != nil {
+		return 0, apperror.Internal("audit log write failed")
+	}
+
+	inserts, err := s.chats.BackfillDefaultMemberships(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("backfill default memberships: %w", err)
+	}
+
+	// Group by chat so we only fetch member IDs once per chat.
+	byChat := make(map[uuid.UUID][]uuid.UUID, len(inserts))
+	for _, ins := range inserts {
+		byChat[ins.ChatID] = append(byChat[ins.ChatID], ins.UserID)
+	}
+
+	for chatID, userIDs := range byChat {
+		allMemberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+		if mErr != nil {
+			slog.WarnContext(ctx, "default-chats backfill: NATS audience lookup failed",
+				"chat_id", chatID, "error", mErr)
+		}
+		for _, userID := range userIDs {
+			s.nats.Publish(
+				fmt.Sprintf("orbit.chat.%s.member.added", chatID),
+				"chat_member_added",
+				map[string]string{
+					"chat_id": chatID.String(),
+					"user_id": userID.String(),
+				},
+				allMemberIDs,
+				actorID.String(),
+			)
+		}
+	}
+
+	return len(inserts), nil
+}

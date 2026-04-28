@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
+	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -252,6 +253,19 @@ func (m *mockChatStore) ClearDraft(ctx context.Context, chatID, userID uuid.UUID
 
 func (m *mockChatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error {
 	return nil
+}
+
+// Welcome flow (mig 069). Tests opt in by setting the *Fn fields on the
+// struct (not added here yet — handlers tests call the parent service which
+// owns its own opt-in fields). No-ops keep the interface satisfied.
+func (m *mockChatStore) JoinUserToDefaults(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	return nil, nil
+}
+func (m *mockChatStore) SetChatDefaultStatus(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error {
+	return nil
+}
+func (m *mockChatStore) BackfillDefaultMemberships(ctx context.Context) ([]store.DefaultBackfillInsert, error) {
+	return nil, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -1003,5 +1003,72 @@ func TestListChats_HydratesPollLastMessage(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// JoinUserToDefaults (mig 069)
+// ---------------------------------------------------------------------------
+
+// TestJoinUserToDefaults_NATS_PerChatEvent asserts the welcome-flow service
+// publishes one `chat_member_added` event per chat the user was newly added
+// to. The audience for each event is the full member list of that chat —
+// already-online members must be reconciled.
+func TestJoinUserToDefaults_NATS_PerChatEvent(t *testing.T) {
+	userID := uuid.New()
+	chatA, chatB := uuid.New(), uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := &mockChatStore{
+		joinUserToDefaultsFn: func(_ context.Context, uid uuid.UUID) ([]uuid.UUID, error) {
+			if uid != userID {
+				t.Fatalf("JoinUserToDefaults: unexpected user id %s", uid)
+			}
+			return []uuid.UUID{chatA, chatB}, nil
+		},
+		getMemberIDsFn: func(_ context.Context, chatID uuid.UUID) ([]string, error) {
+			return []string{userID.String(), uuid.NewString()}, nil
+		},
+	}
+
+	svc := newTestChatService(cs, rec)
+	added, err := svc.JoinUserToDefaults(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("JoinUserToDefaults: %v", err)
+	}
+	if len(added) != 2 {
+		t.Fatalf("expected 2 chats added, got %d", len(added))
+	}
+
+	events := rec.FindByEvent("chat_member_added")
+	if len(events) != 2 {
+		t.Fatalf("expected 2 chat_member_added events, got %d", len(events))
+	}
+	for _, ev := range events {
+		if ev.SenderID != userID.String() {
+			t.Fatalf("welcome-flow event sender must be the user themselves, got %s", ev.SenderID)
+		}
+	}
+}
+
+// TestJoinUserToDefaults_NoDefaults_NoNATS guards the empty path: if the
+// store has no defaults to insert, the service must not publish anything.
+func TestJoinUserToDefaults_NoDefaults_NoNATS(t *testing.T) {
+	rec := &RecordingPublisher{}
+	cs := &mockChatStore{
+		joinUserToDefaultsFn: func(_ context.Context, _ uuid.UUID) ([]uuid.UUID, error) {
+			return nil, nil
+		},
+	}
+	svc := newTestChatService(cs, rec)
+	added, err := svc.JoinUserToDefaults(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("JoinUserToDefaults: %v", err)
+	}
+	if len(added) != 0 {
+		t.Fatalf("expected 0 chats added, got %d", len(added))
+	}
+	if got := rec.FindByEvent("chat_member_added"); len(got) != 0 {
+		t.Fatalf("expected no NATS events, got %d", len(got))
+	}
+}
+
 // suppress unused import
 var _ = fmt.Sprintf

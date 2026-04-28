@@ -56,6 +56,33 @@ type ChatStore interface {
 	// ExportByUserID streams all chats the user is a member of as JSON rows.
 	// writeRow is called once per chat with the JSON-encoded bytes (no newline).
 	ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error
+
+	// Welcome flow (migration 069).
+	// JoinUserToDefaults inserts chat_members rows for the given user into
+	// every chat where is_default_for_new_users = true, ordered by
+	// default_join_order. Idempotent via ON CONFLICT DO NOTHING — returns
+	// the chat IDs that were actually inserted (already-member rows are
+	// skipped) so the service can publish chat_member_added per insert.
+	JoinUserToDefaults(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	// SetChatDefaultStatus toggles the welcome-flow flag on a chat. Used by
+	// the chat-settings UI; admin-permission check lives in the service.
+	SetChatDefaultStatus(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error
+	// BackfillDefaultMemberships inserts chat_members rows for every existing
+	// non-banned user across every chat marked is_default_for_new_users=true,
+	// skipping rows that already exist. Returns the (chat_id, user_id) pairs
+	// that were actually inserted so the caller can fan out NATS events.
+	// Bounded by the welcome-flow chat count × user count — fine for the
+	// 150-user pilot, would need streaming + batching at order-of-magnitude
+	// scale.
+	BackfillDefaultMemberships(ctx context.Context) ([]DefaultBackfillInsert, error)
+}
+
+// DefaultBackfillInsert is one (chat_id, user_id) pair that was newly
+// inserted by BackfillDefaultMemberships — i.e. the user was missing from
+// that default chat before the backfill ran.
+type DefaultBackfillInsert struct {
+	ChatID uuid.UUID
+	UserID uuid.UUID
 }
 
 type chatStore struct {
@@ -1015,4 +1042,79 @@ func (s *chatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeR
 	}
 
 	return rows.Err()
+}
+
+// JoinUserToDefaults — see ChatStore interface.
+func (s *chatStore) JoinUserToDefaults(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := s.pool.Query(ctx, `
+		INSERT INTO chat_members (chat_id, user_id, role, permissions, joined_at)
+		SELECT c.id, $1, 'member', c.default_permissions, now()
+		FROM chats c
+		WHERE c.is_default_for_new_users = true
+		ORDER BY c.default_join_order
+		ON CONFLICT (chat_id, user_id) DO NOTHING
+		RETURNING chat_id`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("join user to default chats: %w", err)
+	}
+	defer rows.Close()
+
+	var inserted []uuid.UUID
+	for rows.Next() {
+		var chatID uuid.UUID
+		if err := rows.Scan(&chatID); err != nil {
+			return nil, fmt.Errorf("scan default chat id: %w", err)
+		}
+		inserted = append(inserted, chatID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate default chat rows: %w", err)
+	}
+	return inserted, nil
+}
+
+// SetChatDefaultStatus — see ChatStore interface.
+func (s *chatStore) SetChatDefaultStatus(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE chats
+		SET is_default_for_new_users = $2,
+		    default_join_order        = $3,
+		    updated_at                = now()
+		WHERE id = $1`, chatID, isDefault, joinOrder)
+	if err != nil {
+		return fmt.Errorf("set chat default status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// BackfillDefaultMemberships — see ChatStore interface.
+func (s *chatStore) BackfillDefaultMemberships(ctx context.Context) ([]DefaultBackfillInsert, error) {
+	rows, err := s.pool.Query(ctx, `
+		INSERT INTO chat_members (chat_id, user_id, role, permissions, joined_at)
+		SELECT c.id, u.id, 'member', c.default_permissions, now()
+		FROM chats c
+		CROSS JOIN users u
+		WHERE c.is_default_for_new_users = true
+		ON CONFLICT (chat_id, user_id) DO NOTHING
+		RETURNING chat_id, user_id`)
+	if err != nil {
+		return nil, fmt.Errorf("backfill default memberships: %w", err)
+	}
+	defer rows.Close()
+
+	var inserts []DefaultBackfillInsert
+	for rows.Next() {
+		var ins DefaultBackfillInsert
+		if err := rows.Scan(&ins.ChatID, &ins.UserID); err != nil {
+			return nil, fmt.Errorf("scan backfill row: %w", err)
+		}
+		inserts = append(inserts, ins)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate backfill rows: %w", err)
+	}
+	return inserts, nil
 }

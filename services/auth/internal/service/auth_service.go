@@ -12,6 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,19 +37,46 @@ type Config struct {
 	TOTPIssuer    string
 	AdminResetKey string
 	FrontendURL   string
+
+	// Welcome flow (mig 069). Optional. When both are set, Register POSTs to
+	// `${MessagingURL}/internal/users/{id}/join-default-chats` with
+	// `X-Internal-Token: ${InternalSecret}` after a successful user create
+	// so the new user is auto-added to chats marked is_default_for_new_users.
+	// Best-effort: a failure here is logged but does not roll back the user.
+	MessagingURL   string
+	InternalSecret string
+}
+
+// HTTPClient is the minimal http.Client interface AuthService uses to talk
+// to messaging. Defined here so tests can inject a mock without depending
+// on a real network.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
 }
 
 type AuthService struct {
-	users    store.UserStore
-	sessions store.SessionStore
-	invites  store.InviteStore
-	redis    *redis.Client
-	cfg      *Config
-	logger   *slog.Logger
+	users      store.UserStore
+	sessions   store.SessionStore
+	invites    store.InviteStore
+	redis      *redis.Client
+	cfg        *Config
+	logger     *slog.Logger
+	httpClient HTTPClient
 }
 
 func NewAuthService(users store.UserStore, sessions store.SessionStore, invites store.InviteStore, rdb *redis.Client, cfg *Config, logger *slog.Logger) *AuthService {
-	return &AuthService{users: users, sessions: sessions, invites: invites, redis: rdb, cfg: cfg, logger: logger}
+	return &AuthService{
+		users: users, sessions: sessions, invites: invites,
+		redis: rdb, cfg: cfg, logger: logger,
+		httpClient: &http.Client{Timeout: 5 * time.Second},
+	}
+}
+
+// WithHTTPClient overrides the default http.Client. Used by tests to
+// avoid hitting the network.
+func (s *AuthService) WithHTTPClient(c HTTPClient) *AuthService {
+	s.httpClient = c
+	return s
 }
 
 // Bootstrap creates the first admin account. Fails if any admin already exists.
@@ -180,7 +209,65 @@ func (s *AuthService) Register(ctx context.Context, code, email, password, displ
 		slog.Error("failed to update invite used_by", "error", ubErr, "code", code, "user_id", u.ID)
 	}
 
+	// Welcome flow (mig 069). Best-effort — a failure here does not roll back
+	// the user. The admin "Backfill default chats" action is the safety net
+	// for users that miss this hop (messaging unreachable, etc.).
+	s.joinDefaultChatsBestEffort(ctx, u.ID)
+
 	return u, nil
+}
+
+// joinDefaultChatsBestEffort calls the messaging service to add the user to
+// every chat marked is_default_for_new_users. One retry on transport errors
+// (100 ms backoff) — beyond that we give up and log so an operator can run
+// the admin Backfill button later. Returns no error: registration must not
+// fail because of this side-channel.
+func (s *AuthService) joinDefaultChatsBestEffort(ctx context.Context, userID uuid.UUID) {
+	if s.cfg == nil || s.cfg.MessagingURL == "" || s.cfg.InternalSecret == "" {
+		// Welcome flow disabled — typically in unit tests or in a deployment
+		// that has not finished migrating to the new shape. Stay silent.
+		return
+	}
+	url := strings.TrimRight(s.cfg.MessagingURL, "/") +
+		"/internal/users/" + userID.String() + "/join-default-chats"
+
+	doOnce := func(attempt int) (status int, err error) {
+		// Independent context — Register's caller may cancel ctx as soon as it
+		// has the response, but we still want this side-channel to land.
+		callCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(callCtx, http.MethodPost, url, nil)
+		if err != nil {
+			return 0, fmt.Errorf("build request: %w", err)
+		}
+		req.Header.Set("X-Internal-Token", s.cfg.InternalSecret)
+		req.Header.Set("X-User-ID", userID.String())
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			return 0, fmt.Errorf("attempt %d: %w", attempt, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode/100 == 2 {
+			return resp.StatusCode, nil
+		}
+		return resp.StatusCode, fmt.Errorf("attempt %d: unexpected status %d", attempt, resp.StatusCode)
+	}
+
+	if status, err := doOnce(1); err == nil {
+		slog.InfoContext(ctx, "welcome-flow: joined user to default chats",
+			"user_id", userID, "status", status)
+		return
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	if status, err := doOnce(2); err != nil {
+		slog.ErrorContext(ctx, "welcome-flow: messaging /internal/.../join-default-chats failed twice; admin backfill required",
+			"user_id", userID, "error", err, "last_status", status)
+	} else {
+		slog.InfoContext(ctx, "welcome-flow: joined user to default chats on retry",
+			"user_id", userID, "status", status)
+	}
 }
 
 // Logout invalidates the current access token and deletes the refresh session.

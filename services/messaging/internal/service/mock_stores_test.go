@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
+	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,11 @@ type mockChatStore struct {
 	setSignaturesFn        func(ctx context.Context, chatID uuid.UUID, enabled bool) error
 	getContactIDsFn        func(ctx context.Context, userID uuid.UUID) ([]string, error)
 	getOrCreateSavedChatFn func(ctx context.Context, userID uuid.UUID) (*model.Chat, error)
+
+	// Welcome flow (mig 069).
+	joinUserToDefaultsFn         func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	setChatDefaultStatusFn       func(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error
+	backfillDefaultMembershipsFn func(ctx context.Context) ([]store.DefaultBackfillInsert, error)
 }
 
 func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -235,6 +241,27 @@ func (m *mockChatStore) ClearDraft(ctx context.Context, chatID, userID uuid.UUID
 
 func (m *mockChatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeRow func([]byte) error) error {
 	return nil
+}
+
+// Welcome-flow methods (mig 069). Tests opt in by setting the *Fn field;
+// otherwise these no-op so unrelated tests stay unaffected.
+func (m *mockChatStore) JoinUserToDefaults(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	if m.joinUserToDefaultsFn != nil {
+		return m.joinUserToDefaultsFn(ctx, userID)
+	}
+	return nil, nil
+}
+func (m *mockChatStore) SetChatDefaultStatus(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error {
+	if m.setChatDefaultStatusFn != nil {
+		return m.setChatDefaultStatusFn(ctx, chatID, isDefault, joinOrder)
+	}
+	return nil
+}
+func (m *mockChatStore) BackfillDefaultMemberships(ctx context.Context) ([]store.DefaultBackfillInsert, error) {
+	if m.backfillDefaultMembershipsFn != nil {
+		return m.backfillDefaultMembershipsFn(ctx)
+	}
+	return nil, nil
 }
 
 // ---------------------------------------------------------------------------
