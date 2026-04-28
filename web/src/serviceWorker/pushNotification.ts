@@ -40,6 +40,23 @@ function isCallPushData(data: unknown): data is CallPushData {
     && typeof (data as { caller_id?: unknown }).caller_id === 'string';
 }
 
+// ReadSyncPushData is the silent payload the gateway sends as a fallback when
+// the user has zero active WS connections at the moment of MarkRead. The SW
+// translates it into closeNotifications and never shows UI for these.
+type ReadSyncPushData = {
+  type: 'read_sync';
+  chat_id: string;
+  last_read_message_id?: string;
+  last_read_seq_num: number;
+};
+
+function isReadSyncPushData(data: unknown): data is ReadSyncPushData {
+  return Boolean(data) && typeof data === 'object'
+    && (data as { type?: string }).type === 'read_sync'
+    && typeof (data as { chat_id?: unknown }).chat_id === 'string'
+    && typeof (data as { last_read_seq_num?: unknown }).last_read_seq_num === 'number';
+}
+
 type LegacyPushData = {
   custom: {
     msg_id?: string;
@@ -317,6 +334,18 @@ export function handlePush(e: PushEvent) {
   // Stage 4: incoming call push has its own shape (no message fields).
   if (isCallPushData(data)) {
     e.waitUntil(showCallNotification(data));
+    return;
+  }
+
+  // Day 4b: silent read-sync from gateway when the user's other devices were
+  // offline at MarkRead time. We never show UI for these — just dismiss
+  // banners that the live device already cleared. last_read_seq_num matches
+  // notification.data.messageId set by the showNotification path.
+  if (isReadSyncPushData(data)) {
+    e.waitUntil(closeNotifications({
+      chatId: data.chat_id,
+      lastReadInboxMessageId: data.last_read_seq_num,
+    }));
     return;
   }
 

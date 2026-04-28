@@ -25,6 +25,7 @@ type mockPushSender struct {
 	sendToUsersFn             func(userIDs []string, payload []byte) error
 	sendCallToUsersFn         func(userIDs []string, payload []byte) error
 	sendToUsersWithPriorityFn func(userIDs []string, payload []byte, priority string) error
+	sendReadSyncToUserFn      func(userID string, payload []byte) error
 }
 
 func (m *mockPushSender) SendToUsers(userIDs []string, payload []byte) error {
@@ -46,6 +47,13 @@ func (m *mockPushSender) SendToUsersWithPriority(userIDs []string, payload []byt
 		return m.sendToUsersWithPriorityFn(userIDs, payload, priority)
 	}
 	return m.SendToUsers(userIDs, payload)
+}
+
+func (m *mockPushSender) SendReadSyncToUser(userID string, payload []byte) error {
+	if m.sendReadSyncToUserFn != nil {
+		return m.sendReadSyncToUserFn(userID, payload)
+	}
+	return nil
 }
 
 func TestSubscriber_HandleEvent_RichMessageEventsDeliverWithMemberIDs(t *testing.T) {
@@ -781,3 +789,260 @@ func TestDispatchPushNotifications_SkipsOffModeUsers(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+// ---------------------------------------------------------------------------
+// Day 4b: read_sync silent push fallback for offline users
+// ---------------------------------------------------------------------------
+
+// readSyncEnvelope marshals the standard NATSEvent for orbit.user.<uid>.read_sync.
+func readSyncEnvelope(t *testing.T, userID, chatID string, unread int64, originSession string) (string, []byte) {
+	t.Helper()
+	subject := "orbit.user." + userID + ".read_sync"
+	payload := marshalTestNATSEvent(t, NATSEvent{
+		Event: EventReadSync,
+		Data: json.RawMessage(fmt.Sprintf(
+			`{"chat_id":%q,"last_read_message_id":%q,"last_read_seq_num":42,"unread_count":%d,"read_at":"2026-04-28T10:30:00Z","origin_session_id":%q}`,
+			chatID, uuid.New().String(), unread, originSession,
+		)),
+		MemberIDs: []string{userID},
+		SenderID:  userID,
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+	return subject, payload
+}
+
+// withFastReadSyncDebounce drops the coalescer's debounce so tests don't need
+// to wait the production 1.5s to observe a flush.
+func withFastReadSyncDebounce(t *testing.T, sub *Subscriber, debounce time.Duration) {
+	t.Helper()
+	if sub.readSyncCoalescer != nil {
+		sub.readSyncCoalescer.Stop()
+	}
+	sub.readSyncCoalescer = newReadSyncCoalescer(debounce, sub.flushReadSyncPush)
+	t.Cleanup(func() {
+		if sub.readSyncCoalescer != nil {
+			sub.readSyncCoalescer.Stop()
+		}
+	})
+}
+
+// TestSubscriber_HandleReadSync_OtherDevicesOnlineSkipsPush asserts that
+// when the user has at least one active WS connection BESIDES the origin,
+// the silent push is suppressed — those non-origin devices already received
+// the WS frame, pushing on top would just burn iOS APNs budget.
+func TestSubscriber_HandleReadSync_OtherDevicesOnlineSkipsPush(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+	const originSession = "tab-A"
+	const otherSession = "tab-B"
+
+	hub := NewHub()
+	// Origin session — would have been excluded from WS fanout.
+	hub.Register(&Conn{UserID: userID, SessionID: originSession, done: make(chan struct{})})
+	// A second connection that DID receive the WS frame.
+	hub.Register(&Conn{UserID: userID, SessionID: otherSession, done: make(chan struct{}),
+		sendFn: func(interface{}) error { return nil }})
+
+	var pushCalls atomic.Int32
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(_ string, _ []byte) error {
+			pushCalls.Add(1)
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, originSession)
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	time.Sleep(80 * time.Millisecond)
+	if got := pushCalls.Load(); got != 0 {
+		t.Fatalf("non-origin device online → push must be skipped, got %d calls", got)
+	}
+}
+
+// TestSubscriber_HandleReadSync_OnlyOriginOnlineSendsPush is the bug-fix
+// test from PR #14 review. When the user's ONLY active connection is the
+// originating session (e.g. desktop tab open, iPhone PWA in background),
+// the WS fanout reaches zero recipients (origin excluded) — but the user
+// has stale notifications on the offline phone. The previous IsOnline
+// gate suppressed the push in this case; CountConnectionsExcluding fixes it.
+func TestSubscriber_HandleReadSync_OnlyOriginOnlineSendsPush(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+	const originSession = "tab-A"
+
+	hub := NewHub()
+	hub.Register(&Conn{UserID: userID, SessionID: originSession, done: make(chan struct{})})
+
+	var pushCalls atomic.Int32
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(_ string, _ []byte) error {
+			pushCalls.Add(1)
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, originSession)
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	// Generous wait — push goes through s.sem goroutine, not the timer fiber.
+	deadline := time.After(time.Second)
+	for {
+		if pushCalls.Load() == 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("expected exactly 1 push (only-origin-online), got %d", pushCalls.Load())
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+// TestSubscriber_HandleReadSync_PartialReadSkipsPush asserts the unread_count
+// gate: partial reads (unread_count != 0) do NOT trigger a push even when
+// offline. The user-visible signal "chat went red→empty" only fires on full
+// clear, so partial reads stay silent to preserve APNs budget.
+func TestSubscriber_HandleReadSync_PartialReadSkipsPush(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+
+	hub := NewHub() // user offline — no Register call
+
+	var pushCalls atomic.Int32
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(_ string, _ []byte) error {
+			pushCalls.Add(1)
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	// unread_count=3 — partial read, must not push
+	subject, payload := readSyncEnvelope(t, userID, chatID, 3, "")
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	time.Sleep(80 * time.Millisecond)
+	if got := pushCalls.Load(); got != 0 {
+		t.Fatalf("partial read must not push (unread_count > 0), got %d calls", got)
+	}
+}
+
+// TestSubscriber_HandleReadSync_OfflineFullClearSendsPush is the happy-path
+// for the fallback: user offline + unread cleared to 0 → exactly one silent
+// push to that user with the read_sync payload shape.
+func TestSubscriber_HandleReadSync_OfflineFullClearSendsPush(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+
+	hub := NewHub() // offline
+
+	type call struct {
+		userID  string
+		payload []byte
+	}
+	calls := make(chan call, 4)
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(uid string, payload []byte) error {
+			calls <- call{userID: uid, payload: append([]byte(nil), payload...)}
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, "tab-A")
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	select {
+	case got := <-calls:
+		if got.userID != userID {
+			t.Fatalf("push targeted wrong user: got %s want %s", got.userID, userID)
+		}
+		var parsed readSyncPushPayload
+		if err := json.Unmarshal(got.payload, &parsed); err != nil {
+			t.Fatalf("parse push payload: %v", err)
+		}
+		if parsed.Type != "read_sync" {
+			t.Errorf("payload.type: got %q want read_sync", parsed.Type)
+		}
+		if parsed.ChatID != chatID {
+			t.Errorf("payload.chat_id: got %q want %s", parsed.ChatID, chatID)
+		}
+		if parsed.LastReadSeqNum != 42 {
+			t.Errorf("payload.last_read_seq_num: got %d want 42", parsed.LastReadSeqNum)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected exactly one silent push, got none")
+	}
+
+	// Verify nothing else fires later (single-flush invariant).
+	select {
+	case extra := <-calls:
+		t.Fatalf("unexpected second push: %+v", extra)
+	case <-time.After(80 * time.Millisecond):
+	}
+}
+
+// TestSubscriber_HandleReadSync_BurstCoalescesPerChat asserts that 5 rapid
+// read_syncs for the SAME (user, chat) collapse to 1 push. This is the iOS
+// budget protection — without it, scrolling fast through unread chats would
+// burn through the APNs budget in seconds.
+func TestSubscriber_HandleReadSync_BurstCoalescesPerChat(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+
+	hub := NewHub()
+
+	var pushCalls atomic.Int32
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(_ string, _ []byte) error {
+			pushCalls.Add(1)
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 60*time.Millisecond)
+
+	for i := 0; i < 5; i++ {
+		subject, payload := readSyncEnvelope(t, userID, chatID, 0, "")
+		sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	time.Sleep(150 * time.Millisecond)
+
+	if got := pushCalls.Load(); got != 1 {
+		t.Fatalf("5 rapid submits for the same key must coalesce to 1 push, got %d", got)
+	}
+}
+
+// TestSubscriber_HandleReadSync_NilDispatcherSafe is a smoke test for the
+// "push not configured" path (e.g. dev environments without VAPID keys):
+// the handler must still broadcast the WS frame and not panic when
+// pushDispatcher is nil.
+func TestSubscriber_HandleReadSync_NilDispatcherSafe(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+
+	hub := NewHub()
+	deliveries := make(chan Envelope, 1)
+	hub.Register(newCapturingConn(userID, deliveries))
+
+	sub := NewSubscriber(hub, nil, "", "", nil) // no pushDispatcher
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, "")
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	// WS broadcast must still happen.
+	got := waitForEnvelope(t, deliveries)
+	if got.Type != EventReadSync {
+		t.Fatalf("expected WS read_sync delivery, got %q", got.Type)
+	}
+}
