@@ -1118,6 +1118,7 @@ export interface LangPair {
   'ScheduleRepeatMonthly': undefined;
   'ScheduleRepeatYearly': undefined;
   'VoipIncoming': undefined;
+  'CompliancePanel.Title': undefined;
   'CompliancePanel.ExportChat': undefined;
   'CompliancePanel.ExportUser': undefined;
   'CompliancePanel.ExportStart': undefined;
@@ -1126,10 +1127,12 @@ export interface LangPair {
   'CompliancePanel.Sessions': undefined;
   'CompliancePanel.RevokeSession': undefined;
   'CompliancePanel.RevokeAll': undefined;
+  'AuditLog.Title': undefined;
   'AuditLog.UserListRead': undefined;
   'AuditLog.DataExport': undefined;
   'AuditLog.UserDeactivated': undefined;
   'AuditLog.SessionRevoked': undefined;
+  'AdminPanel.Title': undefined;
   'AdminPanel.Users': undefined;
   'AdminPanel.Deactivate': undefined;
   'AdminPanel.Sessions': undefined;
@@ -1138,6 +1141,7 @@ export interface LangPair {
   'AI.Transcribe': undefined;
   'AI.Processing': undefined;
   'AI.Error': undefined;
+  'Role.SysAdmin': undefined;
   'Role.Moderator': undefined;
   'Role.Compliance': undefined;
   'Role.HR': undefined;
@@ -2248,6 +2252,7 @@ export interface LangPair {
   'NotificationPriorityImportant': undefined;
   'NotificationPriorityNormal': undefined;
   'NotificationPriorityLow': undefined;
+  'ShowTranslateButton': undefined;
   'ShowTranslateChatButton': undefined;
   'DoNotTranslate': undefined;
   'LocalizationInterfaceLanguage': undefined;
@@ -2265,12 +2270,12 @@ export interface LangPair {
   'ComplianceAllEmployees': undefined;
   'ComplianceSelectEmployee': undefined;
   'ComplianceChatsPending': undefined;
+  'ComplianceExportFailed': undefined;
   'ComplianceChatView': undefined;
   'ComplianceMessagesPending': undefined;
   'ComplianceOpenPanel': undefined;
   'ComplianceExportUser': undefined;
   'ComplianceExportChat': undefined;
-  'ComplianceExportFailed': undefined;
   'AdminPanelTitle': undefined;
   'AdminOpenPanel': undefined;
   'AdminTabFeatureFlags': undefined;
@@ -2292,8 +2297,19 @@ export interface LangPair {
   'AdminAuditSearchPlaceholder': undefined;
   'AdminAuditEmpty': undefined;
   'AdminAuditLoadMore': undefined;
+  'AdminTabWelcome': undefined;
+  'AdminWelcomeIntro': undefined;
+  'AdminWelcomeBackfillDescription': undefined;
+  'AdminWelcomeBackfillWarning': undefined;
+  'AdminWelcomeBackfillButton': undefined;
+  'AdminWelcomeBackfillConfirmTitle': undefined;
+  'AdminWelcomeBackfillConfirmBody': undefined;
+  'AdminWelcomeBackfillConfirmAction': undefined;
+  'ChatDefaultForNewUsers': undefined;
+  'ChatDefaultForNewUsersHint': undefined;
   'MaintenanceBannerDefault': undefined;
   'MaintenanceBannerWriteBlocked': undefined;
+  'AccDescrCollapsePanel': undefined;
   'AccDescrExpandPanel': undefined;
   'AccDescrLike': undefined;
   'AccDescrTopic': undefined;
@@ -2517,6 +2533,10 @@ export interface LangPair {
   'WebBot.Account.Desclaimer.Desc': undefined;
   'IosInstallBanner.Title': undefined;
   'IosInstallBanner.Hint': undefined;
+  'EditMessage': undefined;
+  'Hide': undefined;
+  'Emoji': undefined;
+  'SelectAll': undefined;
 }
 
 export interface LangPairWithVariables<V = LangVariable> {
@@ -4052,20 +4072,23 @@ export interface LangPairWithVariables<V = LangVariable> {
   'BotAuthSuccessText': {
     'url': V;
   };
-  'AiTranslateDefaultItem': {
-    'lang': V;
-  };
   'AiTranslateSelectedCount': {
     'count': V;
   };
   'AiTranslateSkipped': {
     'count': V;
   };
+  'AiTranslateDefaultItem': {
+    'lang': V;
+  };
   'AiUsagePeriodSince': {
     'date': V;
   };
   'ExactTextCopied': {
     '0': V;
+  };
+  'AdminWelcomeBackfillResult': {
+    'count': V;
   };
   'BoostingGiveawayUsedLinksPlural': {
     'count': V;
