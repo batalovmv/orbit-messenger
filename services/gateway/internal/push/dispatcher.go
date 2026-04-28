@@ -26,6 +26,13 @@ const (
 	// callPushTTL caps how long providers should hold a call notification.
 	// Calls auto-expire after ~60s anyway, so anything longer is wasted.
 	callPushTTL = 30
+	// readSyncPushTTL bounds how long a read-sync silent push waits at the
+	// provider. The point of read-sync is to clear stale notifications quickly;
+	// if the device hasn't woken in a minute, the user will reconcile on next
+	// foreground via the /chats sync anyway. Shorter TTL also keeps APNs
+	// throttle accounting tighter — Apple counts undelivered pushes against
+	// the budget too.
+	readSyncPushTTL = 60
 )
 
 type HTTPClient interface {
@@ -117,6 +124,14 @@ func (d *Dispatcher) callOptions() sendOptions {
 	return sendOptions{ttl: callPushTTL, urgency: webpush.UrgencyHigh}
 }
 
+// readSyncOptions: low urgency so iOS/APNs treats the silent payload as
+// non-priority and is more likely to keep us inside the per-device budget.
+// The SW on the receiving end never shows UI for these — it only calls
+// closeNotifications on already-displayed banners, so urgency=low is correct.
+func (d *Dispatcher) readSyncOptions() sendOptions {
+	return sendOptions{ttl: readSyncPushTTL, urgency: webpush.UrgencyLow}
+}
+
 func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
 	return d.sendToUsers(userIDs, payload, d.defaultOptions())
 }
@@ -139,6 +154,15 @@ func (d *Dispatcher) SendToUsersWithPriority(userIDs []string, payload []byte, p
 
 func (d *Dispatcher) SendToUser(userID string, payload []byte) error {
 	return d.sendToUser(userID, payload, d.defaultOptions())
+}
+
+// SendReadSyncToUser fans a silent read-sync payload to a single user's push
+// subscriptions with a short TTL and low urgency. The SW translates this into
+// closeNotifications — there's no banner. Used as the offline fallback when
+// the user's other devices have no active WS connection at the moment of
+// MarkRead, so stale notifications would otherwise sit until next foreground.
+func (d *Dispatcher) SendReadSyncToUser(userID string, payload []byte) error {
+	return d.sendToUser(userID, payload, d.readSyncOptions())
 }
 
 // SendCallToUsers fans out a high-urgency call notification with a short TTL.

@@ -25,6 +25,7 @@ type pushSender interface {
 	SendToUsers(userIDs []string, payload []byte) error
 	SendCallToUsers(userIDs []string, payload []byte) error
 	SendToUsersWithPriority(userIDs []string, payload []byte, priority string) error
+	SendReadSyncToUser(userID string, payload []byte) error
 }
 
 const (
@@ -48,9 +49,10 @@ type Subscriber struct {
 	httpClient          *http.Client
 	pushDispatcher      pushSender
 	classifier          *NotificationClassifier
-	rdb                 *redis.Client // shared Redis for user notification mode cache
-	sem                 chan struct{}  // semaphore to bound concurrent goroutines
-	dedup               *dedupCache   // deduplicates redelivered JetStream events
+	rdb                 *redis.Client      // shared Redis for user notification mode cache
+	sem                 chan struct{}      // semaphore to bound concurrent goroutines
+	dedup               *dedupCache        // deduplicates redelivered JetStream events
+	readSyncCoalescer   *readSyncCoalescer // debounces silent read-sync pushes for offline devices
 }
 
 // SetNotificationClassifier attaches an AI notification classifier to the subscriber.
@@ -73,7 +75,7 @@ func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret 
 		}
 	}
 
-	return &Subscriber{
+	s := &Subscriber{
 		hub:                 hub,
 		nc:                  nc,
 		js:                  js,
@@ -85,7 +87,18 @@ func NewSubscriber(hub *Hub, nc *nats.Conn, messagingServiceURL, internalSecret 
 		sem:                 make(chan struct{}, maxConcurrentFetches),
 		dedup:               newDedupCache(dedupCacheCapacity),
 	}
+	// Coalesce read-sync silent pushes per (user, chat) within a short window.
+	// flushReadSyncPush is a method on *Subscriber so it picks up the current
+	// pushDispatcher even after SetNotificationClassifier-style late wiring.
+	s.readSyncCoalescer = newReadSyncCoalescer(readSyncDebounce, s.flushReadSyncPush)
+	return s
 }
+
+// readSyncDebounce is how long the coalescer waits after a read_sync before
+// firing the silent push. Tuned to absorb a burst of "scroll past 5 unread
+// chats" without flooding APNs while still feeling near-instant when the
+// user pauses on a single chat.
+const readSyncDebounce = 1500 * time.Millisecond
 
 // Start subscribes to all orbit.> events via a JetStream durable consumer.
 // Falls back to core nc.Subscribe when JetStream is unavailable (unit tests).
@@ -147,6 +160,9 @@ func (s *Subscriber) Stop() {
 	for _, sub := range s.subs {
 		sub.Unsubscribe()
 	}
+	if s.readSyncCoalescer != nil {
+		s.readSyncCoalescer.Stop()
+	}
 }
 
 // handleJSEvent wraps handleEvent for JetStream messages: deduplicates by
@@ -206,9 +222,20 @@ type pushPayload struct {
 // handleReadSyncEvent forwards a self-targeted read-sync event to all of the
 // user's active WS connections except the one that originated the action
 // (matched by SessionID, not UserID — origin and recipients share the same
-// UserID by construction). Day 4b will add a silent push fallback for users
-// with zero active WS connections; until then, offline devices reconcile on
-// next foreground via the /chats list (which already prunes notifications).
+// UserID by construction).
+//
+// When the user has ZERO active WS connections AND the read action cleared
+// the chat to unread_count == 0, we additionally enqueue a silent push to
+// the user's push subscriptions. The unread_count == 0 filter is deliberate:
+//   - A partial read (e.g. user marked up to msg 10 of 15 unread) doesn't need
+//     to wake offline devices; the user-visible signal is "the chat went
+//     unread → read", and partial reads keep the badge anyway.
+//   - Apple's per-device APNs throttle counts undelivered silent pushes too,
+//     so pushing only on full-clear preserves budget for the cases that
+//     matter (notifications dismissable on the offline device).
+//
+// Pushes are coalesced per (userID, chatID) over a short debounce window so a
+// "scroll through 5 chats" burst becomes 5 pushes (one per chat), not 25.
 func (s *Subscriber) handleReadSyncEvent(subject string, event NATSEvent, envelope Envelope) {
 	userID := extractUserIDFromUserSubject(subject)
 	if userID == "" {
@@ -225,6 +252,65 @@ func (s *Subscriber) handleReadSyncEvent(subject string, event NATSEvent, envelo
 	}
 
 	s.hub.SendToUserExceptSession(userID, data.OriginSessionID, envelope)
+
+	// Offline-only silent push fallback. Re-checking IsOnline AFTER the
+	// fanout is fine: hub.SendToUserExceptSession is best-effort and the
+	// online check is just an optimisation to avoid pushing devices that
+	// already have a live WS frame in flight.
+	if data.UnreadCount != 0 {
+		return
+	}
+	if s.pushDispatcher == nil || s.readSyncCoalescer == nil {
+		return
+	}
+	if s.hub.IsOnline(userID) {
+		return
+	}
+	if data.ChatID == "" {
+		return
+	}
+
+	payload, err := buildReadSyncPushPayload(data)
+	if err != nil {
+		slog.Warn("nats: marshal read-sync push payload", "error", err, "user_id", userID)
+		return
+	}
+	s.readSyncCoalescer.Submit(userID, data.ChatID, payload)
+}
+
+// readSyncPushPayload is the silent payload delivered to the SW via web push.
+// The SW's handlePush has a dedicated branch for type=read_sync that calls
+// closeNotifications without ever showing UI.
+type readSyncPushPayload struct {
+	Type              string `json:"type"`
+	ChatID            string `json:"chat_id"`
+	LastReadMessageID string `json:"last_read_message_id,omitempty"`
+	LastReadSeqNum    int64  `json:"last_read_seq_num"`
+}
+
+func buildReadSyncPushPayload(data ReadSyncData) ([]byte, error) {
+	return json.Marshal(readSyncPushPayload{
+		Type:              "read_sync",
+		ChatID:            data.ChatID,
+		LastReadMessageID: data.LastReadMessageID,
+		LastReadSeqNum:    data.LastReadSeqNum,
+	})
+}
+
+// flushReadSyncPush is the coalescer's flush callback. Runs on the timer
+// goroutine after the debounce window expires.
+func (s *Subscriber) flushReadSyncPush(userID, chatID string, payload []byte) {
+	if s.pushDispatcher == nil {
+		return
+	}
+	if err := s.pushDispatcher.SendReadSyncToUser(userID, payload); err != nil {
+		// Fail-open: a delivery error here just means offline devices will
+		// reconcile on their next foreground via /chats sync (which already
+		// purges stale notifications). Log so a flood is visible in metrics
+		// but never block the WS handler.
+		slog.Warn("nats: read-sync push dispatch failed",
+			"error", err, "user_id", userID, "chat_id", chatID)
+	}
 }
 
 func (s *Subscriber) handleNewMessageEvent(subject string, event NATSEvent, envelope Envelope) {
