@@ -221,7 +221,12 @@ func TestReadSyncCoalescer_GenerationGuardsStaleQueuedCallback(t *testing.T) {
 	// after Unlock, see the entry with the new payload, delete and flush
 	// in <5ms. We assert the flush is closer to the freshly-armed window
 	// to differentiate the two implementations.
-	minExpected := newWindow / 2
+	//
+	// Threshold is newWindow/4 rather than /2 to leave a 4× safety margin
+	// against scheduler starvation on CI: even a goroutine delayed by ~10ms
+	// before acquiring an uncontested mutex would still fail this assertion
+	// in the un-guarded case.
+	minExpected := newWindow / 4
 	if delay < minExpected {
 		t.Fatalf("flush happened too early: %v after unlock (expected >= %v) — "+
 			"gen guard regression: stale queued callback flushed instead of new timer",

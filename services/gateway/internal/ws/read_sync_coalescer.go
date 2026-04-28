@@ -56,6 +56,11 @@ func newReadSyncCoalescer(debounce time.Duration, flush func(userID, chatID stri
 // (userID, chatID) is still within the debounce window, the payload is
 // replaced with the newer one and the timer is reset — the newest read state
 // always wins.
+//
+// payload MUST NOT be mutated by the caller after Submit returns: the
+// coalescer stores it by reference and may pass it to flush long after.
+// In practice the caller (handleReadSyncEvent) hands us a freshly
+// json.Marshal'd slice that nothing else holds, so this is naturally safe.
 func (c *readSyncCoalescer) Submit(userID, chatID string, payload []byte) {
 	if userID == "" || chatID == "" || len(payload) == 0 {
 		return
