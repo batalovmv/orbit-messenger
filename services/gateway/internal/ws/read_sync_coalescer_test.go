@@ -128,39 +128,103 @@ func TestReadSyncCoalescer_SubmitAfterStopIsNoop_NoPanic(t *testing.T) {
 	time.Sleep(120 * time.Millisecond)
 }
 
-// TestReadSyncCoalescer_GenerationGuardsLateFire reproduces the race called
-// out by the post-#14 review: timer expires → fire() callback queued → a
-// fresh Submit acquires the lock first, replaces the payload, re-arms with
-// a new generation. Without the gen check, the queued (old) callback would
-// flush the new payload immediately, collapsing the debounce. With the gen
-// check it should no-op and let the freshly-armed timer carry the flush.
-//
-// We can't trigger the in-Go-runtime race directly, so we drive it
-// manually: arm with debounce=10ms, sleep past expiry, then before the
-// timer goroutine has acquired the lock we hold it ourselves and run a
-// Submit-equivalent — observe the flush count is 1 (not 2).
-func TestReadSyncCoalescer_GenerationGuardsLateFire(t *testing.T) {
+// TestReadSyncCoalescer_ResetCancelsPendingTimer covers the easy
+// (non-racy) path: a Submit inside the debounce window successfully
+// stops the in-flight timer, no stale callback is ever queued, and the
+// final flush carries the latest payload.
+func TestReadSyncCoalescer_ResetCancelsPendingTimer(t *testing.T) {
 	var calls atomic.Int32
 	c := newReadSyncCoalescer(50*time.Millisecond, func(_, _ string, _ []byte) {
 		calls.Add(1)
 	})
 	defer c.Stop()
 
-	// First submit — armed for 50ms.
 	c.Submit("u-1", "c-1", []byte("v1"))
-	// Sleep until just before the timer fires, then submit again so the
-	// generation increments. This emulates the "Submit just beat fire to
-	// the lock" branch of the race, which the gen check must absorb.
-	time.Sleep(40 * time.Millisecond)
+	time.Sleep(40 * time.Millisecond) // before timer fires
 	c.Submit("u-1", "c-1", []byte("v2"))
 
-	// Wait long enough for both possible callback paths to drain.
 	time.Sleep(200 * time.Millisecond)
-
-	// Without the generation guard the queued (gen=1) callback would flush
-	// in addition to the freshly-armed (gen=2) timer → count == 2.
-	// With the guard, only the gen-2 timer flushes.
 	if got := calls.Load(); got != 1 {
-		t.Fatalf("expected exactly 1 flush after Submit/Reset race, got %d", got)
+		t.Fatalf("expected 1 flush after Stop+rearm path, got %d", got)
+	}
+}
+
+// TestReadSyncCoalescer_GenerationGuardsStaleQueuedCallback exercises the
+// actual race the gen counter was added for: timer fires → fire()
+// goroutine launched but blocks on c.mu → a Submit-like mutation happens
+// under the lock first → when the queued callback eventually runs it must
+// observe entry.gen has advanced and no-op, leaving the flush to the
+// freshly-armed timer.
+//
+// The bug is "flush fires too EARLY", not "flush fires too many times":
+// without the gen guard, the queued callback (which currently holds the
+// new payload because Submit already mutated it) would delete the entry
+// and flush immediately, collapsing the debounce window to ~0. With the
+// guard, that callback no-ops and the freshly-armed timer carries the
+// flush after the new debounce. So the assertion is on TIMING, not count.
+//
+// Driven deterministically by holding c.mu directly while the gen=1 timer
+// expires, then performing the gen++/replace mutation under the lock.
+func TestReadSyncCoalescer_GenerationGuardsStaleQueuedCallback(t *testing.T) {
+	var (
+		flushMu    sync.Mutex
+		flushTimes []time.Time
+	)
+	c := newReadSyncCoalescer(50*time.Millisecond, func(_, _ string, _ []byte) {
+		flushMu.Lock()
+		flushTimes = append(flushTimes, time.Now())
+		flushMu.Unlock()
+	})
+	defer c.Stop()
+
+	const (
+		key       = "u-1:c-1"
+		newWindow = 60 * time.Millisecond
+	)
+
+	c.mu.Lock()
+
+	// Arm a timer with a 1ms debounce so it expires while we hold the
+	// lock — its callback is queued waiting on c.mu.
+	entry := &readSyncEntry{
+		userID:  "u-1",
+		chatID:  "c-1",
+		payload: []byte("v1"),
+		gen:     1,
+	}
+	entry.timer = time.AfterFunc(1*time.Millisecond, func() { c.fire(key, 1) })
+	c.pending[key] = entry
+
+	time.Sleep(20 * time.Millisecond) // past expiry — callback now parked on c.mu
+
+	// Mirror Submit's mutation. Stop returns false (timer already fired),
+	// which is exactly the path the gen guard exists to handle.
+	entry.gen = 2
+	entry.payload = []byte("v2")
+	entry.timer.Stop()
+	entry.timer = time.AfterFunc(newWindow, func() { c.fire(key, 2) })
+
+	unlockAt := time.Now()
+	c.mu.Unlock()
+
+	// Drain both possible callback paths (queued gen=1 + armed gen=2).
+	time.Sleep(150 * time.Millisecond)
+
+	flushMu.Lock()
+	defer flushMu.Unlock()
+	if len(flushTimes) != 1 {
+		t.Fatalf("expected exactly 1 flush, got %d", len(flushTimes))
+	}
+	delay := flushTimes[0].Sub(unlockAt)
+	// The gen-guarded path flushes after ~newWindow (60ms). Without the
+	// guard, the queued gen=1 callback would acquire the lock immediately
+	// after Unlock, see the entry with the new payload, delete and flush
+	// in <5ms. We assert the flush is closer to the freshly-armed window
+	// to differentiate the two implementations.
+	minExpected := newWindow / 2
+	if delay < minExpected {
+		t.Fatalf("flush happened too early: %v after unlock (expected >= %v) — "+
+			"gen guard regression: stale queued callback flushed instead of new timer",
+			delay, minExpected)
 	}
 }
