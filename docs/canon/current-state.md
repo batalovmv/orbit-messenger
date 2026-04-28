@@ -29,6 +29,14 @@
 - **Audit log search**: `audit_store.AuditFilter.Q` — ILIKE по `action / target_type / target_id / actor.display_name / details::text / ip`. Backslash/`%`/`_` экранируются. На 150-user pilot хватает; pg_trgm/tsvector — отложено.
 - **Утечка operator metadata**: `MaintenanceState` (full) с `since/updated_by` идёт ТОЛЬКО в админский `/admin/feature-flags`. Public + auth `/system/config` отдают `PublicMaintenanceState` (active/message/block_writes only). Locked test: `TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata`.
 
+### Cross-device read-receipt sync (PR #13 + #14, 2026-04-28)
+
+- **Новый NATS event** `orbit.user.<userID>.read_sync` (self-only). Messaging публикует после `MarkRead` payload `{chat_id, last_read_message_id, last_read_seq_num, unread_count, read_at, origin_session_id}` ТОЛЬКО на user'а-маркера. Существующий `orbit.chat.*.messages.read` (cross-user receipts) живёт параллельно с slim payload — без `unread_count`, чтобы не утекать другим участникам.
+- **WS Conn carries SessionID** (per-tab, opaque, sessionStorage). Передаётся в auth-frame `{token, session_id}` и в `X-Session-ID` REST header. Сервер генерит UUID если клиент не прислал.
+- **Hub.SendToUserExceptSession(userID, excludeSessionID, msg)** — primitive для cross-device фанаута (read-sync, в будущем typing/draft). `CountConnectionsExcluding` — gate "никто кроме origin не получил WS frame".
+- **Offline silent push fallback** (Day 4b): если у user'а 0 non-origin WS connections И `unread_count == 0` → silent web-push с TTL=60s, urgency=low. Coalesce per `(userID, chatID)` 1.5s, latest-payload-wins, generation-counter защищает от Reset+queued-callback race. Bounded через `s.sem`. SW push handler `type=read_sync` → `closeNotifications` без UI.
+- Frontend: `wsHandler.handleReadSync` → `updateChat(readState)` + `serviceWorker.postMessage('closeMessageNotifications', {chatId, lastReadInboxMessageId: seq_num})`.
+
 ## Открытые направления Phase 8D
 
 См. memory `project_audit_2026_04_26.md` и `audits/FIX-PLAN.md` — 3 CRITICAL + 9 HIGH + 107 IMPORTANT findings, план разнесён по спринтам.
