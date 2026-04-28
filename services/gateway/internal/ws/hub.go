@@ -32,8 +32,14 @@ type Conn struct {
 	// the user just performed locally) can be excluded from the cross-device
 	// fanout. SessionID is opaque, generated client-side at app start; if the
 	// client does not supply one, the auth handler assigns a server-side UUID.
+	//
+	// JTI is the JWT session id (sessions.id row PK) extracted from the
+	// access token. Used by the admin session-revoke path (Day 5.2) to
+	// force-close a specific connection. SessionID and JTI are independent:
+	// SessionID is per-tab opaque, JTI is per-JWT and rotates on refresh.
 	UserID    string
 	SessionID string
+	JTI       string
 	mu        sync.Mutex
 	done    chan struct{}
 	ctx     context.Context
@@ -368,6 +374,36 @@ func (h *Hub) CloseUserConnections(userID string) {
 			slog.Warn("ws: close user connection failed", "user_id", userID, "error", err)
 		}
 	}
+}
+
+// CloseSessionByJTI closes any active connection whose JWT jti matches.
+// Used by the admin session-revoke path (Day 5.2) to terminate a specific
+// device's WS session immediately, without waiting for the next token
+// revalidation tick. Returns the number of connections closed.
+//
+// JTI is unique per session row; in practice 0 or 1 connections match (a
+// single JWT shared across multiple tabs is rare but legal).
+func (h *Hub) CloseSessionByJTI(jti string) int {
+	if jti == "" {
+		return 0
+	}
+	h.mu.RLock()
+	var matches []*Conn
+	for _, conns := range h.conns {
+		for _, c := range conns {
+			if c.JTI == jti {
+				matches = append(matches, c)
+			}
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range matches {
+		if err := conn.Close(closeCodePolicyViolation, "session revoked"); err != nil {
+			slog.Warn("ws: close session by jti failed", "user_id", conn.UserID, "jti", jti, "error", err)
+		}
+	}
+	return len(matches)
 }
 
 // OnlineUserIDs returns the list of currently connected user IDs.

@@ -38,6 +38,11 @@ type ValidatedToken struct {
 	UserID    string
 	ExpiresAt time.Time
 	TokenHash string
+	// JTI is the session id encoded in the JWT's "jti" claim. Used by the
+	// admin session-revoke flow (Day 5.2) so the hub can force-close a
+	// specific connection when its session is revoked, without waiting for
+	// the next token revalidation tick. Empty if the token is missing jti.
+	JTI string
 }
 
 // Handler manages WebSocket connections and typing debounce.
@@ -146,6 +151,7 @@ func (h *Handler) Upgrade(authServiceURL string, rdb *redis.Client) fiber.Handle
 			WS:          c,
 			UserID:      tokenInfo.UserID,
 			SessionID:   sessionID,
+			JTI:         tokenInfo.JTI,
 			done:        make(chan struct{}),
 			ctx:         connCtx,
 			cancel:      connCancel,
@@ -226,6 +232,24 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		return nil, nil
 	}
 
+	// Per-jti blacklist (Day 5.2 admin session revoke). Same reasoning as
+	// gateway JWT middleware: the cache short-circuit below would otherwise
+	// keep a revoked session valid for an entire authCacheTTL window.
+	if jti := parseTokenJTI(token); jti != "" {
+		jtiKey := "jwt_blacklist:jti:" + jti
+		jtiBl, jtiErr := rdb.Exists(ctx, jtiKey).Result()
+		if jtiErr != nil {
+			slog.Error("WS jti blacklist check failed, rejecting token", "error", jtiErr)
+			return nil, fmt.Errorf("jti blacklist check failed")
+		}
+		if jtiBl > 0 {
+			if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+				slog.Error("WS JWT cache del failed after jti blacklist hit", "error", err)
+			}
+			return nil, nil
+		}
+	}
+
 	// Check cache
 	if cached, err := rdb.Get(ctx, cacheKey).Result(); err == nil {
 		var u struct {
@@ -236,6 +260,7 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 				UserID:    u.ID,
 				ExpiresAt: expiresAt,
 				TokenHash: tokenHash,
+				JTI:       parseTokenJTI(token),
 			}, nil
 		}
 	}
@@ -282,6 +307,7 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		UserID:    user.ID,
 		ExpiresAt: expiresAt,
 		TokenHash: tokenHash,
+		JTI:       parseTokenJTI(token),
 	}, nil
 }
 
@@ -294,6 +320,21 @@ func RevalidateToken(ctx context.Context, client *http.Client, rdb *redis.Client
 	}
 	if blacklisted > 0 {
 		return fmt.Errorf("token revoked")
+	}
+
+	// Per-jti blacklist for admin session revoke (Day 5.2). The periodic
+	// revalidation tick is the only chance to catch a revoked session for a
+	// connection that was never targeted by the orbit.session.*.revoked
+	// NATS event (e.g. publish dropped on core NATS).
+	if jti := parseTokenJTI(token); jti != "" {
+		jtiBl, jtiErr := rdb.Exists(ctx, "jwt_blacklist:jti:"+jti).Result()
+		if jtiErr != nil {
+			slog.Error("WS jti blacklist revalidation failed", "error", jtiErr)
+			return fmt.Errorf("jti blacklist check failed: %w", jtiErr)
+		}
+		if jtiBl > 0 {
+			return fmt.Errorf("session revoked")
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", authURL+"/auth/me", nil)
@@ -333,6 +374,19 @@ func parseTokenExpiry(token string) (time.Time, error) {
 	}
 
 	return exp.Time, nil
+}
+
+// parseTokenJTI extracts the "jti" claim without verifying the signature.
+// Returns "" on any parse error or missing claim. The token is already
+// validated upstream (blacklist + auth /me) by the time we reach here.
+func parseTokenJTI(token string) string {
+	claims := jwt.MapClaims{}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
+		return ""
+	}
+	jti, _ := claims["jti"].(string)
+	return jti
 }
 
 func (h *Handler) pingLoop(conn *Conn) {

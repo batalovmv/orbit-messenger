@@ -386,7 +386,7 @@ func setupAdminSessionTestApp(t *testing.T) (*fiber.App, *service.AuthService, *
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	svc := service.NewAuthService(userStore, sessionStore, inviteStore, rdb, cfg, logger)
-	handler := NewAuthHandler(svc, logger, "", testBootstrapSecret)
+	handler := NewAuthHandler(svc, logger, testInternalSecret, testBootstrapSecret)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: response.FiberErrorHandler,
@@ -394,6 +394,12 @@ func setupAdminSessionTestApp(t *testing.T) (*fiber.App, *service.AuthService, *
 	handler.Register(app, RateLimitMiddlewares{})
 
 	return app, svc, userStore, sessionStore, rdb
+}
+
+const testInternalSecret = "test-internal-secret"
+
+func internalHeaders() map[string]string {
+	return map[string]string{"X-Internal-Token": testInternalSecret}
 }
 
 // testBootstrapSecret is the value every test uses to authorize /auth/bootstrap.
@@ -1027,85 +1033,102 @@ func TestLogin_With2FA_WrongCode(t *testing.T) {
 	}
 }
 
-// --- Admin Session Management tests ---
+// --- Internal session endpoints tests ---
+//
+// The public admin paths (/auth/admin/users/:id/sessions[*]) were dropped in
+// Day 5.2: admin policy + audit live in messaging now, and messaging reaches
+// auth via X-Internal-Token-gated /internal endpoints. These tests cover the
+// internal surface only — gates, role hierarchy, and audit are tested in the
+// messaging service.
 
-func TestAdminSession_List_HappyPath(t *testing.T) {
+func TestInternalSessions_List_HappyPath(t *testing.T) {
 	app, _, _, _, _ := setupAdminSessionTestApp(t)
-
 	adminToken := bootstrapAndLogin(t, app)
 	adminUserID := mustUserIDFromToken(t, adminToken)
 
-	resp := doRequest(app, "GET", fmt.Sprintf("/auth/admin/users/%s/sessions", adminUserID), nil, map[string]string{
-		"Authorization": "Bearer " + adminToken,
-		"X-User-Role":   "superadmin",
-	})
-
+	resp := doRequest(app, "GET", fmt.Sprintf("/internal/users/%s/sessions", adminUserID), nil, internalHeaders())
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	var sessions []map[string]interface{}
-	if err := json.Unmarshal(body, &sessions); err != nil {
-		t.Fatalf("expected sessions array response, unmarshal failed: %v", err)
+	var payload struct {
+		Sessions []map[string]interface{} `json:"sessions"`
 	}
-	if len(sessions) == 0 {
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(payload.Sessions) == 0 {
 		t.Fatal("expected at least one session in response")
 	}
 }
 
-func TestAdminSession_List_Forbidden(t *testing.T) {
+func TestInternalSessions_List_RejectsMissingToken(t *testing.T) {
 	app, _, _, _, _ := setupAdminSessionTestApp(t)
-
 	adminToken := bootstrapAndLogin(t, app)
-	adminInviteResp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
-		"role":     "member",
-		"max_uses": 1,
-	}, map[string]string{"Authorization": "Bearer " + adminToken})
-	if adminInviteResp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(adminInviteResp.Body)
-		t.Fatalf("expected 201 invite creation, got %d: %s", adminInviteResp.StatusCode, body)
-	}
-	invite := parseResponse(adminInviteResp)
-	code, _ := invite["code"].(string)
-	if code == "" {
-		t.Fatal("expected invite code")
-	}
+	adminUserID := mustUserIDFromToken(t, adminToken)
 
-	doRequest(app, "POST", "/auth/register", map[string]string{
-		"invite_code":  code,
-		"email":        "member@orbit.test",
-		"password":     "securepassword123",
-		"display_name": "Member",
-	}, nil)
-
-	memberLoginResp := doRequest(app, "POST", "/auth/login", map[string]string{
-		"email":    "member@orbit.test",
-		"password": "securepassword123",
-	}, nil)
-	memberResult := parseResponse(memberLoginResp)
-	memberToken, _ := memberResult["access_token"].(string)
-	if memberToken == "" {
-		t.Fatal("expected member access token")
-	}
-
-	memberUserID := mustUserIDFromToken(t, memberToken)
-	resp := doRequest(app, "GET", fmt.Sprintf("/auth/admin/users/%s/sessions", memberUserID), nil, map[string]string{
-		"Authorization": "Bearer " + memberToken,
-		"X-User-Role":   "member",
-	})
-
+	resp := doRequest(app, "GET", fmt.Sprintf("/internal/users/%s/sessions", adminUserID), nil, nil)
 	if resp.StatusCode != http.StatusForbidden {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, body)
 	}
 }
 
-func TestAdminSession_Revoke_HappyPath(t *testing.T) {
-	app, _, userStore, sessionStore, rdb := setupAdminSessionTestApp(t)
-
+func TestInternalSessions_List_RejectsBadToken(t *testing.T) {
+	app, _, _, _, _ := setupAdminSessionTestApp(t)
 	adminToken := bootstrapAndLogin(t, app)
+	adminUserID := mustUserIDFromToken(t, adminToken)
+
+	resp := doRequest(app, "GET", fmt.Sprintf("/internal/users/%s/sessions", adminUserID), nil, map[string]string{
+		"X-Internal-Token": "wrong-secret",
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestInternalSessions_GetByID_HappyPath(t *testing.T) {
+	app, _, _, sessionStore, _ := setupAdminSessionTestApp(t)
+	bootstrapAndLogin(t, app)
+
+	var sessionID uuid.UUID
+	for id := range sessionStore.sessions {
+		sessionID = id
+		break
+	}
+	if sessionID == uuid.Nil {
+		t.Fatal("expected session to exist")
+	}
+
+	resp := doRequest(app, "GET", fmt.Sprintf("/internal/sessions/%s", sessionID), nil, internalHeaders())
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	out := parseResponse(resp)
+	if out["id"] != sessionID.String() {
+		t.Fatalf("expected session id %s in response, got %v", sessionID, out["id"])
+	}
+}
+
+func TestInternalSessions_GetByID_NotFound(t *testing.T) {
+	app, _, _, _, _ := setupAdminSessionTestApp(t)
+	bootstrapAndLogin(t, app)
+
+	resp := doRequest(app, "GET", fmt.Sprintf("/internal/sessions/%s", uuid.New()), nil, internalHeaders())
+	if resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 404, got %d: %s", resp.StatusCode, body)
+	}
+}
+
+func TestInternalSessions_Revoke_DeletesRow_AndWritesPerJTIBlacklist(t *testing.T) {
+	app, _, userStore, sessionStore, rdb := setupAdminSessionTestApp(t)
+	bootstrapAndLogin(t, app)
+
 	adminUser := userStore.byEmail["admin@orbit.test"]
 	if adminUser == nil {
 		t.Fatal("admin user not found in store")
@@ -1122,91 +1145,70 @@ func TestAdminSession_Revoke_HappyPath(t *testing.T) {
 		t.Fatal("expected session to exist for admin user")
 	}
 
-	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/admin/users/%s/sessions/%s", adminUser.ID, sessionID), nil, map[string]string{
-		"Authorization": "Bearer " + adminToken,
-		"X-User-Role":   "superadmin",
-	})
-
+	resp := doRequest(app, "DELETE", fmt.Sprintf("/internal/sessions/%s", sessionID), nil, internalHeaders())
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
 	}
 
-	ctx := context.Background()
-	blacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", adminUser.ID)
-	exists, err := rdb.Exists(ctx, blacklistKey).Result()
-	if err != nil {
-		t.Fatalf("check redis blacklist key: %v", err)
+	if _, ok := sessionStore.sessions[sessionID]; ok {
+		t.Fatal("expected session row to be deleted")
 	}
-	if exists != 1 {
-		t.Fatalf("expected JWT blacklist key %q to be written", blacklistKey)
+
+	ctx := context.Background()
+
+	// Day 5.2 invariant #1: per-session revoke MUST NOT write the user-wide
+	// blacklist (that would also kill the user's other devices).
+	userBlacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", adminUser.ID)
+	exists, err := rdb.Exists(ctx, userBlacklistKey).Result()
+	if err != nil {
+		t.Fatalf("check redis user blacklist key: %v", err)
+	}
+	if exists != 0 {
+		t.Fatalf("user-wide blacklist key %q must not be written by per-session revoke", userBlacklistKey)
+	}
+
+	// Day 5.2 invariant #2: per-jti blacklist IS written. Without this, the
+	// gateway JWT cache would honour the revoked session for up to its TTL
+	// (30s) — DB delete alone doesn't reach the cache short-circuit path.
+	jtiBlacklistKey := fmt.Sprintf("jwt_blacklist:jti:%s", sessionID)
+	jtiExists, err := rdb.Exists(ctx, jtiBlacklistKey).Result()
+	if err != nil {
+		t.Fatalf("check redis jti blacklist key: %v", err)
+	}
+	if jtiExists != 1 {
+		t.Fatalf("expected per-jti blacklist key %q to be written", jtiBlacklistKey)
 	}
 }
 
-func TestAdminSession_Revoke_NotFound(t *testing.T) {
-	app, _, userStore, _, _ := setupAdminSessionTestApp(t)
+func TestInternalSessions_Revoke_NotFound(t *testing.T) {
+	app, _, _, _, _ := setupAdminSessionTestApp(t)
+	bootstrapAndLogin(t, app)
 
-	adminToken := bootstrapAndLogin(t, app)
-	adminUser := userStore.byEmail["admin@orbit.test"]
-	if adminUser == nil {
-		t.Fatal("admin user not found in store")
-	}
-
-	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/admin/users/%s/sessions/%s", adminUser.ID, uuid.New()), nil, map[string]string{
-		"Authorization": "Bearer " + adminToken,
-		"X-User-Role":   "superadmin",
-	})
-
+	resp := doRequest(app, "DELETE", fmt.Sprintf("/internal/sessions/%s", uuid.New()), nil, internalHeaders())
 	if resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 404, got %d: %s", resp.StatusCode, body)
 	}
 }
 
-func TestAdminSession_Revoke_Forbidden(t *testing.T) {
-	app, _, _, _, _ := setupAdminSessionTestApp(t)
+func TestInternalSessions_Revoke_RejectsMissingToken(t *testing.T) {
+	app, _, _, sessionStore, _ := setupAdminSessionTestApp(t)
+	bootstrapAndLogin(t, app)
 
-	adminToken := bootstrapAndLogin(t, app)
-	invResp := doRequest(app, "POST", "/auth/invites", map[string]interface{}{
-		"role":     "member",
-		"max_uses": 1,
-	}, map[string]string{"Authorization": "Bearer " + adminToken})
-	if invResp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(invResp.Body)
-		t.Fatalf("expected 201 invite creation, got %d: %s", invResp.StatusCode, body)
-	}
-	invite := parseResponse(invResp)
-	code, _ := invite["code"].(string)
-	if code == "" {
-		t.Fatal("expected invite code")
+	var sessionID uuid.UUID
+	for id := range sessionStore.sessions {
+		sessionID = id
+		break
 	}
 
-	doRequest(app, "POST", "/auth/register", map[string]string{
-		"invite_code":  code,
-		"email":        "member@orbit.test",
-		"password":     "securepassword123",
-		"display_name": "Member",
-	}, nil)
-
-	memberLoginResp := doRequest(app, "POST", "/auth/login", map[string]string{
-		"email":    "member@orbit.test",
-		"password": "securepassword123",
-	}, nil)
-	memberResult := parseResponse(memberLoginResp)
-	memberToken, _ := memberResult["access_token"].(string)
-	if memberToken == "" {
-		t.Fatal("expected member access token")
-	}
-	memberUserID := mustUserIDFromToken(t, memberToken)
-
-	resp := doRequest(app, "DELETE", fmt.Sprintf("/auth/admin/users/%s/sessions/%s", memberUserID, uuid.New()), nil, map[string]string{
-		"Authorization": "Bearer " + memberToken,
-		"X-User-Role":   "member",
-	})
-
+	resp := doRequest(app, "DELETE", fmt.Sprintf("/internal/sessions/%s", sessionID), nil, nil)
 	if resp.StatusCode != http.StatusForbidden {
 		body, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, body)
+	}
+	if _, ok := sessionStore.sessions[sessionID]; !ok {
+		t.Fatal("session was deleted despite missing internal token")
 	}
 }
 

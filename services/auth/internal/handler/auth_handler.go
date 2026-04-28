@@ -87,13 +87,19 @@ func (h *AuthHandler) Register(app *fiber.App, rateLimits RateLimitMiddlewares) 
 	auth.Post("/invites", h.requireAuth, h.requireAdmin, h.CreateInvite)
 	auth.Get("/invites", h.requireAuth, h.requireAdmin, h.ListInvites)
 	auth.Delete("/invites/:id", h.requireAuth, h.requireAdmin, h.RevokeInvite)
-	auth.Get("/admin/users/:id/sessions", h.requireAuth, h.requireSysManageUsers, h.AdminListUserSessions)
-	auth.Delete("/admin/users/:id/sessions/:sid", h.requireAuth, h.requireSysManageUsers, h.AdminRevokeSession)
-
 	// User settings routes (proxied from gateway as /users/me/*)
 	users := app.Group("/users/me", h.requireAuth)
 	users.Get("/notification-priority", h.GetNotificationPriorityMode)
 	users.Put("/notification-priority", h.UpdateNotificationPriorityMode)
+
+	// Internal-only routes for service-to-service calls (X-Internal-Token).
+	// Admin session management is owned by messaging (audit + policy) and
+	// reaches into auth via these endpoints. No JWT, no role gate — the
+	// caller (messaging) has already enforced SysManageUsers + audit.
+	internal := app.Group("/internal", h.requireInternalToken)
+	internal.Get("/users/:id/sessions", h.InternalListUserSessions)
+	internal.Get("/sessions/:id", h.InternalGetSession)
+	internal.Delete("/sessions/:id", h.InternalRevokeSession)
 }
 
 // --- Middleware ---
@@ -138,6 +144,20 @@ func (h *AuthHandler) requireSysManageUsers(c *fiber.Ctx) error {
 	role, _ := c.Locals("user_role").(string)
 	if !permissions.HasSysPermission(role, permissions.SysManageUsers) {
 		return response.Error(c, apperror.Forbidden("Insufficient permissions"))
+	}
+	return c.Next()
+}
+
+// requireInternalToken gates service-to-service routes. The token is a shared
+// secret minted by the gateway and passed via X-Internal-Token. Constant-time
+// compare to avoid leaking via timing.
+func (h *AuthHandler) requireInternalToken(c *fiber.Ctx) error {
+	if h.internalSecret == "" {
+		return response.Error(c, apperror.Forbidden("Internal endpoints disabled"))
+	}
+	provided := c.Get("X-Internal-Token")
+	if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(h.internalSecret)) != 1 {
+		return response.Error(c, apperror.Forbidden("Invalid internal token"))
 	}
 	return c.Next()
 }
@@ -588,28 +608,48 @@ func (h *AuthHandler) UpdateNotificationPriorityMode(c *fiber.Ctx) error {
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"mode": req.Mode})
 }
 
-func (h *AuthHandler) AdminListUserSessions(c *fiber.Ctx) error {
+// InternalListUserSessions returns all sessions for the target user. Caller
+// (messaging) is responsible for SysManageUsers gate + audit.
+func (h *AuthHandler) InternalListUserSessions(c *fiber.Ctx) error {
 	targetID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
-	sessions, err := h.svc.AdminListUserSessions(c.Context(), c.Get("X-User-Role"), targetID)
+	sessions, err := h.svc.InternalListUserSessions(c.Context(), targetID)
 	if err != nil {
 		return response.Error(c, err)
 	}
-	return response.JSON(c, fiber.StatusOK, sessions)
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"sessions": sessions})
 }
 
-func (h *AuthHandler) AdminRevokeSession(c *fiber.Ctx) error {
-	targetID, err := uuid.Parse(c.Params("id"))
-	if err != nil {
-		return response.Error(c, apperror.BadRequest("Invalid user ID"))
-	}
-	sessionID, err := uuid.Parse(c.Params("sid"))
+// InternalGetSession returns a single session by id. Used by messaging to
+// resolve target user_id and session metadata before applying guards/audit.
+// Returns 404 if the session does not exist.
+func (h *AuthHandler) InternalGetSession(c *fiber.Ctx) error {
+	sessionID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid session ID"))
 	}
-	if err := h.svc.AdminRevokeSession(c.Context(), c.Get("X-User-Role"), targetID, sessionID); err != nil {
+	sess, err := h.svc.InternalGetSession(c.Context(), sessionID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	if sess == nil {
+		return response.Error(c, apperror.NotFound("Session not found"))
+	}
+	return response.JSON(c, fiber.StatusOK, sess)
+}
+
+// InternalRevokeSession deletes one session row. The DB delete alone is
+// authoritative — ValidateAccessToken loads sessions.GetByID(jti) on every
+// request and rejects when the row is missing, so a deleted row instantly
+// invalidates the JWT carrying it. No Redis writes here.
+func (h *AuthHandler) InternalRevokeSession(c *fiber.Ctx) error {
+	sessionID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid session ID"))
+	}
+	if err := h.svc.InternalRevokeSession(c.Context(), sessionID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "revoked"})

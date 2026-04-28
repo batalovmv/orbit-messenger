@@ -22,6 +22,10 @@ const (
 	EventUserStatus      = "user_status"
 	EventUserDeactivated = "user_deactivated"
 	EventReadSync        = "read_sync"
+	// EventSessionRevoked is published by messaging on
+	// orbit.session.<sessionID>.revoked after a successful admin revoke.
+	// Gateway closes any WS connection whose JWT jti matches sessionID.
+	EventSessionRevoked = "session_revoked"
 	EventPong            = "pong"
 
 	EventChatCreated       = "chat_created"

@@ -25,7 +25,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
-	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/auth/internal/model"
 	"github.com/mst-corp/orbit/services/auth/internal/store"
 )
@@ -608,6 +607,20 @@ func (s *AuthService) ValidateAccessToken(ctx context.Context, tokenStr string) 
 		return uuid.Nil, "", apperror.Unauthorized("Invalid token session")
 	}
 
+	// Per-jti blacklist (Day 5.2 admin session revoke). Written BEFORE the
+	// DB delete in InternalRevokeSession so direct hits to /auth/me (which
+	// bypass the gateway middleware that ALSO checks this key) cannot
+	// validate during the small window between the blacklist write and the
+	// row delete. Fail-closed on Redis error.
+	jtiBlacklisted, err := s.redis.Exists(ctx, "jwt_blacklist:jti:"+sessionID.String()).Result()
+	if err != nil {
+		slog.Error("redis jti blacklist check failed, rejecting token", "error", err)
+		return uuid.Nil, "", apperror.Internal("Token validation temporarily unavailable")
+	}
+	if jtiBlacklisted > 0 {
+		return uuid.Nil, "", apperror.Unauthorized("Session revoked")
+	}
+
 	sess, err := s.sessions.GetByID(ctx, sessionID)
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("get session: %w", err)
@@ -736,30 +749,72 @@ func generateInviteCode() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// AdminListUserSessions returns all sessions for a target user. Gated by SysManageUsers.
-func (s *AuthService) AdminListUserSessions(ctx context.Context, actorRole string, targetID uuid.UUID) ([]model.Session, error) {
-	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
-		return nil, apperror.Forbidden("Insufficient permissions")
-	}
+// InternalListUserSessions returns all sessions for a user. Internal-only: the
+// caller (messaging) has already enforced SysManageUsers + audit. No role gate
+// here.
+func (s *AuthService) InternalListUserSessions(ctx context.Context, targetID uuid.UUID) ([]model.Session, error) {
 	return s.sessions.ListByUser(ctx, targetID)
 }
 
-// AdminRevokeSession deletes a specific session for a target user and invalidates their JWTs.
-// Gated by SysManageUsers. Writes JWT blacklist key for the target user.
-func (s *AuthService) AdminRevokeSession(ctx context.Context, actorRole string, targetID, sessionID uuid.UUID) error {
-	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
-		return apperror.Forbidden("Insufficient permissions")
+// InternalGetSession returns a single session row, or (nil, nil) when missing.
+// Used by messaging to resolve target user_id before applying guards/audit.
+func (s *AuthService) InternalGetSession(ctx context.Context, sessionID uuid.UUID) (*model.Session, error) {
+	sess, err := s.sessions.GetByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("get session: %w", err)
 	}
-	if err := s.sessions.DeleteByID(ctx, sessionID, targetID); err != nil {
+	return sess, nil
+}
+
+// InternalRevokeSession deletes one session row by id and writes a per-jti
+// Redis blacklist entry so the gateway JWT cache (30s TTL) cannot keep the
+// access token alive between revoke and cache expiry.
+//
+// Why per-jti and not per-user-blacklist:
+//   - per-user kills the user's OTHER devices too, contradicting the "single
+//     device revoke" UX (the whole point of this endpoint).
+//   - per-jti is the exact granularity of the JWT being revoked.
+//
+// Why blacklist at all if the DB delete is authoritative:
+//   - ValidateAccessToken does call sessions.GetByID(jti) on every request,
+//     so HTTP requests that reach auth are correctly rejected.
+//   - BUT gateway middleware caches the auth /me result in Redis with TTL =
+//     30s. On a cache hit, gateway never calls auth — meaning a revoked
+//     session can keep authenticating for up to 30s after delete.
+//   - Same shape on the WS upgrade cache path.
+//   - jti blacklist closes that window: gateway middleware checks
+//     jwt_blacklist:jti:<sid> in addition to its existing per-token-hash
+//     blacklist, on every request including cache hits.
+//
+// TTL is bounded by remaining JWT lifetime (sess.ExpiresAt - now), capped at
+// AccessTTL — once the token expires nothing can present it anyway.
+func (s *AuthService) InternalRevokeSession(ctx context.Context, sessionID uuid.UUID) error {
+	sess, err := s.sessions.GetByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("get session: %w", err)
+	}
+	if sess == nil {
+		return apperror.NotFound("Session not found")
+	}
+
+	// Per-jti blacklist FIRST so any concurrent request that reaches the
+	// gateway between this point and the DB delete is already rejected.
+	ttl := time.Until(sess.ExpiresAt)
+	if ttl > s.cfg.AccessTTL {
+		ttl = s.cfg.AccessTTL
+	}
+	if ttl > 0 {
+		blacklistKey := "jwt_blacklist:jti:" + sessionID.String()
+		if err := s.redis.Set(ctx, blacklistKey, "1", ttl).Err(); err != nil {
+			return fmt.Errorf("jti blacklist write: %w", err)
+		}
+	}
+
+	if err := s.sessions.DeleteByID(ctx, sessionID, sess.UserID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, store.ErrNotFound) {
 			return apperror.NotFound("Session not found")
 		}
 		return fmt.Errorf("delete session: %w", err)
-	}
-	blacklistKey := fmt.Sprintf("jwt_blacklist:user:%s", targetID.String())
-	if err := s.redis.Set(ctx, blacklistKey, "1", s.cfg.AccessTTL).Err(); err != nil {
-		s.logger.Error("failed to write JWT user blacklist after session revoke", "error", err, "user_id", targetID)
-		return fmt.Errorf("jwt invalidation failed: %w", err)
 	}
 	return nil
 }

@@ -248,3 +248,45 @@ export async function sendAdminTestPush(req: PushTestRequest): Promise<PushTestR
   });
   return jsonOrThrow(res);
 }
+
+// ---------------------------------------------------------------------------
+// Sessions (Day 5.2) — admin-only, gated by SysManageUsers.
+// ---------------------------------------------------------------------------
+
+// AdminSession is the safe DTO returned by the server. token_hash is stripped
+// at the messaging service boundary; do NOT attempt to render it client-side.
+// is_current is the server's authoritative flag (compared against the actor's
+// JWT jti); the UI hides the revoke button on this row.
+export type AdminSession = {
+  id: string;
+  user_id: string;
+  device_id?: string;
+  ip_address?: string;
+  user_agent?: string;
+  expires_at: string;
+  created_at: string;
+  is_current: boolean;
+};
+
+// fetchUserSessions loads the active sessions for the target user. The server
+// computes is_current against the admin's own jti so the UI does not need
+// access to the access token.
+export async function fetchUserSessions(userId: string): Promise<AdminSession[]> {
+  const res = await fetch(`${API_PREFIX}/admin/users/${encodeURIComponent(userId)}/sessions`, {
+    headers: await authHeader(),
+  });
+  const body = await jsonOrThrow<{ sessions?: AdminSession[] }>(res);
+  return body.sessions || [];
+}
+
+// revokeSession deletes one session row and force-closes the matching WS
+// connection (if online) via NATS. The action is audited server-side BEFORE
+// the mutation; calling this twice for the same id returns 404 the second
+// time but the operator's intent is already on record.
+export async function revokeSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/admin/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: await authHeader(),
+  });
+  await jsonOrThrow<{ status: string }>(res);
+}

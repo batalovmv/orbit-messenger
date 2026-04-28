@@ -135,6 +135,7 @@ func (s *Subscriber) Start() error {
 		"orbit.user.*.status",
 		"orbit.user.*.deactivated",
 		"orbit.user.*.read_sync",
+		"orbit.session.*.revoked",
 		"orbit.chat.*.lifecycle",
 		"orbit.chat.*.member.*",
 		"orbit.chat.*.bot.*",
@@ -831,6 +832,26 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 		return
 	}
 
+	if event.Event == EventSessionRevoked {
+		sessionID := extractSessionIDFromSubject(msg.Subject)
+		if sessionID == "" {
+			var data struct {
+				SessionID string `json:"session_id"`
+			}
+			if err := json.Unmarshal(event.Data, &data); err == nil {
+				sessionID = data.SessionID
+			}
+		}
+		if sessionID != "" {
+			closed := s.hub.CloseSessionByJTI(sessionID)
+			slog.Info("nats: session revoke fanout",
+				"subject", msg.Subject, "session_id", sessionID, "closed", closed)
+		} else {
+			slog.Warn("nats: session_revoked with no session_id, dropping", "subject", msg.Subject)
+		}
+		return
+	}
+
 	// Route to specific members (messaging service provides member_ids for chat events).
 	// Send to ALL members including the sender — the frontend handles dedup for own messages
 	// via pendingSendUuids. Excluding the sender here would block delivery to their other
@@ -1022,6 +1043,21 @@ func extractUserIDFromUserSubject(subject string) string {
 	if len(parts) >= 4 && parts[0] == "orbit" && parts[1] == "user" {
 		if _, err := uuid.Parse(parts[2]); err != nil {
 			slog.Warn("nats: invalid user ID in user subject, dropping", "subject", subject)
+			return ""
+		}
+		return parts[2]
+	}
+	return ""
+}
+
+// extractSessionIDFromSubject parses session ID from "orbit.session.<uuid>.revoked".
+// Returns empty when the segment is missing or not a valid UUID — caller falls
+// back to the JSON payload's session_id field.
+func extractSessionIDFromSubject(subject string) string {
+	parts := strings.Split(subject, ".")
+	if len(parts) >= 4 && parts[0] == "orbit" && parts[1] == "session" {
+		if _, err := uuid.Parse(parts[2]); err != nil {
+			slog.Warn("nats: invalid session ID in subject, dropping", "subject", subject)
 			return ""
 		}
 		return parts[2]

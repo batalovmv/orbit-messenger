@@ -13,10 +13,12 @@ import type {
 
 import {
   backfillDefaultChats, fetchAdminFlags, fetchAuditLog,
+  fetchUserSessions,
+  revokeSession,
   sendAdminTestPush,
   setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
-import type { PushTestReport } from '../../../api/saturn/methods/admin';
+import type { AdminSession, PushTestReport } from '../../../api/saturn/methods/admin';
 import { selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 
@@ -31,7 +33,7 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
-type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
+type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push' | 'sessions';
 
 type StateProps = {
   saturnRole?: GlobalState['saturnRole'];
@@ -48,6 +50,7 @@ const tabLangKey = (tab: AdminTab) => {
     case 'audit': return 'AdminTabAuditLog';
     case 'welcome': return 'AdminTabWelcome';
     case 'push': return 'AdminTabPushInspector';
+    case 'sessions': return 'AdminTabSessions';
   }
 };
 
@@ -56,7 +59,7 @@ const tabLangKey = (tab: AdminTab) => {
 // and SysViewAuditLog (audit). compliance is audit-only — no write access
 // to system settings.
 const tabsForRole = (role?: GlobalState['saturnRole']): readonly AdminTab[] => {
-  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'push', 'audit'];
+  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'push', 'sessions', 'audit'];
   if (role === 'compliance') return ['audit'];
   return [];
 };
@@ -104,6 +107,7 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
         {activeTab === 'maintenance' && <MaintenanceTab />}
         {activeTab === 'welcome' && <WelcomeTab />}
         {activeTab === 'push' && <PushInspectorTab />}
+        {activeTab === 'sessions' && <SessionsTab />}
         {activeTab === 'audit' && <AuditTab />}
       </div>
     </Modal>
@@ -536,6 +540,196 @@ const PushInspectorTab = () => {
             </ul>
           )}
         </div>
+      )}
+    </div>
+  );
+};
+
+// ===========================================================================
+// Sessions tab (Day 5.2)
+// ===========================================================================
+//
+// Lets admins terminate a single device's JWT session without deactivating
+// the whole user (lost laptop / ex-employee / suspicious IP). The server
+// handles audit + guards (own-current, role hierarchy); the UI only needs
+// to render the list, hide the revoke button on the actor's own row, and
+// confirm before sending DELETE.
+const SessionsTab = () => {
+  const lang = useLang();
+  const [identifier, setIdentifier] = useState('');
+  const [resolvedUserId, setResolvedUserId] = useState('');
+  const [sessions, setSessions] = useState<AdminSession[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const [info, setInfo] = useState<string | undefined>();
+  const [isBusy, setIsBusy] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | undefined>();
+  const [revokingId, setRevokingId] = useState<string | undefined>();
+
+  const handleLookup = useLastCallback(async () => {
+    setError(undefined);
+    setInfo(undefined);
+    setSessions([]);
+    const id = identifier.trim();
+    if (!id) return;
+    // Email lookup is not supported by the sessions endpoint (auth indexes by
+    // user_id only). Tell the operator to copy the UUID from the Audit log
+    // or Push Inspector tab — both expose target user_id directly.
+    if (id.includes('@')) {
+      setError(lang('AdminSessionsEmailUnsupported'));
+      return;
+    }
+    setIsBusy(true);
+    setResolvedUserId(id);
+    try {
+      const list = await fetchUserSessions(id);
+      setSessions(list);
+    } catch (e) {
+      setError((e as Error).message || 'lookup failed');
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  const handleAskConfirm = useLastCallback((sessionId: string) => {
+    setError(undefined);
+    setInfo(undefined);
+    setConfirmId(sessionId);
+  });
+
+  const handleCancelConfirm = useLastCallback(() => {
+    if (!revokingId) setConfirmId(undefined);
+  });
+
+  const handleConfirmRevoke = useLastCallback(async () => {
+    if (!confirmId) return;
+    setRevokingId(confirmId);
+    setError(undefined);
+    try {
+      await revokeSession(confirmId);
+      setSessions((prev) => prev.filter((s) => s.id !== confirmId));
+      setInfo(lang('AdminSessionsRevokedOk'));
+      setConfirmId(undefined);
+    } catch (e) {
+      setError((e as Error).message || 'revoke failed');
+    } finally {
+      setRevokingId(undefined);
+    }
+  });
+
+  return (
+    <div className={styles.tabBody}>
+      <div className={styles.welcomeIntro}>
+        {lang('AdminSessionsIntro')}
+      </div>
+      <div className={styles.formRow}>
+        <span className={styles.formLabelText}>{lang('AdminSessionsIdentifier')}</span>
+        <input
+          type="text"
+          className={styles.searchInput}
+          value={identifier}
+          maxLength={200}
+          placeholder={lang('AdminSessionsIdentifierPlaceholder')}
+          onChange={(e) => setIdentifier((e.target as HTMLInputElement).value)}
+        />
+      </div>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          disabled={isBusy || !identifier.trim()}
+          onClick={handleLookup}
+        >
+          {lang(isBusy ? 'Loading' : 'AdminSessionsLookup')}
+        </button>
+      </div>
+      {info && <div className={styles.success}>{info}</div>}
+      {error && <div className={styles.error}>{error}</div>}
+      {resolvedUserId && !error && sessions.length === 0 && !isBusy && (
+        <div className={styles.empty}>{lang('AdminSessionsEmpty')}</div>
+      )}
+      {sessions.length > 0 && (
+        <ul className={styles.sessionList}>
+          {sessions.map((s) => {
+            const isExpired = new Date(s.expires_at).getTime() < Date.now();
+            return (
+              <li
+                key={s.id}
+                className={buildClassName(styles.sessionRow, s.is_current && styles.sessionRowCurrent)}
+              >
+                <div className={styles.sessionMeta}>
+                  <div className={styles.sessionHead}>
+                    <span className={styles.sessionId}>{s.id}</span>
+                    {s.is_current && (
+                      <span className={styles.sessionBadge}>{lang('AdminSessionsCurrent')}</span>
+                    )}
+                    {isExpired && (
+                      <span className={styles.sessionBadgeExpired}>{lang('AdminSessionsExpired')}</span>
+                    )}
+                  </div>
+                  {s.user_agent && (
+                    <div className={styles.sessionUA}>{s.user_agent}</div>
+                  )}
+                  <div className={styles.sessionFoot}>
+                    {s.ip_address && <span>{s.ip_address}</span>}
+                    <span>
+                      {lang('AdminSessionsCreatedAt')}: {new Date(s.created_at).toLocaleString()}
+                    </span>
+                    <span>
+                      {lang('AdminSessionsExpiresAt')}: {new Date(s.expires_at).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className={styles.sessionActions}>
+                  {s.is_current ? (
+                    <span className={styles.sessionCurrentNote}>
+                      {lang('AdminSessionsCurrentNote')}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.dangerBtn}
+                      disabled={Boolean(revokingId)}
+                      onClick={() => handleAskConfirm(s.id)}
+                    >
+                      {lang('AdminSessionsRevoke')}
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {confirmId && (
+        <Modal
+          isOpen={Boolean(confirmId)}
+          onClose={handleCancelConfirm}
+          title={lang('AdminSessionsRevokeConfirmTitle')}
+          hasCloseButton={!revokingId}
+        >
+          <div className={styles.confirmBody}>
+            <p>{lang('AdminSessionsRevokeConfirmBody')}</p>
+          </div>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={Boolean(revokingId)}
+              onClick={handleCancelConfirm}
+            >
+              {lang('Cancel')}
+            </button>
+            <button
+              type="button"
+              className={styles.dangerBtn}
+              disabled={Boolean(revokingId)}
+              onClick={handleConfirmRevoke}
+            >
+              {lang(revokingId ? 'Loading' : 'AdminSessionsRevokeConfirmAction')}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

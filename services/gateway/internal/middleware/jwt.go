@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
@@ -27,6 +28,24 @@ type JWTConfig struct {
 type cachedUser struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
+}
+
+// extractJTI parses the JWT claims WITHOUT verifying the signature. The token
+// has already been validated upstream (Redis blacklist + auth /me); this is
+// purely a metadata read for downstream propagation. Returns "" on any
+// parse error so callers can keep the token alive without jti.
+func extractJTI(token string) string {
+	parser := jwt.NewParser()
+	parsed, _, err := parser.ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		return ""
+	}
+	claims, ok := parsed.Claims.(jwt.MapClaims)
+	if !ok {
+		return ""
+	}
+	jti, _ := claims["jti"].(string)
+	return jti
 }
 
 // JWTMiddleware validates JWT by calling the auth service /auth/me and caching the result.
@@ -61,6 +80,25 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 			return response.Error(c, apperror.Unauthorized("Token revoked"))
 		}
 
+		// Per-jti blacklist: written by auth on admin session revoke. Must be
+		// checked alongside the per-token-hash blacklist because the cache
+		// short-circuit below would otherwise honour a revoked session for
+		// the full CacheTTL window. Fail-closed on Redis error.
+		if jti := extractJTI(token); jti != "" {
+			jtiKey := "jwt_blacklist:jti:" + jti
+			jtiBlacklisted, jtiErr := cfg.Redis.Exists(c.Context(), jtiKey).Result()
+			if jtiErr != nil {
+				slog.Error("JWT jti blacklist Redis check failed, rejecting token", "error", jtiErr)
+				return response.Error(c, apperror.Internal("Token validation temporarily unavailable"))
+			}
+			if jtiBlacklisted > 0 {
+				if err := cfg.Redis.Del(c.Context(), cacheKey).Err(); err != nil {
+					slog.Error("JWT cache del failed after jti blacklist hit", "error", err)
+				}
+				return response.Error(c, apperror.Unauthorized("Session revoked"))
+			}
+		}
+
 		// Check cache
 		cached, err := cfg.Redis.Get(c.Context(), cacheKey).Result()
 		if err == nil {
@@ -81,6 +119,14 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 				c.Locals("userID", u.ID) // for rate limiter — cannot be spoofed by client
 				c.Request().Header.Set("X-User-ID", u.ID)
 				c.Request().Header.Set("X-User-Role", u.Role)
+				// Re-extract jti from the raw token rather than reading it
+				// from the cache record. The WS auth path shares this same
+				// jwt_cache:* key but writes a {id, role}-only shape — so a
+				// cache record populated by a WS connection would arrive
+				// here with empty JTI. Local parse is cheap and authoritative.
+				if jti := extractJTI(token); jti != "" {
+					c.Request().Header.Set("X-User-Session-ID", jti)
+				}
 				return c.Next()
 			}
 		}
@@ -119,6 +165,9 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 
 		// Cache result (fail-open: if Redis write fails, the next request will re-validate via auth service.
 		// This is safe because blacklist checks above are fail-closed.)
+		// JTI deliberately omitted from the cache record — WS auth shares the
+		// same cache key with a different writer; cache-hit consumers must
+		// re-derive jti locally from the raw token.
 		cu := cachedUser{ID: user.ID, Role: user.Role}
 		cuJSON, _ := json.Marshal(cu)
 		if err := cfg.Redis.Set(c.Context(), cacheKey, string(cuJSON), cfg.CacheTTL).Err(); err != nil {
@@ -141,6 +190,9 @@ func JWTMiddleware(cfg JWTConfig) fiber.Handler {
 		c.Locals("userID", user.ID) // for rate limiter — cannot be spoofed by client
 		c.Request().Header.Set("X-User-ID", user.ID)
 		c.Request().Header.Set("X-User-Role", user.Role)
+		if jti := extractJTI(token); jti != "" {
+			c.Request().Header.Set("X-User-Session-ID", jti)
+		}
 		return c.Next()
 	}
 }
