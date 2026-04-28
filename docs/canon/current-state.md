@@ -29,6 +29,14 @@
 - **Audit log search**: `audit_store.AuditFilter.Q` — ILIKE по `action / target_type / target_id / actor.display_name / details::text / ip`. Backslash/`%`/`_` экранируются. На 150-user pilot хватает; pg_trgm/tsvector — отложено.
 - **Утечка operator metadata**: `MaintenanceState` (full) с `since/updated_by` идёт ТОЛЬКО в админский `/admin/feature-flags`. Public + auth `/system/config` отдают `PublicMaintenanceState` (active/message/block_writes only). Locked test: `TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata`.
 
+### Audit fix train (Day 0-3, PRs #6/#7/#8/#9/#10/#11/#15, 2026-04-28)
+
+- **CRITICAL #2 — Media IDOR closed (PR #7)**: `media_store.CanAccess` теперь делает `JOIN chat_members` (был LEFT JOIN с лазейкой через NULL chat_id). Integration-test поднимает реальный postgres + проверяет 4 IDOR-сценария; locked unit-test на `uuid.Nil` guard.
+- **CRITICAL #3 — R2 public bucket fail-closed (PR #6)**: `R2_APPLY_PUBLIC_POLICY=true` против prod-endpoint (`*.r2.cloudflarestorage.com`) теперь возвращает ошибку при старте сервиса. Раньше тихо игнорировал — мог дропнуть приватность бакета.
+- **Push metrics + Prom rules (PR #8)**: `pkg/metrics` обогащён push-counters (`push_send_total{result}`, `push_dispatch_duration_seconds`). `monitoring/prometheus/rules/orbit.yml` чищен от мёртвых правил (referencing deleted services), добавлены `PushDeliveryFailureRate` (>5% failure 5m → page) и `PushDispatchLatencyHigh` (p95 > 2s 5m). Day 1 ops runbook (`docs/runbooks/day-1-saturn-ops.md`) — first-day production checklist.
+- **PITR drill marker (PR #9)**: `scripts/pitr-drill-marker.sh` пишет marker-row в БД до restore-теста, validates что после PITR-восстановления marker отсутствует (proves point-in-time precision). Day 2 ops checklist (`docs/runbooks/day-2-saturn-ops.md`).
+- **Welcome flow (PRs #10/#11/#15, mig 069)**: новый таб AdminPanel «Welcome» — список default-чатов, в которые автоматически добавляются новые invited users. Per-chat override через `Switcher` в `ManageGroup` (gate `SysManageSettings`). Backend endpoints: `GET/POST /api/v1/admin/welcome-chats`, `PATCH /api/v1/chats/:id/welcome-default`. Audit log на каждое изменение.
+
 ### Cross-device read-receipt sync (PR #13 + #14, 2026-04-28)
 
 - **Новый NATS event** `orbit.user.<userID>.read_sync` (self-only). Messaging публикует после `MarkRead` payload `{chat_id, last_read_message_id, last_read_seq_num, unread_count, read_at, origin_session_id}` ТОЛЬКО на user'а-маркера. Существующий `orbit.chat.*.messages.read` (cross-user receipts) живёт параллельно с slim payload — без `unread_count`, чтобы не утекать другим участникам.

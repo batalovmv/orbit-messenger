@@ -1529,6 +1529,15 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [ ] ~~Penetration test~~ — OVERKILL для invite-only пилота
 - [x] GPL-3.0 compliance: license headers (SPDX-License-Identifier: GPL-3.0-or-later добавлен в 225 Go файлов + 48 Saturn TS файлов)
 
+**Audit fix train (2026-04-28, PRs #6-#15):**
+- [x] CRITICAL #2 — Media IDOR closed via `JOIN chat_members` + integration test (#7)
+- [x] CRITICAL #3 — R2 public-policy fail-closed against prod endpoints (#6)
+- [x] Push delivery metrics (`push_send_total`, `push_dispatch_duration_seconds`) + dead Prom rules cleanup + `PushDeliveryFailureRate`/`PushDispatchLatencyHigh` alerts (#8)
+- [x] Day 1 Saturn ops runbook (`docs/runbooks/day-1-saturn-ops.md`) (#8)
+- [x] PITR drill marker helper + Day 2 Saturn ops checklist (`scripts/pitr-drill-marker.sh`, `docs/runbooks/day-2-saturn-ops.md`) (#9)
+- [x] Welcome flow: default-chats backfill for new invited users (mig 069 + admin endpoints + 11 tests + AdminPanel tab + per-chat ManageGroup switcher) (#10/#11/#15)
+- [x] Cross-device read-receipt sync (WS + silent-push fallback, see `docs/canon/current-state.md`) (#13/#14)
+
 **Backup:**
 - [x] PostgreSQL: Saturn.ac managed Hourly backups (RPO = 1h) — enabled via UI
 - [x] PostgreSQL: pg_dump → gzip → gpg (AES-256) → R2 (`scripts/backup-postgres.sh`, every 4h — local dev backup)
