@@ -253,17 +253,19 @@ func (s *Subscriber) handleReadSyncEvent(subject string, event NATSEvent, envelo
 
 	s.hub.SendToUserExceptSession(userID, data.OriginSessionID, envelope)
 
-	// Offline-only silent push fallback. Re-checking IsOnline AFTER the
-	// fanout is fine: hub.SendToUserExceptSession is best-effort and the
-	// online check is just an optimisation to avoid pushing devices that
-	// already have a live WS frame in flight.
+	// Offline-only silent push fallback. The "offline" check is *per
+	// non-origin connection*, not user-level: a user whose ONLY active WS is
+	// the device that just performed MarkRead has IsOnline==true, but the
+	// fanout above reached zero recipients, so other devices (e.g. an
+	// iPhone PWA in the background) still need the push. Counting non-origin
+	// connections gives us the right gate.
 	if data.UnreadCount != 0 {
 		return
 	}
 	if s.pushDispatcher == nil || s.readSyncCoalescer == nil {
 		return
 	}
-	if s.hub.IsOnline(userID) {
+	if s.hub.CountConnectionsExcluding(userID, data.OriginSessionID) > 0 {
 		return
 	}
 	if data.ChatID == "" {
@@ -298,19 +300,36 @@ func buildReadSyncPushPayload(data ReadSyncData) ([]byte, error) {
 }
 
 // flushReadSyncPush is the coalescer's flush callback. Runs on the timer
-// goroutine after the debounce window expires.
+// goroutine after the debounce window expires. The actual SendReadSyncToUser
+// call (which fans across all of the user's push subscriptions and may
+// retry on transient failures) is dispatched through the same s.sem
+// semaphore that bounds other side-fetches in this subscriber, so a burst
+// of debounce expirations cannot spike concurrent webpush HTTP traffic.
+// If the semaphore is saturated we drop the push rather than block the
+// timer goroutine — losing one silent notification is preferable to backing
+// up the whole subscriber.
 func (s *Subscriber) flushReadSyncPush(userID, chatID string, payload []byte) {
 	if s.pushDispatcher == nil {
 		return
 	}
-	if err := s.pushDispatcher.SendReadSyncToUser(userID, payload); err != nil {
-		// Fail-open: a delivery error here just means offline devices will
-		// reconcile on their next foreground via /chats sync (which already
-		// purges stale notifications). Log so a flood is visible in metrics
-		// but never block the WS handler.
-		slog.Warn("nats: read-sync push dispatch failed",
-			"error", err, "user_id", userID, "chat_id", chatID)
+	select {
+	case s.sem <- struct{}{}:
+	default:
+		slog.Warn("nats: read-sync push dropped (sem saturated)",
+			"user_id", userID, "chat_id", chatID)
+		return
 	}
+	go func() {
+		defer func() { <-s.sem }()
+		if err := s.pushDispatcher.SendReadSyncToUser(userID, payload); err != nil {
+			// Fail-open: a delivery error here just means offline devices
+			// will reconcile on their next foreground via /chats sync,
+			// which already purges stale notifications. Log so a flood is
+			// visible in metrics but never block the WS handler.
+			slog.Warn("nats: read-sync push dispatch failed",
+				"error", err, "user_id", userID, "chat_id", chatID)
+		}
+	}()
 }
 
 func (s *Subscriber) handleNewMessageEvent(subject string, event NATSEvent, envelope Envelope) {

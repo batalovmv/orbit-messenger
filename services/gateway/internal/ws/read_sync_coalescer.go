@@ -32,6 +32,13 @@ type readSyncEntry struct {
 	chatID  string
 	payload []byte
 	timer   *time.Timer
+	// gen is incremented by every Submit that resets the timer. The fire()
+	// callback captures its expected generation when the timer is armed and
+	// only flushes if it still matches; a stale callback (race: timer fired
+	// → callback queued → Submit acquired the lock and Reset before the
+	// callback ran) finds gen has advanced, no-ops, and lets the rescheduled
+	// timer run the actual debounce window.
+	gen uint64
 }
 
 // newReadSyncCoalescer constructs a coalescer with the given debounce window
@@ -60,11 +67,17 @@ func (c *readSyncCoalescer) Submit(userID, chatID string, payload []byte) {
 
 	if existing, ok := c.pending[key]; ok {
 		existing.payload = payload
-		// Reset returns false if the timer already fired; in that case the
-		// fire callback is racing to acquire the same lock. We just hold it
-		// here, and when fire() gets in it'll observe the entry has the new
-		// payload and flush the latest snapshot — still correct.
-		existing.timer.Reset(c.debounce)
+		existing.gen++
+		expected := existing.gen
+		// Stop the old timer and replace with a fresh one carrying the new
+		// generation. Stop returns false if the timer already fired and
+		// the callback is queued waiting on this lock; without the gen
+		// check below, that stale callback would acquire the lock after
+		// we release it and flush the new payload immediately, collapsing
+		// the debounce. The new timer with expected==entry.gen is the only
+		// path that should successfully flush.
+		existing.timer.Stop()
+		existing.timer = time.AfterFunc(c.debounce, func() { c.fire(key, expected) })
 		return
 	}
 
@@ -72,15 +85,18 @@ func (c *readSyncCoalescer) Submit(userID, chatID string, payload []byte) {
 		userID:  userID,
 		chatID:  chatID,
 		payload: payload,
+		gen:     1,
 	}
-	entry.timer = time.AfterFunc(c.debounce, func() { c.fire(key) })
+	entry.timer = time.AfterFunc(c.debounce, func() { c.fire(key, 1) })
 	c.pending[key] = entry
 }
 
-func (c *readSyncCoalescer) fire(key string) {
+func (c *readSyncCoalescer) fire(key string, expectedGen uint64) {
 	c.mu.Lock()
 	entry, ok := c.pending[key]
-	if !ok {
+	if !ok || entry.gen != expectedGen {
+		// Either Stop drained the map, or a Submit ran after the timer fired
+		// and re-armed; the freshly-armed timer carries the right generation.
 		c.mu.Unlock()
 		return
 	}

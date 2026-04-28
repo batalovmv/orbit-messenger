@@ -826,16 +826,22 @@ func withFastReadSyncDebounce(t *testing.T, sub *Subscriber, debounce time.Durat
 	})
 }
 
-// TestSubscriber_HandleReadSync_OnlineUserSkipsPush asserts that when the
-// user has at least one active WS connection the silent push is suppressed
-// — the WS frame is the authoritative delivery and pushing on top would
-// just burn iOS APNs throttle budget.
-func TestSubscriber_HandleReadSync_OnlineUserSkipsPush(t *testing.T) {
+// TestSubscriber_HandleReadSync_OtherDevicesOnlineSkipsPush asserts that
+// when the user has at least one active WS connection BESIDES the origin,
+// the silent push is suppressed — those non-origin devices already received
+// the WS frame, pushing on top would just burn iOS APNs budget.
+func TestSubscriber_HandleReadSync_OtherDevicesOnlineSkipsPush(t *testing.T) {
 	userID := uuid.New().String()
 	chatID := uuid.New().String()
+	const originSession = "tab-A"
+	const otherSession = "tab-B"
 
 	hub := NewHub()
-	hub.Register(newCapturingConn(userID, make(chan Envelope, 1)))
+	// Origin session — would have been excluded from WS fanout.
+	hub.Register(&Conn{UserID: userID, SessionID: originSession, done: make(chan struct{})})
+	// A second connection that DID receive the WS frame.
+	hub.Register(&Conn{UserID: userID, SessionID: otherSession, done: make(chan struct{}),
+		sendFn: func(interface{}) error { return nil }})
 
 	var pushCalls atomic.Int32
 	push := &mockPushSender{
@@ -847,12 +853,53 @@ func TestSubscriber_HandleReadSync_OnlineUserSkipsPush(t *testing.T) {
 	sub := NewSubscriber(hub, nil, "", "", nil, push)
 	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
 
-	subject, payload := readSyncEnvelope(t, userID, chatID, 0, "")
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, originSession)
 	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
 
 	time.Sleep(80 * time.Millisecond)
 	if got := pushCalls.Load(); got != 0 {
-		t.Fatalf("online user must not receive a fallback push, got %d calls", got)
+		t.Fatalf("non-origin device online → push must be skipped, got %d calls", got)
+	}
+}
+
+// TestSubscriber_HandleReadSync_OnlyOriginOnlineSendsPush is the bug-fix
+// test from PR #14 review. When the user's ONLY active connection is the
+// originating session (e.g. desktop tab open, iPhone PWA in background),
+// the WS fanout reaches zero recipients (origin excluded) — but the user
+// has stale notifications on the offline phone. The previous IsOnline
+// gate suppressed the push in this case; CountConnectionsExcluding fixes it.
+func TestSubscriber_HandleReadSync_OnlyOriginOnlineSendsPush(t *testing.T) {
+	userID := uuid.New().String()
+	chatID := uuid.New().String()
+	const originSession = "tab-A"
+
+	hub := NewHub()
+	hub.Register(&Conn{UserID: userID, SessionID: originSession, done: make(chan struct{})})
+
+	var pushCalls atomic.Int32
+	push := &mockPushSender{
+		sendReadSyncToUserFn: func(_ string, _ []byte) error {
+			pushCalls.Add(1)
+			return nil
+		},
+	}
+	sub := NewSubscriber(hub, nil, "", "", nil, push)
+	withFastReadSyncDebounce(t, sub, 20*time.Millisecond)
+
+	subject, payload := readSyncEnvelope(t, userID, chatID, 0, originSession)
+	sub.handleEvent(&nats.Msg{Subject: subject, Data: payload})
+
+	// Generous wait — push goes through s.sem goroutine, not the timer fiber.
+	deadline := time.After(time.Second)
+	for {
+		if pushCalls.Load() == 1 {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("expected exactly 1 push (only-origin-online), got %d", pushCalls.Load())
+		case <-time.After(20 * time.Millisecond):
+		}
 	}
 }
 

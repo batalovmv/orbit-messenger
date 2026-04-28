@@ -270,6 +270,25 @@ func (h *Hub) IsOnline(userID string) bool {
 	return len(h.conns[userID]) > 0
 }
 
+// CountConnectionsExcluding returns the number of active connections for
+// userID whose SessionID is NOT excludeSessionID. Use this instead of
+// IsOnline when deciding whether to send a cross-device fallback push: if
+// the user's only connection IS the originating session, IsOnline returns
+// true even though no other device received the WS frame. Pass an empty
+// excludeSessionID to count all connections (equivalent to IsOnline counting).
+func (h *Hub) CountConnectionsExcluding(userID, excludeSessionID string) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	count := 0
+	for _, c := range h.conns[userID] {
+		if excludeSessionID != "" && c.SessionID == excludeSessionID {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
 // SendToUser sends a message to all connections of a specific user.
 func (h *Hub) SendToUser(userID string, msg interface{}) {
 	h.mu.RLock()
