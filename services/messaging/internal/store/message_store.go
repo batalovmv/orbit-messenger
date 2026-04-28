@@ -53,6 +53,12 @@ type MessageStore interface {
 	Unpin(ctx context.Context, chatID, msgID uuid.UUID) error
 	UnpinAll(ctx context.Context, chatID uuid.UUID) error
 	UpdateReadPointer(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error
+	// GetReadState returns the caller's current last-read sequence_number and
+	// the unread message count for a chat. Used by the read-sync NATS event so
+	// the gateway can push a coherent {seq_num, unread_count} snapshot to the
+	// user's other devices without a second round-trip. Returns (0, 0, nil) if
+	// the user has no membership row (caller should have gated with IsMember).
+	GetReadState(ctx context.Context, chatID, userID uuid.UUID) (lastReadSeqNum int64, unreadCount int64, err error)
 	CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error)
 	// Media
 	GetMediaByMessageIDs(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]model.MediaAttachment, error)
@@ -472,6 +478,39 @@ func (s *messageStore) UnpinAll(ctx context.Context, chatID uuid.UUID) error {
 		`UPDATE messages SET is_pinned = false WHERE chat_id = $1 AND is_pinned = true`, chatID,
 	)
 	return err
+}
+
+// GetReadState computes (last_read_seq_num, unread_count) in one round trip.
+// Mirrors the unread_count formula used by chat_store's chat list query so the
+// number we publish on the read-sync event matches what /chats returns.
+func (s *messageStore) GetReadState(ctx context.Context, chatID, userID uuid.UUID) (int64, int64, error) {
+	const q = `
+		SELECT
+		  COALESCE(
+		    (SELECT m.sequence_number FROM messages m
+		     WHERE m.id = cm.last_read_message_id AND m.chat_id = cm.chat_id),
+		    0
+		  ) AS last_read_seq_num,
+		  (SELECT COUNT(*) FROM messages msg
+		   WHERE msg.chat_id = cm.chat_id
+		     AND msg.is_deleted = false
+		     AND msg.sequence_number > COALESCE(
+		       (SELECT m2.sequence_number FROM messages m2 WHERE m2.id = cm.last_read_message_id),
+		       0
+		     )
+		  ) AS unread_count
+		FROM chat_members cm
+		WHERE cm.chat_id = $1 AND cm.user_id = $2`
+
+	var seq, unread int64
+	err := s.pool.QueryRow(ctx, q, chatID, userID).Scan(&seq, &unread)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, nil
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("get read state %s/%s: %w", chatID, userID, err)
+	}
+	return seq, unread, nil
 }
 
 func (s *messageStore) UpdateReadPointer(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error {

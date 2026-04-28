@@ -1087,7 +1087,24 @@ func strPtrOrNil(s string) *string {
 	return &s
 }
 
-func (s *MessageService) MarkRead(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID) error {
+// MarkRead advances the user's read pointer in chatID up to lastReadMsgID and
+// publishes two NATS events:
+//
+//   - orbit.chat.<chatID>.messages.read   — cross-user read receipts; the
+//     payload carries only ids so other members can render "Alice read X"
+//     without learning Alice's unread_count.
+//   - orbit.user.<userID>.read_sync       — self-only cross-device sync; the
+//     payload carries the resolved last_read_seq_num + unread_count so the
+//     user's other tabs/devices can prune notifications and update badges
+//     without an extra fetch. originSessionID lets the gateway exclude the
+//     originating connection from the fanout (no echo to the device that
+//     just performed the action).
+//
+// originSessionID is optional. Empty string means "no exclusion" (older
+// clients that do not yet send X-Session-ID still get correct sync, they just
+// receive their own echo, which is harmless for the closeNotifications
+// handler).
+func (s *MessageService) MarkRead(ctx context.Context, chatID, userID, lastReadMsgID uuid.UUID, originSessionID string) error {
 	isMember, _, err := s.chats.IsMember(ctx, chatID, userID)
 	if err != nil {
 		return fmt.Errorf("check membership: %w", err)
@@ -1100,17 +1117,38 @@ func (s *MessageService) MarkRead(ctx context.Context, chatID, userID, lastReadM
 		return fmt.Errorf("update read pointer: %w", err)
 	}
 
-	// Publish read event
+	// Cross-user read-receipt event (existing behaviour, kept slim).
 	memberIDs, err := s.chats.GetMemberIDs(ctx, chatID)
 	if err != nil {
 		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	}
-	subject := fmt.Sprintf("orbit.chat.%s.messages.read", chatID.String())
-	s.nats.Publish(subject, "messages_read", map[string]interface{}{
+	receiptSubject := fmt.Sprintf("orbit.chat.%s.messages.read", chatID.String())
+	s.nats.Publish(receiptSubject, "messages_read", map[string]interface{}{
 		"chat_id":              chatID.String(),
 		"user_id":              userID.String(),
 		"last_read_message_id": lastReadMsgID.String(),
 	}, memberIDs)
+
+	// Cross-device self-sync event. Compute seq_num/unread_count *after* the
+	// pointer update so the snapshot reflects the post-mark state. We log and
+	// continue on failure: the receipt above is the user-visible side-effect;
+	// failing to publish the self-sync just means other devices will reconcile
+	// on next foreground (existing /chats sync purges stale notifications).
+	seqNum, unread, stateErr := s.messages.GetReadState(ctx, chatID, userID)
+	if stateErr != nil {
+		slog.Warn("failed to load read-state for read-sync publish",
+			"chat_id", chatID, "user_id", userID, "error", stateErr)
+		return nil
+	}
+	syncSubject := fmt.Sprintf("orbit.user.%s.read_sync", userID.String())
+	s.nats.Publish(syncSubject, "read_sync", map[string]interface{}{
+		"chat_id":              chatID.String(),
+		"last_read_message_id": lastReadMsgID.String(),
+		"last_read_seq_num":    seqNum,
+		"unread_count":         unread,
+		"read_at":              time.Now().UTC().Format(time.RFC3339),
+		"origin_session_id":    originSessionID,
+	}, []string{userID.String()}, userID.String())
 
 	return nil
 }

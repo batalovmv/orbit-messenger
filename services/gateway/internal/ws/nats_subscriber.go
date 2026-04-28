@@ -121,6 +121,7 @@ func (s *Subscriber) Start() error {
 		"orbit.chat.*.typing",
 		"orbit.user.*.status",
 		"orbit.user.*.deactivated",
+		"orbit.user.*.read_sync",
 		"orbit.chat.*.lifecycle",
 		"orbit.chat.*.member.*",
 		"orbit.chat.*.bot.*",
@@ -200,6 +201,30 @@ type pushPayload struct {
 		ShouldReplaceHistory bool   `json:"should_replace_history"`
 		Priority             string `json:"priority,omitempty"`
 	} `json:"data"`
+}
+
+// handleReadSyncEvent forwards a self-targeted read-sync event to all of the
+// user's active WS connections except the one that originated the action
+// (matched by SessionID, not UserID — origin and recipients share the same
+// UserID by construction). Day 4b will add a silent push fallback for users
+// with zero active WS connections; until then, offline devices reconcile on
+// next foreground via the /chats list (which already prunes notifications).
+func (s *Subscriber) handleReadSyncEvent(subject string, event NATSEvent, envelope Envelope) {
+	userID := extractUserIDFromUserSubject(subject)
+	if userID == "" {
+		// Defence in depth: messaging always uses orbit.user.<uuid>.read_sync,
+		// but a malformed publisher would otherwise silently broadcast nothing.
+		slog.Warn("nats: read_sync with malformed subject, dropping", "subject", subject)
+		return
+	}
+
+	var data ReadSyncData
+	if err := json.Unmarshal(event.Data, &data); err != nil {
+		slog.Warn("nats: read_sync payload decode failed", "error", err, "subject", subject)
+		return
+	}
+
+	s.hub.SendToUserExceptSession(userID, data.OriginSessionID, envelope)
 }
 
 func (s *Subscriber) handleNewMessageEvent(subject string, event NATSEvent, envelope Envelope) {
@@ -677,6 +702,11 @@ func (s *Subscriber) handleEvent(msg *nats.Msg) {
 
 	if event.Event == EventNewMessage {
 		s.handleNewMessageEvent(msg.Subject, event, envelope)
+		return
+	}
+
+	if event.Event == EventReadSync {
+		s.handleReadSyncEvent(msg.Subject, event, envelope)
 		return
 	}
 

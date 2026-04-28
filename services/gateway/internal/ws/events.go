@@ -21,6 +21,7 @@ const (
 	EventStopTyping      = "stop_typing"
 	EventUserStatus      = "user_status"
 	EventUserDeactivated = "user_deactivated"
+	EventReadSync        = "read_sync"
 	EventPong            = "pong"
 
 	EventChatCreated       = "chat_created"
@@ -94,4 +95,18 @@ type StatusData struct {
 	UserID   string `json:"user_id"`
 	Status   string `json:"status"`
 	LastSeen string `json:"last_seen,omitempty"`
+}
+
+// ReadSyncData is the payload for read_sync events. Published by messaging on
+// the user-scoped subject orbit.user.<userID>.read_sync after a successful
+// MarkRead. The gateway forwards it to all of the user's WS connections except
+// the one whose SessionID matches OriginSessionID — that's the device that
+// just performed the action and already has its UI up-to-date.
+type ReadSyncData struct {
+	ChatID            string `json:"chat_id"`
+	LastReadMessageID string `json:"last_read_message_id"`
+	LastReadSeqNum    int64  `json:"last_read_seq_num"`
+	UnreadCount       int64  `json:"unread_count"`
+	ReadAt            string `json:"read_at"`
+	OriginSessionID   string `json:"origin_session_id"`
 }

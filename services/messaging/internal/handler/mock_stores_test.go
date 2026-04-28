@@ -385,6 +385,10 @@ func (m *mockMessageStore) UpdateReadPointer(ctx context.Context, chatID, userID
 	return nil
 }
 
+func (m *mockMessageStore) GetReadState(ctx context.Context, chatID, userID uuid.UUID) (int64, int64, error) {
+	return 0, 0, nil
+}
+
 func (m *mockMessageStore) CreateForwarded(ctx context.Context, msgs []model.Message) ([]model.Message, error) {
 	if m.createForwardedFn != nil {
 		return m.createForwardedFn(ctx, msgs)

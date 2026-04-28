@@ -673,7 +673,22 @@ func (h *MessageHandler) MarkRead(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid last_read_message_id"))
 	}
 
-	if err := h.svc.MarkRead(c.Context(), chatID, uid, msgID); err != nil {
+	// Optional X-Session-ID (opaque, client-generated per tab) lets the gateway
+	// exclude the originating connection from the cross-device read-sync fanout
+	// so the user's own device that just marked-read does not receive its own
+	// echo. We accept only ASCII printables and cap by byte length: real clients
+	// send a UUID v4 (~36 chars, pure ASCII), so a value that's oversized or
+	// contains multi-byte runes is by definition malformed. Truncating bytes
+	// blindly could split a UTF-8 sequence and propagate � into the NATS
+	// payload, silently breaking the exclusion match — better to drop the
+	// header entirely (the originator just receives its own echo, which is a
+	// harmless no-op for closeMessageNotifications).
+	sessionID := strings.TrimSpace(c.Get("X-Session-ID"))
+	if len(sessionID) > 128 || !isASCIIPrintable(sessionID) {
+		sessionID = ""
+	}
+
+	if err := h.svc.MarkRead(c.Context(), chatID, uid, msgID, sessionID); err != nil {
 		return response.Error(c, err)
 	}
 
@@ -784,4 +799,18 @@ func (h *MessageHandler) hydrateMessages(ctx context.Context, userID uuid.UUID, 
 	}
 
 	return nil
+}
+
+// isASCIIPrintable returns true when every byte in s is in the printable
+// ASCII range (0x20–0x7E). Used as a cheap shape-check on X-Session-ID so we
+// can refuse anything that wouldn't survive a UTF-8 round trip; legitimate
+// clients send a UUID v4, which always passes.
+func isASCIIPrintable(s string) bool {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b < 0x20 || b > 0x7E {
+			return false
+		}
+	}
+	return true
 }

@@ -220,3 +220,126 @@ func TestHub_SendToUser_DisconnectsSlowSubscriberWithoutBlockingOthers(t *testin
 
 	close(releaseSlowWriter)
 }
+
+// newSessionConn is like newCapturingConn but also tags the connection with a
+// SessionID so we can verify SendToUserExceptSession's exclusion logic.
+func newSessionConn(userID, sessionID string, deliveries chan Envelope) *Conn {
+	return &Conn{
+		UserID:    userID,
+		SessionID: sessionID,
+		done:      make(chan struct{}),
+		sendFn: func(msg interface{}) error {
+			if env, ok := msg.(Envelope); ok {
+				deliveries <- env
+			}
+			return nil
+		},
+	}
+}
+
+// TestHub_SendToUserExceptSession_ExcludesOriginatingTab verifies the core
+// cross-device fanout primitive: when a user has multiple connections and one
+// of them performed an action (SessionID == excludeSessionID), only the OTHER
+// connections receive the event.
+func TestHub_SendToUserExceptSession_ExcludesOriginatingTab(t *testing.T) {
+	hub := NewHub()
+
+	originDeliveries := make(chan Envelope, 1)
+	otherDeliveries := make(chan Envelope, 1)
+	thirdDeliveries := make(chan Envelope, 1)
+
+	const userID = "u-1"
+	const originSession = "tab-A"
+	const otherSession = "tab-B"
+	const thirdSession = "tab-C"
+
+	origin := newSessionConn(userID, originSession, originDeliveries)
+	other := newSessionConn(userID, otherSession, otherDeliveries)
+	third := newSessionConn(userID, thirdSession, thirdDeliveries)
+
+	hub.Register(origin)
+	hub.Register(other)
+	hub.Register(third)
+
+	msg := Envelope{Type: EventReadSync, Data: json.RawMessage(`{}`)}
+	hub.SendToUserExceptSession(userID, originSession, msg)
+
+	// origin must NOT receive (its SessionID matches the exclusion)
+	select {
+	case got := <-originDeliveries:
+		t.Fatalf("origin tab received echo it should have been excluded from: %+v", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// the two other tabs must receive
+	for i, ch := range []chan Envelope{otherDeliveries, thirdDeliveries} {
+		select {
+		case got := <-ch:
+			if got.Type != EventReadSync {
+				t.Fatalf("tab %d got unexpected type %q", i, got.Type)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("tab %d did not receive expected event", i)
+		}
+	}
+}
+
+// TestHub_SendToUserExceptSession_EmptyExcludeFansToAll guards the backwards-
+// compat path: a request without X-Session-ID reaches messaging with
+// originSessionID="" and the fanout must include every connection — the
+// originating tab gets its own echo, which is harmless because the SW
+// closeMessageNotifications handler is idempotent.
+func TestHub_SendToUserExceptSession_EmptyExcludeFansToAll(t *testing.T) {
+	hub := NewHub()
+
+	dA := make(chan Envelope, 1)
+	dB := make(chan Envelope, 1)
+
+	hub.Register(newSessionConn("u-1", "tab-A", dA))
+	hub.Register(newSessionConn("u-1", "tab-B", dB))
+
+	msg := Envelope{Type: EventReadSync, Data: json.RawMessage(`{}`)}
+	hub.SendToUserExceptSession("u-1", "", msg)
+
+	for i, ch := range []chan Envelope{dA, dB} {
+		select {
+		case got := <-ch:
+			if got.Type != EventReadSync {
+				t.Fatalf("tab %d unexpected type %q", i, got.Type)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("tab %d did not receive (legacy clients must still get the event)", i)
+		}
+	}
+}
+
+// TestHub_SendToUserExceptSession_DoesNotCrossUsers asserts the userID lookup
+// scopes the fanout to a single user, even if a different user happens to
+// share a SessionID (collision is theoretically possible since SessionID is
+// client-generated).
+func TestHub_SendToUserExceptSession_DoesNotCrossUsers(t *testing.T) {
+	hub := NewHub()
+
+	mine := make(chan Envelope, 1)
+	stranger := make(chan Envelope, 1)
+
+	hub.Register(newSessionConn("u-1", "tab-A", mine))
+	hub.Register(newSessionConn("u-2", "tab-A", stranger)) // same SessionID, different user
+
+	msg := Envelope{Type: EventReadSync, Data: json.RawMessage(`{}`)}
+	hub.SendToUserExceptSession("u-1", "tab-A", msg) // exclude my origin
+
+	// Mine: excluded by SessionID match
+	select {
+	case got := <-mine:
+		t.Fatalf("u-1 origin tab received echo: %+v", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Stranger: must not receive at all — different user
+	select {
+	case got := <-stranger:
+		t.Fatalf("u-2 received an event scoped to u-1: %+v", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+}

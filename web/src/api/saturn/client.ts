@@ -13,6 +13,41 @@ const WS_RECONNECT_MAX_MS = 30 * 1000;
 const ACCESS_TOKEN_STORAGE_KEY = 'saturn_access_token';
 const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'saturn_access_token_expires_at';
 const HAS_SESSION_KEY = 'saturn_has_session';
+const SESSION_ID_STORAGE_KEY = 'saturn_session_id';
+
+let cachedSessionId: string | undefined;
+
+// getSessionId returns a per-tab opaque identifier persisted in sessionStorage.
+// It is sent to the backend in the WS auth frame and the X-Session-ID REST
+// header so server-published events that originated on this tab can be
+// excluded from the cross-device fanout (no echo to the device that just
+// performed the action). sessionStorage is per-tab, which is exactly what we
+// want — opening the app in a second tab gets a distinct id and behaves like
+// a separate device.
+export function getSessionId(): string {
+  if (cachedSessionId) return cachedSessionId;
+  try {
+    const existing = sessionStorage.getItem(SESSION_ID_STORAGE_KEY);
+    if (existing) {
+      cachedSessionId = existing;
+      return existing;
+    }
+  } catch { /* storage disabled — fall through to ephemeral id */ }
+
+  const generated = generateSessionId();
+  cachedSessionId = generated;
+  try { sessionStorage.setItem(SESSION_ID_STORAGE_KEY, generated); } catch { /* noop */ }
+  return generated;
+}
+
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for very old browsers — collision risk is acceptable for a
+  // tab-scoped, ephemeral ID that the server only uses for echo suppression.
+  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 let baseUrl = '';
 let accessToken: string | undefined;
@@ -158,6 +193,7 @@ export async function request<T>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    'X-Session-ID': getSessionId(),
   };
   if (accessToken && !options?.noAuth) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -334,8 +370,10 @@ export function connectWs() {
       // eslint-disable-next-line no-console
       console.log('[Saturn WS] Connected, sending auth frame');
     }
-    // Send auth frame immediately — token is NOT in URL for security
-    ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken } }));
+    // Send auth frame immediately — token is NOT in URL for security.
+    // session_id lets the gateway exclude this connection from cross-device
+    // sync fanout (read receipts, etc) so we don't receive our own echoes.
+    ws!.send(JSON.stringify({ type: 'auth', data: { token: accessToken, session_id: getSessionId() } }));
     wsReconnectDelay = WS_RECONNECT_BASE_MS;
     startPing();
     // Don't dispatch connectionStateConnecting here — WS is already open,
