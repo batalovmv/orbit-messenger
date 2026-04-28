@@ -42,6 +42,10 @@ export interface SaturnChat {
   is_pinned?: boolean;
   is_muted?: boolean;
   is_archived?: boolean;
+  // Welcome flow (mig 069). Backend always returns these on /chats/:id and
+  // /chats/me; older payloads (pre-mig) treat both as default false / 0.
+  is_default_for_new_users?: boolean;
+  default_join_order?: number;
 }
 
 export interface SaturnChatListItem extends SaturnChat {

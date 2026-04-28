@@ -51,11 +51,16 @@ type Chat struct {
 	MaxMembers         int        `json:"max_members"`
 	DefaultPermissions int64      `json:"default_permissions"`
 	SlowModeSeconds    int        `json:"slow_mode_seconds"`
-	IsPinned           bool       `json:"is_pinned"`
-	IsMuted            bool       `json:"is_muted"`
-	IsArchived         bool       `json:"is_archived"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// Welcome flow (mig 069). Always returned so the chat-settings UI can
+	// render the "Default for new users" Switcher without a follow-up fetch.
+	// Default false / 0 for chats created before mig 069 ran.
+	IsDefaultForNewUsers bool `json:"is_default_for_new_users"`
+	DefaultJoinOrder     int  `json:"default_join_order"`
+	IsPinned             bool `json:"is_pinned"`
+	IsMuted              bool `json:"is_muted"`
+	IsArchived           bool `json:"is_archived"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type ChatListItem struct {

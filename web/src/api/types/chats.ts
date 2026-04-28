@@ -52,6 +52,11 @@ export interface ApiChat {
   creationDate?: number;
   isSupport?: true;
   isProtected?: boolean;
+  // Welcome flow (mig 069). When true, every newly invited user is auto-added
+  // to this chat on registration. Backend defaults to false. defaultJoinOrder
+  // controls the position when multiple chats are flagged.
+  isDefaultForNewUsers?: boolean;
+  defaultJoinOrder?: number;
   fakeType?: ApiFakeType;
   color?: ApiTypePeerColor;
   profileColor?: ApiTypePeerColor;

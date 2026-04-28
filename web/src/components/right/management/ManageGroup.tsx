@@ -18,6 +18,7 @@ import {
   isChatPublic,
 } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo, selectIsChatRestricted, selectTabState } from '../../../global/selectors';
+import { setChatDefaultStatus } from '../../../api/saturn/methods/admin';
 import { debounce } from '../../../util/schedulers';
 import { formatInteger } from '../../../util/textFormat';
 import renderText from '../../common/helpers/renderText';
@@ -60,6 +61,10 @@ type StateProps = {
   isChannelsPremiumLimitReached: boolean;
   availableReactions?: ApiAvailableReaction[];
   currentUserId?: string;
+  // Welcome flow (mig 069). Toggle "Default for new users" requires the
+  // SysManageSettings system role (admin / superadmin). The Switcher row
+  // is hidden entirely for everyone else.
+  isWelcomeFlowAdmin?: boolean;
 };
 
 const GROUP_TITLE_EMPTY = 'Group title can\'t be empty';
@@ -102,6 +107,7 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
   isChannelsPremiumLimitReached,
   availableReactions,
   currentUserId,
+  isWelcomeFlowAdmin,
   onScreenSelect,
   onClose,
 }) => {
@@ -127,6 +133,10 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
   const [photo, setPhoto] = useState<File | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [isForumEnabled, setIsForumEnabled] = useState(chat.isForum);
+  // Welcome flow toggle (mig 069). Optimistic — flip the local state
+  // immediately, hit the backend; revert on failure.
+  const [isDefaultChat, setIsDefaultChat] = useState(Boolean(chat.isDefaultForNewUsers));
+  const [isDefaultChatBusy, setIsDefaultChatBusy] = useState(false);
   const imageHash = getChatAvatarHash(chat);
   const currentAvatarBlobUrl = useMedia(imageHash, false, ApiMediaFormat.BlobUrl);
   const isPublicGroup = useMemo(() => isChatPublic(chat), [chat]);
@@ -150,6 +160,28 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     setIsForumEnabled(Boolean(chat.isForum));
   }, [chat.isForum]);
+
+  // Keep the welcome-flow toggle in sync with the canonical chat object —
+  // covers the case where another admin flipped the flag in a parallel tab.
+  useEffect(() => {
+    setIsDefaultChat(Boolean(chat.isDefaultForNewUsers));
+  }, [chat.isDefaultForNewUsers]);
+
+  const handleToggleDefaultChat = useLastCallback(async () => {
+    const next = !isDefaultChat;
+    setIsDefaultChatBusy(true);
+    setIsDefaultChat(next);
+    try {
+      await setChatDefaultStatus(chatId, next, chat.defaultJoinOrder ?? 0);
+    } catch (e) {
+      // Revert optimistic flip and surface the error in the same banner the
+      // title/about fields use, so the operator sees what failed.
+      setIsDefaultChat(!next);
+      setError((e as Error).message || 'failed to update default-chat flag');
+    } finally {
+      setIsDefaultChatBusy(false);
+    }
+  });
 
   useEffect(() => {
     if (progress === ManagementProgress.Complete) {
@@ -435,6 +467,27 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
               <div className="section-info section-info_push">{lang('ForumToggleDescription')}</div>
             </>
           )}
+          {isWelcomeFlowAdmin && !isBasicGroup && (
+            <>
+              <ListItem
+                icon="add-user-filled"
+                ripple
+                onClick={handleToggleDefaultChat}
+                disabled={isDefaultChatBusy}
+              >
+                <span>{lang('ChatDefaultForNewUsers')}</span>
+                <Switcher
+                  id="default-for-new-users"
+                  label={lang('ChatDefaultForNewUsers')}
+                  checked={isDefaultChat}
+                  inactive
+                />
+              </ListItem>
+              <div className="section-info section-info_push">
+                {lang('ChatDefaultForNewUsersHint')}
+              </div>
+            </>
+          )}
         </div>
         <div className="section">
           <ListItem icon="group" multiline onClick={handleClickMembers}>
@@ -516,6 +569,7 @@ export default memo(withGlobal<OwnProps>(
       availableReactions: global.reactions.availableReactions,
       currentUserId: global.currentUserId,
       canEditForum,
+      isWelcomeFlowAdmin: global.saturnRole === 'admin' || global.saturnRole === 'superadmin',
     };
   },
   (global, { chatId }) => {
