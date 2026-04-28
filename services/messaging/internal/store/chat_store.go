@@ -150,6 +150,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 	query := `
 		SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
 		       c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds,
+		       c.is_default_for_new_users, c.default_join_order,
 		       c.created_at, c.updated_at,
 		       m.id, m.chat_id, m.sender_id, m.type, m.content, m.reply_to_id,
 		       m.is_edited, m.is_deleted, m.is_pinned, m.is_forwarded, m.forwarded_from,
@@ -217,6 +218,7 @@ func (s *chatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor str
 			&item.Chat.ID, &item.Chat.Type, &item.Chat.Name, &item.Chat.Description,
 			&item.Chat.AvatarURL, &item.Chat.CreatedBy,
 			&item.Chat.IsProtected, &item.Chat.MaxMembers, &item.Chat.DefaultPermissions, &item.Chat.SlowModeSeconds,
+			&item.Chat.IsDefaultForNewUsers, &item.Chat.DefaultJoinOrder,
 			&item.Chat.CreatedAt, &item.Chat.UpdatedAt,
 			&msgID, &msgChatID, &msgSenderID, &msgType, &msgContent, &msgReplyToID,
 			&msgIsEdited, &msgIsDeleted, &msgIsPinned, &msgIsForwarded, &msgForwardedFrom,
@@ -316,10 +318,12 @@ func (s *chatStore) GetByID(ctx context.Context, chatID uuid.UUID) (*model.Chat,
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
 		        is_protected, max_members, default_permissions, slow_mode_seconds,
+		        is_default_for_new_users, default_join_order,
 		        created_at, updated_at
 		 FROM chats WHERE id = $1`, chatID,
 	).Scan(&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 		&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+		&c.IsDefaultForNewUsers, &c.DefaultJoinOrder,
 		&c.CreatedAt, &c.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -783,6 +787,7 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, type, name, description, avatar_url, created_by,
 		        is_protected, max_members, default_permissions, slow_mode_seconds,
+		        is_default_for_new_users, default_join_order,
 		        created_at, updated_at
 		 FROM chats
 		 ORDER BY created_at
@@ -799,6 +804,7 @@ func (s *chatStore) ListAll(ctx context.Context, limit int) ([]model.Chat, error
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.IsDefaultForNewUsers, &c.DefaultJoinOrder,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -818,6 +824,7 @@ func (s *chatStore) ListAllPaginated(ctx context.Context, cursor string, limit i
 
 	selectCols := `id, type, name, description, avatar_url, created_by,
 		is_protected, max_members, default_permissions, slow_mode_seconds,
+		is_default_for_new_users, default_join_order,
 		created_at, updated_at`
 
 	if cursor != "" {
@@ -850,6 +857,7 @@ func (s *chatStore) ListAllPaginated(ctx context.Context, cursor string, limit i
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.IsDefaultForNewUsers, &c.DefaultJoinOrder,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, "", false, err
@@ -880,6 +888,7 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 	rows, err := s.pool.Query(ctx,
 		`SELECT c.id, c.type, c.name, c.description, c.avatar_url, c.created_by,
 		        c.is_protected, c.max_members, c.default_permissions, c.slow_mode_seconds,
+		        c.is_default_for_new_users, c.default_join_order,
 		        c.created_at, c.updated_at
 		 FROM chats c
 		 JOIN chat_members cm1 ON cm1.chat_id = c.id AND cm1.user_id = $1
@@ -900,6 +909,7 @@ func (s *chatStore) GetCommonChats(ctx context.Context, userA, userB uuid.UUID, 
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.Name, &c.Description, &c.AvatarURL, &c.CreatedBy,
 			&c.IsProtected, &c.MaxMembers, &c.DefaultPermissions, &c.SlowModeSeconds,
+			&c.IsDefaultForNewUsers, &c.DefaultJoinOrder,
 			&c.CreatedAt, &c.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -936,10 +946,12 @@ func (s *chatStore) GetOrCreateSavedChat(ctx context.Context, userID uuid.UUID) 
 		 VALUES ('direct', $1, $2)
 		 RETURNING id, type, name, description, avatar_url, created_by,
 		           is_protected, max_members, default_permissions, slow_mode_seconds,
+		           is_default_for_new_users, default_join_order,
 		           created_at, updated_at`,
 		name, userID,
 	).Scan(&chat.ID, &chat.Type, &chat.Name, &chat.Description, &chat.AvatarURL, &chat.CreatedBy,
 		&chat.IsProtected, &chat.MaxMembers, &chat.DefaultPermissions, &chat.SlowModeSeconds,
+		&chat.IsDefaultForNewUsers, &chat.DefaultJoinOrder,
 		&chat.CreatedAt, &chat.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create saved chat: %w", err)

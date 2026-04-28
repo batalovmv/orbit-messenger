@@ -90,6 +90,17 @@ export function buildApiChat(chat: SaturnChat | SaturnChatListItem): ApiChat {
     apiChat.isProtected = true;
   }
 
+  // Welcome flow (mig 069). Both fields default to false / 0 on older
+  // payloads, so a missing field maps cleanly to "not flagged".
+  const flagged = (chat as { is_default_for_new_users?: boolean }).is_default_for_new_users;
+  if (flagged) {
+    apiChat.isDefaultForNewUsers = true;
+  }
+  const joinOrder = (chat as { default_join_order?: number }).default_join_order;
+  if (typeof joinOrder === 'number' && joinOrder !== 0) {
+    apiChat.defaultJoinOrder = joinOrder;
+  }
+
   return apiChat;
 }
 
