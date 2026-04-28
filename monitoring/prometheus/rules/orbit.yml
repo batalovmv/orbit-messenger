@@ -13,12 +13,15 @@ groups:
           summary: "Service {{ $labels.instance }} is down"
           description: "{{ $labels.instance }} (job={{ $labels.job }}) has been unreachable for more than 1 minute."
 
-      # High p99 latency (>500ms) on any service
+      # High p99 latency (>500ms) on any service.
+      # NOTE: metric name is `orbit_http_request_duration_seconds_bucket` —
+      # services emit the prefixed form via pkg/metrics. The unprefixed name
+      # used here previously never existed in the registry.
       - alert: HighLatency
         expr: |
           histogram_quantile(0.99,
             sum by (service, le) (
-              rate(http_request_duration_seconds_bucket{job="orbit"}[5m])
+              rate(orbit_http_request_duration_seconds_bucket{job="orbit"}[5m])
             )
           ) > 0.5
         for: 5m
@@ -28,15 +31,18 @@ groups:
           summary: "High p99 latency on {{ $labels.service }}"
           description: "p99 latency on {{ $labels.service }} is {{ $value | humanizeDuration }} (threshold: 500ms)."
 
-      # High 5xx error rate (>1% of requests)
+      # High 5xx error rate (>1% of requests).
       - alert: HighErrorRate
         expr: |
           sum by (service) (
-            rate(http_requests_total{job="orbit", status=~"5.."}[5m])
+            rate(orbit_http_requests_total{job="orbit", status=~"5.."}[5m])
           )
           /
-          sum by (service) (
-            rate(http_requests_total{job="orbit"}[5m])
+          clamp_min(
+            sum by (service) (
+              rate(orbit_http_requests_total{job="orbit"}[5m])
+            ),
+            0.001
           ) > 0.01
         for: 5m
         labels:
@@ -49,11 +55,14 @@ groups:
       - alert: CriticalErrorRate
         expr: |
           sum by (service) (
-            rate(http_requests_total{job="orbit", status=~"5.."}[5m])
+            rate(orbit_http_requests_total{job="orbit", status=~"5.."}[5m])
           )
           /
-          sum by (service) (
-            rate(http_requests_total{job="orbit"}[5m])
+          clamp_min(
+            sum by (service) (
+              rate(orbit_http_requests_total{job="orbit"}[5m])
+            ),
+            0.001
           ) > 0.05
         for: 2m
         labels:
@@ -65,22 +74,54 @@ groups:
   - name: orbit.infrastructure
     interval: 60s
     rules:
-      # PostgreSQL connection pool exhaustion
-      - alert: HighDBConnections
-        expr: pg_stat_activity_count > 80
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High PostgreSQL connection count"
-          description: "PostgreSQL has {{ $value }} active connections (threshold: 80)."
-
-      # WebSocket connections spike (gateway)
+      # WebSocket connection count spike (gateway). Steady-state ceiling check.
       - alert: HighWSConnections
-        expr: ws_active_connections > 400
+        expr: orbit_ws_active_connections{service="gateway"} > 400
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High WebSocket connection count"
           description: "Gateway has {{ $value }} active WebSocket connections (threshold: 400)."
+
+      # WS abnormal drop detector. Looks at the difference between the recent
+      # peak and the recent floor of the active-connections gauge: if peak in
+      # the last 5 min was >10 connections higher than the lowest value seen
+      # in the last 2 min, something pulled connections down. `for: 2m`
+      # requires the dip to persist so a transient single-minute blip does not
+      # alert. Caveat: this still fires on a slow rolling deploy that holds
+      # the new pod count below peak for longer than 2 min — accept that for
+      # the 150-user pilot, revisit if it gets noisy.
+      - alert: WSAbnormalDrops
+        expr: |
+          (
+            max_over_time(orbit_ws_active_connections{service="gateway"}[5m])
+            - min_over_time(orbit_ws_active_connections{service="gateway"}[2m])
+          ) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket connections dropped abnormally"
+          description: "Gateway saw a sustained drop of {{ $value }} WS connections relative to the recent 5-min peak."
+
+      # Push delivery failure rate >1% over 5 min. Counter is emitted by the
+      # gateway push dispatcher with result={ok,fail,stale}. `stale` is the
+      # 410/404 path where the subscription is gone — that is housekeeping,
+      # not a delivery failure, so it is excluded from both numerator and
+      # denominator.
+      - alert: PushDeliveryFailureRate
+        expr: |
+          sum(rate(orbit_push_attempts_total{result="fail"}[5m]))
+          /
+          clamp_min(
+            sum(rate(orbit_push_attempts_total{result=~"ok|fail"}[5m])),
+            0.001
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Web push delivery failure rate >1%"
+          description: "Push delivery failure rate is {{ $value | humanizePercentage }} over the last 5 min (threshold: 1%). Check VAPID config, APNs/FCM provider status, and gateway logs."

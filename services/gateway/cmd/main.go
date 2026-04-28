@@ -106,6 +106,17 @@ func main() {
 	wsHandler := ws.NewHandler(hub, nc, callsServiceURL, internalSecret)
 	defer wsHandler.Close()
 
+	// Metrics registry — created before push dispatcher so we can pass the
+	// per-outcome counter into push.Config and keep all registrations in one
+	// place. The HTTP middleware and other consumers below read from the same
+	// registry.
+	metricsReg := metrics.New("gateway")
+	pushAttemptsCounter := metricsReg.Counter(
+		"orbit_push_attempts_total",
+		"Web push delivery attempts grouped by outcome (ok / fail / stale).",
+		"result",
+	)
+
 	// NATS Subscriber
 	pushDispatcher := push.NewDispatcher(push.Config{
 		PublicKey:           vapidPublicKey,
@@ -114,6 +125,7 @@ func main() {
 		MessagingServiceURL: messagingServiceURL,
 		InternalSecret:      internalSecret,
 		Logger:              logger,
+		AttemptsCounter:     pushAttemptsCounter,
 	})
 	if !pushDispatcher.Enabled() {
 		slog.Warn("web push dispatcher disabled: missing VAPID configuration")
@@ -148,9 +160,8 @@ func main() {
 	}
 	app := fiber.New(fiberCfg)
 
-	// Metrics registry + middleware — one per service, mounts /metrics
-	// behind the internal token so only the platform scraper can read it.
-	metricsReg := metrics.New("gateway")
+	// /metrics is mounted behind the internal token so only the platform
+	// scraper can read it. metricsReg is the same registry created above.
 	wsConnectionsGauge := metricsReg.Gauge(
 		"orbit_ws_active_connections",
 		"Active WebSocket connections currently held by this gateway instance.",
