@@ -315,3 +315,86 @@
   padding: 0.5rem 0 1rem;
   font-size: 0.9375rem;
 }
+
+// Push Inspector tab (Day 5.1) — per-device delivery report.
+.pushReport {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pushSummary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.pushCounts {
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.pushDeviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pushDeviceRow {
+  border: 1px solid var(--color-borders);
+  border-left-width: 3px;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pushStatusOk { border-left-color: #28a745; }
+.pushStatusFail { border-left-color: #dc3545; }
+.pushStatusStale { border-left-color: #ffc107; }
+
+.pushDeviceHead {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pushDeviceStatus {
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  font-weight: var(--font-weight-semibold);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.pushDeviceHost {
+  font-family: var(--font-monospace, ui-monospace, monospace);
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.pushDeviceUA {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  word-break: break-all;
+}
+
+.pushDeviceError {
+  font-size: 0.8125rem;
+  color: #dc3545;
+}

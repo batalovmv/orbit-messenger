@@ -21,6 +21,7 @@ import (
 
 type mockUserStore struct {
 	getByIDFn      func(ctx context.Context, id uuid.UUID) (*model.User, error)
+	getByEmailFn   func(ctx context.Context, email string) (*model.User, error)
 	deactivateFn   func(ctx context.Context, userID, actorID uuid.UUID) error
 	reactivateFn   func(ctx context.Context, userID uuid.UUID) error
 	updateRoleFn   func(ctx context.Context, userID uuid.UUID, newRole string) error
@@ -30,6 +31,13 @@ type mockUserStore struct {
 func (m *mockUserStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	if m.getByIDFn != nil {
 		return m.getByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+
+func (m *mockUserStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	if m.getByEmailFn != nil {
+		return m.getByEmailFn(ctx, email)
 	}
 	return nil, nil
 }

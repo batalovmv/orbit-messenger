@@ -16,6 +16,7 @@ import (
 	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -73,9 +74,15 @@ type Dispatcher struct {
 }
 
 type PushSubscription struct {
-	Endpoint string `json:"endpoint"`
-	P256DH   string `json:"p256dh"`
-	Auth     string `json:"auth"`
+	// ID is the messaging-side push_subscriptions PK. Optional in the wire
+	// format because pre-Day-5 messaging instances may not have populated it,
+	// and old call paths that only need delivery don't read it. Day-5 admin
+	// inspector path uses it as the per-device identifier in the report.
+	ID        uuid.UUID `json:"id,omitempty"`
+	Endpoint  string    `json:"endpoint"`
+	P256DH    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	UserAgent string    `json:"user_agent,omitempty"`
 }
 
 func NewDispatcher(cfg Config) *Dispatcher {

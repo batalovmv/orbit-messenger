@@ -39,6 +39,11 @@ func main() {
 	natsURL := config.NatsURL()
 	internalSecret := config.MustEnv("INTERNAL_SECRET")
 	mediaServiceURL := config.EnvOr("MEDIA_URL", config.EnvOr("MEDIA_SERVICE_URL", "http://localhost:8083"))
+	// GATEWAY_URL is consumed by the Day 5 admin "push test" path. Messaging
+	// reaches back into gateway because the push dispatcher (and webpush
+	// transport) lives there. When unset the inspector returns 503 — every
+	// other admin endpoint stays operational.
+	gatewayURL := config.EnvOr("GATEWAY_URL", config.EnvOr("GATEWAY_SERVICE_URL", "http://localhost:8080"))
 	telegramBotToken := config.EnvOr("TELEGRAM_BOT_TOKEN", "")
 
 	// PostgreSQL — try password as-is first, then without backslashes
@@ -279,6 +284,14 @@ func main() {
 	scheduledHandler := handler.NewScheduledHandler(scheduledSvc, logger)
 	adminSvc := service.NewAdminService(userStore, chatStore, messageStore, auditStore, natsPublisher, rdb)
 	adminHandler := handler.NewAdminHandler(adminSvc)
+	pushAdminSvc := service.NewPushAdminService(service.PushAdminConfig{
+		Users:          userStore,
+		Audit:          auditStore,
+		GatewayURL:     gatewayURL,
+		InternalSecret: internalSecret,
+		Logger:         logger,
+	})
+	adminPushHandler := handler.NewAdminPushHandler(pushAdminSvc)
 	featureFlagSvc := service.NewFeatureFlagService(featureFlagStore, auditStore)
 	featureFlagHandler := handler.NewFeatureFlagHandler(featureFlagSvc)
 	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
@@ -321,6 +334,7 @@ func main() {
 	pollHandler.Register(api)
 	scheduledHandler.Register(api)
 	adminHandler.Register(api)
+	adminPushHandler.Register(api)
 	featureFlagHandler.Register(api)
 	folderHandler.Register(api)
 

@@ -2305,6 +2305,17 @@ export interface LangPair {
   'AdminWelcomeBackfillConfirmTitle': undefined;
   'AdminWelcomeBackfillConfirmBody': undefined;
   'AdminWelcomeBackfillConfirmAction': undefined;
+  'AdminTabPushInspector': undefined;
+  'AdminPushInspectorIntro': undefined;
+  'AdminPushInspectorIdentifier': undefined;
+  'AdminPushInspectorIdentifierPlaceholder': undefined;
+  'AdminPushInspectorTitle': undefined;
+  'AdminPushInspectorTitlePlaceholder': undefined;
+  'AdminPushInspectorBody': undefined;
+  'AdminPushInspectorBodyPlaceholder': undefined;
+  'AdminPushInspectorSend': undefined;
+  'AdminPushInspectorTarget': undefined;
+  'AdminPushInspectorNoDevices': undefined;
   'ChatDefaultForNewUsers': undefined;
   'ChatDefaultForNewUsersHint': undefined;
   'MaintenanceBannerDefault': undefined;
@@ -4088,6 +4099,15 @@ export interface LangPairWithVariables<V = LangVariable> {
     '0': V;
   };
   'AdminWelcomeBackfillResult': {
+    'count': V;
+  };
+  'AdminPushInspectorCountSent': {
+    'count': V;
+  };
+  'AdminPushInspectorCountFailed': {
+    'count': V;
+  };
+  'AdminPushInspectorCountStale': {
     'count': V;
   };
   'BoostingGiveawayUsedLinksPlural': {

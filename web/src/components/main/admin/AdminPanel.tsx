@@ -13,8 +13,10 @@ import type {
 
 import {
   backfillDefaultChats, fetchAdminFlags, fetchAuditLog,
+  sendAdminTestPush,
   setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
+import type { PushTestReport } from '../../../api/saturn/methods/admin';
 import { selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 
@@ -29,7 +31,7 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
-type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome';
+type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
 
 type StateProps = {
   saturnRole?: GlobalState['saturnRole'];
@@ -45,6 +47,7 @@ const tabLangKey = (tab: AdminTab) => {
     case 'maintenance': return 'AdminTabMaintenance';
     case 'audit': return 'AdminTabAuditLog';
     case 'welcome': return 'AdminTabWelcome';
+    case 'push': return 'AdminTabPushInspector';
   }
 };
 
@@ -53,7 +56,7 @@ const tabLangKey = (tab: AdminTab) => {
 // and SysViewAuditLog (audit). compliance is audit-only — no write access
 // to system settings.
 const tabsForRole = (role?: GlobalState['saturnRole']): readonly AdminTab[] => {
-  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'audit'];
+  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'push', 'audit'];
   if (role === 'compliance') return ['audit'];
   return [];
 };
@@ -100,6 +103,7 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
         {activeTab === 'flags' && <FlagsTab />}
         {activeTab === 'maintenance' && <MaintenanceTab />}
         {activeTab === 'welcome' && <WelcomeTab />}
+        {activeTab === 'push' && <PushInspectorTab />}
         {activeTab === 'audit' && <AuditTab />}
       </div>
     </Modal>
@@ -396,6 +400,142 @@ const WelcomeTab = () => {
             </button>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+};
+
+// ===========================================================================
+// Push Inspector tab (Day 5.1)
+// ===========================================================================
+//
+// Lets admins debug "user says pushes aren't arriving" without ssh'ing into
+// the gateway. Looks up by email or UUID, fires one test push, displays
+// per-device delivery status (ok/fail/stale) with provider host suffixes.
+// Stale entries are auto-deleted server-side; clicking again refreshes.
+const PushInspectorTab = () => {
+  const lang = useLang();
+  const [identifier, setIdentifier] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [report, setReport] = useState<PushTestReport | undefined>();
+  const [error, setError] = useState<string | undefined>();
+  const [isBusy, setIsBusy] = useState(false);
+
+  const handleSend = useLastCallback(async () => {
+    setError(undefined);
+    setReport(undefined);
+    setIsBusy(true);
+    try {
+      // identifier is email if it has '@', else UUID — let server validate.
+      const isEmail = identifier.includes('@');
+      const result = await sendAdminTestPush({
+        user_id: isEmail ? undefined : identifier.trim() || undefined,
+        email: isEmail ? identifier.trim() : undefined,
+        title: title || undefined,
+        body: body || undefined,
+      });
+      setReport(result);
+    } catch (e) {
+      setError((e as Error).message || 'send failed');
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  return (
+    <div className={styles.tabBody}>
+      <div className={styles.welcomeIntro}>
+        {lang('AdminPushInspectorIntro')}
+      </div>
+      <div className={styles.formRow}>
+        <span className={styles.formLabelText}>{lang('AdminPushInspectorIdentifier')}</span>
+        <input
+          type="text"
+          className={styles.searchInput}
+          value={identifier}
+          maxLength={200}
+          placeholder={lang('AdminPushInspectorIdentifierPlaceholder')}
+          onChange={(e) => setIdentifier((e.target as HTMLInputElement).value)}
+        />
+      </div>
+      <div className={styles.formRow}>
+        <span className={styles.formLabelText}>{lang('AdminPushInspectorTitle')}</span>
+        <input
+          type="text"
+          className={styles.searchInput}
+          value={title}
+          maxLength={200}
+          placeholder={lang('AdminPushInspectorTitlePlaceholder')}
+          onChange={(e) => setTitle((e.target as HTMLInputElement).value)}
+        />
+      </div>
+      <div className={styles.formRow}>
+        <span className={styles.formLabelText}>{lang('AdminPushInspectorBody')}</span>
+        <textarea
+          value={body}
+          maxLength={1000}
+          rows={2}
+          placeholder={lang('AdminPushInspectorBodyPlaceholder')}
+          onChange={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+          className={styles.formTextarea}
+        />
+      </div>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          disabled={isBusy || !identifier.trim()}
+          onClick={handleSend}
+        >
+          {lang(isBusy ? 'Loading' : 'AdminPushInspectorSend')}
+        </button>
+      </div>
+      {error && <div className={styles.error}>{error}</div>}
+      {report && (
+        <div className={styles.pushReport}>
+          <div className={styles.pushSummary}>
+            <span>
+              {lang('AdminPushInspectorTarget')}: {report.email || report.user_id}
+              {report.display_name ? ` (${report.display_name})` : ''}
+            </span>
+            <span className={styles.pushCounts}>
+              {lang('AdminPushInspectorCountSent', { count: report.sent })}
+              {' · '}
+              {lang('AdminPushInspectorCountFailed', { count: report.failed })}
+              {' · '}
+              {lang('AdminPushInspectorCountStale', { count: report.stale })}
+            </span>
+          </div>
+          {report.devices.length === 0 && (
+            <div className={styles.empty}>{lang('AdminPushInspectorNoDevices')}</div>
+          )}
+          {report.devices.length > 0 && (
+            <ul className={styles.pushDeviceList}>
+              {report.devices.map((d) => {
+                const statusClass = d.status === 'ok'
+                  ? styles.pushStatusOk
+                  : d.status === 'fail'
+                    ? styles.pushStatusFail
+                    : styles.pushStatusStale;
+                return (
+                  <li key={d.device_id} className={buildClassName(styles.pushDeviceRow, statusClass)}>
+                    <div className={styles.pushDeviceHead}>
+                      <span className={styles.pushDeviceStatus}>{d.status.toUpperCase()}</span>
+                      <span className={styles.pushDeviceHost}>{d.endpoint_host}</span>
+                    </div>
+                    {d.user_agent && (
+                      <div className={styles.pushDeviceUA}>{d.user_agent}</div>
+                    )}
+                    {d.error && (
+                      <div className={styles.pushDeviceError}>{d.error}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

@@ -204,3 +204,47 @@ export async function backfillDefaultChats(): Promise<{ inserted: number }> {
   });
   return jsonOrThrow(res);
 }
+
+// ---------------------------------------------------------------------------
+// Push Inspector (Day 5.1) — admin-only, gated by SysManageSettings.
+// ---------------------------------------------------------------------------
+
+export type PushTestDeviceReport = {
+  device_id: string;
+  user_agent?: string;
+  endpoint_host: string;
+  status: 'ok' | 'fail' | 'stale';
+  error?: string;
+};
+
+export type PushTestReport = {
+  user_id: string;
+  email?: string;
+  display_name?: string;
+  device_count: number;
+  sent: number;
+  failed: number;
+  stale: number;
+  devices: PushTestDeviceReport[];
+};
+
+export type PushTestRequest = {
+  user_id?: string; // mutually exclusive with email
+  email?: string;
+  title?: string;
+  body?: string;
+};
+
+// sendAdminTestPush triggers a test web-push to one user. The server resolves
+// the target by user_id OR email (exactly one), audits the action, then asks
+// the gateway to dispatch and report per-device delivery status. Endpoint
+// URLs are deliberately omitted from the report; only host suffixes (e.g.
+// "fcm.googleapis.com") are returned for diagnostic UI.
+export async function sendAdminTestPush(req: PushTestRequest): Promise<PushTestReport> {
+  const res = await fetch(`${API_PREFIX}/admin/push/test`, {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return jsonOrThrow(res);
+}

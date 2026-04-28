@@ -458,6 +458,10 @@ func (m *mockUserStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User,
 	return nil, nil
 }
 
+func (m *mockUserStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	return nil, nil
+}
+
 func (m *mockUserStore) Update(ctx context.Context, u *model.User) error {
 	if m.updateFn != nil {
 		return m.updateFn(ctx, u)
