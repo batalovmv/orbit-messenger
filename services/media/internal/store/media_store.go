@@ -263,17 +263,42 @@ func (s *MediaStore) GetUserStorageBytes(ctx context.Context, userID uuid.UUID) 
 	return total, nil
 }
 
-// CanAccess returns true if userID is the uploader OR the media is attached to at least one message
-// (i.e. it's been published and any chat member who loaded the message can view it).
+// canAccessMediaQuery is the SQL behind CanAccess. Extracted so a unit test can
+// pin its shape against IDOR regressions without touching a live Postgres.
+//
+// Access is granted when:
+//   - the caller is the uploader of the media, OR
+//   - the media is attached to a message in a chat the caller is a member of.
+//
+// The chat_members JOIN is what closes the IDOR: a stranger who guesses a
+// media UUID must NOT pass just because the media is "published" somewhere.
+const canAccessMediaQuery = `
+	SELECT EXISTS(
+		SELECT 1 FROM media m
+		WHERE m.id = $1
+		  AND (
+		    m.uploader_id = $2
+		    OR EXISTS(
+		      SELECT 1
+		      FROM message_media mm
+		      JOIN messages msg ON msg.id = mm.message_id
+		      JOIN chat_members cm ON cm.chat_id = msg.chat_id
+		      WHERE mm.media_id = $1 AND cm.user_id = $2
+		    )
+		  )
+	)`
+
+// CanAccess returns true when userID is the uploader OR a member of a chat
+// that has at least one message referencing this media. Membership in the
+// attached chat is required — being "any authenticated user" is not enough.
 func (s *MediaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
+	if userID == uuid.Nil {
+		// Defence in depth: an upstream that forgot to authenticate must not
+		// silently get a positive result. Treat it as access denied.
+		return false, nil
+	}
 	var ok bool
-	err := s.pool.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM media
-			WHERE id = $1
-			  AND (uploader_id = $2 OR EXISTS(SELECT 1 FROM message_media WHERE media_id = $1))
-		)`, mediaID, userID,
-	).Scan(&ok)
+	err := s.pool.QueryRow(ctx, canAccessMediaQuery, mediaID, userID).Scan(&ok)
 	if err != nil {
 		return false, fmt.Errorf("can access media %s: %w", mediaID, err)
 	}
