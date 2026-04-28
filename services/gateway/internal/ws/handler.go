@@ -311,26 +311,34 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 		return nil, err
 	}
 
-	// Per-user tokens-invalid-before threshold (auth.ResetAdmin). Defends
-	// against the race where ResetAdmin fires between /auth/me and the cache
-	// write below — without this the just-written cache entry would happily
-	// serve the now-revoked token until authCacheTTL expires.
-	_, iat := parseTokenSubAndIAT(token)
-	invalid, riErr := checkTokensInvalidatedByReset(ctx, rdb, user.ID, iat)
-	if riErr != nil {
-		slog.Error("WS tokens-invalid-before check failed, rejecting token", "error", riErr)
-		return nil, fmt.Errorf("tokens-invalid-before check failed")
-	}
-	if invalid {
-		return nil, nil
-	}
-
-	// Cache
+	// Cache FIRST, then check tokens-invalid-before with eviction-on-hit.
+	// Mirror order with middleware/jwt.go: doing the check before Set leaves a
+	// race window where ResetAdmin firing between check and Set writes a stale
+	// cache entry and admits the connection — caught only by the next
+	// revalidation tick. Set-then-check-then-Del closes that window: any
+	// concurrent ResetAdmin observed by the check evicts the cache and the
+	// connection is rejected before Hub.Register.
 	cuJSON, err := json.Marshal(user)
 	if err != nil {
 		slog.Error("WS JWT cache marshal failed", "error", err)
 	} else if err := rdb.Set(ctx, cacheKey, string(cuJSON), authCacheTTL).Err(); err != nil {
 		slog.Error("WS JWT cache write failed", "error", err)
+	}
+
+	_, iat := parseTokenSubAndIAT(token)
+	invalid, riErr := checkTokensInvalidatedByReset(ctx, rdb, user.ID, iat)
+	if riErr != nil {
+		slog.Error("WS tokens-invalid-before check failed, rejecting token", "error", riErr)
+		if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+			slog.Error("WS JWT cache del failed after tokens-invalid-before error", "error", err)
+		}
+		return nil, fmt.Errorf("tokens-invalid-before check failed")
+	}
+	if invalid {
+		if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+			slog.Error("WS JWT cache del failed after tokens-invalid-before hit", "error", err)
+		}
+		return nil, nil
 	}
 
 	return &ValidatedToken{

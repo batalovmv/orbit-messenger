@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -81,6 +82,62 @@ func TestJWTMiddleware_TokensInvalidatedByReset_RejectsCachedToken(t *testing.T)
 	// Cache entry must be evicted so a subsequent request also re-validates.
 	if exists, _ := rdb.Exists(t.Context(), cacheKey).Result(); exists != 0 {
 		t.Fatalf("expected cache entry to be deleted after revoke, still present")
+	}
+}
+
+// TestJWTMiddleware_TokensInvalidatedByReset_RejectsOnCacheMiss exercises the
+// race the cache-miss branch is meant to defend against: nothing in cache yet,
+// ResetAdmin already fired (threshold > token iat), /auth/me happens to return
+// 200 — gateway must still reject and must NOT leave a stale cache entry that
+// would admit the next request.
+func TestJWTMiddleware_TokensInvalidatedByReset_RejectsOnCacheMiss(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	userID := uuid.NewString()
+	token := signTestJWT(t, jwt.MapClaims{
+		"sub": userID,
+		"jti": uuid.NewString(),
+		"iat": float64(1_000_000_000),
+		"exp": float64(time.Now().Add(time.Hour).Unix()),
+	})
+
+	threshold := fmt.Sprintf("%d", time.Now().Unix())
+	if err := rdb.Set(t.Context(), "user_tokens_invalid_before:"+userID, threshold, time.Hour).Err(); err != nil {
+		t.Fatalf("seed threshold: %v", err)
+	}
+
+	// Stub auth /me — would happily authenticate the token if gateway didn't
+	// also consult Redis. Models the race: auth's own ValidateAccessToken
+	// already rejects in production, but this test isolates the gateway-side
+	// guard so a future regression that drops the Redis check is caught here.
+	authStub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"role":"member"}`, userID)))
+	}))
+	t.Cleanup(authStub.Close)
+
+	app := fiber.New()
+	app.Use(JWTMiddleware(JWTConfig{
+		AuthServiceURL: authStub.URL,
+		Redis:          rdb,
+		CacheTTL:       30 * time.Second,
+	}))
+	app.Get("/test", func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	req := httptest.NewRequest(fiber.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("test request: %v", err)
+	}
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected 401 on cache-miss with reset threshold, got %d", resp.StatusCode)
+	}
+	cacheKey := "jwt_cache:" + sha256Hex(token)
+	if exists, _ := rdb.Exists(t.Context(), cacheKey).Result(); exists != 0 {
+		t.Fatalf("expected cache entry to be deleted after cache-miss reject, still present")
 	}
 }
 
