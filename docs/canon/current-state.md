@@ -37,6 +37,14 @@
 - **PITR drill marker (PR #9)**: `scripts/pitr-drill-marker.sh` пишет marker-row в БД до restore-теста, validates что после PITR-восстановления marker отсутствует (proves point-in-time precision). Day 2 ops checklist (`docs/runbooks/day-2-saturn-ops.md`).
 - **Welcome flow (PRs #10/#11/#15, mig 069)**: новый таб AdminPanel «Welcome» — список default-чатов, в которые автоматически добавляются новые invited users. Per-chat override через `Switcher` в `ManageGroup` (gate `SysManageSettings`). Backend endpoints: `GET/POST /api/v1/admin/welcome-chats`, `PATCH /api/v1/chats/:id/welcome-default`. Audit log на каждое изменение.
 
+### Day 5.1 Push Inspector (PR #16, 2026-04-28)
+
+- **Новый admin endpoint** `POST /api/v1/admin/push/test` — гейтнут SysManageSettings. Тело: `{user_id|email, title?, body?}`. Резолвит таргета (UUID xor email), пишет audit `push.test_sent` ДО dispatch (fail-closed), вызывает gateway internal endpoint с 12s budget.
+- **Gateway internal endpoint** `POST /internal/push/dispatch-test` (X-Internal-Token only). Дёргает новый `Dispatcher.SendToUserWithReport(ctx, userID, payload) (*Report, error)` — per-device delivery report с status `ok|fail|stale` и `endpoint_host` (только host suffix; raw endpoint URL никогда не возвращается клиенту, действует как auth-токен).
+- **Timeout hierarchy** (slowest→fastest, 2s slack каждый шаг): messaging callGateway 12s → gateway admin handler 10s → webpush per-attempt 5s × ≤3 retries. ctx.Err() проверяется после fetch subscriptions, перед каждым device-send И после — single-device cancel-during-send не возвращает «партиальный 200», а правильно мапится в 504.
+- **Frontend**: новый таб «Push Inspector» в `AdminPanel.tsx` рядом с Welcome flow. Email/UUID input + optional title/body + per-device report list (status pill + host suffix). Endpoint URLs клиенту не показываются.
+- **Прод-факт**: smoke-тест 2026-04-28 выявил что VAPID env vars были пусты на orbit-gateway → push в проде silently no-op'ил неопределённое время (Day 4b read-sync fallback не работал). Сгенерили свежий VAPID keypair, выставили на Saturn (orbit-gateway: PUBLIC+PRIVATE+SUBSCRIBER_EMAIL; orbit-web: PUBLIC только, Build-tagged), Push Inspector подтвердил end-to-end доставку через FCM. См. `memory/project_saturn_vapid_2026_04_28.md`.
+
 ### Cross-device read-receipt sync (PR #13 + #14, 2026-04-28)
 
 - **Новый NATS event** `orbit.user.<userID>.read_sync` (self-only). Messaging публикует после `MarkRead` payload `{chat_id, last_read_message_id, last_read_seq_num, unread_count, read_at, origin_session_id}` ТОЛЬКО на user'а-маркера. Существующий `orbit.chat.*.messages.read` (cross-user receipts) живёт параллельно с slim payload — без `unread_count`, чтобы не утекать другим участникам.

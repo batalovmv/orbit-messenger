@@ -1537,6 +1537,7 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [x] PITR drill marker helper + Day 2 Saturn ops checklist (`scripts/pitr-drill-marker.sh`, `docs/runbooks/day-2-saturn-ops.md`) (#9)
 - [x] Welcome flow: default-chats backfill for new invited users (mig 069 + admin endpoints + 11 tests + AdminPanel tab + per-chat ManageGroup switcher) (#10/#11/#15)
 - [x] Cross-device read-receipt sync (WS + silent-push fallback, see `docs/canon/current-state.md`) (#13/#14)
+- [x] Day 5.1 Admin Push Inspector — admin test-push with per-device delivery report; timeout hierarchy 12s/10s/5s, ctx.Err() guards, audit-first-fail-closed; surfaced+fixed pre-existing prod VAPID env issue (#16)
 
 **Backup:**
 - [x] PostgreSQL: Saturn.ac managed Hourly backups (RPO = 1h) — enabled via UI
