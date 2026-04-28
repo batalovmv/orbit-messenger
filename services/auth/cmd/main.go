@@ -46,6 +46,12 @@ func main() {
 		TOTPIssuer:    config.EnvOr("TOTP_ISSUER", "Orbit"),
 		AdminResetKey: os.Getenv("ORBIT_ADMIN_RESET_KEY"),
 		FrontendURL:   config.EnvOr("FRONTEND_URL", "http://localhost:3000"),
+		// Welcome flow (mig 069). Both must be set for auth.Register to call
+		// the messaging /internal/.../join-default-chats endpoint. When either
+		// is empty the call is skipped — typical in unit tests, and a no-op
+		// in production deployments before this rollout finishes.
+		MessagingURL:   config.EnvOr("MESSAGING_URL", config.EnvOr("MESSAGING_SERVICE_URL", "")),
+		InternalSecret: config.EnvOr("INTERNAL_SECRET", ""),
 	}
 
 	// PostgreSQL — try password as-is first, then without backslashes

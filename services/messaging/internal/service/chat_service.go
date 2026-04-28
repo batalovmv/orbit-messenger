@@ -847,3 +847,37 @@ func (s *ChatService) SaveDraft(ctx context.Context, chatID, userID uuid.UUID, t
 	}
 	return s.chats.SaveDraft(ctx, chatID, userID, text)
 }
+
+// JoinUserToDefaults runs the welcome-flow backfill for a single user — used
+// by the internal endpoint that auth.Register calls right after a successful
+// registration. Idempotent: a user that already belongs to the default chats
+// is a no-op. For each freshly-inserted membership a `chat_member_added`
+// event is published so already-online clients (admins, system bots) see the
+// change without a manual refresh.
+//
+// The actor on the NATS event is the user themselves — they joined as a
+// consequence of registering, no admin acted on them.
+func (s *ChatService) JoinUserToDefaults(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	chatIDs, err := s.chats.JoinUserToDefaults(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("join user to default chats: %w", err)
+	}
+	for _, chatID := range chatIDs {
+		allMemberIDs, mErr := s.chats.GetMemberIDs(ctx, chatID)
+		if mErr != nil {
+			slog.WarnContext(ctx, "default-chat NATS audience lookup failed",
+				"chat_id", chatID, "user_id", userID, "error", mErr)
+		}
+		s.nats.Publish(
+			fmt.Sprintf("orbit.chat.%s.member.added", chatID),
+			"chat_member_added",
+			map[string]string{
+				"chat_id": chatID.String(),
+				"user_id": userID.String(),
+			},
+			allMemberIDs,
+			userID.String(),
+		)
+	}
+	return chatIDs, nil
+}

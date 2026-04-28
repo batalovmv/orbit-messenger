@@ -42,6 +42,10 @@ func (h *AdminHandler) Register(app fiber.Router) {
 	admin.Patch("/users/:id/role", h.ChangeUserRole)
 	admin.Get("/users/:id/export", h.ExportUser)
 	admin.Get("/audit-log", h.GetAuditLog)
+	// Welcome flow (mig 069). Both endpoints gated by SysManageSettings inside
+	// the service layer; the handler only deals with parsing + auth context.
+	admin.Put("/chats/:id/default-status", h.SetChatDefaultStatus)
+	admin.Post("/default-chats/backfill", h.BackfillDefaultMemberships)
 }
 
 func (h *AdminHandler) ListAllChats(c *fiber.Ctx) error {
@@ -279,4 +283,54 @@ func (h *AdminHandler) ExportUser(c *fiber.Ctx) error {
 		}
 	})
 	return nil
+}
+
+// SetChatDefaultStatus toggles is_default_for_new_users on a chat. Body:
+//
+//	{ "is_default": bool, "default_join_order": int }
+//
+// Service layer enforces SysManageSettings (admin/superadmin) and validates
+// join order range; we only parse + relay here.
+func (h *AdminHandler) SetChatDefaultStatus(c *fiber.Ctx) error {
+	actorID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	chatID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid chat ID"))
+	}
+	var req struct {
+		IsDefault        bool `json:"is_default"`
+		DefaultJoinOrder int  `json:"default_join_order"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid body"))
+	}
+	if err := h.svc.SetChatDefaultStatus(c.Context(), actorID, getUserRole(c),
+		chatID, req.IsDefault, req.DefaultJoinOrder, c.IP(), c.Get("User-Agent")); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{
+		"chat_id":            chatID.String(),
+		"is_default":         req.IsDefault,
+		"default_join_order": req.DefaultJoinOrder,
+	})
+}
+
+// BackfillDefaultMemberships joins every existing user to every chat marked
+// is_default_for_new_users=true. Manual admin action — never wired to the
+// flag-flip itself. Returns the count of newly-inserted memberships so the
+// AdminPanel can show "Joined N memberships." after the confirmation modal.
+func (h *AdminHandler) BackfillDefaultMemberships(c *fiber.Ctx) error {
+	actorID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	count, err := h.svc.BackfillDefaultMemberships(c.Context(), actorID, getUserRole(c),
+		c.IP(), c.Get("User-Agent"))
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"inserted": count})
 }

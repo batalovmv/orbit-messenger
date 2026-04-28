@@ -439,3 +439,147 @@ func TestDeactivateUser_LastSuperadmin(t *testing.T) {
 		t.Fatalf("did not expect Redis blacklist key %q to be written", key)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Welcome flow (mig 069) — admin endpoints
+// ---------------------------------------------------------------------------
+
+// TestSetChatDefaultStatus_PermissionDenied — a user without
+// SysManageSettings (e.g. plain 'member') must not be able to flip the
+// flag, and the audit row must not be written either (fail-closed: the
+// service writes audit BEFORE the store, so a forbidden error short-circuits
+// before the audit log).
+func TestSetChatDefaultStatus_PermissionDenied(t *testing.T) {
+	mr := newMiniredis(t)
+	rdb := newRedisClientForMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	chats := &mockChatStore{
+		setChatDefaultStatusFn: func(_ context.Context, _ uuid.UUID, _ bool, _ int) error {
+			t.Fatal("store must not be called when caller lacks permission")
+			return nil
+		},
+	}
+	audit := &mockAuditStore{
+		logFn: func(_ context.Context, _ *model.AuditEntry) error {
+			t.Fatal("audit must not be written when caller lacks permission")
+			return nil
+		},
+	}
+	svc := &AdminService{users: &mockUserStore{}, chats: chats, messages: &mockMessageStore{}, audit: audit, nats: NewNoopNATSPublisher(), redis: rdb}
+
+	err := svc.SetChatDefaultStatus(context.Background(), uuid.New(), "member", uuid.New(), true, 0, "", "")
+	var appErr *apperror.AppError
+	if !errors.As(err, &appErr) || appErr.Status != 403 {
+		t.Fatalf("expected 403 forbidden, got %v", err)
+	}
+}
+
+// TestSetChatDefaultStatus_AdminCanFlip exercises the happy path: an admin
+// flips the flag on, the audit row is written before the store call, and
+// the store sees the exact (chatID, isDefault, joinOrder) tuple.
+func TestSetChatDefaultStatus_AdminCanFlip(t *testing.T) {
+	mr := newMiniredis(t)
+	rdb := newRedisClientForMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	chatID := uuid.New()
+	order := []string{}
+
+	chats := &mockChatStore{
+		setChatDefaultStatusFn: func(_ context.Context, gotChatID uuid.UUID, isDefault bool, joinOrder int) error {
+			order = append(order, "store")
+			if gotChatID != chatID || !isDefault || joinOrder != 5 {
+				t.Fatalf("store args: chat=%s isDefault=%v order=%d", gotChatID, isDefault, joinOrder)
+			}
+			return nil
+		},
+	}
+	audit := &mockAuditStore{
+		logFn: func(_ context.Context, entry *model.AuditEntry) error {
+			order = append(order, "audit")
+			if entry.Action != model.AuditChatDefaultStatusSet {
+				t.Fatalf("unexpected audit action: %s", entry.Action)
+			}
+			return nil
+		},
+	}
+	svc := &AdminService{users: &mockUserStore{}, chats: chats, messages: &mockMessageStore{}, audit: audit, nats: NewNoopNATSPublisher(), redis: rdb}
+
+	if err := svc.SetChatDefaultStatus(context.Background(), uuid.New(), "admin", chatID, true, 5, "", ""); err != nil {
+		t.Fatalf("SetChatDefaultStatus: %v", err)
+	}
+	if len(order) != 2 || order[0] != "audit" || order[1] != "store" {
+		t.Fatalf("expected audit before store, got %v", order)
+	}
+}
+
+// TestBackfillDefaultMemberships_AdminFiresNATSPerInsert verifies that a
+// successful backfill writes audit FIRST, then publishes one
+// `chat_member_added` per (chat, user) tuple returned by the store.
+func TestBackfillDefaultMemberships_AdminFiresNATSPerInsert(t *testing.T) {
+	mr := newMiniredis(t)
+	rdb := newRedisClientForMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	actorID := uuid.New()
+	chatA, chatB := uuid.New(), uuid.New()
+	user1, user2 := uuid.New(), uuid.New()
+
+	rec := &RecordingPublisher{}
+
+	chats := &mockChatStore{
+		backfillDefaultMembershipsFn: func(_ context.Context) ([]store.DefaultBackfillInsert, error) {
+			return []store.DefaultBackfillInsert{
+				{ChatID: chatA, UserID: user1},
+				{ChatID: chatA, UserID: user2},
+				{ChatID: chatB, UserID: user1},
+			}, nil
+		},
+		getMemberIDsFn: func(_ context.Context, _ uuid.UUID) ([]string, error) {
+			return []string{user1.String(), user2.String()}, nil
+		},
+	}
+	audit := &mockAuditStore{}
+	svc := &AdminService{users: &mockUserStore{}, chats: chats, messages: &mockMessageStore{}, audit: audit, nats: rec, redis: rdb}
+
+	count, err := svc.BackfillDefaultMemberships(context.Background(), actorID, "admin", "127.0.0.1", "test")
+	if err != nil {
+		t.Fatalf("BackfillDefaultMemberships: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("expected 3 inserts, got %d", count)
+	}
+
+	events := rec.FindByEvent("chat_member_added")
+	if len(events) != 3 {
+		t.Fatalf("expected 3 chat_member_added events, got %d", len(events))
+	}
+	for _, ev := range events {
+		if ev.SenderID != actorID.String() {
+			t.Fatalf("admin backfill event sender must be the actor admin, got %s", ev.SenderID)
+		}
+	}
+}
+
+// TestBackfillDefaultMemberships_PermissionDenied — must not call the store
+// at all when the caller lacks SysManageSettings.
+func TestBackfillDefaultMemberships_PermissionDenied(t *testing.T) {
+	mr := newMiniredis(t)
+	rdb := newRedisClientForMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	chats := &mockChatStore{
+		backfillDefaultMembershipsFn: func(_ context.Context) ([]store.DefaultBackfillInsert, error) {
+			t.Fatal("store must not be called when caller lacks permission")
+			return nil, nil
+		},
+	}
+	svc := &AdminService{users: &mockUserStore{}, chats: chats, messages: &mockMessageStore{}, audit: &mockAuditStore{}, nats: NewNoopNATSPublisher(), redis: rdb}
+
+	_, err := svc.BackfillDefaultMemberships(context.Background(), uuid.New(), "member", "", "")
+	var appErr *apperror.AppError
+	if !errors.As(err, &appErr) || appErr.Status != 403 {
+		t.Fatalf("expected 403 forbidden, got %v", err)
+	}
+}

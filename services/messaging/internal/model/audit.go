@@ -43,4 +43,9 @@ const (
 	AuditMaintenanceEnable = "maintenance.enable"
 	AuditMaintenanceUpdate = "maintenance.update"
 	AuditMaintenanceDisable = "maintenance.disable"
+
+	// Welcome flow (mig 069). Two distinct events: an admin flipping the
+	// per-chat flag, and an admin running a manual cross-user backfill.
+	AuditChatDefaultStatusSet = "chat.default_status_set"
+	AuditDefaultChatsBackfill = "default_chats.backfill"
 )
