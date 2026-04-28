@@ -30,7 +30,12 @@ const (
 	AuditUserDeactivate     = "user.deactivate"
 	AuditUserReactivate     = "user.reactivate"
 	AuditUserRoleChange     = "user.role_change"
-	AuditUserSessionsRevoke = "user.sessions_revoked"
+	// AuditUserSessionRevoke records a single-session revoke from the admin
+	// Sessions tab (Day 5.2). target_type="user", target_id=target_user_id;
+	// details carry the revoked session_id, ip and user_agent. The action is
+	// singular ("session_revoked") to distinguish from a future "all sessions
+	// of a user" sweep — keep the constants symmetric with the operation.
+	AuditUserSessionRevoke = "user.session_revoked"
 	AuditInviteCreate       = "invite.create"
 	AuditInviteRevoke       = "invite.revoke"
 	AuditAuditView          = "audit.view"

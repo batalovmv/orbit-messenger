@@ -12,6 +12,15 @@ func getUserRole(c *fiber.Ctx) string {
 	return strings.ToLower(strings.TrimSpace(c.Get("X-User-Role")))
 }
 
+// getUserSessionID returns the caller's JWT jti as injected by the gateway's
+// JWT middleware (X-User-Session-ID header). Returns "" when the header is
+// absent — older clients/JWTs without a jti claim. Callers that depend on
+// the value (e.g. own-current-session guard) must treat empty as "do not
+// match" rather than as "matches everything".
+func getUserSessionID(c *fiber.Ctx) string {
+	return strings.TrimSpace(c.Get("X-User-Session-ID"))
+}
+
 // checkSysPermission validates that the current request has the given system permission.
 // Returns nil on success, *apperror.AppError on failure. It is a pure validator — it does
 // NOT call c.Next(), so callers must use it inline inside a handler, not as middleware.

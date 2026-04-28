@@ -44,6 +44,7 @@ func main() {
 	// transport) lives there. When unset the inspector returns 503 — every
 	// other admin endpoint stays operational.
 	gatewayURL := config.EnvOr("GATEWAY_URL", config.EnvOr("GATEWAY_SERVICE_URL", "http://localhost:8080"))
+	authServiceURL := config.EnvOr("AUTH_URL", config.EnvOr("AUTH_SERVICE_URL", "http://localhost:8081"))
 	telegramBotToken := config.EnvOr("TELEGRAM_BOT_TOKEN", "")
 
 	// PostgreSQL — try password as-is first, then without backslashes
@@ -292,6 +293,15 @@ func main() {
 		Logger:         logger,
 	})
 	adminPushHandler := handler.NewAdminPushHandler(pushAdminSvc)
+	sessionAdminSvc := service.NewSessionAdminService(service.SessionAdminConfig{
+		Users:          userStore,
+		Audit:          auditStore,
+		NATS:           natsPublisher,
+		AuthURL:        authServiceURL,
+		InternalSecret: internalSecret,
+		Logger:         logger,
+	})
+	adminSessionHandler := handler.NewAdminSessionHandler(sessionAdminSvc)
 	featureFlagSvc := service.NewFeatureFlagService(featureFlagStore, auditStore)
 	featureFlagHandler := handler.NewFeatureFlagHandler(featureFlagSvc)
 	translationHandler := handler.NewTranslationHandler(translationStore, messageStore, chatStore, aiServiceURL, internalSecret, logger)
@@ -335,6 +345,7 @@ func main() {
 	scheduledHandler.Register(api)
 	adminHandler.Register(api)
 	adminPushHandler.Register(api)
+	adminSessionHandler.Register(api)
 	featureFlagHandler.Register(api)
 	folderHandler.Register(api)
 

@@ -72,17 +72,21 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 		switch strings.ToLower(k) {
 		case "connection", "keep-alive", "transfer-encoding", "te",
 			"trailer", "upgrade", "proxy-authorization", "proxy-authenticate",
-			"x-user-id", "x-user-role", "x-device-id", "x-internal-token", "x-trusted-client-ip":
+			"x-user-id", "x-user-role", "x-user-session-id", "x-device-id", "x-internal-token", "x-trusted-client-ip":
 			return
 		}
 		req.Header.SetBytesKV(key, value)
 	})
-	// Re-add X-User-ID/X-User-Role set by JWT middleware (after stripping client-supplied values)
+	// Re-add X-User-ID/X-User-Role/X-User-Session-ID set by JWT middleware
+	// (after stripping client-supplied values above)
 	if uid := c.Get("X-User-ID"); uid != "" {
 		req.Header.Set("X-User-ID", uid)
 	}
 	if role := c.Get("X-User-Role"); role != "" {
 		req.Header.Set("X-User-Role", role)
+	}
+	if sid := c.Get("X-User-Session-ID"); sid != "" {
+		req.Header.Set("X-User-Session-ID", sid)
 	}
 	// X-Device-ID is client-supplied and untrusted until embedded in JWT claims.
 	// Forward only if it looks like a valid UUID (36 chars) to prevent header injection.

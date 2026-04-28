@@ -313,6 +313,97 @@ func TestHub_SendToUserExceptSession_EmptyExcludeFansToAll(t *testing.T) {
 	}
 }
 
+// newCloseTrackingConn returns a Conn whose Close() calls record the (code,
+// text) pair into the provided channel. Used by CloseSessionByJTI tests.
+func newCloseTrackingConn(userID, jti string, closes chan<- string) *Conn {
+	return &Conn{
+		UserID: userID,
+		JTI:    jti,
+		done:   make(chan struct{}),
+		closeFn: func(code int, text string) error {
+			closes <- fmt.Sprintf("%d:%s:%s", code, jti, text)
+			return nil
+		},
+	}
+}
+
+// TestHub_CloseSessionByJTI_ClosesOnlyMatchingConn verifies the per-jti close
+// primitive used by the admin session-revoke path (Day 5.2).
+//
+// Verify-by-revert: setting the wrong JTI on a connection should mean it does
+// NOT get closed. Reverting the JTI match check would make BOTH connections
+// close, failing TestHub_CloseSessionByJTI_DoesNotCloseOtherJTI below.
+func TestHub_CloseSessionByJTI_ClosesOnlyMatchingConn(t *testing.T) {
+	hub := NewHub()
+
+	closes := make(chan string, 4)
+	target := newCloseTrackingConn("u-1", "jti-target", closes)
+	other := newCloseTrackingConn("u-1", "jti-other", closes)
+	stranger := newCloseTrackingConn("u-2", "jti-stranger", closes)
+
+	hub.Register(target)
+	hub.Register(other)
+	hub.Register(stranger)
+
+	closed := hub.CloseSessionByJTI("jti-target")
+	if closed != 1 {
+		t.Fatalf("expected 1 connection closed, got %d", closed)
+	}
+
+	select {
+	case got := <-closes:
+		want := fmt.Sprintf("%d:%s:%s", closeCodePolicyViolation, "jti-target", "session revoked")
+		if got != want {
+			t.Fatalf("unexpected close payload: want %q, got %q", want, got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("target connection was not closed")
+	}
+
+	// other and stranger must not have been closed
+	select {
+	case got := <-closes:
+		t.Fatalf("non-matching connection was closed: %q", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// TestHub_CloseSessionByJTI_EmptyJTI_NoOp guards against accidentally closing
+// every connection that happens to carry an empty JTI (which is legal — the
+// cache/auth path leaves JTI empty when the JWT lacks a jti claim).
+func TestHub_CloseSessionByJTI_EmptyJTI_NoOp(t *testing.T) {
+	hub := NewHub()
+
+	closes := make(chan string, 4)
+	a := newCloseTrackingConn("u-1", "", closes)
+	b := newCloseTrackingConn("u-2", "", closes)
+	hub.Register(a)
+	hub.Register(b)
+
+	closed := hub.CloseSessionByJTI("")
+	if closed != 0 {
+		t.Fatalf("empty jti must close 0 connections, got %d", closed)
+	}
+	select {
+	case got := <-closes:
+		t.Fatalf("empty jti closed a connection: %q", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// TestHub_CloseSessionByJTI_NoMatch_ReturnsZero is the cheap-path test: the
+// admin revokes a session whose owner currently has no active WS — the hub
+// must not panic and must report zero closes.
+func TestHub_CloseSessionByJTI_NoMatch_ReturnsZero(t *testing.T) {
+	hub := NewHub()
+	hub.Register(newCloseTrackingConn("u-1", "jti-A", make(chan string, 1)))
+
+	closed := hub.CloseSessionByJTI("jti-NOT-PRESENT")
+	if closed != 0 {
+		t.Fatalf("expected 0 closes, got %d", closed)
+	}
+}
+
 // TestHub_SendToUserExceptSession_DoesNotCrossUsers asserts the userID lookup
 // scopes the fanout to a single user, even if a different user happens to
 // share a SessionID (collision is theoretically possible since SessionID is
