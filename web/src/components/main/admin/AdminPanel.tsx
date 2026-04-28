@@ -12,7 +12,8 @@ import type {
 } from '../../../api/saturn/methods/admin';
 
 import {
-  fetchAdminFlags, fetchAuditLog, setAdminFlag, setAdminMaintenance,
+  backfillDefaultChats, fetchAdminFlags, fetchAuditLog,
+  setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
 import { selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
@@ -28,7 +29,7 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
-type AdminTab = 'flags' | 'maintenance' | 'audit';
+type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome';
 
 type StateProps = {
   saturnRole?: GlobalState['saturnRole'];
@@ -43,15 +44,16 @@ const tabLangKey = (tab: AdminTab) => {
     case 'flags': return 'AdminTabFeatureFlags';
     case 'maintenance': return 'AdminTabMaintenance';
     case 'audit': return 'AdminTabAuditLog';
+    case 'welcome': return 'AdminTabWelcome';
   }
 };
 
 // Tab visibility mirrors the backend permission split in pkg/permissions:
-// admin/superadmin have SysManageSettings (flags + maintenance) and
-// SysViewAuditLog (audit). compliance is audit-only — no write access to
-// system settings.
+// admin/superadmin have SysManageSettings (flags + maintenance + welcome)
+// and SysViewAuditLog (audit). compliance is audit-only — no write access
+// to system settings.
 const tabsForRole = (role?: GlobalState['saturnRole']): readonly AdminTab[] => {
-  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'audit'];
+  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'audit'];
   if (role === 'compliance') return ['audit'];
   return [];
 };
@@ -97,6 +99,7 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
       <div className={styles.body}>
         {activeTab === 'flags' && <FlagsTab />}
         {activeTab === 'maintenance' && <MaintenanceTab />}
+        {activeTab === 'welcome' && <WelcomeTab />}
         {activeTab === 'audit' && <AuditTab />}
       </div>
     </Modal>
@@ -294,6 +297,106 @@ const MaintenanceTab = () => {
           </button>
         )}
       </div>
+    </div>
+  );
+};
+
+// ===========================================================================
+// Welcome flow tab (mig 069) — Backfill default chats
+// ===========================================================================
+//
+// The per-chat is_default_for_new_users flag lives in chat-settings UI and
+// must NOT auto-trigger a backfill (a 150-user chat would suddenly appear in
+// every existing user's list). This tab is the operator-driven safety net:
+// click → confirm → POST /admin/default-chats/backfill → server returns the
+// number of newly-inserted memberships.
+const WelcomeTab = () => {
+  const lang = useLang();
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isBusy, setIsBusy] = useState(false);
+  const [insertedCount, setInsertedCount] = useState<number | undefined>();
+  const [error, setError] = useState<string | undefined>();
+
+  const handleStart = useLastCallback(() => {
+    setError(undefined);
+    setInsertedCount(undefined);
+    setIsConfirming(true);
+  });
+
+  const handleCancel = useLastCallback(() => {
+    if (!isBusy) setIsConfirming(false);
+  });
+
+  const handleConfirm = useLastCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    try {
+      const result = await backfillDefaultChats();
+      setInsertedCount(result.inserted);
+      setIsConfirming(false);
+    } catch (e) {
+      setError((e as Error).message || 'backfill failed');
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  return (
+    <div className={styles.tabBody}>
+      <div className={styles.welcomeIntro}>
+        {lang('AdminWelcomeIntro')}
+      </div>
+      <div className={styles.welcomeBody}>
+        <p>{lang('AdminWelcomeBackfillDescription')}</p>
+        <p className={styles.welcomeWarn}>{lang('AdminWelcomeBackfillWarning')}</p>
+      </div>
+      {insertedCount !== undefined && (
+        <div className={styles.success}>
+          {lang('AdminWelcomeBackfillResult', { count: insertedCount })}
+        </div>
+      )}
+      {error && <div className={styles.error}>{error}</div>}
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.primaryBtn}
+          disabled={isBusy}
+          onClick={handleStart}
+        >
+          {lang('AdminWelcomeBackfillButton')}
+        </button>
+      </div>
+
+      {isConfirming && (
+        <Modal
+          isOpen={isConfirming}
+          onClose={handleCancel}
+          title={lang('AdminWelcomeBackfillConfirmTitle')}
+          hasCloseButton={!isBusy}
+        >
+          <div className={styles.confirmBody}>
+            <p>{lang('AdminWelcomeBackfillConfirmBody')}</p>
+          </div>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={isBusy}
+              onClick={handleCancel}
+            >
+              {lang('Cancel')}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              disabled={isBusy}
+              onClick={handleConfirm}
+            >
+              {lang(isBusy ? 'Loading' : 'AdminWelcomeBackfillConfirmAction')}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -2225,10 +2225,11 @@ export interface ActionPayloads {
   selectComplianceUser: { userId: string } & WithTabId;
   selectComplianceChat: { chatId: string } & WithTabId;
 
-  // Orbit: Admin operations — feature flags, maintenance banner, audit log search.
-  openAdminPanel: ({ tab?: 'flags' | 'maintenance' | 'audit' } & WithTabId) | undefined;
+  // Orbit: Admin operations — feature flags, maintenance banner, audit log
+  // search, welcome-flow backfill (mig 069).
+  openAdminPanel: ({ tab?: 'flags' | 'maintenance' | 'audit' | 'welcome' } & WithTabId) | undefined;
   closeAdminPanel: WithTabId | undefined;
-  selectAdminTab: { tab: 'flags' | 'maintenance' | 'audit' } & WithTabId;
+  selectAdminTab: { tab: 'flags' | 'maintenance' | 'audit' | 'welcome' } & WithTabId;
 
   // Orbit: refresh /system/config (maintenance banner + auth-exposed flags).
   refreshSaturnSystemConfig: WithTabId | undefined;

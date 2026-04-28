@@ -3082,6 +3082,17 @@
 "AdminAuditSearchPlaceholder" = "Поиск по действиям, пользователям, IP, JSON-деталям…";
 "AdminAuditEmpty" = "Записей не найдено.";
 "AdminAuditLoadMore" = "Загрузить ещё";
+"AdminTabWelcome" = "Welcome flow";
+"AdminWelcomeIntro" = "Chats marked as default-for-new-users are automatically added to every newly invited user on registration.";
+"AdminWelcomeBackfillDescription" = "The button below adds EVERY existing user to EVERY chat flagged as default-for-new-users. Users that are already members are skipped.";
+"AdminWelcomeBackfillWarning" = "Warning: this is a large, visible operation — every user will see new chats in their list and (if online) a member-added notification. Only run when you are sure.";
+"AdminWelcomeBackfillButton" = "Backfill existing users to default chats";
+"AdminWelcomeBackfillConfirmTitle" = "Confirm backfill";
+"AdminWelcomeBackfillConfirmBody" = "Every existing user will be added to every chat flagged as default-for-new-users. This cannot be undone — you would have to remove members one by one. Proceed?";
+"AdminWelcomeBackfillConfirmAction" = "Yes, add everyone";
+"AdminWelcomeBackfillResult" = "Added {count} new memberships.";
+"ChatDefaultForNewUsers" = "Default for new users";
+"ChatDefaultForNewUsersHint" = "Every newly invited user will be auto-added to this chat. Existing users are not affected — use the AdminPanel \"Backfill\" button for that.";
 "MaintenanceBannerDefault" = "Идут технические работы.";
 "MaintenanceBannerWriteBlocked" = "Только чтение";
 

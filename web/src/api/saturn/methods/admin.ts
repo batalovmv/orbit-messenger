@@ -173,3 +173,34 @@ export async function fetchAuditLog(query: AuditQuery): Promise<AuditPage> {
     has_more: Boolean(raw.has_more),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Welcome flow (mig 069)
+// ---------------------------------------------------------------------------
+
+// setChatDefaultStatus toggles the per-chat is_default_for_new_users flag.
+// Used by the chat-settings Switcher (admin/superadmin only — gateway proxies
+// PUT /admin/chats/:id/default-status to messaging which enforces the role).
+export async function setChatDefaultStatus(
+  chatId: string,
+  isDefault: boolean,
+  joinOrder = 0,
+): Promise<{ chat_id: string; is_default: boolean; default_join_order: number }> {
+  const res = await fetch(`${API_PREFIX}/admin/chats/${chatId}/default-status`, {
+    method: 'PUT',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_default: isDefault, default_join_order: joinOrder }),
+  });
+  return jsonOrThrow(res);
+}
+
+// backfillDefaultChats kicks off a manual cross-user backfill: every existing
+// user is added to every chat marked as default. Returns the count of newly-
+// inserted memberships so the UI can show "Joined N memberships."
+export async function backfillDefaultChats(): Promise<{ inserted: number }> {
+  const res = await fetch(`${API_PREFIX}/admin/default-chats/backfill`, {
+    method: 'POST',
+    headers: await authHeader(),
+  });
+  return jsonOrThrow(res);
+}

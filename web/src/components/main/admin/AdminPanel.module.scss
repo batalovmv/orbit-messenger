@@ -290,3 +290,28 @@
   max-height: 12rem;
   overflow: auto;
 }
+
+// Welcome-flow tab — operator backfill action.
+.welcomeIntro {
+  font-size: 0.9375rem;
+  margin-bottom: 1rem;
+}
+
+.welcomeBody {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+
+  p {
+    margin: 0 0 0.5rem;
+  }
+}
+
+.welcomeWarn {
+  color: var(--color-error, #d33);
+  font-weight: var(--font-weight-medium);
+}
+
+.confirmBody {
+  padding: 0.5rem 0 1rem;
+  font-size: 0.9375rem;
+}
