@@ -30,7 +30,8 @@ type Store interface {
 	CleanupOrphaned(ctx context.Context, maxAgeHours int) ([]string, error)
 	GetUserStorageBytes(ctx context.Context, userID uuid.UUID) (int64, error)
 	// CanAccess returns true if the user may download the media:
-	// they are the uploader OR the media is attached to at least one message.
+	// they are the uploader OR the media is attached to a message in a chat
+	// the user is a member of.
 	CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error)
 	AppendAuditLog(ctx context.Context, actorID uuid.UUID, action, targetType, targetID string, details []byte, ipAddress, userAgent *string) error
 }
@@ -263,15 +264,29 @@ func (s *MediaStore) GetUserStorageBytes(ctx context.Context, userID uuid.UUID) 
 	return total, nil
 }
 
-// CanAccess returns true if userID is the uploader OR the media is attached to at least one message
-// (i.e. it's been published and any chat member who loaded the message can view it).
+// CanAccess returns true if userID is the uploader OR the media is attached to a
+// message in a chat the user is currently a member of. The previous version only
+// checked that the media was attached to *any* message, which was an IDOR letting
+// any authenticated user download media outside their chats once it had been
+// published once (audit 2026-04-26 CRITICAL #2). Forwarded media linked to
+// multiple chats grants access if the user belongs to any of them.
 func (s *MediaStore) CanAccess(ctx context.Context, mediaID, userID uuid.UUID) (bool, error) {
 	var ok bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM media
-			WHERE id = $1
-			  AND (uploader_id = $2 OR EXISTS(SELECT 1 FROM message_media WHERE media_id = $1))
+			SELECT 1 FROM media m
+			WHERE m.id = $1
+			  AND (
+			    m.uploader_id = $2
+			    OR EXISTS(
+			        SELECT 1
+			        FROM message_media mm
+			        JOIN messages msg ON msg.id = mm.message_id
+			        JOIN chat_members cm ON cm.chat_id = msg.chat_id
+			        WHERE mm.media_id = $1
+			          AND cm.user_id = $2
+			    )
+			  )
 		)`, mediaID, userID,
 	).Scan(&ok)
 	if err != nil {
