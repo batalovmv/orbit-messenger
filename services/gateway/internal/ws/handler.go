@@ -256,6 +256,22 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 			ID string `json:"id"`
 		}
 		if json.Unmarshal([]byte(cached), &u) == nil && u.ID != "" {
+			// Per-user tokens-invalid-before threshold (auth.ResetAdmin).
+			// Same reasoning as the per-jti blacklist: cache-hit would
+			// otherwise honour a stale token for the full authCacheTTL after
+			// password reset. Fail-closed on Redis error.
+			_, iat := parseTokenSubAndIAT(token)
+			invalid, riErr := checkTokensInvalidatedByReset(ctx, rdb, u.ID, iat)
+			if riErr != nil {
+				slog.Error("WS tokens-invalid-before check failed, rejecting token", "error", riErr)
+				return nil, fmt.Errorf("tokens-invalid-before check failed")
+			}
+			if invalid {
+				if err := rdb.Del(ctx, cacheKey).Err(); err != nil {
+					slog.Error("WS JWT cache del failed after tokens-invalid-before hit", "error", err)
+				}
+				return nil, nil
+			}
 			return &ValidatedToken{
 				UserID:    u.ID,
 				ExpiresAt: expiresAt,
@@ -293,6 +309,20 @@ func ValidateToken(ctx context.Context, client *http.Client, rdb *redis.Client, 
 	}
 	if err := json.Unmarshal(body, &user); err != nil {
 		return nil, err
+	}
+
+	// Per-user tokens-invalid-before threshold (auth.ResetAdmin). Defends
+	// against the race where ResetAdmin fires between /auth/me and the cache
+	// write below — without this the just-written cache entry would happily
+	// serve the now-revoked token until authCacheTTL expires.
+	_, iat := parseTokenSubAndIAT(token)
+	invalid, riErr := checkTokensInvalidatedByReset(ctx, rdb, user.ID, iat)
+	if riErr != nil {
+		slog.Error("WS tokens-invalid-before check failed, rejecting token", "error", riErr)
+		return nil, fmt.Errorf("tokens-invalid-before check failed")
+	}
+	if invalid {
+		return nil, nil
 	}
 
 	// Cache
@@ -334,6 +364,22 @@ func RevalidateToken(ctx context.Context, client *http.Client, rdb *redis.Client
 		}
 		if jtiBl > 0 {
 			return fmt.Errorf("session revoked")
+		}
+	}
+
+	// Per-user tokens-invalid-before threshold (auth.ResetAdmin). Same
+	// reasoning as per-jti above — for a long-lived WS connection this tick
+	// is the catch-net for password resets that happened after the original
+	// auth, since the ValidateAccessToken check on /auth/me below would also
+	// catch it but at the cost of an HTTP round-trip we can short-circuit.
+	if sub, iat := parseTokenSubAndIAT(token); sub != "" {
+		invalid, err := checkTokensInvalidatedByReset(ctx, rdb, sub, iat)
+		if err != nil {
+			slog.Error("WS tokens-invalid-before revalidation failed", "error", err)
+			return fmt.Errorf("tokens-invalid-before check failed: %w", err)
+		}
+		if invalid {
+			return fmt.Errorf("token revoked by reset")
 		}
 	}
 
@@ -387,6 +433,45 @@ func parseTokenJTI(token string) string {
 	}
 	jti, _ := claims["jti"].(string)
 	return jti
+}
+
+// parseTokenSubAndIAT extracts the JWT sub (userID) and iat claims without
+// verifying the signature. Used by the WS revalidation tick to evaluate the
+// per-user tokens-invalid-before threshold without an extra /auth/me hop.
+// Returns ("", 0) on any parse error or missing claims.
+func parseTokenSubAndIAT(token string) (string, int64) {
+	claims := jwt.MapClaims{}
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
+		return "", 0
+	}
+	sub, _ := claims["sub"].(string)
+	iat, _ := claims["iat"].(float64)
+	return sub, int64(iat)
+}
+
+// checkTokensInvalidatedByReset reports whether the token's iat is older than
+// the per-user "tokens invalid before" threshold written by auth.ResetAdmin.
+// Mirrors gateway middleware/jwt.go.checkTokenInvalidatedByReset — duplicated
+// because middleware and ws are separate packages and a shared helper would
+// either drag middleware into ws or create an awkward upward import.
+//
+// Fail-closed on Redis error. Unparseable threshold → fail-open (avoid
+// bricking auth on a typo'd Redis key). 0 iat is treated as "older than any
+// non-zero threshold", matching auth.ValidateAccessToken's int64-comparison.
+func checkTokensInvalidatedByReset(ctx context.Context, rdb *redis.Client, userID string, iat int64) (bool, error) {
+	val, err := rdb.Get(ctx, "user_tokens_invalid_before:"+userID).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	var threshold int64
+	if _, scanErr := fmt.Sscanf(val, "%d", &threshold); scanErr != nil {
+		return false, nil
+	}
+	return iat <= threshold, nil
 }
 
 func (h *Handler) pingLoop(conn *Conn) {
