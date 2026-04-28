@@ -17,6 +17,7 @@ import (
 
 type UserStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
+	GetByEmail(ctx context.Context, email string) (*model.User, error)
 	Update(ctx context.Context, u *model.User) error
 	UpdateStatus(ctx context.Context, userID, status string, lastSeenAt *time.Time) error
 	Search(ctx context.Context, query string, limit int) ([]model.User, error)
@@ -73,6 +74,20 @@ func scanUsers(rows pgx.Rows) ([]model.User, error) {
 func (s *userStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	return scanUser(s.pool.QueryRow(ctx,
 		`SELECT `+userSelectCols+` FROM users WHERE id = $1`, id))
+}
+
+// GetByEmail resolves a user by email. Used by admin tooling where the
+// operator types in the user's address rather than memorizing UUIDs. The
+// users table does not enforce case-folding on the email column (auth's
+// register/login both store the raw input), so we LOWER() both sides for
+// case-insensitive lookup. Returns (nil, nil) on no match.
+func (s *userStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, nil
+	}
+	return scanUser(s.pool.QueryRow(ctx,
+		`SELECT `+userSelectCols+` FROM users WHERE LOWER(email) = LOWER($1)`, email))
 }
 
 func (s *userStore) Update(ctx context.Context, u *model.User) error {

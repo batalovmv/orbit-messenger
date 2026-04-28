@@ -48,4 +48,11 @@ const (
 	// per-chat flag, and an admin running a manual cross-user backfill.
 	AuditChatDefaultStatusSet = "chat.default_status_set"
 	AuditDefaultChatsBackfill = "default_chats.backfill"
+
+	// Day 5 admin troubleshooting toolkit.
+	// AuditPushTestSent records the *intent*; the per-device delivery report
+	// is NOT persisted (provider error bodies are noisy + sometimes echo
+	// endpoint URLs we don't want in audit storage). Summary counts are
+	// included in details: {target_user_id, device_count, sent, failed, stale}.
+	AuditPushTestSent = "push.test_sent"
 )

@@ -23,9 +23,22 @@ import (
 
 type mockAdminUserStore struct {
 	listAllPaginatedFn func(ctx context.Context, cursor string, limit int) ([]model.User, string, bool, error)
+	getByIDFn          func(ctx context.Context, id uuid.UUID) (*model.User, error)
+	getByEmailFn       func(ctx context.Context, email string) (*model.User, error)
 }
 
-func (m *mockAdminUserStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) { return nil, nil }
+func (m *mockAdminUserStore) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	if m.getByIDFn != nil {
+		return m.getByIDFn(ctx, id)
+	}
+	return nil, nil
+}
+func (m *mockAdminUserStore) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	if m.getByEmailFn != nil {
+		return m.getByEmailFn(ctx, email)
+	}
+	return nil, nil
+}
 func (m *mockAdminUserStore) Update(ctx context.Context, u *model.User) error { return nil }
 func (m *mockAdminUserStore) UpdateStatus(ctx context.Context, userID, status string, lastSeenAt *time.Time) error {
 	return nil

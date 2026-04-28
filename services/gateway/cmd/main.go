@@ -184,6 +184,17 @@ func main() {
 	// required — Prometheus doesn't speak JWT.
 	app.Get("/metrics", middleware.RequireInternalToken(internalSecret), metricsReg.Handler())
 
+	// Internal admin-tool endpoints. Gated by X-Internal-Token: the messaging
+	// service (which owns the user-facing /api/v1/admin/* surface and the
+	// SysManageSettings perm check) calls these for primitives that only
+	// gateway can perform — push dispatch with per-device report (Day 5.1
+	// Push Inspector), session revocation broadcast (Day 5.2), etc.
+	internalGroup := app.Group("/internal", middleware.RequireInternalToken(internalSecret))
+	handler.RegisterAdminPushInternalRoute(internalGroup, handler.AdminPushInternalConfig{
+		Dispatcher: pushDispatcher,
+		Logger:     logger,
+	})
+
 	// Auth proxy (no JWT validation needed)
 	authGroup := app.Group("/api/v1/auth")
 	authSensitiveRateLimit := middleware.RateLimitMiddleware(middleware.RateLimitConfig{

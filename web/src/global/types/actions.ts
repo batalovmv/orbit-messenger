@@ -2227,9 +2227,9 @@ export interface ActionPayloads {
 
   // Orbit: Admin operations — feature flags, maintenance banner, audit log
   // search, welcome-flow backfill (mig 069).
-  openAdminPanel: ({ tab?: 'flags' | 'maintenance' | 'audit' | 'welcome' } & WithTabId) | undefined;
+  openAdminPanel: ({ tab?: 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push' } & WithTabId) | undefined;
   closeAdminPanel: WithTabId | undefined;
-  selectAdminTab: { tab: 'flags' | 'maintenance' | 'audit' | 'welcome' } & WithTabId;
+  selectAdminTab: { tab: 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push' } & WithTabId;
 
   // Orbit: refresh /system/config (maintenance banner + auth-exposed flags).
   refreshSaturnSystemConfig: WithTabId | undefined;

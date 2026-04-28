@@ -238,7 +238,6 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
       {IS_TRANSLATION_SUPPORTED && (
         <div className="settings-item">
           <Checkbox
-            // @ts-expect-error TODO(phase-8D-cleanup): missing lang key ShowTranslateButton
             label={lang('ShowTranslateButton')}
             checked={canTranslate}
             onCheck={handleShouldTranslateChange}

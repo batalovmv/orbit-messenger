@@ -56,3 +56,18 @@ func NotImplemented(msg string) *AppError {
 func ServiceUnavailable(msg string) *AppError {
 	return &AppError{Code: "service_unavailable", Message: msg, Status: 503}
 }
+
+// BadGateway signals that this service tried to call a downstream service
+// and got a non-recoverable failure back (connection refused, malformed
+// response, etc). Distinct from Internal so admin tooling can tell "we
+// crashed" from "the next hop crashed".
+func BadGateway(msg string) *AppError {
+	return &AppError{Code: "bad_gateway", Message: msg, Status: 502}
+}
+
+// GatewayTimeout signals that this service called downstream and the
+// downstream did not respond within the deadline. Used by admin tools
+// where the caller wants to distinguish "took too long" from "crashed".
+func GatewayTimeout(msg string) *AppError {
+	return &AppError{Code: "gateway_timeout", Message: msg, Status: 504}
+}
