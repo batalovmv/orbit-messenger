@@ -3079,6 +3079,19 @@
 "AdminFlagHistoryTitle" = "История изменений: {key}";
 "AdminFlagHistoryEmpty" = "По этому ключу нет записей в журнале.";
 "AdminFlagHistoryClose" = "Закрыть";
+
+// Admin error messages — substring-mapped from raw backend text (see
+// web/src/components/main/admin/adminErrors.ts). Adding a new entry requires
+// (1) a localization key here and in fallback.ru.strings, (2) a pattern row
+// in PATTERNS, and (3) the LangFn key literal in AdminErrorPattern.key.
+"AdminErrorMaintenanceWindowInverted" = "Окончание должно быть строго позже старта.";
+"AdminErrorUnknownFlag" = "Неизвестный флаг — добавьте его в реестр featureflags.";
+"AdminErrorRateLimit" = "Слишком частые запросы. Подождите немного.";
+"AdminErrorUnauthorized" = "Сессия истекла. Перезайдите.";
+"AdminErrorForbidden" = "Недостаточно прав для этого действия.";
+"AdminErrorNotFound" = "Не найдено.";
+"AdminErrorMaintenance" = "Идут технические работы. Попробуйте позже.";
+
 "AdminFlagDangerousConfirmTitle" = "Включить опасный флаг?";
 "AdminFlagDangerousConfirmBody" = "Флаг {key} помечен как опасный. {description} Точно включаете?";
 "AdminFlagDangerousConfirmAction" = "Да, включить";

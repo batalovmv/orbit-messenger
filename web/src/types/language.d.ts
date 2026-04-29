@@ -2293,6 +2293,13 @@ export interface LangPair {
   'AdminFlagHistory': undefined;
   'AdminFlagHistoryEmpty': undefined;
   'AdminFlagHistoryClose': undefined;
+  'AdminErrorMaintenanceWindowInverted': undefined;
+  'AdminErrorUnknownFlag': undefined;
+  'AdminErrorRateLimit': undefined;
+  'AdminErrorUnauthorized': undefined;
+  'AdminErrorForbidden': undefined;
+  'AdminErrorNotFound': undefined;
+  'AdminErrorMaintenance': undefined;
   'AdminFlagDangerousConfirmTitle': undefined;
   'AdminFlagDangerousConfirmAction': undefined;
   'AdminMaintenanceEnable': undefined;
@@ -4124,8 +4131,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ExactTextCopied': {
     '0': V;
   };
-  'AdminWelcomeBackfillResult': {
-    'count': V;
+  'AdminFlagHistoryTitle': {
+    'key': V;
+  };
+  'AdminFlagDangerousConfirmBody': {
+    'key': V;
+    'description': V;
   };
   'AdminAuditExportHint': {
     'cap': V;
@@ -4133,12 +4144,8 @@ export interface LangPairWithVariables<V = LangVariable> {
   'AdminAuditExportFailed': {
     'error': V;
   };
-  'AdminFlagHistoryTitle': {
-    'key': V;
-  };
-  'AdminFlagDangerousConfirmBody': {
-    'key': V;
-    'description': V;
+  'AdminWelcomeBackfillResult': {
+    'count': V;
   };
   'AdminPushInspectorCountSent': {
     'count': V;
