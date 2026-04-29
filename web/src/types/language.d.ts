@@ -2578,6 +2578,7 @@ export interface LangPair {
   'WebBot.Account.Desclaimer.Desc': undefined;
   'IosInstallBanner.Title': undefined;
   'IosInstallBanner.Hint': undefined;
+  'Confirm': undefined;
   'EditMessage': undefined;
   'Hide': undefined;
   'Emoji': undefined;
