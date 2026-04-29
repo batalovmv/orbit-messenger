@@ -29,6 +29,8 @@ import { MaintenanceBannerView } from '../MaintenanceBanner';
 import Modal from '../../ui/Modal';
 import TabList from '../../ui/TabList';
 
+import { localizeAdminError } from './adminErrors';
+
 import styles from './AdminPanel.module.scss';
 
 export type OwnProps = {
@@ -183,7 +185,7 @@ const FlagsTab = () => {
       setFlags(list);
       setError(undefined);
     } catch (e) {
-      setError((e as Error).message || 'load failed');
+      setError(localizeAdminError(lang, e, 'load failed'));
     }
   });
 
@@ -195,7 +197,7 @@ const FlagsTab = () => {
       const updated = await setAdminFlag(flag.key, nextEnabled, flag.metadata);
       setFlags((prev) => prev.map((f) => (f.key === updated.key ? updated : f)));
     } catch (e) {
-      setError((e as Error).message || 'update failed');
+      setError(localizeAdminError(lang, e, 'update failed'));
     } finally {
       setBusyKey(undefined);
     }
@@ -371,7 +373,7 @@ const FlagHistoryModal = ({ flag, onClose }: FlagHistoryModalProps) => {
       })
       .catch((e) => {
         if (cancelled) return;
-        setError((e as Error).message || 'load failed');
+        setError(localizeAdminError(lang, e, 'load failed'));
       })
       .finally(() => {
         if (cancelled) return;
@@ -497,7 +499,7 @@ const MaintenanceTab = () => {
       setEndAt(toDatetimeLocal(md.end_at));
       setUpdatedAt(m.updated_at);
     } catch (e) {
-      setError((e as Error).message || 'load failed');
+      setError(localizeAdminError(lang, e, 'load failed'));
     }
   });
 
@@ -518,7 +520,7 @@ const MaintenanceTab = () => {
       setUpdatedAt(flag.updated_at);
       setInfo(lang('AdminMaintenanceSaved'));
     } catch (e) {
-      setError((e as Error).message || 'save failed');
+      setError(localizeAdminError(lang, e, 'save failed'));
     } finally {
       setIsBusy(false);
     }
@@ -537,7 +539,7 @@ const MaintenanceTab = () => {
       setUpdatedAt(flag.updated_at);
       setInfo(lang('AdminMaintenanceDisabled'));
     } catch (e) {
-      setError((e as Error).message || 'save failed');
+      setError(localizeAdminError(lang, e, 'save failed'));
     } finally {
       setIsBusy(false);
     }
@@ -681,7 +683,7 @@ const WelcomeTab = () => {
       setInsertedCount(result.inserted);
       setIsConfirming(false);
     } catch (e) {
-      setError((e as Error).message || 'backfill failed');
+      setError(localizeAdminError(lang, e, 'backfill failed'));
     } finally {
       setIsBusy(false);
     }
@@ -779,7 +781,7 @@ const PushInspectorTab = () => {
       });
       setReport(result);
     } catch (e) {
-      setError((e as Error).message || 'send failed');
+      setError(localizeAdminError(lang, e, 'send failed'));
     } finally {
       setIsBusy(false);
     }
@@ -963,7 +965,7 @@ const AuditTab = ({ role }: AuditTabProps) => {
       setHasMore(page.has_more);
       setError(undefined);
     } catch (e) {
-      setError((e as Error).message || 'load failed');
+      setError(localizeAdminError(lang, e, 'load failed'));
     } finally {
       setIsBusy(false);
     }

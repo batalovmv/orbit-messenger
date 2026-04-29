@@ -2293,6 +2293,13 @@ export interface LangPair {
   'AdminFlagHistory': undefined;
   'AdminFlagHistoryEmpty': undefined;
   'AdminFlagHistoryClose': undefined;
+  'AdminErrorMaintenanceWindowInverted': undefined;
+  'AdminErrorUnknownFlag': undefined;
+  'AdminErrorRateLimit': undefined;
+  'AdminErrorUnauthorized': undefined;
+  'AdminErrorForbidden': undefined;
+  'AdminErrorNotFound': undefined;
+  'AdminErrorMaintenance': undefined;
   'AdminFlagDangerousConfirmTitle': undefined;
   'AdminFlagDangerousConfirmQuestion': undefined;
   'AdminFlagDangerousConfirmAction': undefined;

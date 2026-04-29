@@ -3715,6 +3715,15 @@
 "AdminFlagUnknown" = "не в реестре";
 "AdminFlagDangerousConfirmIntro" = "Флаг {key} помечен как опасный.";
 "AdminFlagDangerousConfirmQuestion" = "Точно включаете?";
+
+"AdminErrorMaintenanceWindowInverted" = "Окончание должно быть строго позже старта.";
+"AdminErrorUnknownFlag" = "Неизвестный флаг — добавьте его в реестр featureflags.";
+"AdminErrorRateLimit" = "Слишком частые запросы. Подождите немного.";
+"AdminErrorUnauthorized" = "Сессия истекла. Перезайдите.";
+"AdminErrorForbidden" = "Недостаточно прав для этого действия.";
+"AdminErrorNotFound" = "Не найдено.";
+"AdminErrorMaintenance" = "Идут технические работы. Попробуйте позже.";
+
 "AdminMaintenanceApply" = "Применить";
 "AdminMaintenanceBlockWrites" = "Блокировать запись (POST/PUT/PATCH/DELETE)";
 "AdminMaintenanceBlockWritesHelp" = "Если включено — обычные пользователи не смогут писать сообщения, только читать. Суперадмины проходят сквозь блокировку.";
