@@ -114,11 +114,37 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
 // ===========================================================================
 // Feature Flags tab
 // ===========================================================================
+//
+// Three additions on top of the basic toggle list:
+//  1. Exposure filter (segmented control) — `unauth` / `auth` / `admin` /
+//     `server_only`. "All" is the default. Filter is purely client-side
+//     since the dataset is the small in-code registry (≤20 entries).
+//  2. Per-row "History" button — opens a modal showing the audit feed
+//     filtered to this flag (`target_type=feature_flag&target_id=<key>`).
+//     Reuses the existing GET /admin/audit-log endpoint, no new backend.
+//  3. Per-row Dangerous badge + confirmation modal when toggling ON.
+//     Backend annotation is `featureflags.Definition.Dangerous` and ships
+//     in the AdminFlag JSON. Toggle OFF never asks (turning a danger flag
+//     off is always safe — that's why it's marked dangerous).
+
+type ExposureFilter = '' | AdminFlag['exposure'];
+
+const EXPOSURE_FILTERS: { value: ExposureFilter; labelKey: 'AdminFlagFilterAll' | 'AdminFlagFilterUnauth' | 'AdminFlagFilterAuth' | 'AdminFlagFilterAdmin' | 'AdminFlagFilterServerOnly' }[] = [
+  { value: '', labelKey: 'AdminFlagFilterAll' },
+  { value: 'unauth', labelKey: 'AdminFlagFilterUnauth' },
+  { value: 'auth', labelKey: 'AdminFlagFilterAuth' },
+  { value: 'admin', labelKey: 'AdminFlagFilterAdmin' },
+  { value: 'server_only', labelKey: 'AdminFlagFilterServerOnly' },
+];
+
 const FlagsTab = () => {
   const lang = useLang();
   const [flags, setFlags] = useState<AdminFlag[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [busyKey, setBusyKey] = useState<string | undefined>();
+  const [exposureFilter, setExposureFilter] = useState<ExposureFilter>('');
+  const [pendingDangerous, setPendingDangerous] = useState<AdminFlag | undefined>();
+  const [historyFor, setHistoryFor] = useState<AdminFlag | undefined>();
 
   const reload = useLastCallback(async () => {
     try {
@@ -132,10 +158,10 @@ const FlagsTab = () => {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const handleToggle = useLastCallback(async (flag: AdminFlag) => {
+  const applyToggle = useLastCallback(async (flag: AdminFlag, nextEnabled: boolean) => {
     setBusyKey(flag.key);
     try {
-      const updated = await setAdminFlag(flag.key, !flag.enabled, flag.metadata);
+      const updated = await setAdminFlag(flag.key, nextEnabled, flag.metadata);
       setFlags((prev) => prev.map((f) => (f.key === updated.key ? updated : f)));
     } catch (e) {
       setError((e as Error).message || 'update failed');
@@ -144,12 +170,59 @@ const FlagsTab = () => {
     }
   });
 
+  const handleToggle = useLastCallback((flag: AdminFlag) => {
+    const nextEnabled = !flag.enabled;
+    // Confirmation only when turning a dangerous flag ON. Turning off is
+    // always safe (that's why these flags exist as dangerous in the first
+    // place — they make the live system riskier when active).
+    if (flag.dangerous && nextEnabled) {
+      setPendingDangerous(flag);
+      return;
+    }
+    applyToggle(flag, nextEnabled);
+  });
+
+  const handleConfirmDangerous = useLastCallback(() => {
+    const target = pendingDangerous;
+    if (!target) return;
+    setPendingDangerous(undefined);
+    applyToggle(target, true);
+  });
+
+  const handleCancelDangerous = useLastCallback(() => setPendingDangerous(undefined));
+  const handleCloseHistory = useLastCallback(() => setHistoryFor(undefined));
+
+  const visibleFlags = useMemo(() => {
+    if (!exposureFilter) return flags;
+    return flags.filter((f) => f.exposure === exposureFilter);
+  }, [flags, exposureFilter]);
+
   return (
     <div className={styles.tabBody}>
+      <div className={styles.flagFilterBar} role="tablist">
+        {EXPOSURE_FILTERS.map((opt) => (
+          <button
+            key={opt.value || 'all'}
+            type="button"
+            role="tab"
+            aria-selected={exposureFilter === opt.value}
+            className={buildClassName(
+              styles.flagFilterChip,
+              exposureFilter === opt.value && styles.flagFilterChipActive,
+            )}
+            onClick={() => setExposureFilter(opt.value)}
+          >
+            {lang(opt.labelKey)}
+          </button>
+        ))}
+      </div>
       {error && <div className={styles.error}>{error}</div>}
       {flags.length === 0 && !error && <div className={styles.empty}>{lang('Loading')}</div>}
+      {flags.length > 0 && visibleFlags.length === 0 && (
+        <div className={styles.empty}>{lang('AdminAuditEmpty')}</div>
+      )}
       <ul className={styles.flagList}>
-        {flags.map((flag) => (
+        {visibleFlags.map((flag) => (
           <li key={flag.key} className={styles.flagRow}>
             <div className={styles.flagInfo}>
               <div className={styles.flagKey}>
@@ -157,25 +230,168 @@ const FlagsTab = () => {
                 {!flag.known && (
                   <span className={styles.flagBadge}>{lang('AdminFlagUnknown')}</span>
                 )}
+                {flag.dangerous && (
+                  <span className={styles.flagBadge}>{lang('AdminFlagDangerous')}</span>
+                )}
                 <span className={styles.flagExposure}>{flag.exposure}</span>
               </div>
               {flag.description && <div className={styles.flagDesc}>{flag.description}</div>}
             </div>
-            <button
-              type="button"
-              className={buildClassName(
-                styles.flagToggle,
-                flag.enabled && styles.flagToggleOn,
-              )}
-              disabled={busyKey === flag.key}
-              onClick={() => handleToggle(flag)}
-            >
-              {flag.enabled ? lang('AdminFlagOn') : lang('AdminFlagOff')}
-            </button>
+            <div className={styles.flagControls}>
+              <button
+                type="button"
+                className={styles.flagHistoryBtn}
+                onClick={() => setHistoryFor(flag)}
+              >
+                {lang('AdminFlagHistory')}
+              </button>
+              {/* Unknown DB rows (no registry entry) are read-only — the
+                  backend Set() rejects them with "Unknown feature flag", so
+                  rendering a toggle would be a dead control. The "не в
+                  реестре" badge surfaces the state. */}
+              <button
+                type="button"
+                className={buildClassName(
+                  styles.flagToggle,
+                  flag.enabled && styles.flagToggleOn,
+                )}
+                disabled={busyKey === flag.key || !flag.known}
+                onClick={() => handleToggle(flag)}
+              >
+                {flag.enabled ? lang('AdminFlagOn') : lang('AdminFlagOff')}
+              </button>
+            </div>
           </li>
         ))}
       </ul>
+
+      {pendingDangerous && (
+        <Modal
+          isOpen
+          onClose={handleCancelDangerous}
+          title={lang('AdminFlagDangerousConfirmTitle')}
+          hasCloseButton
+        >
+          <div className={styles.confirmBody}>
+            <p>
+              {lang('AdminFlagDangerousConfirmBody', {
+                key: pendingDangerous.key,
+                description: pendingDangerous.description || '',
+              })}
+            </p>
+          </div>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onClick={handleCancelDangerous}
+            >
+              {lang('Cancel')}
+            </button>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              onClick={handleConfirmDangerous}
+            >
+              {lang('AdminFlagDangerousConfirmAction')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {historyFor && (
+        <FlagHistoryModal flag={historyFor} onClose={handleCloseHistory} />
+      )}
     </div>
+  );
+};
+
+// FlagHistoryModal queries the existing audit-log endpoint with a fixed
+// filter scope (target_type=feature_flag, target_id=<key>) and renders the
+// last AUDIT_PAGE_SIZE entries. No backend changes — this reuses the
+// pagination already exposed by /admin/audit-log.
+type FlagHistoryModalProps = {
+  flag: AdminFlag;
+  onClose: NoneToVoidFunction;
+};
+
+const FlagHistoryModal = ({ flag, onClose }: FlagHistoryModalProps) => {
+  const lang = useLang();
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsBusy(true);
+    fetchAuditLog({
+      target_type: 'feature_flag',
+      target_id: flag.key,
+      limit: AUDIT_PAGE_SIZE,
+    })
+      .then((page) => {
+        if (cancelled) return;
+        setEntries(page.data);
+        setError(undefined);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError((e as Error).message || 'load failed');
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsBusy(false);
+      });
+    return () => { cancelled = true; };
+  }, [flag.key]);
+
+  return (
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={lang('AdminFlagHistoryTitle', { key: flag.key })}
+      hasCloseButton
+    >
+      <div className={styles.tabBody}>
+        {error && <div className={styles.error}>{error}</div>}
+        {isBusy && entries.length === 0 && <div className={styles.empty}>{lang('Loading')}</div>}
+        {!isBusy && !error && entries.length === 0 && (
+          <div className={styles.empty}>{lang('AdminFlagHistoryEmpty')}</div>
+        )}
+        <div className={styles.auditList}>
+          {entries.map((row) => (
+            <div key={row.id} className={styles.auditRow}>
+              <div className={styles.auditMeta}>
+                <span className={styles.auditAction}>{row.action}</span>
+                <span className={styles.auditWhen}>
+                  {new Date(row.created_at).toLocaleString()}
+                </span>
+              </div>
+              <div className={styles.auditDetails}>
+                <span className={styles.auditActor}>
+                  {row.actor_name || row.actor_id}
+                </span>
+                {row.ip_address && (
+                  <span className={styles.auditIp}>{row.ip_address}</span>
+                )}
+              </div>
+              {row.details && Object.keys(row.details).length > 0 && (
+                <pre className={styles.auditDump}>{JSON.stringify(row.details, undefined, 2)}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={onClose}
+          >
+            {lang('AdminFlagHistoryClose')}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

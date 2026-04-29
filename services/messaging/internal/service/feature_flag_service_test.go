@@ -131,6 +131,31 @@ func TestFeatureFlagService_Set_MaintenanceMetadataSanitised(t *testing.T) {
 	}
 }
 
+// TestFeatureFlagService_ListAll_PropagatesDangerous locks in the contract
+// that featureflags.Definition.Dangerous flows through to the AdminFlag
+// JSON. The frontend uses this bit to decide whether to show a confirm
+// modal on toggle-on; if the registry says dangerous and the API drops it,
+// the modal silently disappears.
+func TestFeatureFlagService_ListAll_PropagatesDangerous(t *testing.T) {
+	svc := NewFeatureFlagService(newMockFlagStore(), &mockAuditStore{})
+	flags, err := svc.ListAll(context.Background(), uuid.New(), "superadmin", "ip", "ua")
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	byKey := map[string]AdminFlag{}
+	for _, f := range flags {
+		byKey[f.Key] = f
+	}
+	// e2e_dm_enabled is registered as Dangerous: true.
+	if !byKey[featureflags.KeyE2EDirectMessages].Dangerous {
+		t.Errorf("expected %s to be marked dangerous", featureflags.KeyE2EDirectMessages)
+	}
+	// maintenance_mode is NOT dangerous (separate Class=control).
+	if byKey[featureflags.KeyMaintenanceMode].Dangerous {
+		t.Errorf("maintenance_mode must not be marked dangerous")
+	}
+}
+
 func TestFeatureFlagService_VisibleFlags_FiltersByExposure(t *testing.T) {
 	flagStore := newMockFlagStore()
 	flagStore.rows[featureflags.KeyMaintenanceMode] = store.FeatureFlag{

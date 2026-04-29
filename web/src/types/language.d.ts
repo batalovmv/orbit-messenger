@@ -2284,6 +2284,17 @@ export interface LangPair {
   'AdminFlagOn': undefined;
   'AdminFlagOff': undefined;
   'AdminFlagUnknown': undefined;
+  'AdminFlagDangerous': undefined;
+  'AdminFlagFilterAll': undefined;
+  'AdminFlagFilterUnauth': undefined;
+  'AdminFlagFilterAuth': undefined;
+  'AdminFlagFilterAdmin': undefined;
+  'AdminFlagFilterServerOnly': undefined;
+  'AdminFlagHistory': undefined;
+  'AdminFlagHistoryEmpty': undefined;
+  'AdminFlagHistoryClose': undefined;
+  'AdminFlagDangerousConfirmTitle': undefined;
+  'AdminFlagDangerousConfirmAction': undefined;
   'AdminMaintenanceEnable': undefined;
   'AdminMaintenanceMessage': undefined;
   'AdminMaintenanceMessagePlaceholder': undefined;
@@ -4116,6 +4127,13 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AdminAuditExportFailed': {
     'error': V;
+  };
+  'AdminFlagHistoryTitle': {
+    'key': V;
+  };
+  'AdminFlagDangerousConfirmBody': {
+    'key': V;
+    'description': V;
   };
   'AdminPushInspectorCountSent': {
     'count': V;
