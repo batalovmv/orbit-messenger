@@ -195,6 +195,16 @@ export async function request<T>(
     'X-Requested-With': 'XMLHttpRequest',
     'X-Session-ID': getSessionId(),
   };
+  // X-App-Version handshake: gateway uses this to detect too-old clients
+  // and emit `X-App-Latest-Version` on every response. Sent on every
+  // request, not just polling — the version banner now triggers on the
+  // first API call after a deploy instead of waiting for the periodic
+  // version.txt poll. APP_VERSION is the webpack DefinePlugin substitution
+  // of package.json's "version" at build time; only undefined during
+  // tests/SSR, in which case the header is omitted.
+  if (typeof APP_VERSION !== 'undefined') {
+    headers['X-App-Version'] = APP_VERSION;
+  }
   if (accessToken && !options?.noAuth) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
@@ -212,6 +222,12 @@ export async function request<T>(
     body: body ? JSON.stringify(body) : undefined,
     signal: options?.signal,
   });
+
+  // Inspect version-handshake headers BEFORE branching on response.ok so we
+  // catch both the success path (latest-version drift) and the 426 path. The
+  // notifier is fire-and-forget; failure to dispatch must not break the
+  // request flow.
+  notifyAppVersionMismatch(response);
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({
@@ -232,6 +248,49 @@ export async function request<T>(
   }
 
   return response.json();
+}
+
+// notifyAppVersionMismatch inspects the gateway's X-App-Version-handshake
+// response headers and lazily dispatches `checkAppVersion({ force: true })`
+// when the server announces a newer build (or rejects this client with 426
+// Upgrade Required). Reading the action handler module lazily breaks the
+// import cycle between the API client and global/actions; it also keeps
+// SSR/test environments where `getActions` is undefined a no-op.
+//
+// Tracks last successfully-fired version so a second deploy in the same
+// tab session still triggers the banner. Marking the firing flag only
+// AFTER a successful dispatch ensures a transient failure (lazy chunk
+// 404, action handler not yet wired) doesn't permanently silence the
+// notification — the next mismatch retries.
+let lastFiredForVersion: string | undefined;
+function notifyAppVersionMismatch(response: Response) {
+  const status = response.status;
+  const latest = response.headers.get('X-App-Latest-Version') || undefined;
+  let mismatch = false;
+  let key: string;
+
+  if (status === 426 /* Upgrade Required */) {
+    mismatch = true;
+    key = `426:${response.headers.get('X-Required-Version') || ''}`;
+  } else if (latest && typeof APP_VERSION !== 'undefined' && latest !== APP_VERSION) {
+    mismatch = true;
+    key = `latest:${latest}`;
+  } else {
+    return;
+  }
+  if (!mismatch || lastFiredForVersion === key) return;
+
+  // Lazy import: the saturn client is loaded before the global actions
+  // module is wired, so a top-level `import { getActions }` would
+  // initialize as `undefined` here and never dispatch. Resolve it on the
+  // first mismatch instead. Mark `lastFiredForVersion` only on success so
+  // a chunk-eviction failure doesn't permanently silence retries.
+  import('../../global').then((mod) => {
+    const actions = mod.getActions?.();
+    if (!actions?.checkAppVersion) return;
+    actions.checkAppVersion({ force: true });
+    lastFiredForVersion = key;
+  }).catch(() => { /* SSR / tests / chunk evicted — retry on next mismatch */ });
 }
 
 function kickWsReconnect() {

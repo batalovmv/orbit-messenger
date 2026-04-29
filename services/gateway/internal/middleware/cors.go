@@ -37,10 +37,19 @@ func CORSMiddleware(frontendURL string) fiber.Handler {
 		c.Set("Access-Control-Allow-Credentials", "true")
 		c.Set("Vary", "Origin")
 
+		// Expose response headers the saturn client / browser JS need to read
+		// cross-origin: version handshake (X-App-Latest-Version, X-Required-Version)
+		// and any future operator headers. Without this list browsers silently
+		// strip these from response.headers in JS.
+		c.Set("Access-Control-Expose-Headers", "X-App-Latest-Version,X-Required-Version,Retry-After")
+
 		// Preflight: add extra headers and return 204
 		if c.Method() == fiber.MethodOptions {
 			c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Set("Access-Control-Allow-Headers", "Origin,Content-Type,Authorization,Accept,X-Requested-With")
+			// X-Session-ID and X-App-Version are saturn-specific request headers;
+			// without listing them here the browser blocks the actual request
+			// before our gateway middleware ever sees it.
+			c.Set("Access-Control-Allow-Headers", "Origin,Content-Type,Authorization,Accept,X-Requested-With,X-Session-ID,X-App-Version")
 			c.Set("Access-Control-Max-Age", "86400")
 			return c.SendStatus(fiber.StatusNoContent)
 		}

@@ -1538,6 +1538,7 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [x] Welcome flow: default-chats backfill for new invited users (mig 069 + admin endpoints + 11 tests + AdminPanel tab + per-chat ManageGroup switcher) (#10/#11/#15)
 - [x] Cross-device read-receipt sync (WS + silent-push fallback, see `docs/canon/current-state.md`) (#13/#14)
 - [x] Day 5.1 Admin Push Inspector — admin test-push with per-device delivery report; timeout hierarchy 12s/10s/5s, ctx.Err() guards, audit-first-fail-closed; surfaced+fixed pre-existing prod VAPID env issue (#16)
+- [x] X-App-Version handshake — gateway middleware echoes `X-App-Latest-Version` per response; optional 426 on `APP_MIN_VERSION` violation; web client dispatches `checkAppVersion({force:true})` on mismatch (no wait for periodic version.txt poll) (#20)
 
 **Backup:**
 - [x] PostgreSQL: Saturn.ac managed Hourly backups (RPO = 1h) — enabled via UI
