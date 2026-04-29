@@ -12,11 +12,12 @@ import type {
 } from '../../../api/saturn/methods/admin';
 
 import {
-  backfillDefaultChats, fetchAdminFlags, fetchAuditLog,
+  AUDIT_ACTIONS, AUDIT_EXPORT_HARD_CAP, AUDIT_TARGET_TYPES,
+  backfillDefaultChats, fetchAdminFlags, fetchAuditLog, fetchAuditLogExport,
   sendAdminTestPush,
   setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
-import type { PushTestReport } from '../../../api/saturn/methods/admin';
+import type { AuditQuery, PushTestReport } from '../../../api/saturn/methods/admin';
 import { selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 
@@ -104,7 +105,7 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
         {activeTab === 'maintenance' && <MaintenanceTab />}
         {activeTab === 'welcome' && <WelcomeTab />}
         {activeTab === 'push' && <PushInspectorTab />}
-        {activeTab === 'audit' && <AuditTab />}
+        {activeTab === 'audit' && <AuditTab role={saturnRole} />}
       </div>
     </Modal>
   );
@@ -544,29 +545,74 @@ const PushInspectorTab = () => {
 // ===========================================================================
 // Audit log tab
 // ===========================================================================
-const AuditTab = () => {
+//
+// Filters compose AND-style server-side: q (free-text ILIKE) on top of the
+// dropdown-bound action / target_type / actor_id / from-to date filters.
+// Anything left blank is omitted from the request. Date inputs use native
+// <input type="date"> (YYYY-MM-DD); the backend accepts that shape and
+// interprets it as UTC midnight, so a "from 2026-04-01 to 2026-04-29" range
+// includes both endpoints.
+//
+// The Export button is hidden for `admin` — the role has SysViewAuditLog
+// but not SysExportData, so the server would 403. Compliance + superadmin
+// see the button; clicking streams a CSV download with the same filter set.
+
+type AuditTabProps = {
+  role?: GlobalState['saturnRole'];
+};
+
+const canExportAudit = (role?: GlobalState['saturnRole']) => (
+  role === 'compliance' || role === 'superadmin'
+);
+
+// AUDIT_FILTER_ALL is the sentinel value for "no filter" on the action /
+// target_type dropdowns. We CANNOT use the empty string here — Teact drops
+// `value=""` from rendered <option> attributes, which makes the browser fall
+// back to option.text (the localized label like "Все действия") for
+// `option.value`. That value would then be sent as `?action=Все действия`
+// and the backend whitelist would reject it with 400 "unknown action". Use
+// a non-empty sentinel and convert to '' before request-building.
+const AUDIT_FILTER_ALL = '__all__';
+
+const AuditTab = ({ role }: AuditTabProps) => {
   const lang = useLang();
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
+  const [actionFilter, setActionFilter] = useState('');
+  const [targetTypeFilter, setTargetTypeFilter] = useState('');
+  const [actorIdFilter, setActorIdFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [cursor, setCursor] = useState<string | undefined>();
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [isBusy, setIsBusy] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQ(q), AUDIT_SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(t);
   }, [q]);
 
+  // Resolve the active filter into the AuditQuery shape sent to backend. Empty
+  // strings are dropped via buildAuditParams; we still translate them here so
+  // useEffect dep tracking is on real values.
+  const buildQuery = useLastCallback((cursorVal?: string): AuditQuery => ({
+    q: debouncedQ || undefined,
+    action: actionFilter || undefined,
+    target_type: targetTypeFilter || undefined,
+    actor_id: actorIdFilter.trim() || undefined,
+    since: fromDate || undefined,
+    until: toDate || undefined,
+    cursor: cursorVal,
+    limit: AUDIT_PAGE_SIZE,
+  }));
+
   const load = useLastCallback(async (next?: string) => {
     setIsBusy(true);
     try {
-      const page = await fetchAuditLog({
-        q: debouncedQ || undefined,
-        cursor: next,
-        limit: AUDIT_PAGE_SIZE,
-      });
+      const page = await fetchAuditLog(buildQuery(next));
       if (next) {
         setEntries((prev) => [...prev, ...page.data]);
       } else {
@@ -582,13 +628,119 @@ const AuditTab = () => {
     }
   });
 
-  // Refetch from scratch whenever the debounced query changes.
-  useEffect(() => { load(undefined); }, [debouncedQ, load]);
+  // Refetch from scratch whenever any of the filter inputs change. Free-text
+  // is the only one debounced — the rest fire on the next tick.
+  useEffect(() => { load(undefined); }, [
+    debouncedQ, actionFilter, targetTypeFilter, actorIdFilter, fromDate, toDate, load,
+  ]);
+
+  const handleResetFilters = useLastCallback(() => {
+    setQ('');
+    setActionFilter('');
+    setTargetTypeFilter('');
+    setActorIdFilter('');
+    setFromDate('');
+    setToDate('');
+  });
+
+  const handleExport = useLastCallback(async () => {
+    setIsExporting(true);
+    setError(undefined);
+    try {
+      const res = await fetchAuditLogExport({
+        q: debouncedQ || undefined,
+        action: actionFilter || undefined,
+        target_type: targetTypeFilter || undefined,
+        actor_id: actorIdFilter.trim() || undefined,
+        since: fromDate || undefined,
+        until: toDate || undefined,
+      });
+      if (!res.ok) {
+        const status = res.status;
+        if (status === 403) {
+          throw new Error(lang('AdminAuditExportForbidden'));
+        }
+        throw new Error(`HTTP ${status}`);
+      }
+      const blob = await res.blob();
+      // Trigger a regular browser download. Chrome/Firefox/Safari all honour
+      // download attribute on a same-origin blob URL; revoke the URL after
+      // the click to release memory once the download starts.
+      const url = URL.createObjectURL(blob);
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orbit-audit-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Defer revoke until the next tick so the browser has the URL committed.
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      setError(lang('AdminAuditExportFailed', { error: (e as Error).message || 'unknown' }));
+    } finally {
+      setIsExporting(false);
+    }
+  });
 
   const rows = useMemo(() => entries, [entries]);
 
   return (
     <div className={styles.tabBody}>
+      <div className={styles.auditFilterGrid}>
+        <div className={styles.auditFilterField}>
+          <span className={styles.formLabelText}>{lang('AdminAuditFilterAction')}</span>
+          <select
+            className={styles.auditFilterSelect}
+            value={actionFilter || AUDIT_FILTER_ALL}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setActionFilter(v === AUDIT_FILTER_ALL ? '' : v);
+            }}
+          >
+            <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterActionAll')}</option>
+            {AUDIT_ACTIONS.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+        <div className={styles.auditFilterField}>
+          <span className={styles.formLabelText}>{lang('AdminAuditFilterTargetType')}</span>
+          <select
+            className={styles.auditFilterSelect}
+            value={targetTypeFilter || AUDIT_FILTER_ALL}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setTargetTypeFilter(v === AUDIT_FILTER_ALL ? '' : v);
+            }}
+          >
+            <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterTargetTypeAll')}</option>
+            {AUDIT_TARGET_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div className={styles.auditFilterField}>
+          <span className={styles.formLabelText}>{lang('AdminAuditFilterFrom')}</span>
+          <input
+            type="date"
+            className={styles.auditFilterDate}
+            value={fromDate}
+            max={toDate || undefined}
+            onChange={(e) => setFromDate((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div className={styles.auditFilterField}>
+          <span className={styles.formLabelText}>{lang('AdminAuditFilterTo')}</span>
+          <input
+            type="date"
+            className={styles.auditFilterDate}
+            value={toDate}
+            min={fromDate || undefined}
+            onChange={(e) => setToDate((e.target as HTMLInputElement).value)}
+          />
+        </div>
+      </div>
       <div className={styles.formRow}>
         <input
           type="text"
@@ -598,6 +750,29 @@ const AuditTab = () => {
           placeholder={lang('AdminAuditSearchPlaceholder')}
           onChange={(e) => setQ((e.target as HTMLInputElement).value)}
         />
+      </div>
+      <div className={styles.auditToolbar}>
+        <div className={styles.auditToolbarLeft}>
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={isBusy}
+            onClick={handleResetFilters}
+          >
+            {lang('AdminAuditFilterReset')}
+          </button>
+        </div>
+        {canExportAudit(role) && (
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={isExporting}
+            onClick={handleExport}
+            title={lang('AdminAuditExportHint', { cap: AUDIT_EXPORT_HARD_CAP })}
+          >
+            {lang(isExporting ? 'AdminAuditExportRunning' : 'AdminAuditExport')}
+          </button>
+        )}
       </div>
       {error && <div className={styles.error}>{error}</div>}
       {!error && rows.length === 0 && !isBusy && (

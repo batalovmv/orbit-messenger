@@ -55,4 +55,53 @@ const (
 	// endpoint URLs we don't want in audit storage). Summary counts are
 	// included in details: {target_user_id, device_count, sent, failed, stale}.
 	AuditPushTestSent = "push.test_sent"
+
+	// AuditAuditExport records a CSV export of the audit log itself —
+	// compliance-friendly meta-event so an export operation cannot be
+	// performed without leaving its own row in the table. Written BEFORE
+	// the stream begins, fail-closed; details capture the active filter so
+	// the scope of the export is reconstructable post-hoc.
+	AuditAuditExport = "audit.export"
 )
+
+// AuditActions returns the canonical, ordered list of known action codes
+// for use as a UI dropdown whitelist. Adding a new action constant above
+// must be reflected here so the admin filter UI can offer it. The order
+// is stable for predictable rendering.
+func AuditActions() []string {
+	return []string{
+		AuditChatPrivilegedRead,
+		AuditUserDeactivate,
+		AuditUserReactivate,
+		AuditUserRoleChange,
+		AuditUserSessionsRevoke,
+		AuditInviteCreate,
+		AuditInviteRevoke,
+		AuditAuditView,
+		AuditAuditExport,
+		AuditUserListRead,
+		AuditDataExport,
+		AuditFeatureFlagList,
+		AuditFeatureFlagSet,
+		AuditMaintenanceEnable,
+		AuditMaintenanceUpdate,
+		AuditMaintenanceDisable,
+		AuditChatDefaultStatusSet,
+		AuditDefaultChatsBackfill,
+		AuditPushTestSent,
+	}
+}
+
+// AuditTargetTypes returns the canonical list of target_type values written
+// by services/* — kept in sync by hand (no compiler enforcement). Used by
+// the admin UI dropdown so operators don't have to remember exact strings.
+// Source-of-truth grep: `TargetType: ` literals across services/messaging/.
+func AuditTargetTypes() []string {
+	return []string{
+		"system",
+		"user",
+		"chat",
+		"message",
+		"feature_flag",
+	}
+}

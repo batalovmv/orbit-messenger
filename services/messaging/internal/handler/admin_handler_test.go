@@ -6,6 +6,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -59,7 +60,8 @@ func (m *mockAdminUserStore) UpdateRole(ctx context.Context, userID uuid.UUID, n
 func (m *mockAdminUserStore) CountByRole(ctx context.Context, role string) (int, error) { return 0, nil }
 
 type mockAdminAuditStore struct {
-	logFn func(ctx context.Context, entry *model.AuditEntry) error
+	logFn    func(ctx context.Context, entry *model.AuditEntry) error
+	streamFn func(ctx context.Context, filter store.AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error)
 }
 
 func (m *mockAdminAuditStore) Log(ctx context.Context, entry *model.AuditEntry) error {
@@ -71,6 +73,13 @@ func (m *mockAdminAuditStore) Log(ctx context.Context, entry *model.AuditEntry) 
 
 func (m *mockAdminAuditStore) List(ctx context.Context, filter store.AuditFilter) ([]model.AuditEntry, string, bool, error) {
 	return nil, "", false, nil
+}
+
+func (m *mockAdminAuditStore) Stream(ctx context.Context, filter store.AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error) {
+	if m.streamFn != nil {
+		return m.streamFn(ctx, filter, hardCap, emit)
+	}
+	return 0, nil
 }
 
 func newAdminApp(us store.UserStore, audit store.AuditStore, rdb *redis.Client) *fiber.App {
@@ -319,6 +328,233 @@ func TestExportUser_AuthFail(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("expected 403, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Audit log export (PR — admin toolkit polish)
+// ---------------------------------------------------------------------------
+
+// TestExportAuditLog_HappyPath — compliance can export. Asserts:
+//   - 200 OK with text/csv content-type and an attachment Content-Disposition
+//   - audit-first ordering: an `audit.export` row hits the audit store
+//     BEFORE the streamFn callback fires
+//   - rows emitted by streamFn show up as CSV lines after the header
+func TestExportAuditLog_HappyPath(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	var (
+		auditWritten bool
+		auditAction  string
+		streamCalled bool
+	)
+	audit := &mockAdminAuditStore{
+		logFn: func(_ context.Context, e *model.AuditEntry) error {
+			auditWritten = true
+			auditAction = e.Action
+			return nil
+		},
+		streamFn: func(_ context.Context, _ store.AuditFilter, _ int, emit func(model.AuditEntry) error) (int, error) {
+			if !auditWritten {
+				t.Fatalf("stream invoked before audit-first row was written")
+			}
+			streamCalled = true
+			return 1, emit(model.AuditEntry{
+				ID:         42,
+				ActorID:    uuid.New(),
+				Action:     "user.role_change",
+				TargetType: "user",
+				ActorName:  "Alice",
+				CreatedAt:  time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC),
+			})
+		},
+	}
+
+	app := newAdminApp(&mockAdminUserStore{}, audit, rdb)
+	req, _ := http.NewRequest(http.MethodGet, "/admin/audit-log/export", bytes.NewBuffer(nil))
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "compliance")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "text/csv; charset=utf-8" {
+		t.Fatalf("expected text/csv, got %q", got)
+	}
+	if cd := resp.Header.Get("Content-Disposition"); cd == "" {
+		t.Fatalf("expected Content-Disposition header")
+	}
+	if !auditWritten {
+		t.Fatalf("audit-first row was not written")
+	}
+	if auditAction != model.AuditAuditExport {
+		t.Fatalf("expected audit action %q, got %q", model.AuditAuditExport, auditAction)
+	}
+	if !streamCalled {
+		t.Fatalf("stream callback was not invoked")
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !bytes.Contains(body, []byte("id,created_at,actor_id,actor_name,action,target_type,target_id,ip_address,user_agent,details")) {
+		t.Fatalf("missing CSV header in body: %s", body)
+	}
+	if !bytes.Contains(body, []byte("user.role_change")) {
+		t.Fatalf("missing data row in body: %s", body)
+	}
+}
+
+// TestExportAuditLog_AdminCannotExport — admin role has SysViewAuditLog but
+// not SysExportData; the export endpoint must reject with 403 even though
+// the in-app GET /audit-log works.
+func TestExportAuditLog_AdminCannotExport(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	var streamCalled bool
+	audit := &mockAdminAuditStore{
+		streamFn: func(_ context.Context, _ store.AuditFilter, _ int, _ func(model.AuditEntry) error) (int, error) {
+			streamCalled = true
+			return 0, nil
+		},
+	}
+	app := newAdminApp(&mockAdminUserStore{}, audit, rdb)
+	req, _ := http.NewRequest(http.MethodGet, "/admin/audit-log/export", bytes.NewBuffer(nil))
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "admin")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 403 for admin role, got %d: %s", resp.StatusCode, raw)
+	}
+	if streamCalled {
+		t.Fatalf("stream must not be invoked when permission check fails")
+	}
+}
+
+// TestExportAuditLog_RejectsUnknownAction — handler whitelists `action` and
+// `target_type` against the in-code registries before reaching the store.
+func TestExportAuditLog_RejectsUnknownAction(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	app := newAdminApp(&mockAdminUserStore{}, &mockAdminAuditStore{}, rdb)
+	req, _ := http.NewRequest(http.MethodGet, "/admin/audit-log/export?action=fake.action", bytes.NewBuffer(nil))
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "compliance")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400 for unknown action, got %d: %s", resp.StatusCode, raw)
+	}
+}
+
+// TestExportAuditLog_FailsClosedOnAuditWriteError — if the audit-first write
+// fails, the stream must NOT proceed AND the response must be a real 5xx
+// (not a 200 OK CSV with a "#error" row, which is what a naive
+// SetBodyStreamWriter implementation would surface).
+func TestExportAuditLog_FailsClosedOnAuditWriteError(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	var streamCalled bool
+	audit := &mockAdminAuditStore{
+		logFn: func(_ context.Context, _ *model.AuditEntry) error {
+			return fmt.Errorf("audit DB unavailable")
+		},
+		streamFn: func(_ context.Context, _ store.AuditFilter, _ int, _ func(model.AuditEntry) error) (int, error) {
+			streamCalled = true
+			return 0, nil
+		},
+	}
+	app := newAdminApp(&mockAdminUserStore{}, audit, rdb)
+	req, _ := http.NewRequest(http.MethodGet, "/admin/audit-log/export", bytes.NewBuffer(nil))
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "compliance")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	// Audit-first runs synchronously before SetBodyStreamWriter, so the
+	// failure surfaces as an HTTP 500 with a JSON error body — not a 200
+	// streaming a "#error" CSV row.
+	if resp.StatusCode != http.StatusInternalServerError {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 500, got %d: %s", resp.StatusCode, raw)
+	}
+	if got := resp.Header.Get("Content-Type"); got == "text/csv; charset=utf-8" {
+		t.Fatalf("must not commit text/csv response when audit write fails")
+	}
+	if streamCalled {
+		t.Fatalf("stream must not be invoked when audit-first write fails")
+	}
+}
+
+// TestExportAuditLog_CSVInjectionDefanged — values like a user_agent that
+// starts with '=' or '@' are spreadsheet-formula vectors when the export
+// is opened in Excel/LibreOffice. Cells must be prefixed with a single
+// quote on output.
+func TestExportAuditLog_CSVInjectionDefanged(t *testing.T) {
+	actorID := uuid.New()
+
+	mr := miniredis.RunT(t)
+	rdb := newRedisClientForHandlerMiniredis(mr)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	uaPayload := "=cmd|'/c calc'!A1"
+	audit := &mockAdminAuditStore{
+		streamFn: func(_ context.Context, _ store.AuditFilter, _ int, emit func(model.AuditEntry) error) (int, error) {
+			ua := uaPayload
+			return 1, emit(model.AuditEntry{
+				ID:         1,
+				ActorID:    uuid.New(),
+				Action:     "user.list_read",
+				TargetType: "system",
+				CreatedAt:  time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC),
+				UserAgent:  &ua,
+			})
+		},
+	}
+	app := newAdminApp(&mockAdminUserStore{}, audit, rdb)
+	req, _ := http.NewRequest(http.MethodGet, "/admin/audit-log/export", bytes.NewBuffer(nil))
+	req.Header.Set("X-User-ID", actorID.String())
+	req.Header.Set("X-User-Role", "compliance")
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	// The dangerous cell must be prefixed with ' (encoding/csv will quote
+	// the cell because of the embedded comma; the leading ' is preserved
+	// inside the quotes).
+	if !bytes.Contains(body, []byte("'=cmd")) {
+		t.Fatalf("CSV injection prefix missing for user_agent in body: %s", body)
 	}
 }
 

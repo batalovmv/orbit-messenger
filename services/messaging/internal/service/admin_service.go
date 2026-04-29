@@ -245,6 +245,88 @@ func (s *AdminService) GetAuditLog(ctx context.Context, actorID uuid.UUID, actor
 	return s.audit.List(ctx, filter)
 }
 
+// AuditExportHardCap caps a single audit-export response at 200,000 rows.
+// Two reasons for this number:
+//
+//  1. Memory budget at the gateway. Gateway proxy.doProxy() buffers the full
+//     upstream response with c.Response().SetBody() — at ~500 bytes/row that
+//     is ~100MB, which is on the edge of what we want a 1GB Saturn instance
+//     to allocate transiently. Higher caps need a streaming proxy path.
+//  2. Compliance scope. At a 150-user pilot, 200k rows is roughly three
+//     months of audit traffic; if the operator needs more they can scope by
+//     date range and run two passes, or use the WAL/PITR-era pg_dump runbook.
+const AuditExportHardCap = 200_000
+
+// PreflightAuditExport runs every check that MUST happen before the HTTP
+// status code is committed: SysViewAuditLog + SysExportData gates, the
+// actor-role pivot guard, and the audit-first row write (fail-closed).
+//
+// Split out from streaming because fasthttp's SetBodyStreamWriter callback
+// runs in a separate goroutine after the handler returns; by then the
+// status header is already on the wire and an error can only manifest as
+// a "#error" CSV row, which is indistinguishable from a 200-with-empty
+// body to a script. All gates that must produce a real 4xx/5xx live here.
+//
+// Authorization is intentionally stricter than GetAuditLog: requires both
+// SysViewAuditLog AND SysExportData. In the role table that means
+// 'compliance' and 'superadmin' can export — 'admin' can only read in-app.
+// Separation of duties: the operator who makes admin changes is not the
+// one who pulls the audit trail off-platform.
+func (s *AdminService) PreflightAuditExport(ctx context.Context, actorID uuid.UUID, actorRole string, filter store.AuditFilter, ip, ua string) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysViewAuditLog) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	if !permissions.HasSysPermission(actorRole, permissions.SysExportData) {
+		return apperror.Forbidden("Audit export requires SysExportData")
+	}
+
+	if filter.ActorID != nil && actorRole != "superadmin" && actorRole != "compliance" {
+		target, err := s.users.GetByID(ctx, *filter.ActorID)
+		if err != nil {
+			return fmt.Errorf("resolve audit actor filter: %w", err)
+		}
+		if target != nil && permissions.SystemRoleRank(target.Role) > permissions.SystemRoleRank(actorRole) {
+			return apperror.Forbidden("Cannot filter audit log by a more privileged actor")
+		}
+	}
+
+	// Audit-first: snapshot the active filter scope so the export operation
+	// is reconstructable post-hoc. Fail-closed.
+	details := map[string]interface{}{"hard_cap": AuditExportHardCap}
+	if filter.ActorID != nil {
+		details["actor_id"] = filter.ActorID.String()
+	}
+	if filter.Action != nil {
+		details["action"] = *filter.Action
+	}
+	if filter.TargetType != nil {
+		details["target_type"] = *filter.TargetType
+	}
+	if filter.TargetID != nil {
+		details["target_id"] = *filter.TargetID
+	}
+	if filter.Since != nil {
+		details["since"] = filter.Since.Format(time.RFC3339)
+	}
+	if filter.Until != nil {
+		details["until"] = filter.Until.Format(time.RFC3339)
+	}
+	if filter.Q != "" {
+		details["q"] = filter.Q
+	}
+	if err := s.writeAudit(ctx, actorID, model.AuditAuditExport, "system", nil, details, ip, ua); err != nil {
+		return apperror.Internal("audit log write failed")
+	}
+	return nil
+}
+
+// StreamAuditExport emits audit rows via the callback. Caller MUST have
+// invoked PreflightAuditExport first — this method does no auth/audit work,
+// just the row stream. Capped at AuditExportHardCap.
+func (s *AdminService) StreamAuditExport(ctx context.Context, filter store.AuditFilter, emit func(model.AuditEntry) error) (int, error) {
+	return s.audit.Stream(ctx, filter, AuditExportHardCap, emit)
+}
+
 // writeAudit is a helper that logs an audit entry.
 func (s *AdminService) writeAudit(ctx context.Context, actorID uuid.UUID, action, targetType string, targetID *string, details map[string]interface{}, ip, ua string) error {
 	entry := &model.AuditEntry{
