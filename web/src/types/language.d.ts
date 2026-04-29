@@ -2294,6 +2294,7 @@ export interface LangPair {
   'AdminFlagHistoryEmpty': undefined;
   'AdminFlagHistoryClose': undefined;
   'AdminFlagDangerousConfirmTitle': undefined;
+  'AdminFlagDangerousConfirmQuestion': undefined;
   'AdminFlagDangerousConfirmAction': undefined;
   'AdminMaintenanceEnable': undefined;
   'AdminMaintenanceMessage': undefined;
@@ -4124,8 +4125,15 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ExactTextCopied': {
     '0': V;
   };
-  'AdminWelcomeBackfillResult': {
-    'count': V;
+  'AdminFlagHistoryTitle': {
+    'key': V;
+  };
+  'AdminFlagDangerousConfirmBody': {
+    'key': V;
+    'description': V;
+  };
+  'AdminFlagDangerousConfirmIntro': {
+    'key': V;
   };
   'AdminAuditExportHint': {
     'cap': V;
@@ -4133,12 +4141,8 @@ export interface LangPairWithVariables<V = LangVariable> {
   'AdminAuditExportFailed': {
     'error': V;
   };
-  'AdminFlagHistoryTitle': {
-    'key': V;
-  };
-  'AdminFlagDangerousConfirmBody': {
-    'key': V;
-    'description': V;
+  'AdminWelcomeBackfillResult': {
+    'count': V;
   };
   'AdminPushInspectorCountSent': {
     'count': V;
@@ -4203,6 +4207,7 @@ export interface LangPairPlural {
   'Chat.DeleteMessagesConfirmation': undefined;
   'lng': undefined;
   'MediaReplaceInvalidError': undefined;
+  'AdminFlagDesc': undefined;
   'ChannelStats.SharesCount': undefined;
   'i18n': undefined;
 }

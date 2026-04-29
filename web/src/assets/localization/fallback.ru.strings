@@ -3695,7 +3695,7 @@
 "AdminWelcomeBackfillConfirmAction" = "Да, добавить всех";
 "AdminWelcomeBackfillResult" = "Добавлено новых участников: {count}.";
 "AdminTabPushInspector" = "Push-инспектор";
-"AdminPushInspectorIntro" = "Отправить тестовый web-push одному пользователю, чтобы быстро проверить «мне не приходят уведомления». Ниже показывается статус доставки по каждому устройству; URL push-эндпоинтов клиенту не возвращаются.";
+"AdminPushInspectorIntro" = "Отправить тестовый web-push одному пользователю, чтобы быстро проверить «мне не приходят уведомления». Ниже показывается статус доставки по каждому устройству. URL push-эндпоинтов клиенту не возвращаются.";
 "AdminPushInspectorIdentifier" = "Пользователь (email или UUID)";
 "AdminPushInspectorIdentifierPlaceholder" = "user@example.com или 11111111-1111-…";
 "AdminPushInspectorTitle" = "Заголовок уведомления (необязательно)";
@@ -3713,6 +3713,8 @@
 "AdminFlagOff" = "Выкл";
 "AdminFlagOn" = "Вкл";
 "AdminFlagUnknown" = "не в реестре";
+"AdminFlagDangerousConfirmIntro" = "Флаг {key} помечен как опасный.";
+"AdminFlagDangerousConfirmQuestion" = "Точно включаете?";
 "AdminMaintenanceApply" = "Применить";
 "AdminMaintenanceBlockWrites" = "Блокировать запись (POST/PUT/PATCH/DELETE)";
 "AdminMaintenanceBlockWritesHelp" = "Если включено — обычные пользователи не смогут писать сообщения, только читать. Суперадмины проходят сквозь блокировку.";
@@ -3728,6 +3730,11 @@
 "AdminTabAuditLog" = "Журнал действий";
 "AdminTabFeatureFlags" = "Переключатели";
 "AdminTabMaintenance" = "Технические работы";
+
+"AdminFlagDesc_e2e_dm_enabled" = "Включает E2E-шифрование для новых DM-чатов. Сейчас неактивно (Phase 7 Signal Protocol откачен в migration 053). Опасный: при включении пользователи решат, что DM зашифрованы, хотя реальный шифротекст не обменивается — это вопрос доверия, а не баг.";
+"AdminFlagDesc_maintenance_mode" = "Режим технических работ для всей системы. Когда включён, web-клиент показывает баннер. Если metadata.block_writes=true, gateway блокирует запись (POST/PUT/PATCH/DELETE) для всех, кроме суперадминов.";
+"AdminFlagDesc_calls_group_enabled" = "Включает групповые аудио-/видео-звонки (SFU). Выключен для пилота — backend готов, но UX инициализации группового звонка имеет известные пробелы. P2P 1-на-1 звонки работают независимо от этого флага.";
+"AdminFlagDesc_calls_screen_share_enabled" = "Включает демонстрацию экрана в звонках. Выключен для пилота — UI-переключатель не полностью связан с WebRTC track-replace. Независим от calls_group_enabled (P2P 1-на-1 демонстрация тоже за этим флагом).";
 "MaintenanceBannerDefault" = "Идут технические работы.";
 "MaintenanceBannerWriteBlocked" = "Только чтение";
 "BoostingGiveawayCanceledByPayment" = "Розыгрыш отменен из-за проблемы с оплатой";

@@ -55,6 +55,28 @@ const tabLangKey = (tab: AdminTab) => {
   }
 };
 
+// flagDescription resolves the per-flag description with three priorities:
+//  1. Frontend localization key `AdminFlagDesc_<flag.key>` — russian-first
+//     editorial copy (see fallback.strings / fallback.ru.strings).
+//  2. Backend `flag.description` from pkg/featureflags/registry.go — used
+//     as a fallback for unknown / future keys, so adding a flag without
+//     touching the strings file still shows the operator-doc text.
+//  3. undefined — caller hides the description row entirely.
+//
+// Missing keys make lang() return the key itself (oldLangProvider.ts:245),
+// hence the explicit `localized !== key` guard. We accept the `as` cast
+// because LangFn is exhaustively typed by the generated key union and we're
+// constructing the key dynamically from data.
+function flagDescription(
+  lang: ReturnType<typeof useLang>,
+  flag: AdminFlag,
+): string | undefined {
+  const key = `AdminFlagDesc_${flag.key}`;
+  const localized = (lang as unknown as (k: string) => string)(key);
+  if (localized && localized !== key) return localized;
+  return flag.description || undefined;
+}
+
 // Tab visibility mirrors the backend permission split in pkg/permissions:
 // admin/superadmin have SysManageSettings (flags + maintenance + welcome)
 // and SysViewAuditLog (audit). compliance is audit-only — no write access
@@ -244,7 +266,8 @@ const FlagsTab = () => {
                 )}
                 <span className={styles.flagExposure}>{flag.exposure}</span>
               </div>
-              {flag.description && <div className={styles.flagDesc}>{flag.description}</div>}
+              {(flagDescription(lang, flag) ?? '') !== ''
+                && <div className={styles.flagDesc}>{flagDescription(lang, flag)}</div>}
             </div>
             <div className={styles.flagControls}>
               <button
@@ -281,13 +304,16 @@ const FlagsTab = () => {
           title={lang('AdminFlagDangerousConfirmTitle')}
           hasCloseButton
         >
+          {/* Render the prompt as separate paragraphs instead of stuffing the
+              flag description into the {description} placeholder — when the
+              description didn't end with a period, the legacy single-line
+              format produced runs like "DM chats Точно включаете?". */}
           <div className={styles.confirmBody}>
-            <p>
-              {lang('AdminFlagDangerousConfirmBody', {
-                key: pendingDangerous.key,
-                description: pendingDangerous.description || '',
-              })}
-            </p>
+            <p>{lang('AdminFlagDangerousConfirmIntro', { key: pendingDangerous.key })}</p>
+            {flagDescription(lang, pendingDangerous) && (
+              <p className={styles.flagDesc}>{flagDescription(lang, pendingDangerous)}</p>
+            )}
+            <p>{lang('AdminFlagDangerousConfirmQuestion')}</p>
           </div>
           <div className={styles.actions}>
             <button
