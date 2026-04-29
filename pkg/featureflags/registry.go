@@ -43,12 +43,20 @@ const (
 )
 
 // Definition is the in-code description of a single feature flag.
+//
+// Dangerous is a UX-layer hint, separate from Class: when true, the admin
+// AdminPanel surfaces a confirmation modal before toggling the flag ON.
+// "Dangerous" is about user-visible blast radius (turning on something with
+// known UX gaps, partially-implemented surfaces, or trust implications),
+// not about Class — a hardening flag can be safe to toggle, while a risky
+// feature can be inert. The two axes intentionally don't collapse.
 type Definition struct {
 	Key         string
 	Default     bool
 	Description string
 	Exposure    Exposure
 	Class       Class
+	Dangerous   bool
 }
 
 // Well-known flag keys. Adding a key here is the only correct way to
@@ -65,11 +73,13 @@ const (
 // adding a row here AND a migration that seeds the row in feature_flags.
 var Registry = []Definition{
 	{
-		Key:         KeyE2EDirectMessages,
-		Default:     false,
-		Description: "Enable E2E encryption for new DM chats. Currently inert (Phase 7 Signal Protocol rolled back in mig 053).",
-		Exposure:    ExposureAuth,
-		Class:       ClassRiskyFeature,
+		Key:     KeyE2EDirectMessages,
+		Default: false,
+		Description: "Enable E2E encryption for new DM chats. Currently inert (Phase 7 Signal Protocol rolled back in mig 053). " +
+			"Dangerous: enabling it would suggest to users that DMs are encrypted while ciphertext is not actually exchanged — a trust implication, not a tech bug.",
+		Exposure:  ExposureAuth,
+		Class:     ClassRiskyFeature,
+		Dangerous: true,
 	},
 	{
 		Key:         KeyMaintenanceMode,
@@ -83,8 +93,9 @@ var Registry = []Definition{
 		Default: false,
 		Description: "Enable group voice/video calls (SFU mode). Off for the pilot — the SFU backend is " +
 			"production-ready but the group-call init UX has known gaps. P2P 1-1 calls remain available regardless of this flag.",
-		Exposure: ExposureAuth,
-		Class:    ClassRiskyFeature,
+		Exposure:  ExposureAuth,
+		Class:     ClassRiskyFeature,
+		Dangerous: true,
 	},
 	{
 		Key:     KeyCallsScreenShare,

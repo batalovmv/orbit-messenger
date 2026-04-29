@@ -156,6 +156,51 @@
   border-color: transparent;
 }
 
+.flagFilterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--color-borders);
+  border-radius: 0.5rem;
+  background: var(--color-background);
+}
+
+.flagFilterChip {
+  background: transparent;
+  border: none;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+
+  &:hover { color: inherit; }
+}
+
+.flagFilterChipActive {
+  background: var(--color-primary, #3390ec);
+  color: #fff;
+}
+
+.flagControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.flagHistoryBtn {
+  background: transparent;
+  border: 1px solid var(--color-borders);
+  border-radius: 999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
 // Maintenance ---------------------------------------------------------------
 .formRow {
   display: flex;

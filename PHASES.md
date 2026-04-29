@@ -1539,6 +1539,7 @@ E2E (Signal, X3DH + Double Ratchet) криптографически исклю�
 - [x] Cross-device read-receipt sync (WS + silent-push fallback, see `docs/canon/current-state.md`) (#13/#14)
 - [x] Day 5.1 Admin Push Inspector — admin test-push with per-device delivery report; timeout hierarchy 12s/10s/5s, ctx.Err() guards, audit-first-fail-closed; surfaced+fixed pre-existing prod VAPID env issue (#16)
 - [x] Admin toolkit polish A — Audit log dropdown filters (action / target_type whitelists, since/until date pickers, free-text q AND-combined) + CSV export endpoint `GET /admin/audit-log/export` (200k row hard cap, gated SysViewAuditLog+SysExportData, preflight audit-first, CSV-injection defanged via OWASP `'` prefix)
+- [x] Admin toolkit polish B — Feature Flags exposure-segmented filter + per-flag history modal (reuses /admin/audit-log) + confirm-modal on Dangerous toggle-ON (`featureflags.Definition.Dangerous`, marks e2e_dm_enabled + calls_group_enabled); pre-existing fix: disable toggle for !known DB rows.
 
 **Backup:**
 - [x] PostgreSQL: Saturn.ac managed Hourly backups (RPO = 1h) — enabled via UI

@@ -67,7 +67,12 @@ type AdminFlag struct {
 	Exposure    string                 `json:"exposure"`
 	Class       string                 `json:"class"`
 	Known       bool                   `json:"known"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	// Dangerous mirrors featureflags.Definition.Dangerous: a UX hint asking
+	// the admin UI to require an explicit confirmation when the flag is
+	// turned ON. Always false for unknown DB rows — they have no registry
+	// entry to anchor a danger annotation against.
+	Dangerous bool      `json:"dangerous"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FeatureFlagService fronts the feature_flags table with a process-local
@@ -249,6 +254,7 @@ func (s *FeatureFlagService) ListAll(ctx context.Context, actorID uuid.UUID, act
 			Exposure:    string(def.Exposure),
 			Class:       string(def.Class),
 			Known:       true,
+			Dangerous:   def.Dangerous,
 			Metadata:    map[string]interface{}{},
 		}
 		if row, ok := byKey[def.Key]; ok {
@@ -354,6 +360,7 @@ func (s *FeatureFlagService) Set(ctx context.Context, actorID uuid.UUID, actorRo
 		Exposure:    string(def.Exposure),
 		Class:       string(def.Class),
 		Known:       true,
+		Dangerous:   def.Dangerous,
 		UpdatedAt:   row.UpdatedAt,
 		Metadata:    map[string]interface{}{},
 	}

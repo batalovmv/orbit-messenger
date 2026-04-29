@@ -54,6 +54,10 @@ export type AdminFlag = {
   exposure: 'unauth' | 'auth' | 'admin' | 'server_only';
   class: string;
   known: boolean;
+  // dangerous mirrors featureflags.Definition.Dangerous on the backend; UI
+  // requires an extra confirmation modal before turning the flag ON.
+  // Always false for unknown DB rows.
+  dangerous?: boolean;
   updated_at?: string;
 };
 
