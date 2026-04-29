@@ -3061,8 +3061,11 @@
 "ComplianceOpenPanel" = "Compliance Review";
 "ComplianceExportUser" = "Export user data (.ndjson)";
 "ComplianceExportChat" = "Export chat messages (.ndjson)";
+// AdminPanelTitle stays Russian-only — admin UI is russian-first by project
+// pattern. AdminOpenPanel is the burger-menu entry shown next to "My Profile",
+// "Settings" etc., so it follows the locale of the host menu.
 "AdminPanelTitle" = "Администрирование";
-"AdminOpenPanel" = "Администрирование";
+"AdminOpenPanel" = "Administration";
 "AdminTabFeatureFlags" = "Переключатели";
 "AdminTabMaintenance" = "Технические работы";
 "AdminTabAuditLog" = "Журнал действий";

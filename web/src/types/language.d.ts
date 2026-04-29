@@ -4124,8 +4124,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ExactTextCopied': {
     '0': V;
   };
-  'AdminWelcomeBackfillResult': {
-    'count': V;
+  'AdminFlagHistoryTitle': {
+    'key': V;
+  };
+  'AdminFlagDangerousConfirmBody': {
+    'key': V;
+    'description': V;
   };
   'AdminAuditExportHint': {
     'cap': V;
@@ -4133,12 +4137,8 @@ export interface LangPairWithVariables<V = LangVariable> {
   'AdminAuditExportFailed': {
     'error': V;
   };
-  'AdminFlagHistoryTitle': {
-    'key': V;
-  };
-  'AdminFlagDangerousConfirmBody': {
-    'key': V;
-    'description': V;
+  'AdminWelcomeBackfillResult': {
+    'count': V;
   };
   'AdminPushInspectorCountSent': {
     'count': V;
