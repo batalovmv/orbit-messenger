@@ -142,14 +142,19 @@ addActionHandler('initMain', (global): ActionReturnType => {
         localStorage.setItem(NOTIFICATION_PROMPT_STORAGE_KEY, '1');
       }
 
-      if (shouldRestorePushSubscription) {
-        const serviceWorkerRegistration = await navigator.serviceWorker.ready;
-        const existingSubscription = await serviceWorkerRegistration.pushManager.getSubscription();
-        if (!existingSubscription) {
-          return;
-        }
-      }
-
+      // shouldRestorePushSubscription handles two distinct cases and used to
+      // bail on the second:
+      //  (a) PushSubscription still exists in the SW but our settings cache
+      //      lost track of it — subscribe() short-circuits via
+      //      checkIfShouldResubscribe and re-syncs the settings.
+      //  (b) PushSubscription was invalidated (VAPID rotation 2026-04-28,
+      //      browser cleared site data, FCM purged the registration) —
+      //      getSubscription() returns null and we MUST call subscribe()
+      //      to create a new one. The previous early-return when no existing
+      //      subscription was found left users with permission=granted but
+      //      no active push indefinitely (silent push failure mode discovered
+      //      during the 2026-04-29 frontend audit).
+      // In both cases, calling subscribe() is the right move.
       await subscribe();
     };
     events.forEach((event) => {
