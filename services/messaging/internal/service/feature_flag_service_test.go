@@ -10,6 +10,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -190,6 +191,53 @@ func TestFeatureFlagService_VisibleFlags_FiltersByExposure(t *testing.T) {
 	}
 }
 
+// TestFeatureFlagService_Maintenance_ScheduledWindow exercises the scheduled
+// mode: an enabled flag is only effectively active when `now` falls inside
+// the optional start_at / end_at window. The window is read from JSONB
+// metadata at request time — no background sweeper, no migration.
+func TestFeatureFlagService_Maintenance_ScheduledWindow(t *testing.T) {
+	flagStore := newMockFlagStore()
+	flagStore.rows[featureflags.KeyMaintenanceMode] = store.FeatureFlag{
+		Key: featureflags.KeyMaintenanceMode, Enabled: true,
+		Metadata: json.RawMessage(
+			`{"message":"plan","block_writes":true,` +
+				`"start_at":"2026-05-01T08:00:00Z",` +
+				`"end_at":"2026-05-01T10:00:00Z"}`),
+	}
+	svc := NewFeatureFlagService(flagStore, &mockAuditStore{})
+	ctx := context.Background()
+
+	// Before the window: enabled=true but Active must be false — banner is
+	// suppressed until start_at.
+	before := svc.maintenanceAt(ctx, mustParseRFC3339(t, "2026-05-01T07:59:00Z"))
+	if before.Active {
+		t.Fatalf("expected inactive before start_at, got %+v", before)
+	}
+
+	// Inside the window: Active.
+	during := svc.maintenanceAt(ctx, mustParseRFC3339(t, "2026-05-01T08:30:00Z"))
+	if !during.Active {
+		t.Fatalf("expected active inside window, got %+v", during)
+	}
+
+	// After end_at: window expired, banner clears even though enabled=true.
+	after := svc.maintenanceAt(ctx, mustParseRFC3339(t, "2026-05-01T10:01:00Z"))
+	if after.Active {
+		t.Fatalf("expected inactive after end_at, got %+v", after)
+	}
+
+	// Open-ended (no end_at): always active once start_at passes.
+	flagStore.rows[featureflags.KeyMaintenanceMode] = store.FeatureFlag{
+		Key: featureflags.KeyMaintenanceMode, Enabled: true,
+		Metadata: json.RawMessage(`{"message":"open","block_writes":false,"start_at":"2026-05-01T08:00:00Z"}`),
+	}
+	svc.invalidate()
+	openAfter := svc.maintenanceAt(ctx, mustParseRFC3339(t, "2026-12-31T23:59:00Z"))
+	if !openAfter.Active {
+		t.Fatalf("expected active for open-ended window past start, got %+v", openAfter)
+	}
+}
+
 func TestFeatureFlagService_Maintenance_SnapshotShape(t *testing.T) {
 	flagStore := newMockFlagStore()
 	flagStore.rows[featureflags.KeyMaintenanceMode] = store.FeatureFlag{
@@ -211,10 +259,15 @@ func TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata(t *testing.
 	flagStore := newMockFlagStore()
 	flagStore.rows[featureflags.KeyMaintenanceMode] = store.FeatureFlag{
 		Key: featureflags.KeyMaintenanceMode, Enabled: true,
+		// Window deliberately covers the entire test-suite lifetime
+		// (1970-2099) so this stays a public-leak assertion, not a window
+		// behaviour assertion.
 		Metadata: json.RawMessage(
 			`{"message":"тех. работы","block_writes":true,` +
 				`"since":"2026-04-27T12:00:00Z",` +
-				`"updated_by":"4ac0c4d2-1111-2222-3333-444455556666"}`),
+				`"updated_by":"4ac0c4d2-1111-2222-3333-444455556666",` +
+				`"start_at":"1970-01-01T00:00:00Z",` +
+				`"end_at":"2099-12-31T00:00:00Z"}`),
 	}
 	svc := NewFeatureFlagService(flagStore, &mockAuditStore{})
 
@@ -226,8 +279,12 @@ func TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata(t *testing.
 	pub := svc.PublicMaintenance(context.Background())
 	// Marshal to JSON and assert the leak-safe shape — easier to read than
 	// reflect-based field checks and matches the wire format clients see.
+	// The scheduled-mode timestamps (`start_at` / `end_at`) ARE operator
+	// metadata too — leaking them tells a passerby "maintenance starts at X"
+	// before the operator has decided to communicate that. Only the
+	// effective `Active` bit, computed at read time, is public.
 	raw, _ := json.Marshal(pub)
-	for _, banned := range []string{`"since"`, `"updated_by"`} {
+	for _, banned := range []string{`"since"`, `"updated_by"`, `"start_at"`, `"end_at"`} {
 		if bytes.Contains(raw, []byte(banned)) {
 			t.Errorf("public maintenance payload leaks %s: %s", banned, raw)
 		}
@@ -235,6 +292,85 @@ func TestFeatureFlagService_PublicMaintenance_StripsOperatorMetadata(t *testing.
 	if !pub.Active || !pub.BlockWrites || pub.Message != "тех. работы" {
 		t.Fatalf("public maintenance lost legitimate fields: %+v", pub)
 	}
+}
+
+// TestSanitizeMaintenanceMetadata_ScheduledWindow exercises the parser:
+// valid RFC3339 + datetime-local round-trips, invalid strings drop, and
+// end < start drops the whole window so we never write a degenerate state.
+func TestSanitizeMaintenanceMetadata_ScheduledWindow(t *testing.T) {
+	actor := uuid.MustParse("11111111-2222-3333-4444-555566667777")
+
+	t.Run("valid RFC3339 window preserved", func(t *testing.T) {
+		out := sanitizeMaintenanceMetadata(map[string]interface{}{
+			"message":      "x",
+			"block_writes": false,
+			"start_at":     "2026-05-01T08:00:00Z",
+			"end_at":       "2026-05-01T10:00:00Z",
+		}, actor)
+		if out["start_at"] != "2026-05-01T08:00:00Z" {
+			t.Errorf("expected RFC3339 start_at preserved, got %v", out["start_at"])
+		}
+		if out["end_at"] != "2026-05-01T10:00:00Z" {
+			t.Errorf("expected RFC3339 end_at preserved, got %v", out["end_at"])
+		}
+	})
+
+	t.Run("datetime-local form normalised to RFC3339", func(t *testing.T) {
+		out := sanitizeMaintenanceMetadata(map[string]interface{}{
+			"start_at": "2026-05-01T08:00",
+		}, actor)
+		if out["start_at"] != "2026-05-01T08:00:00Z" {
+			t.Errorf("datetime-local should normalise to RFC3339, got %v", out["start_at"])
+		}
+	})
+
+	t.Run("garbage time dropped", func(t *testing.T) {
+		out := sanitizeMaintenanceMetadata(map[string]interface{}{
+			"start_at": "tomorrow",
+			"end_at":   "next tuesday",
+		}, actor)
+		if _, ok := out["start_at"]; ok {
+			t.Errorf("garbage start_at should be dropped: %v", out)
+		}
+		if _, ok := out["end_at"]; ok {
+			t.Errorf("garbage end_at should be dropped: %v", out)
+		}
+	})
+
+	t.Run("end before start drops both", func(t *testing.T) {
+		out := sanitizeMaintenanceMetadata(map[string]interface{}{
+			"start_at": "2026-05-01T10:00:00Z",
+			"end_at":   "2026-05-01T08:00:00Z",
+		}, actor)
+		if _, ok := out["start_at"]; ok {
+			t.Errorf("inverted window: start_at must be dropped, got %v", out)
+		}
+		if _, ok := out["end_at"]; ok {
+			t.Errorf("inverted window: end_at must be dropped, got %v", out)
+		}
+	})
+
+	t.Run("equal start and end drops both (zero-length window)", func(t *testing.T) {
+		out := sanitizeMaintenanceMetadata(map[string]interface{}{
+			"start_at": "2026-05-01T10:00:00Z",
+			"end_at":   "2026-05-01T10:00:00Z",
+		}, actor)
+		if _, ok := out["start_at"]; ok {
+			t.Errorf("equal start==end: start_at must be dropped, got %v", out)
+		}
+		if _, ok := out["end_at"]; ok {
+			t.Errorf("equal start==end: end_at must be dropped, got %v", out)
+		}
+	})
+}
+
+func mustParseRFC3339(t *testing.T, s string) time.Time {
+	t.Helper()
+	tt, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("parse RFC3339 %q: %v", s, err)
+	}
+	return tt
 }
 
 func TestFeatureFlagService_ListAll_RequiresPermission(t *testing.T) {

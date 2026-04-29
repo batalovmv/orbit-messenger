@@ -30,15 +30,26 @@ const flagsCacheTTL = 30 * time.Second
 // Stored in DB as `metadata` JSONB on the flag row.
 //
 // MaintenanceState is the AUTH/admin shape — it includes operator metadata
-// (`since`, `updated_by`). Use PublicMaintenance() for unauthenticated
-// responses; that strips the operator UUID + timestamp so a passerby on
-// the login screen cannot enumerate active admin accounts.
+// (`since`, `updated_by`, `start_at`, `end_at`). Use PublicMaintenance()
+// for unauthenticated responses; that strips operator metadata so a
+// passerby on the login screen cannot enumerate active admin accounts or
+// the planned maintenance schedule.
+//
+// StartAt / EndAt power the scheduled-mode flow: an admin can enable the
+// flag in advance and supply a window — the banner is suppressed until
+// `now >= StartAt` and auto-clears once `now > EndAt`. Both are optional;
+// when absent the flag toggles immediately. Storage stays JSONB metadata
+// (no schema migration). Effective Active is computed at read time —
+// see Maintenance() — so a single read per /system/config request is
+// enough; no background sweeper.
 type MaintenanceState struct {
 	Active      bool       `json:"active"`
 	Message     string     `json:"message,omitempty"`
 	BlockWrites bool       `json:"block_writes"`
 	Since       *time.Time `json:"since,omitempty"`
 	UpdatedBy   *string    `json:"updated_by,omitempty"`
+	StartAt     *time.Time `json:"start_at,omitempty"`
+	EndAt       *time.Time `json:"end_at,omitempty"`
 }
 
 // PublicMaintenanceState is the leak-safe projection of MaintenanceState
@@ -181,7 +192,21 @@ func (s *FeatureFlagService) PublicMaintenance(ctx context.Context) PublicMainte
 // Maintenance returns the parsed maintenance state for client+gateway.
 // Always safe to call; on DB error returns "off" — banner suppressed but
 // the system stays available.
+//
+// Effective Active includes the optional StartAt / EndAt window (admin
+// scheduled-mode). The flag-enabled bit is necessary but not sufficient:
+//   - if StartAt is set and now < StartAt → not yet active
+//   - if EndAt is set and now > EndAt → window expired, no longer active
+//
+// We deliberately do NOT auto-disable the row in the DB when the window
+// expires — that would require a background sweeper / cron, plus another
+// audit row. Read-time evaluation keeps the contract stateless.
 func (s *FeatureFlagService) Maintenance(ctx context.Context) MaintenanceState {
+	return s.maintenanceAt(ctx, time.Now())
+}
+
+// maintenanceAt is the testable seam — Maintenance pins it to time.Now().
+func (s *FeatureFlagService) maintenanceAt(ctx context.Context, now time.Time) MaintenanceState {
 	snap, err := s.snapshot(ctx)
 	if err != nil {
 		return MaintenanceState{}
@@ -194,8 +219,21 @@ func (s *FeatureFlagService) Maintenance(ctx context.Context) MaintenanceState {
 	if len(row.Metadata) > 0 {
 		_ = json.Unmarshal(row.Metadata, &meta) // unknown fields are dropped
 	}
-	meta.Active = row.Enabled
+	meta.Active = row.Enabled && maintenanceWindowOpen(meta.StartAt, meta.EndAt, now)
 	return meta
+}
+
+// maintenanceWindowOpen returns true when `now` falls inside [start, end].
+// Either bound being nil means open-ended on that side. The function does
+// NOT consult the enabled bit — the caller composes both signals.
+func maintenanceWindowOpen(startAt, endAt *time.Time, now time.Time) bool {
+	if startAt != nil && now.Before(*startAt) {
+		return false
+	}
+	if endAt != nil && now.After(*endAt) {
+		return false
+	}
+	return true
 }
 
 // VisibleFlags returns flag values filtered to those whose registry
@@ -391,6 +429,16 @@ func (s *FeatureFlagService) writeAudit(ctx context.Context, actorID uuid.UUID, 
 
 const maintenanceMessageMax = 500
 
+// sanitizeMaintenanceMetadata projects an admin-supplied metadata blob onto
+// the canonical shape stored in feature_flags.metadata. Unknown fields are
+// dropped so a stale or malicious client cannot smuggle additional keys.
+//
+// Allowed input fields: message, block_writes, start_at, end_at.
+// Always-set output fields: message, block_writes, since, updated_by.
+// Optional output fields: start_at, end_at (preserved iff valid RFC3339
+// AND end_at >= start_at when both present; otherwise dropped silently
+// rather than rejected — UX-friendlier and the sanitiser is the
+// last-write-wins authority).
 func sanitizeMaintenanceMetadata(in map[string]interface{}, actorID uuid.UUID) map[string]interface{} {
 	out := map[string]interface{}{}
 
@@ -410,7 +458,49 @@ func sanitizeMaintenanceMetadata(in map[string]interface{}, actorID uuid.UUID) m
 		out["block_writes"] = false
 	}
 
+	startAt := parseAdminTime(in["start_at"])
+	endAt := parseAdminTime(in["end_at"])
+	// Window sanity: drop the pair if end <= start. The handler should
+	// have already rejected this with a 400, so this branch is
+	// defence-in-depth for direct admin-flag PATCH callers (and for any
+	// future code path that bypasses SetMaintenance). Acting as if no
+	// window was requested is safer than half-applying it (which would
+	// either always evaluate to "window closed" or open for a single
+	// tick at start_at == end_at).
+	if startAt != nil && endAt != nil && !endAt.After(*startAt) {
+		startAt = nil
+		endAt = nil
+	}
+	if startAt != nil {
+		out["start_at"] = startAt.UTC().Format(time.RFC3339)
+	}
+	if endAt != nil {
+		out["end_at"] = endAt.UTC().Format(time.RFC3339)
+	}
+
 	out["since"] = time.Now().UTC().Format(time.RFC3339)
 	out["updated_by"] = actorID.String()
 	return out
+}
+
+// parseAdminTime accepts the same shapes the AdminPanel form produces:
+// the browser-native datetime-local "YYYY-MM-DDTHH:MM" (interpreted as
+// UTC — clients can convert in-display) and the canonical RFC3339 form
+// for round-trip after a save.
+func parseAdminTime(raw interface{}) *time.Time {
+	s, ok := raw.(string)
+	if !ok {
+		return nil
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return &t
+	}
+	if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+		return &t
+	}
+	return nil
 }

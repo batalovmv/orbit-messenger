@@ -2305,6 +2305,11 @@ export interface LangPair {
   'AdminMaintenanceSaved': undefined;
   'AdminMaintenanceDisabled': undefined;
   'AdminMaintenanceLastUpdated': undefined;
+  'AdminMaintenanceStartAt': undefined;
+  'AdminMaintenanceEndAt': undefined;
+  'AdminMaintenanceWindowHelp': undefined;
+  'AdminMaintenancePreviewTitle': undefined;
+  'AdminMaintenancePreviewIdle': undefined;
   'AdminAuditSearchPlaceholder': undefined;
   'AdminAuditEmpty': undefined;
   'AdminAuditLoadMore': undefined;

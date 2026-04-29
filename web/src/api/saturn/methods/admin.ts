@@ -89,6 +89,11 @@ export type MaintenanceUpdate = {
   enabled: boolean;
   message: string;
   block_writes: boolean;
+  // Optional scheduled-mode window. Either RFC3339 (server canonical) or
+  // the browser-native datetime-local form ("YYYY-MM-DDTHH:MM"). Empty
+  // strings are treated as "no bound" — backend sanitiser drops them.
+  start_at?: string;
+  end_at?: string;
 };
 
 export async function setAdminMaintenance(update: MaintenanceUpdate): Promise<AdminFlag> {
