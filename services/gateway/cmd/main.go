@@ -197,6 +197,24 @@ func main() {
 	app.Use(metricsReg.HTTPMiddleware())
 	app.Use(middleware.CORSMiddleware(frontendURL))
 
+	// X-App-Version handshake. Mounted BEFORE rate limiting so a forced
+	// upgrade response doesn't burn the client's per-IP quota. Both env
+	// vars are optional and default to no-op:
+	//   APP_LATEST_VERSION — when set, every response carries
+	//     `X-App-Latest-Version: <ver>` and the web client triggers an
+	//     update banner if it differs from its baked-in APP_VERSION. Set
+	//     by CI/deploy from web/package.json's "version".
+	//   APP_MIN_VERSION — when set, requests carrying `X-App-Version`
+	//     below this are rejected with 426 + `X-Required-Version`.
+	//     Opt-in: leave empty unless you have a hard-incompatibility
+	//     between client and server (schema break, security fix that
+	//     requires the new client). /auth/* and /public/* are always
+	//     allowed through so users can still log in / poll version.txt.
+	app.Use(middleware.AppVersionMiddleware(middleware.AppVersionConfig{
+		LatestVersion: config.EnvOr("APP_LATEST_VERSION", ""),
+		MinVersion:    config.EnvOr("APP_MIN_VERSION", ""),
+	}))
+
 	// Health
 	app.Get("/health", handler.HealthHandler)
 
