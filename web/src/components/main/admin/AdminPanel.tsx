@@ -565,6 +565,15 @@ const canExportAudit = (role?: GlobalState['saturnRole']) => (
   role === 'compliance' || role === 'superadmin'
 );
 
+// AUDIT_FILTER_ALL is the sentinel value for "no filter" on the action /
+// target_type dropdowns. We CANNOT use the empty string here — Teact drops
+// `value=""` from rendered <option> attributes, which makes the browser fall
+// back to option.text (the localized label like "Все действия") for
+// `option.value`. That value would then be sent as `?action=Все действия`
+// and the backend whitelist would reject it with 400 "unknown action". Use
+// a non-empty sentinel and convert to '' before request-building.
+const AUDIT_FILTER_ALL = '__all__';
+
 const AuditTab = ({ role }: AuditTabProps) => {
   const lang = useLang();
   const [q, setQ] = useState('');
@@ -683,10 +692,13 @@ const AuditTab = ({ role }: AuditTabProps) => {
           <span className={styles.formLabelText}>{lang('AdminAuditFilterAction')}</span>
           <select
             className={styles.auditFilterSelect}
-            value={actionFilter}
-            onChange={(e) => setActionFilter((e.target as HTMLSelectElement).value)}
+            value={actionFilter || AUDIT_FILTER_ALL}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setActionFilter(v === AUDIT_FILTER_ALL ? '' : v);
+            }}
           >
-            <option value="">{lang('AdminAuditFilterActionAll')}</option>
+            <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterActionAll')}</option>
             {AUDIT_ACTIONS.map((a) => (
               <option key={a} value={a}>{a}</option>
             ))}
@@ -696,10 +708,13 @@ const AuditTab = ({ role }: AuditTabProps) => {
           <span className={styles.formLabelText}>{lang('AdminAuditFilterTargetType')}</span>
           <select
             className={styles.auditFilterSelect}
-            value={targetTypeFilter}
-            onChange={(e) => setTargetTypeFilter((e.target as HTMLSelectElement).value)}
+            value={targetTypeFilter || AUDIT_FILTER_ALL}
+            onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setTargetTypeFilter(v === AUDIT_FILTER_ALL ? '' : v);
+            }}
           >
-            <option value="">{lang('AdminAuditFilterTargetTypeAll')}</option>
+            <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterTargetTypeAll')}</option>
             {AUDIT_TARGET_TYPES.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
