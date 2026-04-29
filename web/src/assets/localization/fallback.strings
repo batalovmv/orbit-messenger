@@ -3081,6 +3081,8 @@
 "AdminFlagHistoryClose" = "Закрыть";
 "AdminFlagDangerousConfirmTitle" = "Включить опасный флаг?";
 "AdminFlagDangerousConfirmBody" = "Флаг {key} помечен как опасный. {description} Точно включаете?";
+"AdminFlagDangerousConfirmIntro" = "Флаг {key} помечен как опасный.";
+"AdminFlagDangerousConfirmQuestion" = "Точно включаете?";
 "AdminFlagDangerousConfirmAction" = "Да, включить";
 "AdminMaintenanceEnable" = "Включить режим технических работ";
 "AdminMaintenanceMessage" = "Сообщение для пользователей";
@@ -3112,29 +3114,41 @@
 "AdminAuditExportRunning" = "Готовим выгрузку…";
 "AdminAuditExportFailed" = "Не удалось выгрузить CSV: {error}";
 "AdminAuditExportForbidden" = "Экспорт доступен только compliance/superadmin.";
-"AdminTabWelcome" = "Welcome flow";
-"AdminWelcomeIntro" = "Chats marked as default-for-new-users are automatically added to every newly invited user on registration.";
-"AdminWelcomeBackfillDescription" = "The button below adds EVERY existing user to EVERY chat flagged as default-for-new-users. Users that are already members are skipped.";
-"AdminWelcomeBackfillWarning" = "Warning: this is a large, visible operation — every user will see new chats in their list and (if online) a member-added notification. Only run when you are sure.";
-"AdminWelcomeBackfillButton" = "Backfill existing users to default chats";
-"AdminWelcomeBackfillConfirmTitle" = "Confirm backfill";
-"AdminWelcomeBackfillConfirmBody" = "Every existing user will be added to every chat flagged as default-for-new-users. This cannot be undone — you would have to remove members one by one. Proceed?";
-"AdminWelcomeBackfillConfirmAction" = "Yes, add everyone";
-"AdminWelcomeBackfillResult" = "Added {count} new memberships.";
-"AdminTabPushInspector" = "Push Inspector";
-"AdminPushInspectorIntro" = "Send a test web-push to one user to debug \"I'm not getting notifications\" reports. Per-device delivery status is shown below — provider endpoint URLs are not exposed.";
-"AdminPushInspectorIdentifier" = "User (email or UUID)";
-"AdminPushInspectorIdentifierPlaceholder" = "user@example.com or 11111111-1111-...";
-"AdminPushInspectorTitle" = "Notification title (optional)";
-"AdminPushInspectorTitlePlaceholder" = "Defaults to \"Orbit test push\"";
-"AdminPushInspectorBody" = "Notification body (optional)";
-"AdminPushInspectorBodyPlaceholder" = "Defaults to a generic confirmation line";
-"AdminPushInspectorSend" = "Send test push";
-"AdminPushInspectorTarget" = "Target";
-"AdminPushInspectorCountSent" = "{count} sent";
-"AdminPushInspectorCountFailed" = "{count} failed";
-"AdminPushInspectorCountStale" = "{count} stale";
-"AdminPushInspectorNoDevices" = "User has no registered push devices.";
+// Admin UI is Russian-first for the pilot. The fallback values below mirror
+// fallback.ru.strings so users on en-locale (the default fallback) see the
+// same admin copy as ru-locale users. AdminMaintenance/AdminFeatureFlags/
+// AdminAudit blocks above already follow this pattern.
+"AdminTabWelcome" = "Авто-чаты";
+"AdminWelcomeIntro" = "Чаты, отмеченные как «по умолчанию для новых», автоматически добавляются каждому новому приглашённому пользователю при регистрации.";
+"AdminWelcomeBackfillDescription" = "Кнопка ниже добавит ВСЕХ существующих пользователей во ВСЕ чаты, помеченные как «по умолчанию для новых». Уже состоящие участники пропускаются.";
+"AdminWelcomeBackfillWarning" = "Внимание: операция массовая и заметна — каждый получит чаты в списке и (если был онлайн) уведомление о добавлении. Запускайте только когда уверены.";
+"AdminWelcomeBackfillButton" = "Добавить всех существующих пользователей";
+"AdminWelcomeBackfillConfirmTitle" = "Подтвердите добавление";
+"AdminWelcomeBackfillConfirmBody" = "Все существующие пользователи будут добавлены во все чаты, отмеченные как «по умолчанию для новых». Действие нельзя отменить — придётся вручную исключать участников. Продолжить?";
+"AdminWelcomeBackfillConfirmAction" = "Да, добавить всех";
+"AdminWelcomeBackfillResult" = "Добавлено новых участников: {count}.";
+"AdminTabPushInspector" = "Push-инспектор";
+"AdminPushInspectorIntro" = "Отправить тестовый web-push одному пользователю, чтобы быстро проверить «мне не приходят уведомления». Ниже показывается статус доставки по каждому устройству. URL push-эндпоинтов клиенту не возвращаются.";
+"AdminPushInspectorIdentifier" = "Пользователь (email или UUID)";
+"AdminPushInspectorIdentifierPlaceholder" = "user@example.com или 11111111-1111-…";
+"AdminPushInspectorTitle" = "Заголовок уведомления (необязательно)";
+"AdminPushInspectorTitlePlaceholder" = "По умолчанию — «Orbit test push»";
+"AdminPushInspectorBody" = "Текст уведомления (необязательно)";
+"AdminPushInspectorBodyPlaceholder" = "По умолчанию — стандартная подтверждающая строка";
+"AdminPushInspectorSend" = "Отправить тестовый push";
+"AdminPushInspectorTarget" = "Цель";
+"AdminPushInspectorCountSent" = "{count} доставлено";
+"AdminPushInspectorCountFailed" = "{count} ошибок";
+"AdminPushInspectorCountStale" = "{count} устарело";
+"AdminPushInspectorNoDevices" = "У пользователя нет зарегистрированных push-устройств.";
+
+// Per-flag descriptions live on the frontend (russian-first); the backend
+// `flag.description` from pkg/featureflags/registry.go is kept as the
+// fallback for unknown / future keys, and as inline operator documentation.
+"AdminFlagDesc_e2e_dm_enabled" = "Включает E2E-шифрование для новых DM-чатов. Сейчас неактивно (Phase 7 Signal Protocol откачен в migration 053). Опасный: при включении пользователи решат, что DM зашифрованы, хотя реальный шифротекст не обменивается — это вопрос доверия, а не баг.";
+"AdminFlagDesc_maintenance_mode" = "Режим технических работ для всей системы. Когда включён, web-клиент показывает баннер. Если metadata.block_writes=true, gateway блокирует запись (POST/PUT/PATCH/DELETE) для всех, кроме суперадминов.";
+"AdminFlagDesc_calls_group_enabled" = "Включает групповые аудио-/видео-звонки (SFU). Выключен для пилота — backend готов, но UX инициализации группового звонка имеет известные пробелы. P2P 1-на-1 звонки работают независимо от этого флага.";
+"AdminFlagDesc_calls_screen_share_enabled" = "Включает демонстрацию экрана в звонках. Выключен для пилота — UI-переключатель не полностью связан с WebRTC track-replace. Независим от calls_group_enabled (P2P 1-на-1 демонстрация тоже за этим флагом).";
 "ChatDefaultForNewUsers" = "Default for new users";
 "ChatDefaultForNewUsersHint" = "Every newly invited user will be auto-added to this chat. Existing users are not affected — use the AdminPanel \"Backfill\" button for that.";
 "MaintenanceBannerDefault" = "Идут технические работы.";
