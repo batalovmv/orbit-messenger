@@ -2297,6 +2297,16 @@ export interface LangPair {
   'AdminAuditSearchPlaceholder': undefined;
   'AdminAuditEmpty': undefined;
   'AdminAuditLoadMore': undefined;
+  'AdminAuditFilterAction': undefined;
+  'AdminAuditFilterActionAll': undefined;
+  'AdminAuditFilterTargetType': undefined;
+  'AdminAuditFilterTargetTypeAll': undefined;
+  'AdminAuditFilterFrom': undefined;
+  'AdminAuditFilterTo': undefined;
+  'AdminAuditFilterReset': undefined;
+  'AdminAuditExport': undefined;
+  'AdminAuditExportRunning': undefined;
+  'AdminAuditExportForbidden': undefined;
   'AdminTabWelcome': undefined;
   'AdminWelcomeIntro': undefined;
   'AdminWelcomeBackfillDescription': undefined;
@@ -4100,6 +4110,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AdminWelcomeBackfillResult': {
     'count': V;
+  };
+  'AdminAuditExportHint': {
+    'cap': V;
+  };
+  'AdminAuditExportFailed': {
+    'error': V;
   };
   'AdminPushInspectorCountSent': {
     'count': V;

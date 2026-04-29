@@ -158,13 +158,8 @@ export type AuditQuery = {
 };
 
 export async function fetchAuditLog(query: AuditQuery): Promise<AuditPage> {
-  const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined && v !== '' && v !== null) {
-      params.set(k, String(v));
-    }
-  }
-  const url = `${API_PREFIX}/admin/audit-log${params.toString() ? `?${params.toString()}` : ''}`;
+  const params = buildAuditParams(query);
+  const url = `${API_PREFIX}/admin/audit-log${params ? `?${params}` : ''}`;
   const res = await fetch(url, { headers: await authHeader() });
   const raw = await jsonOrThrow<{ data?: AuditEntry[]; cursor?: string; has_more?: boolean }>(res);
   return {
@@ -172,6 +167,65 @@ export async function fetchAuditLog(query: AuditQuery): Promise<AuditPage> {
     cursor: raw.cursor,
     has_more: Boolean(raw.has_more),
   };
+}
+
+// Hard cap is enforced server-side (services/messaging/internal/service/admin_service.go
+// AuditExportHardCap). Mirrored here so the UI hint stays in sync without a
+// round-trip; if backend bumps the cap, update this constant in the same PR.
+export const AUDIT_EXPORT_HARD_CAP = 200_000;
+
+// AUDIT_ACTIONS / AUDIT_TARGET_TYPES mirror the in-code registries in
+// services/messaging/internal/model/audit.go (AuditActions / AuditTargetTypes).
+// Kept in sync by hand — the backend rejects unknown values with 400, so a
+// drift here surfaces as a UI bug, not a security issue.
+export const AUDIT_ACTIONS = [
+  'chat.privileged_read',
+  'user.deactivate',
+  'user.reactivate',
+  'user.role_change',
+  'user.sessions_revoked',
+  'invite.create',
+  'invite.revoke',
+  'audit.view',
+  'audit.export',
+  'user.list_read',
+  'data.export',
+  'feature_flag.list',
+  'feature_flag.set',
+  'maintenance.enable',
+  'maintenance.update',
+  'maintenance.disable',
+  'chat.default_status_set',
+  'default_chats.backfill',
+  'push.test_sent',
+] as const;
+
+export const AUDIT_TARGET_TYPES = [
+  'system',
+  'user',
+  'chat',
+  'message',
+  'feature_flag',
+] as const;
+
+// fetchAuditLogExport returns the raw Response so the caller can stream the
+// CSV body into a Blob. Streaming-friendly: the gateway buffers it (see
+// proxy.doProxy), so the response is fully materialised before the .blob()
+// resolves; for the 200k hard cap this is ~50-100MB, acceptable.
+export async function fetchAuditLogExport(query: Omit<AuditQuery, 'cursor' | 'limit'>): Promise<Response> {
+  const params = buildAuditParams(query);
+  const url = `${API_PREFIX}/admin/audit-log/export${params ? `?${params}` : ''}`;
+  return fetch(url, { headers: await authHeader() });
+}
+
+function buildAuditParams(query: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== '' && v !== null) {
+      params.set(k, String(v));
+    }
+  }
+  return params.toString();
 }
 
 // ---------------------------------------------------------------------------

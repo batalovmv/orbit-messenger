@@ -89,8 +89,9 @@ func (m *mockUserStore) CountByRole(ctx context.Context, role string) (int, erro
 }
 
 type mockAuditStore struct {
-	logFn  func(ctx context.Context, entry *model.AuditEntry) error
-	listFn func(ctx context.Context, filter store.AuditFilter) ([]model.AuditEntry, string, bool, error)
+	logFn    func(ctx context.Context, entry *model.AuditEntry) error
+	listFn   func(ctx context.Context, filter store.AuditFilter) ([]model.AuditEntry, string, bool, error)
+	streamFn func(ctx context.Context, filter store.AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error)
 }
 
 func (m *mockAuditStore) Log(ctx context.Context, entry *model.AuditEntry) error {
@@ -105,6 +106,13 @@ func (m *mockAuditStore) List(ctx context.Context, filter store.AuditFilter) ([]
 		return m.listFn(ctx, filter)
 	}
 	return nil, "", false, nil
+}
+
+func (m *mockAuditStore) Stream(ctx context.Context, filter store.AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error) {
+	if m.streamFn != nil {
+		return m.streamFn(ctx, filter, hardCap, emit)
+	}
+	return 0, nil
 }
 
 func newRedisClientForMiniredis(mr *miniredis.Miniredis) *redis.Client {

@@ -19,6 +19,12 @@ import (
 type AuditStore interface {
 	Log(ctx context.Context, entry *model.AuditEntry) error
 	List(ctx context.Context, filter AuditFilter) ([]model.AuditEntry, string, bool, error)
+	// Stream invokes emit once per matching row in id-DESC order, up to
+	// hardCap rows. The Cursor and Limit fields of filter are ignored —
+	// streaming is single-shot, scoped by the other filter fields. Returns
+	// the number of rows emitted (≤ hardCap) and any iteration error.
+	// Aborts cleanly if ctx is cancelled or emit returns an error.
+	Stream(ctx context.Context, filter AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error)
 }
 
 // AuditFilter defines query parameters for listing audit log entries.
@@ -179,4 +185,130 @@ func (s *auditStore) List(ctx context.Context, filter AuditFilter) ([]model.Audi
 func escapeLike(s string) string {
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(s)
+}
+
+// Stream walks audit_log entries matching the filter and invokes emit per
+// row, capped at hardCap. Cursor/Limit on the filter are ignored. Used by
+// the CSV export endpoint where we don't want to buffer the whole table in
+// memory or paginate.
+//
+// A SET LOCAL statement_timeout is applied within a single-tx connection to
+// bound DB load — long ILIKE+jsonb scans can otherwise pin a backend forever
+// if the operator vendors a pathological filter.
+func (s *auditStore) Stream(ctx context.Context, filter AuditFilter, hardCap int, emit func(model.AuditEntry) error) (int, error) {
+	if hardCap <= 0 {
+		return 0, fmt.Errorf("audit stream: hardCap must be positive")
+	}
+	if emit == nil {
+		return 0, fmt.Errorf("audit stream: emit must not be nil")
+	}
+
+	// Reuse the same WHERE-builder shape as List, with Cursor/Limit elided.
+	var conditions []string
+	var args []interface{}
+	argIdx := 1
+
+	if filter.ActorID != nil {
+		conditions = append(conditions, fmt.Sprintf("a.actor_id = $%d", argIdx))
+		args = append(args, *filter.ActorID)
+		argIdx++
+	}
+	if filter.Action != nil {
+		conditions = append(conditions, fmt.Sprintf("a.action = $%d", argIdx))
+		args = append(args, *filter.Action)
+		argIdx++
+	}
+	if filter.TargetType != nil {
+		conditions = append(conditions, fmt.Sprintf("a.target_type = $%d", argIdx))
+		args = append(args, *filter.TargetType)
+		argIdx++
+	}
+	if filter.TargetID != nil {
+		conditions = append(conditions, fmt.Sprintf("a.target_id = $%d", argIdx))
+		args = append(args, *filter.TargetID)
+		argIdx++
+	}
+	if filter.Since != nil {
+		conditions = append(conditions, fmt.Sprintf("a.created_at >= $%d", argIdx))
+		args = append(args, *filter.Since)
+		argIdx++
+	}
+	if filter.Until != nil {
+		conditions = append(conditions, fmt.Sprintf("a.created_at <= $%d", argIdx))
+		args = append(args, *filter.Until)
+		argIdx++
+	}
+	if q := strings.TrimSpace(filter.Q); q != "" {
+		pattern := "%" + escapeLike(q) + "%"
+		conditions = append(conditions, fmt.Sprintf(
+			"(a.action ILIKE $%d OR a.target_type ILIKE $%d OR a.target_id ILIKE $%d "+
+				"OR COALESCE(u.display_name,'') ILIKE $%d OR a.details::text ILIKE $%d "+
+				"OR host(a.ip_address) ILIKE $%d)",
+			argIdx, argIdx, argIdx, argIdx, argIdx, argIdx))
+		args = append(args, pattern)
+		argIdx++
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query := fmt.Sprintf(
+		`SELECT a.id, a.actor_id, a.action, a.target_type, a.target_id,
+		        a.details, a.ip_address::text, a.user_agent, a.created_at,
+		        COALESCE(u.display_name, '') AS actor_name
+		 FROM audit_log a
+		 LEFT JOIN users u ON u.id = a.actor_id
+		 %s
+		 ORDER BY a.id DESC
+		 LIMIT $%d`, where, argIdx,
+	)
+	args = append(args, hardCap)
+
+	// Acquire a dedicated connection so SET LOCAL stays scoped to this stream.
+	conn, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("acquire audit stream conn: %w", err)
+	}
+	defer conn.Release()
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin audit stream tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // read-only tx, rollback is best-effort
+
+	if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '60s'"); err != nil {
+		return 0, fmt.Errorf("set audit stream timeout: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("query audit stream: %w", err)
+	}
+	defer rows.Close()
+
+	emitted := 0
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return emitted, err
+		}
+		var e model.AuditEntry
+		if err := rows.Scan(
+			&e.ID, &e.ActorID, &e.Action, &e.TargetType, &e.TargetID,
+			&e.Details, &e.IPAddress, &e.UserAgent, &e.CreatedAt,
+			&e.ActorName,
+		); err != nil {
+			return emitted, fmt.Errorf("scan audit stream row: %w", err)
+		}
+		if err := emit(e); err != nil {
+			return emitted, err
+		}
+		emitted++
+	}
+	if err := rows.Err(); err != nil {
+		return emitted, err
+	}
+	return emitted, nil
 }
