@@ -120,9 +120,15 @@ export function installWebVitals() {
   // JS heap (Chromium only).
   const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
   if (memory && typeof memory.usedJSHeapSize === 'number') {
-    // Snapshot at flush time, not at install.
+    // Snapshot at flush time, not at install. `configurable: true` is required:
+    // flush() does `delete vitals.__memorySnapshot` before serializing the
+    // beacon payload, and Object.defineProperty defaults non-configurable —
+    // strict-mode delete on a non-configurable own property throws TypeError,
+    // which fires on every pagehide/visibilitychange:hidden in capture phase
+    // and prevents sendBeacon from running.
     Object.defineProperty(vitals, '__memorySnapshot', {
       value: () => Math.round(memory.usedJSHeapSize / (1024 * 1024)),
+      configurable: true,
     });
   }
 
