@@ -10,6 +10,7 @@ import type { GlobalState } from '../../../global/types';
 import type {
   AdminFlag, AuditEntry,
 } from '../../../api/saturn/methods/admin';
+import type { TabWithProperties } from '../../ui/TabList';
 
 import {
   AUDIT_ACTIONS, AUDIT_EXPORT_HARD_CAP, AUDIT_TARGET_TYPES,
@@ -26,6 +27,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 
 import { MaintenanceBannerView } from '../MaintenanceBanner';
 import Modal from '../../ui/Modal';
+import TabList from '../../ui/TabList';
 
 import styles from './AdminPanel.module.scss';
 
@@ -72,6 +74,20 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
   const shouldRender = Boolean(isOpen && hasAccess);
 
   const activeTab: AdminTab = tab && visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? 'audit';
+  const activeTabIdx = Math.max(0, visibleTabs.indexOf(activeTab));
+
+  // The shared TabList expects `id: number`. We use the index into visibleTabs
+  // both as id and as the click-arg, then map back to the AdminTab string in
+  // handleSwitchTab. lang() runs on every render anyway — no extra deps.
+  const tabListItems: TabWithProperties[] = useMemo(
+    () => visibleTabs.map((t, i) => ({ id: i, title: lang(tabLangKey(t)) })),
+    [visibleTabs, lang],
+  );
+
+  const handleSwitchTab = useLastCallback((idx: number) => {
+    const next = visibleTabs[idx];
+    if (next) selectAdminTab({ tab: next });
+  });
 
   const handleClose = useLastCallback(() => closeAdminPanel());
 
@@ -87,20 +103,12 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
       title={lang('AdminPanelTitle')}
       hasCloseButton
     >
-      <div className={styles.tabs} role="tablist">
-        {visibleTabs.map((t) => (
-          <button
-            type="button"
-            key={t}
-            role="tab"
-            aria-selected={activeTab === t}
-            className={buildClassName(styles.tab, activeTab === t && styles.tabActive)}
-            onClick={() => selectAdminTab({ tab: t })}
-          >
-            {lang(tabLangKey(t))}
-          </button>
-        ))}
-      </div>
+      <TabList
+        tabs={tabListItems}
+        activeTab={activeTabIdx}
+        onSwitchTab={handleSwitchTab}
+        className={styles.tabs}
+      />
       <div className={styles.body}>
         {activeTab === 'flags' && <FlagsTab />}
         {activeTab === 'maintenance' && <MaintenanceTab />}
