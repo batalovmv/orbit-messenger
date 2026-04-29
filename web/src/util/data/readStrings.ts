@@ -1,7 +1,13 @@
 import { DEBUG } from '../../config';
 
 export default function readStrings(data: string): Record<string, string> {
-  const lines = data.split(/;\r?\n?/);
+  // Split only at end-of-entry markers — a `;` that immediately follows the
+  // closing `"` of a `.strings` value. Naive `data.split(/;\r?\n?/)` also
+  // split on semicolons embedded in comments and (rarely) in string values,
+  // silently dropping the next entry. The lookbehind keeps the `"` in the
+  // preceding chunk so parseLine's JSON.parse on the value still sees a
+  // properly-terminated quoted string.
+  const lines = data.split(/(?<=");\r?\n?/);
   const result: Record<string, string> = {};
   for (const rawLine of lines) {
     // Strip blank lines and comment-only lines from the *front* of each chunk.
