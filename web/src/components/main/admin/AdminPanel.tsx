@@ -24,6 +24,7 @@ import buildClassName from '../../../util/buildClassName';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import { MaintenanceBannerView } from '../MaintenanceBanner';
 import Modal from '../../ui/Modal';
 
 import styles from './AdminPanel.module.scss';
@@ -398,11 +399,52 @@ const FlagHistoryModal = ({ flag, onClose }: FlagHistoryModalProps) => {
 // ===========================================================================
 // Maintenance tab
 // ===========================================================================
+//
+// Two additions on top of the basic enable / message / block_writes form:
+//  1. Live preview at the top — renders MaintenanceBannerView with the
+//     CURRENT form state, so the operator sees exactly what users will see
+//     before clicking Apply. Reuses the same component as production.
+//  2. Optional scheduled mode via two `<input type="datetime-local">`
+//     fields. Empty = no bound. Backend evaluates the window at read time
+//     against `time.Now()` (no migration, no sweeper) — see
+//     services/messaging/internal/service/feature_flag_service.go
+//     maintenanceWindowOpen.
+
+// toDatetimeLocal converts an RFC3339 timestamp from the server into the
+// "YYYY-MM-DDTHH:MM" shape that <input type="datetime-local"> expects.
+// Returns '' if the input is missing or unparseable. The conversion is in
+// the LOCAL browser timezone — that matches what the operator sees in the
+// rest of the UI and what they'll re-submit when editing.
+function toDatetimeLocal(rfc?: unknown): string {
+  if (typeof rfc !== 'string' || !rfc) return '';
+  const d = new Date(rfc);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// fromDatetimeLocal performs the inverse — interpreting the browser-native
+// datetime-local shape ("YYYY-MM-DDTHH:MM", no timezone) as the operator's
+// LOCAL clock and returning a fully-qualified RFC3339 string with the UTC
+// offset baked in. This is critical: the backend sanitiser parses the
+// "YYYY-MM-DDTHH:MM" form as UTC, so sending the bare string from a UTC+3
+// operator would shift the window by their offset on every save. Sending
+// `.toISOString()` removes that ambiguity — the server stores exactly the
+// instant the operator clicked.
+function fromDatetimeLocal(local: string): string {
+  if (!local) return '';
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString();
+}
+
 const MaintenanceTab = () => {
   const lang = useLang();
   const [enabled, setEnabled] = useState(false);
   const [message, setMessage] = useState('');
   const [blockWrites, setBlockWrites] = useState(false);
+  const [startAt, setStartAt] = useState('');
+  const [endAt, setEndAt] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [info, setInfo] = useState<string | undefined>();
   const [isBusy, setIsBusy] = useState(false);
@@ -417,6 +459,8 @@ const MaintenanceTab = () => {
       const md = m.metadata || {};
       setMessage(typeof md.message === 'string' ? md.message : '');
       setBlockWrites(Boolean(md.block_writes));
+      setStartAt(toDatetimeLocal(md.start_at));
+      setEndAt(toDatetimeLocal(md.end_at));
       setUpdatedAt(m.updated_at);
     } catch (e) {
       setError((e as Error).message || 'load failed');
@@ -430,7 +474,13 @@ const MaintenanceTab = () => {
     setError(undefined);
     setInfo(undefined);
     try {
-      const flag = await setAdminMaintenance({ enabled, message, block_writes: blockWrites });
+      const flag = await setAdminMaintenance({
+        enabled,
+        message,
+        block_writes: blockWrites,
+        start_at: fromDatetimeLocal(startAt) || undefined,
+        end_at: fromDatetimeLocal(endAt) || undefined,
+      });
       setUpdatedAt(flag.updated_at);
       setInfo(lang('AdminMaintenanceSaved'));
     } catch (e) {
@@ -448,6 +498,8 @@ const MaintenanceTab = () => {
       setEnabled(false);
       setMessage('');
       setBlockWrites(false);
+      setStartAt('');
+      setEndAt('');
       setUpdatedAt(flag.updated_at);
       setInfo(lang('AdminMaintenanceDisabled'));
     } catch (e) {
@@ -459,6 +511,22 @@ const MaintenanceTab = () => {
 
   return (
     <div className={styles.tabBody}>
+      <div className={styles.maintenancePreview}>
+        <span className={styles.formLabelText}>{lang('AdminMaintenancePreviewTitle')}</span>
+        {enabled
+          ? (
+            <MaintenanceBannerView
+              active
+              message={message}
+              blockWrites={blockWrites}
+            />
+          )
+          : (
+            <div className={styles.maintenancePreviewIdle}>
+              {lang('AdminMaintenancePreviewIdle')}
+            </div>
+          )}
+      </div>
       <div className={styles.formRow}>
         <label className={styles.formLabel}>
           <input
@@ -491,6 +559,29 @@ const MaintenanceTab = () => {
         </label>
         <div className={styles.formHelp}>{lang('AdminMaintenanceBlockWritesHelp')}</div>
       </div>
+      <div className={styles.maintenanceWindowGrid}>
+        <div className={styles.formRow}>
+          <span className={styles.formLabelText}>{lang('AdminMaintenanceStartAt')}</span>
+          <input
+            type="datetime-local"
+            className={styles.maintenanceDate}
+            value={startAt}
+            max={endAt || undefined}
+            onChange={(e) => setStartAt((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div className={styles.formRow}>
+          <span className={styles.formLabelText}>{lang('AdminMaintenanceEndAt')}</span>
+          <input
+            type="datetime-local"
+            className={styles.maintenanceDate}
+            value={endAt}
+            min={startAt || undefined}
+            onChange={(e) => setEndAt((e.target as HTMLInputElement).value)}
+          />
+        </div>
+      </div>
+      <div className={styles.formHelp}>{lang('AdminMaintenanceWindowHelp')}</div>
       {info && <div className={styles.success}>{info}</div>}
       {error && <div className={styles.error}>{error}</div>}
       {updatedAt && (

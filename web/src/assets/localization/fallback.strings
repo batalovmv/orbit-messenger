@@ -3092,6 +3092,11 @@
 "AdminMaintenanceSaved" = "Настройки сохранены.";
 "AdminMaintenanceDisabled" = "Режим технических работ выключен.";
 "AdminMaintenanceLastUpdated" = "Последнее изменение";
+"AdminMaintenanceStartAt" = "Старт (необязательно)";
+"AdminMaintenanceEndAt" = "Окончание (необязательно)";
+"AdminMaintenanceWindowHelp" = "Если время указано — баннер появится автоматически после старта и снимется после окончания. Окно можно открыть с одной стороны.";
+"AdminMaintenancePreviewTitle" = "Так увидят пользователи";
+"AdminMaintenancePreviewIdle" = "Включите режим, чтобы увидеть баннер.";
 "AdminAuditSearchPlaceholder" = "Поиск по действиям, пользователям, IP, JSON-деталям…";
 "AdminAuditEmpty" = "Записей не найдено.";
 "AdminAuditLoadMore" = "Загрузить ещё";

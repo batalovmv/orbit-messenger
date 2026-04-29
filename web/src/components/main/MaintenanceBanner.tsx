@@ -21,19 +21,14 @@ type StateProps = {
   blockWrites?: boolean;
 };
 
-const MaintenanceBanner = ({ active, message, blockWrites }: StateProps) => {
-  const { refreshSaturnSystemConfig } = getActions();
+// MaintenanceBannerView is the pure-render portion of the banner — no
+// withGlobal wrapper, no polling. Exported separately so the AdminPanel
+// Maintenance tab can render a live preview of operator form state without
+// reaching into global state. Keep the JSX shape identical between this
+// view and the connected default export so what the operator sees in
+// preview matches production.
+export const MaintenanceBannerView = ({ active, message, blockWrites }: StateProps) => {
   const lang = useLang();
-
-  // Always poll: the banner is opt-in for the user but we want it to appear
-  // within ~60 s of an admin enabling maintenance. The endpoint is public,
-  // CDN-cached at the messaging service edge for free, so the cost is trivial.
-  useEffect(() => {
-    refreshSaturnSystemConfig();
-    const id = window.setInterval(refreshSaturnSystemConfig, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [refreshSaturnSystemConfig]);
-
   if (!active) return undefined;
 
   const text = message?.trim() || lang('MaintenanceBannerDefault');
@@ -47,6 +42,21 @@ const MaintenanceBanner = ({ active, message, blockWrites }: StateProps) => {
       )}
     </div>
   );
+};
+
+const MaintenanceBanner = (props: StateProps) => {
+  const { refreshSaturnSystemConfig } = getActions();
+
+  // Always poll: the banner is opt-in for the user but we want it to appear
+  // within ~60 s of an admin enabling maintenance. The endpoint is public,
+  // CDN-cached at the messaging service edge for free, so the cost is trivial.
+  useEffect(() => {
+    refreshSaturnSystemConfig();
+    const id = window.setInterval(refreshSaturnSystemConfig, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [refreshSaturnSystemConfig]);
+
+  return <MaintenanceBannerView {...props} />;
 };
 
 export default memo(withGlobal(
