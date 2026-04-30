@@ -13,7 +13,6 @@ import {
 import {
   addChatListIds,
   addUnreadMentions,
-  deleteChatMessages,
   deletePeerPhoto,
   leaveChat,
   removeUnreadMentions,
@@ -33,7 +32,6 @@ import {
   selectChat,
   selectChatFullInfo,
   selectChatListType,
-  selectChatMessages,
   selectCommonBoxChatId,
   selectCurrentMessageList,
   selectIsChatListed,

@@ -41,7 +41,9 @@ export function getSessionId(): string {
 
   const generated = generateSessionId();
   cachedSessionId = generated;
-  try { sessionStorage.setItem(SESSION_ID_STORAGE_KEY, generated); } catch { /* noop */ }
+  try {
+    sessionStorage.setItem(SESSION_ID_STORAGE_KEY, generated);
+  } catch { /* noop */ }
   return generated;
 }
 

@@ -148,7 +148,7 @@ describe('live translate settings wiring', () => {
   it('calls loadSaturnSettings after sync marks the app as synced', async () => {
     const events: string[] = [];
 
-    mockCallApi.mockImplementation(async (method: string) => {
+    mockCallApi.mockImplementation((method: string) => {
       if (method === 'fetchChats') {
         return undefined;
       }

@@ -9,10 +9,10 @@ const STORAGE_KEY = 'orbit_translate_default_lang';
 export type OrbitTranslateLangOption = {
   code: string;
   nameKey: 'AiTranslateLangEn'
-  | 'AiTranslateLangRu'
-  | 'AiTranslateLangEs'
-  | 'AiTranslateLangDe'
-  | 'AiTranslateLangFr';
+    | 'AiTranslateLangRu'
+    | 'AiTranslateLangEs'
+    | 'AiTranslateLangDe'
+    | 'AiTranslateLangFr';
 };
 
 export const ORBIT_TRANSLATE_LANGS: OrbitTranslateLangOption[] = [

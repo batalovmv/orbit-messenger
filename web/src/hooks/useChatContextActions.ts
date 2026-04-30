@@ -162,7 +162,7 @@ const useChatContextActions = ({
       handler: handleChatFolderChange,
     } satisfies MenuItemContextAction : undefined;
 
-     const actionMute: MenuItemContextAction = isMuted
+    const actionMute: MenuItemContextAction = isMuted
       ? {
         title: lang('ChatsUnmute'),
         icon: 'unmute',
@@ -182,17 +182,15 @@ const useChatContextActions = ({
       handler: () => handleNotificationPriority?.(undefined),
     } satisfies MenuItemContextAction : undefined;
 
-
     if (isInSearch) {
-       return compact([
-         actionOpenInNewTab,
-         actionQuickPreview,
-         actionPin,
-         actionAddToFolder,
-         actionMute,
-         actionNotificationPriority,
-       ]) as MenuItemContextAction[];
-
+      return compact([
+        actionOpenInNewTab,
+        actionQuickPreview,
+        actionPin,
+        actionAddToFolder,
+        actionMute,
+        actionNotificationPriority,
+      ]) as MenuItemContextAction[];
     }
 
     const actionMarkAsRead = (
@@ -227,13 +225,13 @@ const useChatContextActions = ({
       actionAddToFolder,
       actionMarkAsRead,
       actionMarkAsUnread,
-       actionPin,
-       !isSelf && actionMute,
-       // @ts-expect-error TODO(phase-8D-cleanup): icon "notifications" propagated through actionNotificationPriority
-       actionNotificationPriority,
-       !isSelf && !isServiceNotifications && !isInFolder && actionArchive,
-       actionReport,
-       actionDelete,
+      actionPin,
+      !isSelf && actionMute,
+      // @ts-expect-error TODO(phase-8D-cleanup): icon "notifications" propagated through actionNotificationPriority
+      actionNotificationPriority,
+      !isSelf && !isServiceNotifications && !isInFolder && actionArchive,
+      actionReport,
+      actionDelete,
 
     ]);
   }, [

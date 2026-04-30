@@ -2,8 +2,8 @@ import { memo, useEffect, useState } from '../../lib/teact/teact';
 
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 
-import useLastCallback from '../../hooks/useLastCallback';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 
 import Button from '../ui/Button';

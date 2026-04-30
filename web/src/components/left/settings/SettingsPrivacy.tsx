@@ -229,23 +229,6 @@ const SettingsPrivacy = ({
           channel and no auth wiring for this dialog. Hidden until a native
           Orbit-shaped 2FA screen lands. See audits/UI-DEAD-BUTTONS-2026-04-27.md.
         */}
-        {false && (
-        <ListItem
-          icon="admin"
-          narrow
-
-          onClick={() => openSettingsScreen({
-            screen: hasPassword ? SettingsScreens.TwoFaEnabled : SettingsScreens.TwoFaDisabled,
-          })}
-        >
-          <div className="multiline-item">
-            <span className="title">{oldLang('TwoStepVerification')}</span>
-            <span className="subtitle" dir="auto">
-              {lang(hasPassword ? 'SettingsItemPrivacyOn' : 'SettingsItemPrivacyOff')}
-            </span>
-          </div>
-        </ListItem>
-        )}
         {arePasskeysAvailable && (
           <ListItem
             icon="key"

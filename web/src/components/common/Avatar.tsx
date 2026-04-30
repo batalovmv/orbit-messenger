@@ -9,8 +9,8 @@ import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { CustomPeer } from '../../types';
 import { ApiMediaFormat } from '../../api/types';
 
-import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import { IS_TEST } from '../../config';
+import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import {
   getChatAvatarHash,
   getChatTitle,

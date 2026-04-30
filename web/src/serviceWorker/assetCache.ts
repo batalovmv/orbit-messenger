@@ -40,19 +40,17 @@ export async function respondWithCacheNetworkFirst(e: FetchEvent) {
   // Navigation Preload (enabled in activate) may have already started this
   // fetch in parallel with SW boot. Prefer it when present and OK — saves
   // the round-trip latency that SW startup otherwise adds to cold navigations.
-  if (e.preloadResponse) {
-    try {
-      const preloaded = await e.preloadResponse as Response | undefined;
-      if (preloaded?.ok) {
-        const toCache = preloaded.clone();
-        self.caches.open(ASSET_CACHE_NAME).then((cache) => {
-          return cache?.put(e.request, toCache);
-        });
-        return preloaded;
-      }
-    } catch {
-      // fall through to manual fetch
+  try {
+    const preloaded = await e.preloadResponse as Response | undefined;
+    if (preloaded?.ok) {
+      const toCache = preloaded.clone();
+      self.caches.open(ASSET_CACHE_NAME).then((cache) => {
+        return cache?.put(e.request, toCache);
+      });
+      return preloaded;
     }
+  } catch {
+    // fall through to manual fetch
   }
 
   const remote = await withTimeout(() => fetch(e.request), TIMEOUT);

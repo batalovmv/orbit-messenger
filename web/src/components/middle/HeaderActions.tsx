@@ -2,9 +2,9 @@ import type { FC } from '../../lib/teact/teact';
 import {
   memo, useCallback, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
-import type { NotificationPriorityOverride } from '../../api/saturn/methods/notifications';
 import { getActions, withGlobal } from '../../global';
 
+import type { NotificationPriorityOverride } from '../../api/saturn/methods/notifications';
 import type { IAnchorPosition, MessageListType, ThreadId } from '../../types';
 import { MAIN_THREAD_ID } from '../../api/types';
 import { ManagementScreens } from '../../types';

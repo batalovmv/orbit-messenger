@@ -1,6 +1,7 @@
 import { useEffect, useState } from '../../../../lib/teact/teact';
 
 import { suggestReply } from '../../../../api/saturn/methods/ai';
+
 import useFlag from '../../../../hooks/useFlag';
 import useLang from '../../../../hooks/useLang';
 import useLastCallback from '../../../../hooks/useLastCallback';

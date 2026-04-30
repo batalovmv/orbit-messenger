@@ -2864,10 +2864,12 @@
 "AriaGiftPreviewPlay" = "Play random previews";
 "AriaGiftPreviewStop" = "Pause random previews";
 "RegistrationJoinWith" = "Register with invite code";
+"RegistrationInviteHelp" = "Use the code from your admin. After sign-up, Orbit opens the workspace chats configured for new people.";
 "RegistrationSignUp" = "Sign Up";
 "InviteCode" = "Invite Code";
 "DisplayName" = "Display Name";
-"AdminCreateInvite" = "Invite Codes";
+"AdminCreateInvite" = "Team Onboarding";
+"AdminComplianceAudit" = "Compliance Audit";
 "AdminInviteCreated" = "Invite code copied to clipboard";
 "AdminInviteError" = "Failed to create invite (admin only)";
 "lng_channel_add_users" = "Add Members";
@@ -3268,10 +3270,10 @@
 "AdminTabWelcome" = "Onboarding";
 "AdminTabWelcomeShort" = "Onboarding";
 "AdminWelcomeIntro" = "Onboarding controls how people enter Orbit: invite codes create accounts, and default chats place new employees into required workspaces.";
-"AdminWelcomeBackfillDescription" = "Backfill applies this rule to existing users. Before running it, review which chats are affected and how many memberships will be added.";
+"AdminWelcomeBackfillDescription" = "Manual backfill applies this rule to existing users only when you run it. Before running it, review which chats are affected and how many memberships will be added.";
 "AdminWelcomeBackfillWarning" = "Warning: this is a visible bulk operation. Users will see the chats in their list and may receive join notifications. Run it only when you are sure.";
-"AdminInvitesTitle" = "Invites";
-"AdminInvitesDescription" = "Create invite codes for new employees. Regular admins can invite members; superadmins can assign privileged roles.";
+"AdminInvitesTitle" = "Account invite codes";
+"AdminInvitesDescription" = "Create account invite codes for new employees. These are different from chat invite links: they let a person register and then join the default workspace chats.";
 "AdminInvitesEmail" = "Email";
 "AdminInvitesEmailPlaceholder" = "Optional, locks invite to one email";
 "AdminInvitesRole" = "Role";
@@ -3298,6 +3300,7 @@
 "AdminWelcomeUsersCount" = "users";
 "AdminWelcomeMissingCount" = "to add";
 "AdminWelcomeNoDefaultChats" = "No chats are marked as default for new users.";
+"AdminWelcomeNoDefaultChatsImpact" = "New people can still register, but their first screen will stay empty until a default chat is configured.";
 "AdminWelcomeNoMissingMemberships" = "All existing users are already members of these chats.";
 "AdminWelcomeUnnamedChat" = "Unnamed chat";
 "AdminWelcomeChatMeta" = "{type} · members: {members} · order: {order}";

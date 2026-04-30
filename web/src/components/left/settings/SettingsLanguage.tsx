@@ -4,11 +4,10 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
+import type { ApiLanguage } from '../../../api/types';
 import type { SharedSettings } from '../../../global/types';
 import type { AccountSettings } from '../../../types';
 import { SettingsScreens } from '../../../types';
-
-import type { ApiLanguage } from '../../../api/types';
 
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';

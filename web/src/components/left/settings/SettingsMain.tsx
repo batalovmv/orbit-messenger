@@ -2,11 +2,8 @@ import type { FC } from '../../../lib/teact/teact';
 import { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
+import type { GlobalState } from '../../../global/types';
 import { SettingsScreens } from '../../../types';
-
-import {
-  selectIsPremiumPurchaseBlocked,
-} from '../../../global/selectors';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -26,16 +23,14 @@ type OwnProps = {
 type StateProps = {
   sessionCount: number;
   currentUserId?: string;
-  canBuyPremium?: boolean;
-  isSaturnAdmin?: boolean;
+  saturnRole?: GlobalState['saturnRole'];
 };
 
 const SettingsMain: FC<OwnProps & StateProps> = ({
   isActive,
   currentUserId,
   sessionCount,
-  canBuyPremium,
-  isSaturnAdmin,
+  saturnRole,
   onReset,
 }) => {
   const {
@@ -65,8 +60,15 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     closeSupportDialog();
   });
 
-  const handleCreateInvite = useLastCallback(() => {
+  const canManageWorkspace = saturnRole === 'admin' || saturnRole === 'superadmin';
+  const canViewAudit = canManageWorkspace || saturnRole === 'compliance';
+
+  const handleOpenOnboarding = useLastCallback(() => {
     openAdminPanel({ tab: 'welcome' });
+  });
+
+  const handleOpenAudit = useLastCallback(() => {
+    openAdminPanel({ tab: 'audit' });
   });
 
   return (
@@ -178,28 +180,39 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
           {lang('AiUsageTitle')}
         </ListItem>
       </div>
-      {isSaturnAdmin && (
+      {canViewAudit && (
         <div className="settings-main-menu">
+          {canManageWorkspace && (
+            <>
+              <ListItem
+                icon="link"
+                narrow
+                onClick={handleOpenOnboarding}
+              >
+                {lang('AdminCreateInvite')}
+              </ListItem>
+              <ListItem
+                icon="bots"
+                narrow
+                onClick={() => openSettingsScreen({ screen: SettingsScreens.BotManagement })}
+              >
+                {lang('BotManagement')}
+              </ListItem>
+              <ListItem
+                icon="channel"
+                narrow
+                onClick={() => openSettingsScreen({ screen: SettingsScreens.Integrations })}
+              >
+                {lang('Integrations')}
+              </ListItem>
+            </>
+          )}
           <ListItem
-            icon="link"
+            icon="data"
             narrow
-            onClick={handleCreateInvite}
+            onClick={handleOpenAudit}
           >
-            {lang('AdminCreateInvite')}
-          </ListItem>
-          <ListItem
-            icon="bots"
-            narrow
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.BotManagement })}
-          >
-            {lang('BotManagement')}
-          </ListItem>
-          <ListItem
-            icon="channel"
-            narrow
-            onClick={() => openSettingsScreen({ screen: SettingsScreens.Integrations })}
-          >
-            {lang('Integrations')}
+            {lang('AdminComplianceAudit')}
           </ListItem>
         </div>
       )}
@@ -222,8 +235,7 @@ export default memo(withGlobal<OwnProps>(
     return {
       sessionCount: global.activeSessions.orderedHashes.length,
       currentUserId,
-      canBuyPremium: !selectIsPremiumPurchaseBlocked(global),
-      isSaturnAdmin: global.saturnRole === 'admin' || global.saturnRole === 'superadmin',
+      saturnRole: global.saturnRole,
     };
   },
 )(SettingsMain));

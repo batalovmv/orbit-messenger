@@ -1206,7 +1206,9 @@ export async function updateChatNotifySettings({
   const { updateChatNotifySettings: update } = await import('./settingsApi');
   return update({
     chatId: chat.id,
-    mutedUntil: settings.mutedUntil != null ? new Date(settings.mutedUntil * 1000).toISOString() : undefined,
+    mutedUntil: settings.mutedUntil !== undefined
+      ? new Date(settings.mutedUntil * 1000).toISOString()
+      : undefined,
     showPreview: settings.shouldShowPreviews,
     silentPosting: settings.isSilentPosting,
     sound: undefined,
@@ -1245,7 +1247,9 @@ export {
 
 function parseAssetRef(url: string) {
   const normalizedUrl = url.replace(/^\.\//, '');
-  const match = normalizedUrl.match(/(?:progressive\/)?(avatar|profile|photo|video|document|stickerSet|sticker)([^/?&#]+)/);
+  const match = normalizedUrl.match(
+    /(?:progressive\/)?(avatar|profile|photo|video|document|stickerSet|sticker)([^/?&#]+)/,
+  );
   if (!match) {
     return undefined;
   }

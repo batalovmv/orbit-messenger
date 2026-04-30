@@ -1,8 +1,8 @@
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 
+import buildClassName from '../../../util/buildClassName';
 import { translateMessages } from '../../../api/saturn/methods/ai';
 import { resolveMessageUuid } from '../../../api/saturn/methods/messages';
-import buildClassName from '../../../util/buildClassName';
 
 import useLang from '../../../hooks/useLang';
 
@@ -35,7 +35,10 @@ function subscribe(messageId: number, cb: () => void): () => void {
     listeners.set(messageId, set);
   }
   set.add(cb);
-  return () => { set!.delete(cb); if (set!.size === 0) listeners.delete(messageId); };
+  return () => {
+    set.delete(cb);
+    if (set.size === 0) listeners.delete(messageId);
+  };
 }
 
 // Defensive cleanup for Claude's output. The single-message prompt asks
@@ -56,7 +59,10 @@ function sanitizeTranslation(raw: string): string {
 
   // Drop the model's "nothing to translate" preamble followed by a `---` separator.
   const separatorIdx = text.indexOf('\n---\n');
-  if (separatorIdx >= 0 && /нечего|ничего не.*перевод|nothing to translate|no translation needed/i.test(text.slice(0, separatorIdx))) {
+  if (
+    separatorIdx >= 0
+    && /нечего|ничего не.*перевод|nothing to translate|no translation needed/i.test(text.slice(0, separatorIdx))
+  ) {
     text = text.slice(separatorIdx + 5);
     // After the separator the model typically dumps the original with the
     // transcript prefix again — strip that too.
@@ -122,8 +128,8 @@ export function startMessageTranslation(
       const e = err as Error & { status?: number };
       const messageKey = e?.status === 503 ? 'AiNotConfigured'
         : e?.status === 429 ? 'AiSuggestRateLimited'
-        : e?.status === 502 || e?.status === 500 || e?.status === 504 ? 'AiSuggestUnavailable'
-        : 'AiTranslateFailed';
+          : e?.status === 502 || e?.status === 500 || e?.status === 504 ? 'AiSuggestUnavailable'
+            : 'AiTranslateFailed';
       updateEntry(messageId, { status: 'error', targetLang, messageKey });
     }
   })();

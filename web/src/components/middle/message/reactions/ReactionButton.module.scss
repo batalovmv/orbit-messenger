@@ -27,7 +27,12 @@
 
   background-color: var(--reaction-background) !important;
 
-  transition: background-color 150ms, color 150ms, backdrop-filter 150ms, filter 150ms, transform 150ms ease-out !important;
+  transition:
+    background-color 150ms,
+    color 150ms,
+    backdrop-filter 150ms,
+    filter 150ms,
+    transform 150ms ease-out !important;
 
   &.chosen {
     --reaction-background: var(--color-reaction-chosen);

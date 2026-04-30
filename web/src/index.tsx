@@ -21,9 +21,8 @@ import { installAndroidTapRecovery } from './util/androidTapRecovery';
 import { betterView } from './util/betterView';
 import { IS_TAURI } from './util/browser/globalEnvironment';
 import listenOtherClients from './util/browser/listenOtherClients';
-import { restoreRescuedDrafts } from './util/draftRescue';
-import { installWebVitals } from './util/webVitals';
 import { requestGlobal, subscribeToMultitabBroadcastChannel } from './util/browser/multitab';
+import { restoreRescuedDrafts } from './util/draftRescue';
 import { establishMultitabRole, subscribeToMasterChange } from './util/establishMultitabRole';
 import { initGlobal } from './util/init';
 import { initLocalization } from './util/localization';
@@ -32,6 +31,8 @@ import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import initTauriApi from './util/tauri/initTauriApi';
 import setupTauriListeners from './util/tauri/setupTauriListeners';
+import { installWebVitals } from './util/webVitals';
+
 import App from './components/App';
 
 import './assets/fonts/roboto.css';

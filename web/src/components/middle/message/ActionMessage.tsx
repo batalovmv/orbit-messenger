@@ -57,6 +57,7 @@ import SuggestedPostBalanceTooLow from './actions/SuggestedPostBalanceTooLow';
 import SuggestedPostRejected from './actions/SuggestedPostRejected';
 import ContextMenuContainer from './ContextMenuContainer';
 import Reactions from './reactions/Reactions';
+
 import styles from './ActionMessage.module.scss';
 
 type OwnProps = {

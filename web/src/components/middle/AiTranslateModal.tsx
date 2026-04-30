@@ -1,9 +1,9 @@
 import { memo, useEffect, useRef, useState } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
+import { selectChatMessage } from '../../global/selectors';
 import { translateMessages } from '../../api/saturn/methods/ai';
 import { resolveMessageUuid } from '../../api/saturn/methods/messages';
-import { selectChatMessage } from '../../global/selectors';
 
 import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
@@ -24,6 +24,12 @@ const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
 ];
 
 const MAX_MESSAGES = 50;
+const ERROR_STYLE = 'padding: 0.75rem; background: var(--color-error); color: white; '
+  + 'border-radius: 0.5rem; margin-bottom: 1rem';
+const OUTPUT_STYLE = 'padding: 1rem; background: var(--color-background-secondary); '
+  + 'border-radius: 0.5rem; white-space: pre-wrap; min-height: 4rem; '
+  + 'max-height: 24rem; overflow-y: auto';
+const STREAM_CURSOR_STYLE = 'display: inline-block; margin-left: 0.25rem; vertical-align: middle';
 
 type OwnProps = {
   isOpen: boolean;
@@ -173,16 +179,16 @@ const AiTranslateModal = ({
         </div>
 
         {error && (
-          <div style="padding: 0.75rem; background: var(--color-error); color: white; border-radius: 0.5rem; margin-bottom: 1rem">
+          <div style={ERROR_STYLE}>
             {error}
           </div>
         )}
 
         {(output || isStreaming) && (
-          <div style="padding: 1rem; background: var(--color-background-secondary); border-radius: 0.5rem; white-space: pre-wrap; min-height: 4rem; max-height: 24rem; overflow-y: auto">
+          <div style={OUTPUT_STYLE}>
             {output}
             {isStreaming && (
-              <span style="display: inline-block; margin-left: 0.25rem; vertical-align: middle">
+              <span style={STREAM_CURSOR_STYLE}>
                 <Spinner color="gray" />
               </span>
             )}

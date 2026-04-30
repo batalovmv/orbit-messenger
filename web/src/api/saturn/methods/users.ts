@@ -229,7 +229,8 @@ export async function checkUsername(username: string): Promise<{ result?: boolea
     if (!usernameRegex.test(username)) {
       return {
         result: false,
-        error: 'Username must be 5-32 characters, start with a letter, and contain only letters, numbers, and underscores',
+        error: 'Username must be 5-32 characters, start with a letter, '
+          + 'and contain only letters, numbers, and underscores',
       };
     }
 
@@ -237,7 +238,9 @@ export async function checkUsername(username: string): Promise<{ result?: boolea
       'GET',
       `/users?q=${encodeURIComponent(username)}&limit=1`,
     );
-    const taken = response?.users?.some((u: any) => u.username?.toLowerCase() === username.toLowerCase());
+    const taken = response?.users?.some((u: any) => (
+      u.username?.toLowerCase() === username.toLowerCase()
+    ));
 
     return { result: !taken };
   } catch {
@@ -256,6 +259,7 @@ export async function updateUsername(username: string): Promise<boolean | undefi
 
 export async function updateEmojiStatus(emojiStatus: any): Promise<boolean> {
   if (!emojiStatus) {
+    // eslint-disable-next-line no-null/no-null
     await client.request('PUT', '/users/me', { custom_status: null, custom_status_emoji: null });
   } else {
     await client.request('PUT', '/users/me', {

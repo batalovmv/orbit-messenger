@@ -969,6 +969,7 @@ export async function deleteHistory({
       for_everyone: shouldDeleteForAll || false,
     });
   } catch {
+    // eslint-disable-next-line no-console
     console.warn('[Saturn] deleteHistory not fully implemented on backend');
   }
 }

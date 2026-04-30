@@ -8,10 +8,6 @@
   margin: 0 auto;
   padding: 2rem 1rem 1rem;
 
-  @media (min-height: 700px) {
-    padding-top: 6rem;
-  }
-
   text-align: center;
 
   #logo,
@@ -70,6 +66,10 @@
     .form {
       min-height: 0;
     }
+  }
+
+  @media (min-height: 700px) {
+    padding-top: 6rem;
   }
 
   @media (min-width: 600px) and (min-height: 450px) {

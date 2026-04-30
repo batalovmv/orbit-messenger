@@ -1,15 +1,35 @@
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
+import type { SaturnConnectorStats } from '../../../api/saturn/methods/integrations';
 import type {
-  SaturnConnectorCreateResponse,
   SaturnIntegrationConnector,
   SaturnIntegrationDelivery,
   SaturnIntegrationRoute,
 } from '../../../api/saturn/types';
-import type { SaturnConnectorStats } from '../../../api/saturn/methods/integrations';
 
 import { copyTextToClipboard } from '../../../util/clipboard';
+import { request as saturnRequest } from '../../../api/saturn/client';
+import {
+  createConnector,
+  createRoute,
+  deleteConnector,
+  deleteRoute,
+  fetchConnectors,
+  fetchConnectorStats,
+  fetchDeliveries,
+  fetchRoutes,
+  previewTemplate,
+  retryDelivery,
+  rotateConnectorSecret,
+  testConnector,
+  updateConnector,
+} from '../../../api/saturn/methods/integrations';
+import {
+  findPresetById,
+  getDefaultPreset,
+  INTEGRATION_PRESETS,
+} from '../../../api/saturn/presets/integrations';
 
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
@@ -22,28 +42,6 @@ import ListItem from '../../ui/ListItem';
 import Modal from '../../ui/Modal';
 import Select from '../../ui/Select';
 import Spinner from '../../ui/Spinner';
-
-import {
-  createConnector,
-  createRoute,
-  deleteConnector,
-  deleteRoute,
-  fetchConnectorStats,
-  fetchConnectors,
-  fetchDeliveries,
-  fetchRoutes,
-  previewTemplate,
-  retryDelivery,
-  rotateConnectorSecret,
-  testConnector,
-  updateConnector,
-} from '../../../api/saturn/methods/integrations';
-import { request as saturnRequest } from '../../../api/saturn/client';
-import {
-  findPresetById,
-  getDefaultPreset,
-  INTEGRATION_PRESETS,
-} from '../../../api/saturn/presets/integrations';
 
 type ViewMode = 'list' | 'edit' | 'routes';
 
@@ -65,7 +63,7 @@ const SettingsIntegrations = () => {
   const [deletingId, setDeletingId] = useState<string | undefined>();
   const [newName, setNewName] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
-  const [newPresetId, setNewPresetId] = useState<string>(getDefaultPreset().id);
+  const [newPresetId, setNewPresetId] = useState<string>(() => getDefaultPreset().id);
 
   // Stats
   const [stats, setStats] = useState<SaturnConnectorStats | undefined>();
@@ -105,7 +103,7 @@ const SettingsIntegrations = () => {
         name: newName.trim(),
         display_name: newDisplayName.trim(),
         type: preset.type,
-      }) as SaturnConnectorCreateResponse;
+      });
 
       if (!result?.connector) return;
 
@@ -268,7 +266,7 @@ const SettingsIntegrations = () => {
       });
       setTemplatePreview(result?.rendered ?? '');
     } catch (e) {
-      setTemplatePreview(`Error: ${e}`);
+      setTemplatePreview(`Error: ${e instanceof Error ? e.message : 'failed to render template'}`);
     }
   });
 
@@ -346,11 +344,23 @@ const SettingsIntegrations = () => {
       <div className="settings-content custom-scroll">
         <div className="settings-item">
           <h4>{selectedConnector.display_name}</h4>
-          <p className="settings-item-description">{lang('ConnectorName')}: {selectedConnector.name}</p>
-          <p className="settings-item-description">{lang('ConnectorType')}: {selectedConnector.type}</p>
+          <p className="settings-item-description">
+            {lang('ConnectorName')}
+            :
+            {' '}
+            {selectedConnector.name}
+          </p>
+          <p className="settings-item-description">
+            {lang('ConnectorType')}
+            :
+            {' '}
+            {selectedConnector.type}
+          </p>
           {editedPreset && (
             <p className="settings-item-description">
-              Preset: {editedPreset.displayName}
+              Preset:
+              {' '}
+              {editedPreset.displayName}
               {editedPreset.status === 'framework-only' ? ' — framework only, pending live testing' : ''}
             </p>
           )}
@@ -360,12 +370,27 @@ const SettingsIntegrations = () => {
           <div className="settings-item">
             <div className="settings-item-header">24h stats</div>
             <p className="settings-item-description">
-              Total: <b>{stats.total}</b> · Delivered: <b>{stats.delivered}</b> ·
-              {' '}Failed: <b>{stats.failed}</b> · Dead-letter: <b>{stats.dead_letter}</b>
+              Total:
+              {' '}
+              <b>{stats.total}</b>
+              {' '}
+              · Delivered:
+              {' '}
+              <b>{stats.delivered}</b>
+              {' '}
+              ·
+              {' '}
+              Failed:
+              <b>{stats.failed}</b>
+              {' '}
+              · Dead-letter:
+              <b>{stats.dead_letter}</b>
             </p>
             {stats.last_delivery_at && (
               <p className="settings-item-description">
-                Last delivery: {new Date(stats.last_delivery_at).toLocaleString()}
+                Last delivery:
+                {' '}
+                {new Date(stats.last_delivery_at).toLocaleString()}
               </p>
             )}
           </div>
@@ -409,7 +434,13 @@ const SettingsIntegrations = () => {
     return (
       <div className="settings-content custom-scroll">
         <div className="settings-item">
-          <h4>{selectedConnector.display_name} — {lang('Routes')}</h4>
+          <h4>
+            {selectedConnector.display_name}
+            {' '}
+            —
+            {' '}
+            {lang('Routes')}
+          </h4>
           <Button onClick={handleOpenRouteCreate} color="primary" size="smaller">
             {lang('CreateRoute')}
           </Button>
@@ -427,8 +458,16 @@ const SettingsIntegrations = () => {
                 destructive: true,
               }]}
             >
-              <span className="title">Chat: {route.chat_id}</span>
-              {route.event_filter && <span className="subtitle">Filter: {route.event_filter}</span>}
+              <span className="title">
+                Chat:
+                {route.chat_id}
+              </span>
+              {route.event_filter && (
+                <span className="subtitle">
+                  Filter:
+                  {route.event_filter}
+                </span>
+              )}
             </ListItem>
           ))}
           {!routes.length && <p className="settings-item-description">No routes configured</p>}
@@ -452,7 +491,12 @@ const SettingsIntegrations = () => {
             >
               <span className="title">{delivery.event_type || 'event'}</span>
               <span className="subtitle">
-                {delivery.status} · attempt {delivery.attempt_count}/3 · {new Date(delivery.created_at).toLocaleString()}
+                {delivery.status}
+                {' '}
+                · attempt
+                {delivery.attempt_count}
+                /3 ·
+                {new Date(delivery.created_at).toLocaleString()}
               </span>
             </ListItem>
           ))}
@@ -479,7 +523,11 @@ const SettingsIntegrations = () => {
               if (preset?.availableEventTypes?.length) {
                 const toggle = (ev: string) => {
                   const next = new Set(selected);
-                  if (next.has(ev)) next.delete(ev); else next.add(ev);
+                  if (next.has(ev)) {
+                    next.delete(ev);
+                  } else {
+                    next.add(ev);
+                  }
                   setNewRouteEventFilter(Array.from(next).join(','));
                 };
                 return (
@@ -538,13 +586,25 @@ const SettingsIntegrations = () => {
           {deliveryDetail && (
             <div className="settings-item">
               <p className="settings-item-description">
-                Status: <b>{deliveryDetail.status}</b>
-                {'  '}·{'  '}Attempts: <b>{deliveryDetail.attempt_count}</b>
+                Status:
+                {' '}
+                <b>{deliveryDetail.status}</b>
+                {'  '}
+                ·
+                {'  '}
+                Attempts:
+                <b>{deliveryDetail.attempt_count}</b>
               </p>
               <p className="settings-item-description">
-                Created: {new Date(deliveryDetail.created_at).toLocaleString()}
+                Created:
+                {' '}
+                {new Date(deliveryDetail.created_at).toLocaleString()}
                 {deliveryDetail.delivered_at && (
-                  <> · Delivered: {new Date(deliveryDetail.delivered_at).toLocaleString()}</>
+                  <>
+                    {' '}
+                    · Delivered:
+                    {new Date(deliveryDetail.delivered_at).toLocaleString()}
+                  </>
                 )}
               </p>
               {deliveryDetail.last_error && (
@@ -558,16 +618,29 @@ const SettingsIntegrations = () => {
                   <div className="settings-item-header">Attempts timeline</div>
                   {deliveryDetail.attempts.map((a) => (
                     <div key={a.id} className="settings-item-description">
-                      #{a.attempt_no} · <b>{a.status}</b>
+                      #
+                      {a.attempt_no}
+                      {' '}
+                      ·
+                      {' '}
+                      <b>{a.status}</b>
                       {a.response_status ? ` · HTTP ${a.response_status}` : ''}
-                      {' '}· {new Date(a.ran_at).toLocaleString()}
+                      {' '}
+                      ·
+                      {new Date(a.ran_at).toLocaleString()}
                       {a.error && <div style="color: var(--color-error); word-break: break-all">{a.error}</div>}
                     </div>
                   ))}
                 </>
               )}
               {deliveryDetail.status === 'failed' && (
-                <Button size="smaller" onClick={() => { handleRetryDelivery(deliveryDetail.id); closeDelivery(); }}>
+                <Button
+                  size="smaller"
+                  onClick={() => {
+                    handleRetryDelivery(deliveryDetail.id);
+                    closeDelivery();
+                  }}
+                >
                   {lang('RetryDelivery')}
                 </Button>
               )}
@@ -611,7 +684,13 @@ const SettingsIntegrations = () => {
             }]}
           >
             <span className="title">{connector.display_name}</span>
-            <span className="subtitle">{connector.name} — {connector.is_active ? 'Active' : 'Inactive'}</span>
+            <span className="subtitle">
+              {connector.name}
+              {' '}
+              —
+              {' '}
+              {connector.is_active ? 'Active' : 'Inactive'}
+            </span>
           </ListItem>
         ))}
       </div>

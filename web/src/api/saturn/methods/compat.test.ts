@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { ARCHIVED_FOLDER_ID } from '../../../config';
+import * as client from '../client';
 import * as apiUpdateEmitter from '../updates/apiUpdateEmitter';
 import * as chats from './chats';
-import * as client from '../client';
 import {
   editChatPhoto,
   fetchProfilePhotos,

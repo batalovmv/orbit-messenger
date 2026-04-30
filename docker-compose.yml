@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # ============================================================
   # Infrastructure
@@ -371,6 +369,8 @@ services:
   # at `docker compose up` time.
   prometheus:
     image: prom/prometheus:v2.55.1
+    profiles:
+      - monitoring
     ports:
       - "9090:9090"
     volumes:
@@ -389,6 +389,8 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
+    profiles:
+      - monitoring
     ports:
       - "9093:9093"
     volumes:
@@ -438,6 +440,8 @@ services:
   # admin / admin (you'll be asked to change on first login).
   grafana:
     image: grafana/grafana:11.4.0
+    profiles:
+      - monitoring
     ports:
       - "3001:3000"
     volumes:

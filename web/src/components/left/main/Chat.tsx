@@ -54,15 +54,14 @@ import buildClassName from '../../../util/buildClassName';
 import { isUserId } from '../../../util/entities/ids';
 import { getChatFolderIds } from '../../../util/folderManager';
 import { createLocationHash } from '../../../util/routing';
-
-import { useSelectorSignal } from '../../../hooks/data/useSelector';
-import useAppLayout from '../../../hooks/useAppLayout';
-import useChatContextActions from '../../../hooks/useChatContextActions';
-
 import {
   type NotificationPriorityOverride,
   updateChatNotificationPriority,
 } from '../../../api/saturn/methods/notifications';
+
+import { useSelectorSignal } from '../../../hooks/data/useSelector';
+import useAppLayout from '../../../hooks/useAppLayout';
+import useChatContextActions from '../../../hooks/useChatContextActions';
 import useEnsureMessage from '../../../hooks/useEnsureMessage';
 import useFlag from '../../../hooks/useFlag';
 import { useIsIntersecting } from '../../../hooks/useIntersectionObserver';
@@ -71,13 +70,12 @@ import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDepreca
 import useChatListEntry from './hooks/useChatListEntry';
 
 import Avatar from '../../common/Avatar';
- import DeleteChatModal from '../../common/DeleteChatModal';
- import FullNameTitle from '../../common/FullNameTitle';
- import Icon from '../../common/icons/Icon';
- import NotificationPriorityPickerModal from '../../common/NotificationPriorityPickerModal.async';
-
+import DeleteChatModal from '../../common/DeleteChatModal';
+import FullNameTitle from '../../common/FullNameTitle';
+import Icon from '../../common/icons/Icon';
 import StarIcon from '../../common/icons/StarIcon';
 import LastMessageMeta from '../../common/LastMessageMeta';
+import NotificationPriorityPickerModal from '../../common/NotificationPriorityPickerModal.async';
 import ListItem from '../../ui/ListItem';
 import ChatFolderModal from '../ChatFolderModal.async';
 import MuteChatModal from '../MuteChatModal.async';
@@ -212,7 +210,7 @@ const Chat: FC<OwnProps & StateProps> = ({
   const [shouldRenderChatFolderModal, markRenderChatFolderModal, unmarkRenderChatFolderModal] = useFlag();
   const [shouldRenderNotificationPriorityModal,
     markRenderNotificationPriorityModal,
-    unmarkRenderNotificationPriorityModal] = useFlag();
+    _unmarkRenderNotificationPriorityModal] = useFlag();
 
   const { isForum, isForumAsMessages, isMonoforum } = chat || {};
 

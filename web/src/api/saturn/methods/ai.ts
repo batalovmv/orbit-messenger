@@ -90,7 +90,7 @@ async function* postSseStream<Body extends Record<string, unknown>>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
+    Accept: 'text/event-stream',
     'X-Requested-With': 'XMLHttpRequest',
   };
   if (token) {
@@ -166,7 +166,9 @@ async function* postSseStream<Body extends Record<string, unknown>>(
       }
     }
   } finally {
-    try { reader.releaseLock(); } catch { /* noop */ }
+    try {
+      reader.releaseLock();
+    } catch { /* noop */ }
   }
 }
 
@@ -222,7 +224,9 @@ function isTransientTranslateError(err: unknown): boolean {
 
 function translateRetryDelay(): Promise<void> {
   const ms = 1000 + Math.floor(Math.random() * 1000);
-  return new Promise((resolve) => { setTimeout(resolve, ms); });
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export async function* translateMessages(
@@ -301,7 +305,6 @@ export async function semanticSearch(_args: { query: string; chatId?: string }):
   }
   return [];
 }
-
 
 // --- Live Translate Phase 2 -------------------------------------------------
 

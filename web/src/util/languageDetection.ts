@@ -26,9 +26,12 @@ async function initLanguageDetection() {
   if (isInitialized()) return;
   if (IS_TRANSLATION_DETECTOR_SUPPORTED) {
     try {
-      languageDetector = await LanguageDetector.create();
-      initializationDeferred.resolve();
-      return;
+      const availability = await LanguageDetector.availability();
+      if (availability === 'available') {
+        languageDetector = await LanguageDetector.create();
+        initializationDeferred.resolve();
+        return;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const isModelUnavailable = message.includes('Model not available');

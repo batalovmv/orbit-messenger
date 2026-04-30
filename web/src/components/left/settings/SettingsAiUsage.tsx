@@ -4,14 +4,13 @@ import type { AiUsageStats } from '../../../api/saturn/methods/ai';
 import type { LangPair } from '../../../types/language';
 
 import { formatDateToString } from '../../../util/dates/dateFormat';
+import { fetchAiUsage } from '../../../api/saturn/methods/ai';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
-
-import { fetchAiUsage } from '../../../api/saturn/methods/ai';
 
 type OwnProps = {
   isActive?: boolean;

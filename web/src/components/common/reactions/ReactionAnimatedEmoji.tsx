@@ -13,8 +13,8 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import { getStickerHashById, isSameReaction } from '../../../global/helpers';
 import { selectPerformanceSettingsValue, selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
-import { getLocalReactionTgsUrl } from '../../../api/saturn/apiBuilders/reactions';
 import { roundToNearestEven } from '../../../util/math';
+import { getLocalReactionTgsUrl } from '../../../api/saturn/apiBuilders/reactions';
 import { REM } from '../helpers/mediaDimensions';
 
 import useFlag from '../../../hooks/useFlag';

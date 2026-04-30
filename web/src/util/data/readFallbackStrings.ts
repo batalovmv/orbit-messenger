@@ -2,9 +2,10 @@ import type {
   ApiLanguage, CachedLangData, LangPack, LangPackStringValuePlural,
 } from '../../api/types';
 
-import enStrings from '../../assets/localization/fallback.strings';
-import ruStrings from '../../assets/localization/fallback.ru.strings';
 import readStrings from './readStrings';
+
+import ruStrings from '../../assets/localization/fallback.ru.strings';
+import enStrings from '../../assets/localization/fallback.strings';
 
 const DEFAULT_LANG_CODE = 'en';
 // Bump when bundled fallback strings change so cached PWA langpacks refresh.
@@ -63,7 +64,7 @@ function parseStringsFile(fileData: string): LangPack['strings'] {
     // properties to a primitive string. Audit 2026-04-27.
     const knownValue = (typeof existing === 'string'
       ? { other: existing }
-      : ((existing as LangPackStringValuePlural | undefined) || { other: '' })) as LangPackStringValuePlural;
+      : ((existing as LangPackStringValuePlural | undefined) || { other: '' }));
     knownValue[suffix as keyof LangPackStringValuePlural] = value;
     strings[clearKey] = knownValue;
   });

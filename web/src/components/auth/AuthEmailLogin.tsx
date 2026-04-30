@@ -38,35 +38,41 @@ const AuthEmailLogin = ({
 
   const emailRef = useRef<HTMLInputElement>();
   const passwordRef = useRef<HTMLInputElement>();
+  const hasClearedInitialErrorRef = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
   const isEmailValid = email.includes('@') && email.length > 3;
   const canSubmit = isEmailValid && password.length >= 8 && !isLoading;
+  const { errorKey } = auth;
+
   useEffect(() => {
     if (!isPreloadInitiated) {
       isPreloadInitiated = true;
       preloadFonts();
       void preloadImage(monkeyPath);
     }
+    if (hasClearedInitialErrorRef.current) return;
+    hasClearedInitialErrorRef.current = true;
+
     // Clear stale errors on mount (e.g. from cache or Chrome credential auto-submit)
-    if (auth.errorKey) clearAuthErrorKey();
-  }, []);
+    if (errorKey) clearAuthErrorKey();
+  }, [clearAuthErrorKey, errorKey]);
 
   useEffect(() => {
-    if (auth.errorKey) {
+    if (errorKey) {
       unmarkIsLoading();
     }
-  }, [auth.errorKey]);
+  }, [errorKey, unmarkIsLoading]);
 
   const handleEmailChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (auth.errorKey) clearAuthErrorKey();
+    if (errorKey) clearAuthErrorKey();
     setEmail(e.target.value);
   });
 
   const handlePasswordChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (auth.errorKey) clearAuthErrorKey();
+    if (errorKey) clearAuthErrorKey();
     setPassword(e.target.value);
   });
 

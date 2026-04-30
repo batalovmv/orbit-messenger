@@ -14,9 +14,9 @@ import { IS_INSTALL_PROMPT_SUPPORTED, PLATFORM_ENV } from '../util/browser/windo
 import buildClassName from '../util/buildClassName';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
 import { syncManifestWithLanguage } from '../util/manifest';
-import { requestPersistentStorage } from '../util/persistentStorage';
 import { ACCOUNT_SLOT, getAccountsInfo, getAccountSlotUrl } from '../util/multiaccount';
 import { hasEncryptedSession } from '../util/passcode';
+import { requestPersistentStorage } from '../util/persistentStorage';
 import { getInitialLocationHash, parseInitialLocationHash } from '../util/routing';
 import { checkSessionLocked, hasStoredSession } from '../util/sessions';
 import { updateSizes } from '../util/windowSize';

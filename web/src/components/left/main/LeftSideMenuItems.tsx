@@ -13,8 +13,6 @@ import {
   BETA_CHANGELOG_URL,
   FEEDBACK_URL,
   IS_BETA,
-  IS_TEST,
-  PRODUCTION_HOSTNAME,
   WEB_VERSION_BASE,
 } from '../../../config';
 import {
@@ -25,8 +23,6 @@ import {
 import { selectTabState, selectTheme, selectUser } from '../../../global/selectors';
 import { selectPremiumLimit } from '../../../global/selectors/limits';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
-import { IS_MULTIACCOUNT_SUPPORTED } from '../../../util/browser/globalEnvironment';
-import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { getPromptInstall } from '../../../util/installPrompt';
 import { switchPermanentWebVersion } from '../../../util/permanentWebVersion';
 import { getSystemTheme } from '../../../util/systemTheme';
@@ -35,15 +31,14 @@ import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManag
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import AttachBotItem from '../../middle/composer/AttachBotItem';
 import Avatar from '../../common/Avatar';
 import FullNameTitle from '../../common/FullNameTitle';
+import AttachBotItem from '../../middle/composer/AttachBotItem';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
 import NestedMenuItem from '../../ui/NestedMenuItem';
 import Switcher from '../../ui/Switcher';
 import Toggle from '../../ui/Toggle';
-import AccountMenuItems from './AccountMenuItems';
 
 type OwnProps = {
   onSelectSettings: NoneToVoidFunction;

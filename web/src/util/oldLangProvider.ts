@@ -189,10 +189,10 @@ export function syncFromNewPack(
   for (const [key, value] of Object.entries(strings)) {
     if (typeof value === 'string') {
       next[key] = value;
-    } else if (value && typeof value === 'object' && 'isDeleted' in (value as object)) {
+    } else if (value && typeof value === 'object' && 'isDeleted' in (value)) {
       // skip
     } else if (value && typeof value === 'object') {
-      const plural = value as Partial<Record<'zero'|'one'|'two'|'few'|'many'|'other', string>>;
+      const plural = value as Partial<Record<'zero' | 'one' | 'two' | 'few' | 'many' | 'other', string>>;
       next[key] = {
         zeroValue: plural.zero,
         oneValue: plural.one,

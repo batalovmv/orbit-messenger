@@ -6,7 +6,7 @@ import type { ApiChatMember, ApiUser, ApiUserStatus } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
 import { sortUserIds } from '../../../global/helpers';
-import { selectChat, selectChatFullInfo } from '../../../global/selectors';
+import { selectChatFullInfo } from '../../../global/selectors';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 
@@ -90,7 +90,6 @@ const ManageGroupUserPermissionsCreate: FC<OwnProps & StateProps> = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { chatId }): Complete<StateProps> => {
-    const chat = selectChat(global, chatId);
     const { byId: usersById, statusesById: userStatusesById } = global.users;
     const members = selectChatFullInfo(global, chatId)?.members;
     return {

@@ -31,7 +31,6 @@ if (typeof globalThis.CSS === 'undefined') {
 // default. @noble/* primitives touch them during module init, so we must
 // polyfill them before any crypto modules are imported.
 if (typeof globalThis.TextEncoder === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { TextEncoder, TextDecoder } = require('util');
   globalThis.TextEncoder = TextEncoder;
   globalThis.TextDecoder = TextDecoder;
@@ -42,7 +41,6 @@ if (typeof globalThis.TextEncoder === 'undefined') {
 // non-writable getter, so blanket reassignment via `globalThis.crypto =`
 // silently fails — patch `subtle` directly instead.
 {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { webcrypto } = require('crypto');
   if (typeof globalThis.crypto === 'undefined') {
     globalThis.crypto = webcrypto;
@@ -62,7 +60,6 @@ if (typeof globalThis.TextEncoder === 'undefined') {
 // jsdom does not ship structuredClone by default on older versions.
 // fake-indexeddb needs it for deep-cloning stored records.
 if (typeof globalThis.structuredClone === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
   const util = require('node:util');
   if (typeof util.structuredClone === 'function') {
     globalThis.structuredClone = util.structuredClone;

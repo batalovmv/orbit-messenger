@@ -3,10 +3,10 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiUser } from '../../../api/types';
 
-import { fetchAdminChatExport, fetchAdminUserExport } from '../../../api/saturn/methods/admin';
 import { getUserFullName } from '../../../global/helpers';
 import { selectTabState, selectUser } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
+import { fetchAdminChatExport, fetchAdminUserExport } from '../../../api/saturn/methods/admin';
 
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
@@ -39,7 +39,7 @@ const CompliancePanel = ({
   usersById,
 }: OwnProps & StateProps) => {
   const {
-    closeCompliancePanel, selectComplianceUser, selectComplianceChat, loadContactList,
+    closeCompliancePanel, selectComplianceUser, loadContactList,
     showNotification,
   } = getActions();
 

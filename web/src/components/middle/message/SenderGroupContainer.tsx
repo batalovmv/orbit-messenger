@@ -23,7 +23,6 @@ import {
 } from '../../../global/helpers';
 import { isApiPeerUser } from '../../../global/helpers/peers';
 import {
-  selectChat,
   selectForwardedSender,
   selectIsChatWithSelf,
   selectSender,
@@ -239,7 +238,6 @@ export default memo(withGlobal<OwnProps>(
     } = ownProps;
     const { chatId } = message;
 
-    const chat = selectChat(global, chatId);
     const isChatWithSelf = selectIsChatWithSelf(global, chatId);
     const isSystemBotChat = isSystemBot(chatId);
     const isAnonymousForwards = isAnonymousForwardsChat(chatId);

@@ -311,25 +311,25 @@ export async function fetchAnimatedEmojiEffects() {
   return fetchAnimatedEmojis();
 }
 
-export async function fetchDefaultStatusEmojis(): Promise<any> {
-  return {
+export function fetchDefaultStatusEmojis(): Promise<any> {
+  return Promise.resolve({
     set: { id: 'default-statuses', title: 'Default Statuses' },
     stickers: [],
-  };
+  });
 }
 
-export async function fetchRecentEmojiStatuses(): Promise<any> {
-  return {
+export function fetchRecentEmojiStatuses(): Promise<any> {
+  return Promise.resolve({
     hash: '0',
     emojiStatuses: [],
-  };
+  });
 }
 
-export async function fetchCollectibleEmojiStatuses(): Promise<any> {
-  return {
+export function fetchCollectibleEmojiStatuses(): Promise<any> {
+  return Promise.resolve({
     hash: '0',
     emojiStatuses: [],
-  };
+  });
 }
 
 export function fetchStickersForEmoji({ emoji, hash }: { emoji: string; hash?: string }) {

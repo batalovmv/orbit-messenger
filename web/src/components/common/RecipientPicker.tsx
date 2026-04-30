@@ -159,7 +159,6 @@ const RecipientPicker = ({
     archivedListIds,
     contactIds,
     filter,
-    isForwarding,
     orderedChatIds,
     shouldRenderFolders,
   ]);

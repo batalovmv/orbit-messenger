@@ -5,7 +5,7 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiPeer } from '../../../api/types';
 
 import {
-  getChatTitle, getUserFirstOrLastName, getUserFullName, isChatBasicGroup,
+  getChatTitle, getUserFirstOrLastName, getUserFullName,
 } from '../../../global/helpers';
 import { isApiPeerChat, isApiPeerUser } from '../../../global/helpers/peers';
 import { selectPeer } from '../../../global/selectors';
@@ -68,8 +68,6 @@ const ChatReportPane: FC<OwnProps & StateProps> = ({
   const renderingPeer = useCurrentOrPrev(peer);
   const chat = renderingPeer && isApiPeerChat(renderingPeer) ? renderingPeer : undefined;
   const user = renderingPeer && isApiPeerUser(renderingPeer) ? renderingPeer : undefined;
-  const isBasicGroup = chat && isChatBasicGroup(chat);
-
   const renderingCanAddContact = useCurrentOrPrev(canAddContact);
   const renderingCanBlockContact = useCurrentOrPrev(canBlockContact);
   const renderingCanReportSpam = useCurrentOrPrev(canReportSpam);

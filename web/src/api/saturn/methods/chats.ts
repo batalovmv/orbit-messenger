@@ -601,7 +601,7 @@ export async function toggleChatPinned({
 // a concrete pinnable entity, and this handler exists purely to silence the
 // "[Saturn] Method not implemented" warning from the inherited TG Web A UI
 // path. If you need to pin the Saved Messages chat itself, use toggleChatPinned.
-export async function toggleSavedDialogPinned(_args: {
+export function toggleSavedDialogPinned(_args: {
   chat: ApiChat;
   shouldBePinned: boolean;
 }) {

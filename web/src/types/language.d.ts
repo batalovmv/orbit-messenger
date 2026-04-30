@@ -2089,10 +2089,12 @@ export interface LangPair {
   'AriaGiftPreviewPlay': undefined;
   'AriaGiftPreviewStop': undefined;
   'RegistrationJoinWith': undefined;
+  'RegistrationInviteHelp': undefined;
   'RegistrationSignUp': undefined;
   'InviteCode': undefined;
   'DisplayName': undefined;
   'AdminCreateInvite': undefined;
+  'AdminComplianceAudit': undefined;
   'AdminInviteCreated': undefined;
   'AdminInviteError': undefined;
   'ConversationSearchPlaceholder': undefined;
@@ -2472,6 +2474,7 @@ export interface LangPair {
   'AdminWelcomeUsersCount': undefined;
   'AdminWelcomeMissingCount': undefined;
   'AdminWelcomeNoDefaultChats': undefined;
+  'AdminWelcomeNoDefaultChatsImpact': undefined;
   'AdminWelcomeNoMissingMemberships': undefined;
   'AdminWelcomeUnnamedChat': undefined;
   'AdminWelcomeBackfillButton': undefined;

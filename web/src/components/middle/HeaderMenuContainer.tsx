@@ -2,11 +2,6 @@ import type { FC } from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
-
-import {
-  type NotificationPriorityOverride,
-  updateChatNotificationPriority,
-} from '../../api/saturn/methods/notifications';
 import { getActions, withGlobal } from '../../global';
 
 import type {
@@ -37,7 +32,6 @@ import {
   selectChat,
   selectChatFullInfo,
   selectCurrentMessageList,
-  selectDmPeerUserId,
   selectIsChatRestricted,
   selectIsChatWithSelf,
   selectIsCurrentUserFrozen,
@@ -49,8 +43,11 @@ import {
   selectUser,
   selectUserFullInfo,
 } from '../../global/selectors';
-import { isUserId } from '../../util/entities/ids';
 import { disableScrolling } from '../../util/scrollLock';
+import {
+  type NotificationPriorityOverride,
+  updateChatNotificationPriority,
+} from '../../api/saturn/methods/notifications';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useFlag from '../../hooks/useFlag';
@@ -61,12 +58,12 @@ import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 
 import DeleteChatModal from '../common/DeleteChatModal';
+import NotificationPriorityPickerModal from '../common/NotificationPriorityPickerModal.async';
 import MuteChatModal from '../left/MuteChatModal.async';
 import Menu from '../ui/Menu';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
 import Portal from '../ui/Portal';
-import NotificationPriorityPickerModal from '../common/NotificationPriorityPickerModal.async';
 
 import './HeaderMenuContainer.scss';
 
@@ -248,17 +245,16 @@ const HeaderMenuContainer: FC<OwnProps & StateProps> = ({
     return Object.values(disallowedGifts).every(Boolean);
   }, [disallowedGifts]);
 
-   const closeMuteModal = useLastCallback(() => {
-     setIsMuteModalOpen(false);
-     onClose();
-   });
+  const closeMuteModal = useLastCallback(() => {
+    setIsMuteModalOpen(false);
+    onClose();
+  });
 
   const closeNotificationPriorityModal = useLastCallback(() => {
     setIsNotificationPriorityModalOpen(false);
     unmarkRenderNotificationPriorityModal();
     onClose();
   });
-
 
   const handleReport = useLastCallback(() => {
     if (isAccountFrozen) {

@@ -10,7 +10,6 @@ import {
   buildCollectionByCallback, buildCollectionByKey, omit,
 } from '../../../util/iteratees';
 import { getMessageKey } from '../../../util/keys/messageKey';
-
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { callApi } from '../../../api/saturn';
 import { sendReaction as sendReactionApi } from '../../../api/saturn/methods/reactions';

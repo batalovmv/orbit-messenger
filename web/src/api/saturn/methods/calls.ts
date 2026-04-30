@@ -1,14 +1,14 @@
 ﻿// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { ApiCallProtocol, ApiPhoneCallConnection } from '../../../lib/secret-sauce';
 import type { ApiPhoneCall, ApiUser } from '../../types';
-import type { ApiPhoneCallConnection, ApiCallProtocol } from '../../../lib/secret-sauce';
+
 import {
   leaveSfuCall,
 } from '../../../lib/secret-sauce/sfu';
-
+import { request, sendWsMessage } from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
-import { request, sendWsMessage, getAccessToken, getBaseUrl } from '../client';
 
 // Saturn call types
 interface SaturnCall {
@@ -516,12 +516,6 @@ export function getSfuRemoteStreams(): ReadonlyMap<string, MediaStream> {
   return remoteSfuStreams;
 }
 
-function buildSfuWsBase(): string {
-  const baseUrl = getBaseUrl();
-  if (!baseUrl) return '';
-  return baseUrl.replace(/^http/, 'ws');
-}
-
 /**
  * Saturn createGroupCall — POST /calls with mode='group'. Returns the call
  * row (including sfu_ws_url) so the action layer can hand it off to
@@ -546,7 +540,10 @@ export async function createGroupCall({ chatId, type, memberIds }: {
  * group call panel has been opened. The signature accepts a loose object so
  * existing TG callers (which pass `{call, params, inviteHash}`) keep working.
  */
-export async function joinGroupCall(args?: { call?: { id?: string; type?: string }; isVideo?: boolean }): Promise<SaturnCall | undefined> {
+export async function joinGroupCall(args?: {
+  call?: { id?: string; type?: string };
+  isVideo?: boolean;
+}): Promise<SaturnCall | undefined> {
   const callId = args?.call?.id;
   if (!callId) {
     // eslint-disable-next-line no-console
@@ -556,7 +553,7 @@ export async function joinGroupCall(args?: { call?: { id?: string; type?: string
 
   // Mark this user as a participant in the DB. The REST hop fires
   // NATS call_participant_joined so other peers see the new tile immediately.
-  // The actual SFU WebSocket connection is managed by useSfuStreamManager in GroupCall.tsx.
+  // The actual SFU WebSocket connection is managed by useSfuStreamManager.
   try {
     await request<{ status: string }>('POST', `/calls/${callId}/join`);
   } catch (e) {
@@ -611,8 +608,13 @@ export async function fetchSaturnCall(callId: string): Promise<SaturnCall | unde
 // call flow (joinGroupCall fetches everything it needs itself), but the TG
 // Web A action layer still imports them. Returning undefined keeps the
 // existing fetchGroupCall path inert without breaking the type contract.
-export function getGroupCall() { return Promise.resolve(undefined); }
-export async function fetchGroupCallParticipants(args?: { call?: { id?: string } }): Promise<SaturnCallParticipant[] | undefined> {
+export function getGroupCall() {
+  return Promise.resolve(undefined);
+}
+
+export async function fetchGroupCallParticipants(
+  args?: { call?: { id?: string } },
+): Promise<SaturnCallParticipant[] | undefined> {
   const callId = args?.call?.id;
   if (!callId) return undefined;
   const call = await fetchCall({ callId });
@@ -622,9 +624,26 @@ export async function fetchGroupCallParticipants(args?: { call?: { id?: string }
 // The remaining methods are not used by the Saturn group call path but the
 // TG Web A action layer still imports them. They stay as no-ops to keep the
 // type surface compatible until those code paths are removed.
-export function editGroupCallParticipant() { return Promise.resolve(undefined); }
-export function editGroupCallTitle() { return Promise.resolve(undefined); }
-export function exportGroupCallInvite() { return Promise.resolve(undefined); }
-export function joinGroupCallPresentation() { return Promise.resolve(undefined); }
-export function leaveGroupCallPresentation() { return Promise.resolve(undefined); }
-export function toggleGroupCallStartSubscription() { return Promise.resolve(undefined); }
+export function editGroupCallParticipant() {
+  return Promise.resolve(undefined);
+}
+
+export function editGroupCallTitle() {
+  return Promise.resolve(undefined);
+}
+
+export function exportGroupCallInvite() {
+  return Promise.resolve(undefined);
+}
+
+export function joinGroupCallPresentation() {
+  return Promise.resolve(undefined);
+}
+
+export function leaveGroupCallPresentation() {
+  return Promise.resolve(undefined);
+}
+
+export function toggleGroupCallStartSubscription() {
+  return Promise.resolve(undefined);
+}

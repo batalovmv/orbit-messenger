@@ -132,15 +132,6 @@ const SettingsDataStorage = ({
             (see docs/canon/divergences.md). The setting is still wired through
             the global state for compatibility with the upstream TG Web A
             shape, but the toggle has no surface in Orbit. */}
-        {false && (
-        <Checkbox
-          label={lang('AutoDownloadSettingsChannels')}
-          checked={canAutoLoadInChannels}
-
-          onCheck={(isChecked) => setSettingOption({ [`canAutoLoad${key}InChannels`]: isChecked })}
-        />
-        )}
-
         {key === 'File' && renderContentSizeSlider()}
       </div>
     );

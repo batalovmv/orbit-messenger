@@ -202,8 +202,6 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
 
   // Check if this is a Saturn SFU call (has sfu_ws_url) vs legacy Colibri
   const isSfuCall = Boolean((groupCall as any).sfuWsUrl);
-  const callId = groupCall.id;
-
   if (isSfuCall) {
     // Saturn SFU path — the actual connection happens in the GroupCall
     // component via useSfuStreamManager hook. Here we just update state.

@@ -4,12 +4,12 @@
 import type { ApiChat, ApiPeer, ApiPhoto, ApiUser } from '../../types';
 import type { SaturnUser } from '../types';
 
-import { DEBUG, ARCHIVED_FOLDER_ID } from '../../../config';
+import { ARCHIVED_FOLDER_ID, DEBUG } from '../../../config';
 import { buildAvatarPhoto, getAvatarPhotoId } from '../apiBuilders/avatars';
 import { getRegisteredAsset } from '../apiBuilders/symbols';
+import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
 import { getBaseUrl, request } from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
-import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
 import { archiveChat, unarchiveChat } from './chats';
 import { deleteChatPhoto, updateChatPhoto, uploadMedia } from './media';
 import { updateProfile } from './users';

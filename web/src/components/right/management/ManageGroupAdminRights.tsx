@@ -61,7 +61,7 @@ const ManageGroupAdminRights = ({
   onScreenSelect,
 }: OwnProps & StateProps) => {
   const {
-    updateChatAdmin, showNotification,
+    updateChatAdmin,
     openTwoFaCheckModal, verifyTransferOwnership,
   } = getActions();
 

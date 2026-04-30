@@ -3,8 +3,8 @@
 
 import type { SaturnChatListItem, SaturnStickerPack } from '../types';
 
-import { buildApiUser } from '../apiBuilders/users';
 import { registerAsset } from '../apiBuilders/symbols';
+import { buildApiUser } from '../apiBuilders/users';
 import * as client from '../client';
 import {
   downloadMedia,
@@ -105,7 +105,7 @@ describe('downloadMedia', () => {
       .mockResolvedValueOnce({
         ok: true,
         headers: new Headers({ 'content-type': 'image/jpeg' }),
-        blob: async () => new Blob(['image-data'], { type: 'image/jpeg' }),
+        blob: () => Promise.resolve(new Blob(['image-data'], { type: 'image/jpeg' })),
       } as Response);
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,

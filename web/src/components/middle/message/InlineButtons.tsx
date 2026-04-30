@@ -11,8 +11,8 @@ import useLang from '../../../hooks/useLang';
 
 import CustomEmoji from '../../common/CustomEmoji';
 import Icon from '../../common/icons/Icon';
-import Spinner from '../../ui/Spinner';
 import Button from '../../ui/Button';
+import Spinner from '../../ui/Spinner';
 
 import styles from './InlineButtons.module.scss';
 

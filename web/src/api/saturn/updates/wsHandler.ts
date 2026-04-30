@@ -1,7 +1,7 @@
 ﻿// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import type { ApiGroupCall, ApiMessage } from '../../types';
+import type { ApiGroupCall } from '../../types';
 import type { SaturnChat, SaturnMessage, SaturnMessageEntity, SaturnWsMessage } from '../types';
 
 import { buildApiChat } from '../apiBuilders/chats';
@@ -490,14 +490,14 @@ function handlePollUpdated(data: Record<string, unknown>, isClosed = false) {
   }
 
   sendApiUpdate({
-      '@type': 'updateMessagePoll',
-      pollId,
-      pollUpdate: {
-        id: pollId,
-        mediaType: 'poll',
-        summary: isClosed ? { closed: true } : undefined,
-        ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId, peerId),
-      } as any,
+    '@type': 'updateMessagePoll',
+    pollId,
+    pollUpdate: {
+      id: pollId,
+      mediaType: 'poll',
+      summary: isClosed ? { closed: true } : undefined,
+      ...buildApiPollFromWs(poll, isClosed, peerId === currentUserId, peerId),
+    } as any,
   });
 }
 
@@ -556,8 +556,8 @@ function buildApiPollFromWs(
         .map((option) => ({
           option: option.id as string,
           votersCount: Number(option.voters || 0),
-          isChosen: shouldKeepChoiceState && Boolean(option.is_chosen) || undefined,
-          isCorrect: shouldKeepChoiceState && Boolean(option.is_correct) || undefined,
+          isChosen: (shouldKeepChoiceState && Boolean(option.is_chosen)) || undefined,
+          isCorrect: (shouldKeepChoiceState && Boolean(option.is_correct)) || undefined,
         })),
       totalVoters: Number(poll.total_voters || 0),
       recentVoterIds: !poll.is_anonymous && voterId ? [voterId] : undefined,
@@ -570,7 +570,7 @@ function buildApiPollFromWs(
 // Phase 6: Call event handlers
 
 function handleCallIncoming(data: Record<string, unknown>) {
-  const call = data as Record<string, unknown>;
+  const call = data;
   const callId = (call.id || data.call_id) as string;
   const initiatorId = (call.initiator_id) as string;
   const isVideo = call.type === 'video';

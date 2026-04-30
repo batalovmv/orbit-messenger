@@ -24,7 +24,10 @@ export default function readStrings(data: string): Record<string, string> {
     }
     while (line.startsWith('//')) {
       const eol = line.indexOf('\n');
-      if (eol === -1) { line = ''; break; }
+      if (eol === -1) {
+        line = '';
+        break;
+      }
       line = line.slice(eol + 1);
       while (line.length > 0 && (line.startsWith('\r') || line.startsWith('\n'))) {
         line = line.slice(1);
@@ -125,9 +128,18 @@ function escapeControlInString(chunk: string): string {
       inside = false;
       continue;
     }
-    if (ch === '\n') { out += '\\n'; continue; }
-    if (ch === '\r') { out += '\\r'; continue; }
-    if (ch === '\t') { out += '\\t'; continue; }
+    if (ch === '\n') {
+      out += '\\n';
+      continue;
+    }
+    if (ch === '\r') {
+      out += '\\r';
+      continue;
+    }
+    if (ch === '\t') {
+      out += '\\t';
+      continue;
+    }
     out += ch;
   }
   return out;

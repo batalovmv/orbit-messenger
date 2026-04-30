@@ -13,7 +13,7 @@ import {
   isUserBot,
 } from '../../global/helpers';
 import { filterPeersByQuery } from '../../global/helpers/peers';
-import { selectChat, selectChatFullInfo, selectTabState } from '../../global/selectors';
+import { selectChatFullInfo, selectTabState } from '../../global/selectors';
 import { unique } from '../../util/iteratees';
 import sortChatIds from '../common/helpers/sortChatIds';
 
@@ -150,7 +150,6 @@ const AddChatMembers: FC<OwnProps & StateProps> = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { chatId }): Complete<StateProps> => {
-    const chat = selectChat(global, chatId);
     const { userIds: localContactIds } = global.contactList || {};
     const { newChatMembersProgress } = selectTabState(global);
     const { currentUserId } = global;

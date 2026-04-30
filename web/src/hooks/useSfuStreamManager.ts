@@ -9,25 +9,26 @@
 //   // remoteStreams passed to video grid components
 
 import { useCallback, useEffect, useRef, useState } from '../lib/teact/teact';
-import { getAccessToken, getBaseUrl } from '../api/saturn/client';
+import { getGlobal } from '../global';
+
 import {
-  type SfuRemoteTrack,
-  type SfuSession,
   joinSfuCall,
   leaveSfuCall,
+  type SfuRemoteTrack,
+  type SfuSession,
   toggleSfuMute,
-  toggleSfuVideo,
   toggleSfuScreenShare,
+  toggleSfuVideo,
 } from '../lib/secret-sauce/sfu';
-import { getGlobal } from '../global';
+import { getAccessToken, getBaseUrl } from '../api/saturn/client';
 import { fetchICEServers } from '../api/saturn/methods/calls';
 
 export interface SfuStreamManager {
   remoteStreams: Map<string, SfuRemoteTrack>;
-  localStream: MediaStream | null;
+  localStream?: MediaStream;
   isConnecting: boolean;
   isConnected: boolean;
-  error: Error | null;
+  error?: Error;
   join: () => Promise<void>;
   leave: () => void;
   toggleMute: (muted: boolean) => void;
@@ -40,11 +41,11 @@ const createEmptyStreamMap = () => new Map<string, SfuRemoteTrack>();
 
 export function useSfuStreamManager(callId: string | undefined): SfuStreamManager {
   const [remoteStreams, setRemoteStreams] = useState<Map<string, SfuRemoteTrack>>(createEmptyStreamMap);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | undefined>();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const sessionRef = useRef<SfuSession | null>(null);
+  const [error, setError] = useState<Error | undefined>();
+  const sessionRef = useRef<SfuSession | undefined>();
 
   const handleRemoteTrack = useCallback((track: SfuRemoteTrack) => {
     setRemoteStreams((prev) => {
@@ -73,7 +74,7 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     if (!callId || isConnecting || isConnected) return;
 
     setIsConnecting(true);
-    setError(null);
+    setError(undefined);
 
     try {
       const global = getGlobal();
@@ -133,9 +134,9 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
   const leave = useCallback(() => {
     if (sessionRef.current) {
       leaveSfuCall();
-      sessionRef.current = null;
+      sessionRef.current = undefined;
     }
-    setLocalStream(null);
+    setLocalStream(undefined);
     setRemoteStreams(new Map());
     setIsConnected(false);
   }, []);

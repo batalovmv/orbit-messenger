@@ -119,7 +119,9 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     displayName: 'ASA Analytics — Campaign alerts',
     description: 'Apple Search Ads campaign events into #marketing.',
     defaultConnectorDisplayName: 'ASA Analytics',
-    defaultTemplate: '📊 Кампания {{.campaign_name}}: CPI ${{.cpi}}, {{.installs}} установок, ${{.spend}} потрачено',
+    defaultTemplate: '📊 Кампания {{.campaign_name}}: CPI $'
+      + '{{.cpi}}, {{.installs}} установок, $'
+      + '{{.spend}} потрачено',
     defaultEventFilter: 'campaign.alert,campaign.limit_reached',
     availableEventTypes: ['campaign.alert', 'campaign.limit_reached', 'campaign.paused'],
     config: {
@@ -174,7 +176,11 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
     displayName: 'Prometheus Alertmanager',
     description: 'Alerts from Prometheus Alertmanager into #monitoring channel.',
     defaultConnectorDisplayName: 'MST Monitoring',
-    defaultTemplate: '{{if eq .status "firing"}}🔴{{else}}✅{{end}} [{{.status | toUpper}}] {{.commonLabels.alertname}}\nСервис: {{if .commonLabels.service}}{{.commonLabels.service}}{{else}}{{.commonLabels.instance}}{{end}}\n{{.commonAnnotations.description}}',
+    defaultTemplate: [
+      '{{if eq .status "firing"}}🔴{{else}}✅{{end}} [{{.status | toUpper}}] {{.commonLabels.alertname}}',
+      'Сервис: {{if .commonLabels.service}}{{.commonLabels.service}}{{else}}{{.commonLabels.instance}}{{end}}',
+      '{{.commonAnnotations.description}}',
+    ].join('\n'),
     defaultEventFilter: 'alert.firing,alert.resolved',
     availableEventTypes: ['alert.firing', 'alert.resolved'],
     config: {
@@ -197,10 +203,10 @@ export const INTEGRATION_PRESETS: IntegrationPreset[] = [
       'Template fields: .status, .commonLabels.alertname, .commonLabels.service,',
       '.commonAnnotations.summary, .commonAnnotations.description',
     ].join('\n'),
-     status: 'ready',
-   },
-   {
-     id: 'generic',
+    status: 'ready',
+  },
+  {
+    id: 'generic',
     type: 'inbound_webhook',
     displayName: 'Generic webhook',
     description: 'Manual configuration for any provider not listed above.',

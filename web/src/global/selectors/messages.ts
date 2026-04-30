@@ -356,7 +356,6 @@ export function selectSender<T extends GlobalState>(global: T, message: ApiMessa
     return message.isOutgoing ? currentUser : chat;
   }
 
-
   return selectPeer(global, senderId);
 }
 

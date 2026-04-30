@@ -3,6 +3,8 @@ import {
   memo, useCallback, useEffect, useRef, useState,
 } from '../../lib/teact/teact';
 
+import { summarizeChat } from '../../api/saturn/methods/ai';
+
 import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
@@ -10,8 +12,6 @@ import useLastCallback from '../../hooks/useLastCallback';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Spinner from '../ui/Spinner';
-
-import { summarizeChat } from '../../api/saturn/methods/ai';
 
 type OwnProps = {
   isOpen: boolean;
@@ -33,6 +33,12 @@ const LANGUAGE_OPTIONS: Array<{ value: Language; label: string }> = [
   { value: 'ru', label: 'RU' },
   { value: 'en', label: 'EN' },
 ];
+
+const ERROR_STYLE = 'padding: 0.75rem; background: var(--color-error); color: white; '
+  + 'border-radius: 0.5rem; margin-bottom: 1rem';
+const OUTPUT_STYLE = 'padding: 1rem; background: var(--color-background-secondary); '
+  + 'border-radius: 0.5rem; white-space: pre-wrap; min-height: 4rem';
+const STREAM_CURSOR_STYLE = 'display: inline-block; margin-left: 0.25rem; vertical-align: middle';
 
 // AiSummaryModal is the first Phase 8A UI consumer. It opens from the chat
 // header AI button and lets the user pick a time range + output language,
@@ -173,16 +179,16 @@ const AiSummaryModal: FC<OwnProps> = ({ isOpen, chatId, onClose }) => {
         </div>
 
         {error && (
-          <div style="padding: 0.75rem; background: var(--color-error); color: white; border-radius: 0.5rem; margin-bottom: 1rem">
+          <div style={ERROR_STYLE}>
             {error}
           </div>
         )}
 
         {(summary || isStreaming) && (
-          <div style="padding: 1rem; background: var(--color-background-secondary); border-radius: 0.5rem; white-space: pre-wrap; min-height: 4rem">
+          <div style={OUTPUT_STYLE}>
             {summary}
             {isStreaming && (
-              <span style="display: inline-block; margin-left: 0.25rem; vertical-align: middle">
+              <span style={STREAM_CURSOR_STYLE}>
                 <Spinner color="gray" />
               </span>
             )}

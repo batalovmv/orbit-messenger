@@ -30,9 +30,9 @@ export default function syncContentEditableHtml({ element, html, inputId }: Args
     const selection = window.getSelection();
     const shouldRestore = Boolean(
       document.activeElement === element
-        && selection?.rangeCount
-        && selection.isCollapsed
-        && isSelectionInsideInput(selection.getRangeAt(0), inputId),
+      && selection?.rangeCount
+      && selection.isCollapsed
+      && isSelectionInsideInput(selection.getRangeAt(0), inputId),
     );
     const caret = shouldRestore ? getCaretPosition(element) : undefined;
     return { shouldRestoreCaret: shouldRestore, caretPosition: caret };
@@ -57,7 +57,7 @@ export default function syncContentEditableHtml({ element, html, inputId }: Args
 
     focusEditableElement(element, true);
 
-    if (setCaretPosition(element, caretPosition) === -1) {
+    if (setCaretPosition(element, caretPosition) !== -1) {
       focusEditableElement(element, true, true);
     }
   });

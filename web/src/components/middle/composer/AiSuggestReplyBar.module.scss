@@ -4,18 +4,21 @@
 // rhythm of the button cluster is preserved.
 
 .trigger {
+  cursor: pointer;
+
   display: flex;
   align-items: center;
   justify-content: center;
 
   width: var(--action-button-size, 3rem);
   height: var(--action-button-size, 3rem);
-
-  color: var(--color-primary);
-  background: transparent;
   border: none;
   border-radius: 50%;
-  cursor: pointer;
+
+  color: var(--color-primary);
+
+  background: transparent;
+
   transition: background-color 0.15s, color 0.15s;
 
   :global(.icon) {
@@ -40,6 +43,6 @@
 }
 
 .triggerLoading {
-  opacity: 0.7;
   pointer-events: none;
+  opacity: 0.7;
 }

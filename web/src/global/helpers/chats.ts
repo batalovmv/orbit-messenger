@@ -47,7 +47,6 @@ export function isChatSuperGroup(chat: ApiChat) {
   return chat.type === 'chatTypeSuperGroup';
 }
 
-
 export function isChatMonoforum(chat: ApiChat) {
   return chat.isMonoforum;
 }

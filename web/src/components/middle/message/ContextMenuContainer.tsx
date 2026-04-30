@@ -4,8 +4,6 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import { clearMessageTranslation, hasMessageTranslation, startMessageTranslation } from './AiTranslateInline';
-
 import type {
   ApiAvailableReaction,
   ApiChat,
@@ -50,7 +48,6 @@ import {
   selectCanGift,
   selectCanPlayAnimatedEmojis,
   selectCanScheduleUntilOnline,
-  selectCanTranslateMessage,
   selectChat,
   selectChatFullInfo,
   selectCurrentMessageList,
@@ -88,6 +85,7 @@ import useShowTransition from '../../../hooks/useShowTransition';
 
 import PinMessageModal from '../../common/PinMessageModal.async';
 import ConfirmDialog from '../../ui/ConfirmDialog';
+import { clearMessageTranslation, hasMessageTranslation, startMessageTranslation } from './AiTranslateInline';
 import MessageContextMenu from './MessageContextMenu';
 
 export type OwnProps = {

@@ -260,7 +260,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         break;
       }
 
-      callApi('decodePhoneCallData', [update.data])?.then((msg) => { if (msg) processSignalingMessage(msg); });
+      callApi('decodePhoneCallData', [update.data])?.then((msg) => {
+        if (msg) processSignalingMessage(msg);
+      });
       break;
     }
     case 'updateWebRTCSignaling': {

@@ -10,11 +10,6 @@ import type { ApiPhoneCall, ApiUser } from '../../../api/types';
 import {
   getStreams, IS_SCREENSHARE_SUPPORTED, switchCameraInputP2p, toggleStreamP2p,
 } from '../../../lib/secret-sauce';
-import {
-  startScreenShareApi,
-  stopScreenShareApi,
-  toggleCallMute as apiToggleCallMute,
-} from '../../../api/saturn/methods/calls';
 import { selectTabState } from '../../../global/selectors';
 import { selectPhoneCallUser } from '../../../global/selectors/calls';
 import {
@@ -25,6 +20,11 @@ import {
 import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dates/dateFormat';
 import { getServerTime } from '../../../util/serverTime';
+import {
+  startScreenShareApi,
+  stopScreenShareApi,
+  toggleCallMute as apiToggleCallMute,
+} from '../../../api/saturn/methods/calls';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
 import renderText from '../../common/helpers/renderText';
 

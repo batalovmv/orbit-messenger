@@ -1,7 +1,6 @@
 ﻿// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-
 // ---------------------------------------------------------------------------
 // Saturn translateText — bridges the TG-original translateMessages action
 // (which calls callApi('translateText')) to our cached translation endpoints.
@@ -11,9 +10,9 @@
 
 import type { ApiChat, ApiFormattedText } from '../../types';
 
-import { resolveMessageUuid } from './messages';
-import { fetchTranslationsBatch } from './ai';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+import { fetchTranslationsBatch } from './ai';
+import { resolveMessageUuid } from './messages';
 
 type TranslateTextParams = ({
   text: ApiFormattedText[];

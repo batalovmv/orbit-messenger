@@ -719,7 +719,8 @@ addActionHandler('checkAppVersion', (global, actions, payload): ActionReturnType
   // still know the cached app graph is broken — flip the flag immediately.
   const isForced = Boolean((payload as { force?: boolean } | undefined)?.force);
   if (isForced && !global.isAppUpdateAvailable) {
-    setGlobal({ ...global, isAppUpdateAvailable: true });
+    global = { ...global, isAppUpdateAvailable: true };
+    setGlobal(global);
   }
 
   fetch(`${APP_VERSION_URL}?${Date.now()}`, { cache: 'no-store' })

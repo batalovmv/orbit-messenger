@@ -9,7 +9,7 @@ import type { ApiChatFolder } from '../../../../api/types';
 import { STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { isUserBot } from '../../../../global/helpers';
 import {
-  selectCanInviteToChat, selectChat,
+  selectCanInviteToChat,
   selectChatFolder,
   selectTabState, selectUser,
 } from '../../../../global/selectors';
@@ -111,7 +111,6 @@ const SettingsShareChatlist: FC<OwnProps & StateProps> = ({
   const handleClickDisabled = useLastCallback((id: string) => {
     const global = getGlobal();
     const user = selectUser(global, id);
-    const chat = selectChat(global, id);
     if (user && isUserBot(user)) {
       showNotification({
         message: oldLang('FolderLinkScreen.AlertTextUnavailableBot'),

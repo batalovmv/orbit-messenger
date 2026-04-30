@@ -30,8 +30,8 @@ import styles from './UiLoader.module.scss';
 import starIconPath from '../../assets/icons/star/star.webp';
 import lockPreviewPath from '../../assets/lock.png';
 import monkeyPath from '../../assets/monkey.svg';
-import spoilerMaskPath from '../../assets/spoilers/mask.svg';
 import telegramLogoPath from '../../assets/orbit-logo.svg';
+import spoilerMaskPath from '../../assets/spoilers/mask.svg';
 
 export type UiLoaderPage =
   'main'

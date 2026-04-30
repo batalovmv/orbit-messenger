@@ -18,9 +18,9 @@ import {
   isChatPublic,
 } from '../../../global/helpers';
 import { selectChat, selectChatFullInfo, selectIsChatRestricted, selectTabState } from '../../../global/selectors';
-import { setChatDefaultStatus } from '../../../api/saturn/methods/admin';
 import { debounce } from '../../../util/schedulers';
 import { formatInteger } from '../../../util/textFormat';
+import { setChatDefaultStatus } from '../../../api/saturn/methods/admin';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';

@@ -2,13 +2,12 @@ import type { ApiPeer, ApiSavedGifts, ApiStarGiftCollection } from '../../api/ty
 import type { GlobalState, TabArgs } from '../types';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../config';
-import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
-import { isChatAdmin, isDeletedUser } from '../helpers';
-import { selectChat, selectChatFullInfo, selectIsMonoforumAdmin } from './chats';
+import { isDeletedUser } from '../helpers';
+import { selectChat, selectChatFullInfo } from './chats';
 import { selectTabState } from './tabs';
 import { selectPeerProfileColor } from './ui';
-import { selectBot, selectUser, selectUserFullInfo } from './users';
+import { selectBot, selectUser } from './users';
 
 export type ProfileCollectionKey = 'all' | number;
 

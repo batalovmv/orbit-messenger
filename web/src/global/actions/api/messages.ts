@@ -455,135 +455,135 @@ addActionHandler('sendMessage', (global, actions, payload): ActionReturnType => 
   // Fire-and-forget: Teact cannot resume async action handlers after await
   void (async () => {
   // Create new bot forum topic
-  if (chat.isBotForum && user?.canManageBotForumTopics && threadId === MAIN_THREAD_ID
-    && replyInfo?.type !== 'message'
-  ) {
-    const baseTitle = params.text ?? getTranslationFn()('BotForumTopicTitlePlaceholder');
-    const title = baseTitle.length > 12 ? `${baseTitle.slice(0, 12)}...` : baseTitle;
-    const topic = await callApi('createTopic', {
-      chat,
-      title,
-      isTitleMissing: true,
-      sendAs: params.sendAs,
-    });
-    if (topic) {
-      params.replyInfo = params.replyInfo?.type === 'message'
-        ? { ...params.replyInfo, replyToTopId: topic }
-        : { type: 'message', replyToMsgId: topic, replyToTopId: topic };
-      getActions().openThread({ chatId: chat.id, threadId: topic });
-    }
-  }
-
-  const isSingle = (!payload.attachments || payload.attachments.length <= 1) && !isForwarding;
-  const isGrouped = !isSingle && payload.shouldGroupMessages;
-  const localMessages: SendMessageParams[] = [];
-
-  if (isSingle) {
-    const { attachments, ...restParams } = params;
-    const sendParams: SendMessageParams = {
-      ...restParams,
-      attachment: attachments ? attachments[0] : undefined,
-      wasDrafted: Boolean(draft),
-    };
-    await sendMessageOrReduceLocal(global, sendParams, localMessages);
-  } else if (isGrouped) {
-    const {
-      text, entities, attachments, ...commonParams
-    } = params;
-    const byType = splitAttachmentsByType(attachments!);
-
-    let hasSentCaption = false;
-    for (let groupIndex = 0; groupIndex < byType.length; groupIndex++) {
-      const group = byType[groupIndex];
-      const groupedAttachments = split(group, MAX_MEDIA_FILES_FOR_ALBUM);
-      for (let i = 0; i < groupedAttachments.length; i++) {
-        const groupedId = `${Date.now()}${groupIndex}${i}`;
-
-        const isFirst = i === 0 && groupIndex === 0;
-        const isLast = i === groupedAttachments.length - 1 && groupIndex === byType.length - 1;
-
-        if (group[0].quick && !group[0].shouldSendAsFile) {
-          const [firstAttachment, ...restAttachments] = groupedAttachments[i];
-
-          let sendParams: SendMessageParams = {
-            ...commonParams,
-            text: isFirst && !hasSentCaption ? text : undefined,
-            entities: isFirst && !hasSentCaption ? entities : undefined,
-            attachment: firstAttachment,
-            groupedId: restAttachments.length > 0 ? groupedId : undefined,
-            wasDrafted: Boolean(draft),
-          };
-          await sendMessageOrReduceLocal(global, sendParams, localMessages);
-
-          hasSentCaption = true;
-
-          for (const attachment of restAttachments) {
-            sendParams = {
-              ...commonParams,
-              attachment,
-              groupedId,
-            };
-            await sendMessageOrReduceLocal(global, sendParams, localMessages);
-          }
-        } else {
-          const firstAttachments = groupedAttachments[i].slice(0, -1);
-          const lastAttachment = groupedAttachments[i][groupedAttachments[i].length - 1];
-          for (const attachment of firstAttachments) {
-            const sendParams = {
-              ...commonParams,
-              attachment,
-              groupedId,
-            };
-            await sendMessageOrReduceLocal(global, sendParams, localMessages);
-          }
-
-          const sendParams = {
-            ...commonParams,
-            text: isLast && !hasSentCaption ? text : undefined,
-            entities: isLast && !hasSentCaption ? entities : undefined,
-            attachment: lastAttachment,
-            groupedId: firstAttachments.length > 0 ? groupedId : undefined,
-            wasDrafted: Boolean(draft),
-          };
-          await sendMessageOrReduceLocal(global, sendParams, localMessages);
-
-          hasSentCaption = true;
-        }
+    if (chat.isBotForum && user?.canManageBotForumTopics && threadId === MAIN_THREAD_ID
+      && replyInfo?.type !== 'message'
+    ) {
+      const baseTitle = params.text ?? getTranslationFn()('BotForumTopicTitlePlaceholder');
+      const title = baseTitle.length > 12 ? `${baseTitle.slice(0, 12)}...` : baseTitle;
+      const topic = await callApi('createTopic', {
+        chat,
+        title,
+        isTitleMissing: true,
+        sendAs: params.sendAs,
+      });
+      if (topic) {
+        params.replyInfo = params.replyInfo?.type === 'message'
+          ? { ...params.replyInfo, replyToTopId: topic }
+          : { type: 'message', replyToMsgId: topic, replyToTopId: topic };
+        getActions().openThread({ chatId: chat.id, threadId: topic });
       }
     }
-  } else {
-    const {
-      text, entities, attachments, replyInfo: replyToForFirstMessage, ...commonParams
-    } = params;
 
-    if (text) {
-      const sendParams = {
-        ...commonParams,
-        text,
-        entities,
-        replyInfo: replyToForFirstMessage,
+    const isSingle = (!payload.attachments || payload.attachments.length <= 1) && !isForwarding;
+    const isGrouped = !isSingle && payload.shouldGroupMessages;
+    const localMessages: SendMessageParams[] = [];
+
+    if (isSingle) {
+      const { attachments, ...restParams } = params;
+      const sendParams: SendMessageParams = {
+        ...restParams,
+        attachment: attachments ? attachments[0] : undefined,
         wasDrafted: Boolean(draft),
       };
       await sendMessageOrReduceLocal(global, sendParams, localMessages);
-    }
+    } else if (isGrouped) {
+      const {
+        text, entities, attachments, ...commonParams
+      } = params;
+      const byType = splitAttachmentsByType(attachments!);
 
-    if (attachments) {
-      for (const attachment of attachments) {
+      let hasSentCaption = false;
+      for (let groupIndex = 0; groupIndex < byType.length; groupIndex++) {
+        const group = byType[groupIndex];
+        const groupedAttachments = split(group, MAX_MEDIA_FILES_FOR_ALBUM);
+        for (let i = 0; i < groupedAttachments.length; i++) {
+          const groupedId = `${Date.now()}${groupIndex}${i}`;
+
+          const isFirst = i === 0 && groupIndex === 0;
+          const isLast = i === groupedAttachments.length - 1 && groupIndex === byType.length - 1;
+
+          if (group[0].quick && !group[0].shouldSendAsFile) {
+            const [firstAttachment, ...restAttachments] = groupedAttachments[i];
+
+            let sendParams: SendMessageParams = {
+              ...commonParams,
+              text: isFirst && !hasSentCaption ? text : undefined,
+              entities: isFirst && !hasSentCaption ? entities : undefined,
+              attachment: firstAttachment,
+              groupedId: restAttachments.length > 0 ? groupedId : undefined,
+              wasDrafted: Boolean(draft),
+            };
+            await sendMessageOrReduceLocal(global, sendParams, localMessages);
+
+            hasSentCaption = true;
+
+            for (const attachment of restAttachments) {
+              sendParams = {
+                ...commonParams,
+                attachment,
+                groupedId,
+              };
+              await sendMessageOrReduceLocal(global, sendParams, localMessages);
+            }
+          } else {
+            const firstAttachments = groupedAttachments[i].slice(0, -1);
+            const lastAttachment = groupedAttachments[i][groupedAttachments[i].length - 1];
+            for (const attachment of firstAttachments) {
+              const sendParams = {
+                ...commonParams,
+                attachment,
+                groupedId,
+              };
+              await sendMessageOrReduceLocal(global, sendParams, localMessages);
+            }
+
+            const sendParams = {
+              ...commonParams,
+              text: isLast && !hasSentCaption ? text : undefined,
+              entities: isLast && !hasSentCaption ? entities : undefined,
+              attachment: lastAttachment,
+              groupedId: firstAttachments.length > 0 ? groupedId : undefined,
+              wasDrafted: Boolean(draft),
+            };
+            await sendMessageOrReduceLocal(global, sendParams, localMessages);
+
+            hasSentCaption = true;
+          }
+        }
+      }
+    } else {
+      const {
+        text, entities, attachments, replyInfo: replyToForFirstMessage, ...commonParams
+      } = params;
+
+      if (text) {
         const sendParams = {
           ...commonParams,
-          attachment,
+          text,
+          entities,
+          replyInfo: replyToForFirstMessage,
+          wasDrafted: Boolean(draft),
         };
         await sendMessageOrReduceLocal(global, sendParams, localMessages);
       }
+
+      if (attachments) {
+        for (const attachment of attachments) {
+          const sendParams = {
+            ...commonParams,
+            attachment,
+          };
+          await sendMessageOrReduceLocal(global, sendParams, localMessages);
+        }
+      }
     }
-  }
-  if (isForwarding) {
-    const localForwards = await executeForwardMessages(global, params, tabId);
-    if (localForwards) {
-      localMessages.push(...localForwards);
+    if (isForwarding) {
+      const localForwards = await executeForwardMessages(global, params, tabId);
+      if (localForwards) {
+        localMessages.push(...localForwards);
+      }
     }
-  }
-  if (localMessages?.length) sendMessagesWithNotification(global, localMessages);
+    if (localMessages?.length) sendMessagesWithNotification(global, localMessages);
   })();
 });
 

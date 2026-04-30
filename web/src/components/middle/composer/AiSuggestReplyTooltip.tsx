@@ -1,6 +1,7 @@
 import { memo, useRef } from '../../../lib/teact/teact';
 
 import buildClassName from '../../../util/buildClassName';
+
 import useShowTransitionDeprecated from '../../../hooks/useShowTransitionDeprecated';
 
 import Icon from '../../common/icons/Icon';

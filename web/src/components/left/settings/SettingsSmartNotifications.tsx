@@ -2,7 +2,6 @@ import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
 import type { NotificationMode } from '../../../api/saturn/methods/notifications';
-
 import type { RegularLangKey } from '../../../types/language';
 
 import { getNotificationMode, updateNotificationMode } from '../../../api/saturn/methods/notifications';
@@ -28,7 +27,7 @@ const SettingsSmartNotifications = ({ isActive, onReset }: OwnProps) => {
   const lang = useLang();
 
   const [mode, setMode] = useState<NotificationMode>('smart');
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
 
   useHistoryBack({ isActive, onBack: onReset });
 
@@ -47,7 +46,9 @@ const SettingsSmartNotifications = ({ isActive, onReset }: OwnProps) => {
         }
       }
     })();
-    return () => { isCancelled = true; };
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   const handleModeChange = useLastCallback(async (value: string) => {

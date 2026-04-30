@@ -7,7 +7,6 @@ export type NotificationMode = 'smart' | 'off';
 
 export type NotificationPriority = 'urgent' | 'important' | 'normal' | 'low';
 
-// eslint-disable-next-line no-null/no-null
 export type NotificationPriorityOverride = NotificationPriority | null;
 
 export type NotificationModeResponse = {

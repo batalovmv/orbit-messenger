@@ -27,9 +27,9 @@ import useFlag from '../../../hooks/useFlag';
 import { useIntersectionObserver, useIsIntersecting } from '../../../hooks/useIntersectionObserver';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
+import { useSfuStreamManager } from '../../../hooks/useSfuStreamManager';
 import { useFullscreenStatus } from '../../../hooks/window/useFullscreen';
 import useGroupCallVideoLayout from './hooks/useGroupCallVideoLayout';
-import { useSfuStreamManager } from '../../../hooks/useSfuStreamManager';
 
 import Button from '../../ui/Button';
 import Checkbox from '../../ui/Checkbox';
@@ -192,8 +192,7 @@ const GroupCall: FC<OwnProps & StateProps> = ({
     return () => {
       sfuManager.leave();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupCallId]);
+  }, [groupCallId, sfuManager]);
 
   // Build a userId → MediaStream map from SFU remote tracks (video kind only).
   const sfuVideoStreams = useMemo(() => {

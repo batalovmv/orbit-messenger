@@ -634,9 +634,10 @@
 "InviteLinks" = "Ссылки-приглашения";
 "CreateLink" = "Создать ссылку";
 "CreateInviteLink" = "Создать ссылку-приглашение";
-"AdminCreateInvite" = "Коды приглашений";
-"AdminInviteCreated" = "Ссылка создана";
-"AdminInviteError" = "Не удалось создать ссылку";
+"AdminCreateInvite" = "Онбординг команды";
+"AdminComplianceAudit" = "Аудит доступа";
+"AdminInviteCreated" = "Инвайт-код создан";
+"AdminInviteError" = "Не удалось создать инвайт-код";
 "RevokeLink" = "Аннулировать ссылку";
 "CopyInviteLink" = "Копировать ссылку";
 "ShareInviteLink" = "Поделиться ссылкой";
@@ -1629,6 +1630,7 @@
 "RecoveryEmailSubtitle" = "Введите код, отправленный на вашу электронную почту.";
 "RecoveryEmailTitle" = "Почта для восстановления";
 "RegistrationJoinWith" = "Зарегистрироваться по коду приглашения";
+"RegistrationInviteHelp" = "Введите код от администратора. После регистрации Orbit откроет рабочие чаты, настроенные для новых пользователей.";
 "RegistrationSignUp" = "Зарегистрироваться";
 "RemoveEffect" = "Убрать эффект";
 "RemoveQuote" = "Убрать цитату";
@@ -3779,10 +3781,10 @@
 "AdminTabWelcome" = "Онбординг";
 "AdminTabWelcomeShort" = "Онбординг";
 "AdminWelcomeIntro" = "Онбординг управляет входом людей в Orbit: инвайт-коды создают аккаунты, а чаты по умолчанию добавляют новых сотрудников в нужные рабочие пространства.";
-"AdminWelcomeBackfillDescription" = "Backfill применяет это правило к уже существующим пользователям. Перед запуском ниже показано, какие чаты затронуты и сколько членств будет добавлено.";
+"AdminWelcomeBackfillDescription" = "Ручной backfill применяет это правило к уже существующим пользователям только после запуска. Ниже показано, какие чаты затронуты и сколько членств будет добавлено.";
 "AdminWelcomeBackfillWarning" = "Внимание: операция массовая и заметна — каждый получит чаты в списке и (если был онлайн) уведомление о добавлении. Запускайте только когда уверены.";
-"AdminInvitesTitle" = "Инвайты";
-"AdminInvitesDescription" = "Создавайте инвайт-коды для новых сотрудников. Обычные админы приглашают пользователей; суперадмины могут назначать привилегированные роли.";
+"AdminInvitesTitle" = "Коды входа в аккаунт";
+"AdminInvitesDescription" = "Создавайте коды входа для новых сотрудников. Это не ссылки-приглашения в чат: код позволяет зарегистрироваться и затем попасть в рабочие чаты по умолчанию.";
 "AdminInvitesEmail" = "Email";
 "AdminInvitesEmailPlaceholder" = "Необязательно, привязывает инвайт к email";
 "AdminInvitesRole" = "Роль";
@@ -3809,6 +3811,7 @@
 "AdminWelcomeUsersCount" = "пользователей";
 "AdminWelcomeMissingCount" = "нужно добавить";
 "AdminWelcomeNoDefaultChats" = "Нет чатов, отмеченных как «по умолчанию для новых».";
+"AdminWelcomeNoDefaultChatsImpact" = "Новые пользователи смогут зарегистрироваться, но первый экран останется пустым, пока не настроен чат по умолчанию.";
 "AdminWelcomeNoMissingMemberships" = "Все существующие пользователи уже состоят в этих чатах.";
 "AdminWelcomeUnnamedChat" = "Чат без названия";
 "AdminWelcomeChatMeta" = "{type} · участников: {members} · порядок: {order}";

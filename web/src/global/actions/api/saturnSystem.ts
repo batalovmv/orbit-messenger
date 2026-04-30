@@ -7,11 +7,10 @@
 // enabled banner inside one minute, low-rate enough to be invisible on the
 // network panel.
 
-import { addActionHandler, setGlobal } from '../../index';
-
 import {
   fetchPublicSystemConfig, fetchSystemConfig,
 } from '../../../api/saturn/methods/admin';
+import { addActionHandler, setGlobal } from '../../index';
 
 addActionHandler('refreshSaturnSystemConfig', async (global): Promise<void> => {
   // Logged-in users get the auth-exposed config; pre-login screens fall back

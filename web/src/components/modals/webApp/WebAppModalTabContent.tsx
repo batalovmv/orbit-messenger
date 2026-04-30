@@ -18,7 +18,6 @@ import { convertToApiChatType, getUserFullName } from '../../../global/helpers';
 import { getWebAppKey } from '../../../global/helpers/bots';
 import {
   selectBotAppPermissions,
-  selectTabState,
   selectTheme,
   selectUser,
   selectUserFullInfo,

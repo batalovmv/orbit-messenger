@@ -367,7 +367,11 @@ export async function fetchAuditLogExport(query: Omit<AuditQuery, 'cursor' | 'li
 function buildAuditParams(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined && v !== '' && v !== null) {
+    if (v === undefined || v === '' || (typeof v === 'object' && !v)) {
+      continue;
+    }
+
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
       params.set(k, String(v));
     }
   }

@@ -6,36 +6,35 @@ import {
 } from '@teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { GlobalState } from '../../../global/types';
 import type {
   AdminFlag, AdminInvite, AdminSession, AdminUser, AuditEntry, DefaultChatsPreview,
 } from '../../../api/saturn/methods/admin';
+import type { AuditQuery, PushTestReport } from '../../../api/saturn/methods/admin';
+import type { GlobalState } from '../../../global/types';
 import type { IconName } from '../../../types/icons';
 import type { TabWithProperties } from '../../ui/TabList';
 
+import { selectTabState } from '../../../global/selectors';
+import buildClassName from '../../../util/buildClassName';
 import {
   AUDIT_ACTIONS, AUDIT_EXPORT_HARD_CAP, AUDIT_TARGET_TYPES,
   backfillDefaultChats, changeAdminUserRole, createAdminInvite, deactivateAdminUser, fetchAdminFlags,
-  fetchAdminInvites, fetchAdminUserExport, fetchAdminUserSessions, fetchAdminUsers, fetchAuditLog,
+  fetchAdminInvites, fetchAdminUserExport, fetchAdminUsers, fetchAdminUserSessions, fetchAuditLog,
   fetchAuditLogExport, fetchDefaultChatsPreview, reactivateAdminUser, revokeAdminInvite,
   revokeAdminUserSession, revokeAllAdminUserSessions,
   sendAdminTestPush,
   setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
-import type { AuditQuery, PushTestReport } from '../../../api/saturn/methods/admin';
-import { selectTabState } from '../../../global/selectors';
-import buildClassName from '../../../util/buildClassName';
+import { localizeAdminError } from './adminErrors';
 
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import { MaintenanceBannerView } from '../MaintenanceBanner';
-import Modal from '../../ui/Modal';
-import TabList from '../../ui/TabList';
 import ListItem from '../../ui/ListItem';
+import Modal from '../../ui/Modal';
 import Switcher from '../../ui/Switcher';
-
-import { localizeAdminError } from './adminErrors';
+import TabList from '../../ui/TabList';
+import { MaintenanceBannerView } from '../MaintenanceBanner';
 
 import styles from './AdminPanel.module.scss';
 
@@ -293,17 +292,20 @@ const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
     }
   });
 
-  useEffect(() => { reloadUsers(); }, [debouncedQuery, reloadUsers]);
+  useEffect(() => {
+    reloadUsers();
+  }, [debouncedQuery, reloadUsers]);
 
   useEffect(() => {
-    if (!selectedUser) {
+    const selectedUserId = selectedUser?.id;
+    if (!selectedUserId) {
       setSessions([]);
       return undefined;
     }
 
     let cancelled = false;
     setIsSessionsBusy(true);
-    fetchAdminUserSessions(selectedUser.id)
+    fetchAdminUserSessions(selectedUserId)
       .then((list) => {
         if (cancelled) return;
         setSessions(list);
@@ -318,8 +320,10 @@ const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
         setIsSessionsBusy(false);
       });
 
-    return () => { cancelled = true; };
-  }, [selectedUser?.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [lang, selectedUser?.id]);
 
   const summary = useMemo(() => ({
     total: users.length,
@@ -479,7 +483,10 @@ const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
               >
                 <span className="title">{user.display_name || user.email}</span>
                 <span className="subtitle">
-                  {user.email} · {adminRoleLabel(lang, user.role)}
+                  {user.email}
+                  {' '}
+                  ·
+                  {adminRoleLabel(lang, user.role)}
                 </span>
               </ListItem>
             );
@@ -612,7 +619,10 @@ const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
                           : lang('AdminUsersSessionUnknownDevice')}
                       </span>
                       <span className={styles.userSearchMeta}>
-                        {session.ip_address || '—'} · {formatAdminDate(session.created_at)}
+                        {session.ip_address || '—'}
+                        {' '}
+                        ·
+                        {formatAdminDate(session.created_at)}
                       </span>
                       {session.user_agent && (
                         <span className={styles.sessionAgent}>{session.user_agent}</span>
@@ -714,7 +724,8 @@ const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
 // Adding a new exposure means adding it here AND in the translation pack.
 const FLAG_SECTION_ORDER: Array<{
   exposure: AdminFlag['exposure'] | 'unknown';
-  labelKey: 'AdminFlagSectionUnauth' | 'AdminFlagSectionAuth' | 'AdminFlagSectionAdmin' | 'AdminFlagSectionServerOnly' | 'AdminFlagSectionUnknown';
+  labelKey: 'AdminFlagSectionUnauth' | 'AdminFlagSectionAuth' | 'AdminFlagSectionAdmin'
+    | 'AdminFlagSectionServerOnly' | 'AdminFlagSectionUnknown';
 }> = [
   { exposure: 'unauth', labelKey: 'AdminFlagSectionUnauth' },
   { exposure: 'auth', labelKey: 'AdminFlagSectionAuth' },
@@ -759,7 +770,9 @@ const FlagsTab = () => {
     }
   });
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const applyToggle = useLastCallback(async (flag: AdminFlag, nextEnabled: boolean) => {
     setBusyKey(flag.key);
@@ -956,8 +969,10 @@ const FlagHistoryModal = ({ flag, onClose }: FlagHistoryModalProps) => {
         if (cancelled) return;
         setIsBusy(false);
       });
-    return () => { cancelled = true; };
-  }, [flag.key]);
+    return () => {
+      cancelled = true;
+    };
+  }, [flag.key, lang]);
 
   return (
     <Modal
@@ -1086,7 +1101,9 @@ const MaintenanceTab = () => {
     }
   });
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   const handleApply = useLastCallback(async () => {
     setIsBusy(true);
@@ -1205,7 +1222,9 @@ const MaintenanceTab = () => {
       {error && <div className={styles.error}>{error}</div>}
       {updatedAt && (
         <div className={styles.formHelp}>
-          {lang('AdminMaintenanceLastUpdated')}: {new Date(updatedAt).toLocaleString()}
+          {lang('AdminMaintenanceLastUpdated')}
+          :
+          {new Date(updatedAt).toLocaleString()}
         </div>
       )}
       <div className={styles.actions}>
@@ -1491,10 +1510,16 @@ const WelcomeTab = ({ role }: WelcomeTabProps) => {
                       </span>
                     </div>
                     <span className={styles.inviteMeta}>
-                      {invite.email || lang('AdminInvitesAllEmails')} · {adminRoleLabel(lang, invite.role)}
+                      {invite.email || lang('AdminInvitesAllEmails')}
+                      {' '}
+                      ·
+                      {adminRoleLabel(lang, invite.role)}
                     </span>
                     <span className={styles.inviteMeta}>
-                      {lang('AdminInvitesUsage', { used: invite.use_count, max: invite.max_uses })} · {' '}
+                      {lang('AdminInvitesUsage', { used: invite.use_count, max: invite.max_uses })}
+                      {' '}
+                      ·
+                      {' '}
                       {invite.expires_at
                         ? lang('AdminInvitesExpires', { date: formatAdminDate(invite.expires_at) })
                         : lang('AdminInvitesNeverExpires')}
@@ -1549,7 +1574,12 @@ const WelcomeTab = ({ role }: WelcomeTabProps) => {
           <span className={styles.summaryValue}>{isPreviewBusy && !preview ? '...' : preview?.user_count ?? 0}</span>
           <span className={styles.summaryLabel}>{lang('AdminWelcomeUsersCount')}</span>
         </div>
-        <div className={buildClassName(styles.summaryCard, (preview?.missing_memberships || 0) > 0 && styles.summaryCardWarn)}>
+        <div
+          className={buildClassName(
+            styles.summaryCard,
+            (preview?.missing_memberships || 0) > 0 && styles.summaryCardWarn,
+          )}
+        >
           <span className={styles.summaryValue}>
             {isPreviewBusy && !preview ? '...' : preview?.missing_memberships ?? 0}
           </span>
@@ -1562,7 +1592,10 @@ const WelcomeTab = ({ role }: WelcomeTabProps) => {
           <div className={styles.empty}>{lang('Loading')}</div>
         )}
         {!isPreviewBusy && defaultChats.length === 0 && (
-          <div className={styles.empty}>{lang('AdminWelcomeNoDefaultChats')}</div>
+          <>
+            <div className={styles.empty}>{lang('AdminWelcomeNoDefaultChats')}</div>
+            <div className={styles.welcomeWarn}>{lang('AdminWelcomeNoDefaultChatsImpact')}</div>
+          </>
         )}
         {defaultChats.length > 0 && (
           <div className={styles.defaultChatList}>
@@ -1698,7 +1731,7 @@ const PushInspectorTab = () => {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [identifier, selectedUser]);
+  }, [identifier, lang, selectedUser]);
 
   const handleIdentifierChange = useLastCallback((value: string) => {
     setIdentifier(value);
@@ -1765,7 +1798,11 @@ const PushInspectorTab = () => {
               >
                 <span className={styles.userSearchName}>{user.display_name || user.email}</span>
                 <span className={styles.userSearchMeta}>
-                  {user.email} · {user.role}{user.is_active ? '' : ` · ${lang('AdminPushInspectorUserInactive')}`}
+                  {user.email}
+                  {' '}
+                  ·
+                  {user.role}
+                  {user.is_active ? '' : ` · ${lang('AdminPushInspectorUserInactive')}`}
                 </span>
               </button>
             ))}
@@ -1775,7 +1812,13 @@ const PushInspectorTab = () => {
           <div className={styles.selectedUser}>
             <span className={styles.formLabelText}>{lang('AdminPushInspectorSelectedUser')}</span>
             <span>{selectedUser.display_name || selectedUser.email}</span>
-            <span className={styles.userSearchMeta}>{selectedUser.email} · {selectedUser.id}</span>
+            <span className={styles.userSearchMeta}>
+              {selectedUser.email}
+              {' '}
+              ·
+              {' '}
+              {selectedUser.id}
+            </span>
           </div>
         )}
       </div>
@@ -1816,7 +1859,9 @@ const PushInspectorTab = () => {
         <div className={styles.pushReport}>
           <div className={styles.pushSummary}>
             <span>
-              {lang('AdminPushInspectorTarget')}: {report.email || report.user_id}
+              {lang('AdminPushInspectorTarget')}
+              :
+              {report.email || report.user_id}
               {report.display_name ? ` (${report.display_name})` : ''}
             </span>
             <span className={styles.pushCounts}>
@@ -2174,7 +2219,9 @@ const AuditTab = ({ role }: AuditTabProps) => {
 
   // Refetch from scratch whenever any of the filter inputs change. Free-text
   // is the only one debounced — the rest fire on the next tick.
-  useEffect(() => { load(undefined); }, [
+  useEffect(() => {
+    load(undefined);
+  }, [
     debouncedQ, actionFilter, targetTypeFilter, actorIdFilter, fromDate, toDate, load,
   ]);
 

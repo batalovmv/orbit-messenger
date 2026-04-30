@@ -67,7 +67,9 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 0.5rem 0.625rem;
+
     padding: 0.625rem;
+
     font-size: 0.875rem;
   }
 
@@ -93,6 +95,7 @@
   .root .action {
     grid-column: 1 / -1;
     grid-row: 2;
+
     width: 100%;
     height: 2.25rem;
     padding-right: 0.75rem;

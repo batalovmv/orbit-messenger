@@ -70,6 +70,7 @@
   .quick-reaction {
     --custom-emoji-size: 1.75rem;
 
+    pointer-events: none;
     cursor: var(--custom-cursor, pointer);
 
     position: absolute;
@@ -83,14 +84,13 @@
     justify-content: center;
 
     opacity: 0;
-    pointer-events: none;
 
     transition: transform 0.2s ease-out, opacity 0.2s ease-out;
     transition-delay: 0.2s;
 
     &.visible {
-      opacity: 1 !important;
       pointer-events: auto;
+      opacity: 1 !important;
     }
 
     &:hover {

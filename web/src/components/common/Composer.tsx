@@ -69,7 +69,6 @@ import {
   isSystemBot,
 } from '../../global/helpers';
 import { getChatNotifySettings } from '../../global/helpers/notifications';
-import { getPeerTitle } from '../../global/helpers/peers';
 import {
   selectBot,
   selectCanPlayAnimatedEmojis,
@@ -99,7 +98,6 @@ import {
   selectTheme,
   selectTopicFromMessage,
   selectUser,
-  selectDmPeerUserId,
   selectUserFullInfo,
   selectWebPage,
 } from '../../global/selectors';
@@ -118,7 +116,6 @@ import { processDeepLink } from '../../util/deeplink';
 import { tryParseDeepLink } from '../../util/deepLinkParser';
 import deleteLastCharacterOutsideSelection from '../../util/deleteLastCharacterOutsideSelection';
 import { processMessageInputForCustomEmoji } from '../../util/emoji/customEmojiManager';
-import { isUserId } from '../../util/entities/ids';
 import { fetchBlob } from '../../util/files';
 import focusEditableElement from '../../util/focusEditableElement';
 import { fetch } from '../../util/mediaLoader';
@@ -154,6 +151,7 @@ import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated
 import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
 import useBrowserOnline from '../../hooks/window/useBrowserOnline';
+import useAiSuggestReply from '../middle/composer/hooks/useAiSuggestReply';
 import useAttachmentModal from '../middle/composer/hooks/useAttachmentModal';
 import useChatCommandTooltip from '../middle/composer/hooks/useChatCommandTooltip';
 import useClipboardPaste from '../middle/composer/hooks/useClipboardPaste';
@@ -166,8 +164,9 @@ import useLoadLinkPreview from '../middle/composer/hooks/useLoadLinkPreview';
 import useMentionTooltip from '../middle/composer/hooks/useMentionTooltip';
 import useStickerTooltip from '../middle/composer/hooks/useStickerTooltip';
 import useVoiceRecording from '../middle/composer/hooks/useVoiceRecording';
-import useAiSuggestReply from '../middle/composer/hooks/useAiSuggestReply';
 
+import AiSuggestReplyBar from '../middle/composer/AiSuggestReplyBar';
+import AiSuggestReplyTooltip from '../middle/composer/AiSuggestReplyTooltip';
 import AttachmentModal from '../middle/composer/AttachmentModal.async';
 import AttachMenu from '../middle/composer/AttachMenu';
 import BotCommandMenu from '../middle/composer/BotCommandMenu.async';
@@ -181,8 +180,6 @@ import DropArea, { DropAreaState } from '../middle/composer/DropArea.async';
 import EmojiTooltip from '../middle/composer/EmojiTooltip.async';
 import InlineBotTooltip from '../middle/composer/InlineBotTooltip.async';
 import MentionTooltip from '../middle/composer/MentionTooltip.async';
-import AiSuggestReplyBar from '../middle/composer/AiSuggestReplyBar';
-import AiSuggestReplyTooltip from '../middle/composer/AiSuggestReplyTooltip';
 import MessageInput from '../middle/composer/MessageInput';
 import PollModal from '../middle/composer/PollModal.async';
 import SendAsMenu from '../middle/composer/SendAsMenu.async';
@@ -457,7 +454,6 @@ const Composer = ({
     saveEffectInDraft,
     setReactionEffect,
     hideEffectInComposer,
-    updateChatSilentPosting,
     updateInsertingPeerIdMention,
     updateDraftSuggestedPostInfo,
     updateShouldSaveAttachmentsCompression,
@@ -902,7 +898,6 @@ const Composer = ({
     editedMessage: editingMessage,
     isDisabled: isInStoryViewer || Boolean(requestedDraft) || (!hasSuggestedPost && isMonoforum),
   });
-
 
   useLoadLinkPreview({
     chatId,
@@ -1713,17 +1708,6 @@ const Composer = ({
     });
   });
 
-  const handleToggleSilentPosting = useLastCallback(() => {
-    const newValue = !isSilentPosting;
-    updateChatSilentPosting({ chatId, isEnabled: newValue });
-
-    showNotification({
-      localId: 'silentPosting',
-      icon: newValue ? 'mute' : 'unmute',
-      message: lang(`ComposerSilentPosting${newValue ? 'Enabled' : 'Disabled'}Tootlip`),
-    });
-  });
-
   useEffect(() => {
     if (isRightColumnShown && isMobile) {
       closeSymbolMenu();
@@ -1812,7 +1796,7 @@ const Composer = ({
     return lang('ComposerPlaceholderNoText');
   }, [
     activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isComposerBlocked,
-    isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth,
+    isInStoryViewer, lang, replyToTopic, isReplying, threadId, windowWidth,
     hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil, user?.canManageBotForumTopics,
     isBrowserOffline,
   ]);

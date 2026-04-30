@@ -113,8 +113,6 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
   const folderAllOrderedIds = useFolderManagerForOrderedIds(ALL_FOLDER_ID);
   const folderArchivedOrderedIds = useFolderManagerForOrderedIds(ARCHIVED_FOLDER_ID);
   const displayedIds = useMemo(() => {
-    // No need for expensive global updates on chats, so we avoid them
-    const chatsById = getGlobal().chats.byId;
     const usersById = getGlobal().users.byId;
 
     const chatIds = unique([...folderAllOrderedIds || [], ...folderArchivedOrderedIds || []])

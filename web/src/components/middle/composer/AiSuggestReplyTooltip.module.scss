@@ -8,6 +8,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+
   max-height: none; // override composer-tooltip's 15rem cap — we only ever fit one row
   padding: 0.5rem;
 }
@@ -19,8 +20,11 @@
 }
 
 .chip {
-  max-width: 100%;
+  cursor: pointer;
 
+  overflow: hidden;
+
+  max-width: 100%;
   padding: 0.375rem 0.75rem;
   border: 1px solid var(--color-borders);
   border-radius: 1.25rem;
@@ -28,12 +32,11 @@
   font-size: 0.875rem;
   line-height: 1.25;
   color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 
   background: var(--color-background-secondary);
-  cursor: pointer;
+
   transition: background-color 0.15s, border-color 0.15s;
 
   // Chips with long text: soft-wrap to 2 lines max instead of hard-truncating
@@ -51,8 +54,9 @@
 
 .status {
   display: flex;
-  align-items: center;
   gap: 0.5rem;
+  align-items: center;
+
   padding: 0.25rem 0.5rem;
 
   font-size: 0.875rem;

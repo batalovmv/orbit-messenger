@@ -1,9 +1,10 @@
 .root {
   --custom-emoji-border-radius: 0.25rem;
 
+  pointer-events: none;
+
   position: relative;
   z-index: 1;
-  pointer-events: none;
 
   display: flex;
   align-items: center;

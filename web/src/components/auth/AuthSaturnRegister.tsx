@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from '../../lib/teact/teact';
+import { memo, useEffect, useRef, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
@@ -19,6 +19,8 @@ type StateProps = {
 const AuthSaturnRegister = ({ auth }: StateProps) => {
   const { saturnRegister, clearAuthErrorKey } = getActions();
   const lang = useLang();
+  const { errorKey } = auth;
+  const hasClearedInitialErrorRef = useRef(false);
 
   const [inviteCode, setInviteCode] = useState('');
   const [email, setEmail] = useState('');
@@ -27,20 +29,27 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag(false);
 
   useEffect(() => {
+    if (hasClearedInitialErrorRef.current) return;
+    hasClearedInitialErrorRef.current = true;
+
     // Clear stale errors on mount
-    if (auth.errorKey) clearAuthErrorKey();
-  }, []);
+    if (errorKey) clearAuthErrorKey();
+  }, [clearAuthErrorKey, errorKey]);
 
   useEffect(() => {
-    if (auth.errorKey) {
+    if (errorKey) {
       unmarkIsLoading();
     }
-  }, [auth.errorKey]);
+  }, [errorKey, unmarkIsLoading]);
 
-  const canSubmit = inviteCode.length > 0
-    && email.length > 0
+  const trimmedInviteCode = inviteCode.trim();
+  const trimmedEmail = email.trim();
+  const trimmedDisplayName = displayName.trim();
+
+  const canSubmit = trimmedInviteCode.length > 0
+    && trimmedEmail.length > 0
     && password.length >= 6
-    && displayName.length > 0
+    && trimmedDisplayName.length > 0
     && !isLoading;
 
   const handleChange = useLastCallback(() => {
@@ -69,15 +78,17 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
     setDisplayName(e.target.value);
   });
 
-  const handleSubmit = useLastCallback(async (e: React.FormEvent) => {
+  const handleSubmit = useLastCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     markIsLoading();
-    try {
-      await saturnRegister({ inviteCode, email, password, displayName });
-    } finally {
-      unmarkIsLoading();
-    }
+    saturnRegister({
+      inviteCode: trimmedInviteCode,
+      email: trimmedEmail,
+      password,
+      displayName: trimmedDisplayName,
+    });
+    unmarkIsLoading();
   });
 
   return (
@@ -86,12 +97,13 @@ const AuthSaturnRegister = ({ auth }: StateProps) => {
         <div id="logo" />
         <h1>Orbit Messenger</h1>
         <p className="note">{lang('RegistrationJoinWith') || 'Register with invite code'}</p>
+        <p className="note">{lang('RegistrationInviteHelp')}</p>
         <form action="" onSubmit={handleSubmit}>
           <InputText
             id="register-invite-code"
             label={lang('InviteCode')}
             value={inviteCode}
-            error={auth.errorKey ? lang.withRegular(auth.errorKey) : undefined}
+            error={errorKey ? lang.withRegular(errorKey) : undefined}
             autoComplete="off"
             onChange={handleInviteChange}
           />

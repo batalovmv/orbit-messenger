@@ -1,6 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
 import { memo, useEffect, useRef, useState } from '../../../lib/teact/teact';
-import { callApi } from '../../../api/saturn';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiVideo } from '../../../api/types';
@@ -9,6 +8,7 @@ import { SLIDE_TRANSITION_DURATION } from '../../../config';
 import { selectCurrentMessageList, selectIsChatWithSelf } from '../../../global/selectors';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { callApi } from '../../../api/saturn';
 
 import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver';
 import useLastCallback from '../../../hooks/useLastCallback';
@@ -187,7 +187,7 @@ const GifPicker: FC<OwnProps & StateProps> = ({
           <h4 className="GifPicker-sectionTitle">Trending</h4>
           {trendingGifs?.length ? renderGifGrid(trendingGifs, 'trending') : (
             <div className="GifPicker-sectionFallback">
-              {isTrendingLoading ? <Loading color="yellow" /> : null}
+              {isTrendingLoading ? <Loading color="yellow" /> : undefined}
             </div>
           )}
         </section>

@@ -4,7 +4,7 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChatInviteImporter, ApiExportedInvite } from '../../../api/types';
 
-import { selectChat, selectTabState } from '../../../global/selectors';
+import { selectTabState } from '../../../global/selectors';
 import { formatFullDate, formatMediaDateTime, formatTime } from '../../../util/dates/dateFormat';
 import { getServerTime } from '../../../util/serverTime';
 
@@ -168,7 +168,6 @@ export default memo(withGlobal<OwnProps>(
   (global, { chatId }): Complete<StateProps> => {
     const { inviteInfo } = selectTabState(global).management.byChatId[chatId] || {};
     const { invite, importers, requesters } = inviteInfo || {};
-    const chat = selectChat(global, chatId);
     return {
       invite,
       importers,

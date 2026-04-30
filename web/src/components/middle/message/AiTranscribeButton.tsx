@@ -1,7 +1,7 @@
 import { memo, useState } from '../../../lib/teact/teact';
 
-import { transcribeVoice } from '../../../api/saturn/methods/ai';
 import buildClassName from '../../../util/buildClassName';
+import { transcribeVoice } from '../../../api/saturn/methods/ai';
 
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';

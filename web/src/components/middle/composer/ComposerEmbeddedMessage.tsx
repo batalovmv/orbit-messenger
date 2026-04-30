@@ -539,7 +539,6 @@ export default memo(withGlobal<OwnProps>(
       }
     }
 
-    const chat = sender && selectChat(global, sender.id);
     const forwardsHaveCaptions = forwardedMessages?.some((forward) => (
       forward?.content?.text && Object.keys(forward.content).length > 1
     ));

@@ -169,7 +169,9 @@ export function uploadEncryptedMedia(
     method: 'POST',
     headers,
     credentials: 'include',
-    body: new Blob([ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer], { type: 'application/octet-stream' }),
+    body: new Blob([
+      ciphertext.buffer.slice(ciphertext.byteOffset, ciphertext.byteOffset + ciphertext.byteLength) as ArrayBuffer,
+    ], { type: 'application/octet-stream' }),
     signal,
   }).then(async (resp) => {
     if (!resp.ok) {

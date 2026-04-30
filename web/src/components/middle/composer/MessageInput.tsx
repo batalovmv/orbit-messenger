@@ -249,7 +249,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 
       updateInputHeight(!html);
     }
-  }, [getHtml, isActive, updateInputHeight]);
+  }, [editableInputId, getHtml, isActive, updateInputHeight]);
 
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;

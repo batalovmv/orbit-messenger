@@ -31,7 +31,6 @@ import {
   selectChatMessages,
   selectChatScheduledMessages,
   selectCurrentMessageIds,
-  selectDmPeerUserId,
   selectFirstUnreadId,
   selectFocusedMessageId,
   selectIsChatProtected,
@@ -76,8 +75,8 @@ import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps
 import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
 import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
-import useBrowserOnline from '../../hooks/window/useBrowserOnline';
 import { isBackgroundModeActive } from '../../hooks/window/useBackgroundMode';
+import useBrowserOnline from '../../hooks/window/useBrowserOnline';
 import useContainerHeight from './hooks/useContainerHeight';
 import useStickyDates from './hooks/useStickyDates';
 

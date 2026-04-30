@@ -4,8 +4,8 @@
 }
 
 .scroll {
-  height: 100%;
   overflow-y: auto;
+  height: 100%;
   padding-bottom: 6rem;
 }
 
@@ -19,6 +19,7 @@
 
 .sectionHeader {
   margin: 0.5rem 0 0.5rem 0.5rem;
+
   font-size: 0.8125rem;
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
@@ -34,21 +35,25 @@
 
 .copyRow {
   display: flex;
-  align-items: center;
   gap: 0.5rem;
+  align-items: center;
+
   margin-top: 0.25rem;
   padding: 0.5rem 0.625rem;
-  background-color: var(--color-background-secondary);
   border-radius: 0.5rem;
+
+  background-color: var(--color-background-secondary);
 }
 
 .copyValue {
+  user-select: text;
+
   flex: 1 1 auto;
+
   font-family: var(--font-family-monospace, monospace);
   font-size: 0.75rem;
-  word-break: break-all;
   color: var(--color-text);
-  user-select: text;
+  word-break: break-all;
 }
 
 .copyValueBlurred {
@@ -62,34 +67,40 @@
 }
 
 .copyButton {
-  flex: 0 0 auto;
-  padding: 0;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  color: var(--color-text-secondary);
   cursor: pointer;
 
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+
+  color: var(--color-text-secondary);
+
+  background: transparent;
+
   &:hover {
-    background-color: var(--color-interactive-element-hover);
     color: var(--color-primary);
+    background-color: var(--color-interactive-element-hover);
   }
 }
 
 .charCounter {
+  display: block;
+  align-self: flex-end;
+
   margin-top: 0.25rem;
   margin-left: auto;
+  padding-right: 0.5rem;
+
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  align-self: flex-end;
-  display: block;
   text-align: end;
-  padding-right: 0.5rem;
 }
 
 .charCounterError {

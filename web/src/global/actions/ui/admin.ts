@@ -11,10 +11,10 @@ import { selectTabState } from '../../selectors';
 addActionHandler('openAdminPanel', (global, actions, payload): ActionReturnType => {
   const { tab, tabId = getCurrentTabId() } = payload || {};
   return updateTabState(global, {
-      adminPanel: {
-        isOpen: true,
-        tab: tab || 'users',
-      },
+    adminPanel: {
+      isOpen: true,
+      tab: tab || 'users',
+    },
   }, tabId);
 });
 

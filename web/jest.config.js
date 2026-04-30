@@ -16,7 +16,7 @@ export default {
   testEnvironment: 'jsdom',
   transform: {
     '\\.(jsx?|tsx?)$': 'babel-jest',
-    '\\.txt$': '@glen/jest-raw-loader',
+    '\\.(txt|strings)$': '@glen/jest-raw-loader',
   },
   // @noble/* packages ship as ESM and must be transformed by babel-jest.
   // The default `node_modules` ignore has to be overridden so babel can

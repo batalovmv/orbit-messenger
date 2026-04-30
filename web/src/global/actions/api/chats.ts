@@ -41,7 +41,6 @@ import { getOrderedIds } from '../../../util/folderManager';
 import {
   buildCollectionByKey, omit, unique,
 } from '../../../util/iteratees';
-import { isLocalMessageId } from '../../../util/keys/messageKey';
 import * as langProvider from '../../../util/oldLangProvider';
 import { debounce, pause, throttle } from '../../../util/schedulers';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
@@ -67,7 +66,6 @@ import {
   addSimilarBots,
   addUsers,
   addUserStatuses,
-  deleteChatMessages,
   deletePeerPhoto,
   deleteTopic,
   leaveChat,
@@ -86,7 +84,6 @@ import {
   updateChatsLastMessageId,
   updateListedTopicIds,
   updateManagementProgress,
-  updateMissingInvitedUsers,
   updatePeerFullInfo,
   updatePoll,
   updateTopic,
@@ -113,7 +110,6 @@ import {
   selectChatLastMessageId,
   selectChatListLoadingParameters,
   selectChatListType,
-  selectChatMessages,
   selectCurrentChat,
   selectCurrentMessageList,
   selectIsChatPinned,

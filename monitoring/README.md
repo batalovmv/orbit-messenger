@@ -2,12 +2,13 @@
 
 Stack: **Prometheus** scrapes every Orbit service's `/metrics` endpoint, **Grafana** renders dashboards.
 
-This is **local-dev only**. Saturn.ac has no managed Prometheus/Grafana provisioned yet — provisioning is a separate 8D task.
+This is **optional local-dev tooling**. It is disabled in the default Docker Compose stack
+so routine app/PWA testing does not spend ports and resources on dashboards.
 
 ## Run
 
 ```bash
-docker compose up -d prometheus grafana
+docker compose --profile monitoring up -d prometheus grafana alertmanager
 ```
 
 - Grafana: http://localhost:3001 (anonymous Viewer access — no login needed for read-only)

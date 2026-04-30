@@ -3,10 +3,10 @@
 
 import type { SaturnLoginResponse, SaturnUser } from '../types';
 
+import { isOfflineNetworkError } from '../../../util/saturnSession';
 import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBuilders/users';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
-import { isOfflineNetworkError } from '../../../util/saturnSession';
 
 export async function validateInviteCode({ code }: { code: string }) {
   const result = await client.request<{ valid: boolean; email?: string; role: string }>(

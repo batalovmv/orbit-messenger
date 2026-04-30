@@ -1,13 +1,14 @@
 ﻿// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { request } from '../client';
 import type {
   SaturnConnectorCreateResponse,
   SaturnIntegrationConnector,
   SaturnIntegrationDelivery,
   SaturnIntegrationRoute,
 } from '../types';
+
+import { request } from '../client';
 
 export async function fetchConnectors(limit = 50, offset = 0) {
   return request<{ data: SaturnIntegrationConnector[]; total: number }>(
@@ -40,11 +41,17 @@ export async function rotateConnectorSecret(connectorId: string) {
 }
 
 export async function fetchRoutes(connectorId: string) {
-  const result = await request<{ data: SaturnIntegrationRoute[] }>('GET', `/integrations/connectors/${connectorId}/routes`);
+  const result = await request<{ data: SaturnIntegrationRoute[] }>(
+    'GET',
+    `/integrations/connectors/${connectorId}/routes`,
+  );
   return result.data;
 }
 
-export async function createRoute(connectorId: string, data: { chat_id: string; event_filter?: string; template?: string }) {
+export async function createRoute(
+  connectorId: string,
+  data: { chat_id: string; event_filter?: string; template?: string },
+) {
   return request<SaturnIntegrationRoute>('POST', `/integrations/connectors/${connectorId}/routes`, data);
 }
 

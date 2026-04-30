@@ -214,11 +214,15 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   });
   useClickOutside([ref], handleClickOutside);
 
-  const hasResultsContainer = Boolean(((query || fromPeerId || hasDateFilters || hasMessageTypeFilter) && foundIds) || isHashtagQuery);
+  const hasResultsContainer = Boolean(
+    ((query || fromPeerId || hasDateFilters || hasMessageTypeFilter) && foundIds) || isHashtagQuery,
+  );
   const isOnlyHash = isHashtagQuery && !query;
   const isNonFocusedDropdownForced = searchType === 'myChats' || searchType === 'channels';
   const hasMemberResults = !isHashtagQuery && Boolean(memberSearchResults?.length);
-  const hasQueryData = Boolean((query && !isOnlyHash) || savedTag || fromPeerId || hasDateFilters || hasMessageTypeFilter);
+  const hasQueryData = Boolean(
+    (query && !isOnlyHash) || savedTag || fromPeerId || hasDateFilters || hasMessageTypeFilter,
+  );
   const hasNavigationButtons = searchType === 'chat' && Boolean(foundIds?.length);
 
   const handleClose = useLastCallback(() => {

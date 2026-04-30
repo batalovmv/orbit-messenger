@@ -237,9 +237,6 @@ const ChatResults: FC<OwnProps & StateProps> = ({
       return MEMO_EMPTY_ARRAY;
     }
 
-    // No need for expensive global updates, so we avoid them
-    const chatsById = getGlobal().chats.byId;
-
     return sortChatIds(globalPeerIds, true);
   }, [globalPeerIds, searchQuery]);
 

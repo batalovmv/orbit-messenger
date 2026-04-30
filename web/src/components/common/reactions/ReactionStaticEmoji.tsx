@@ -78,7 +78,11 @@ const ReactionStaticEmoji: FC<OwnProps> = ({
 
   if (shouldReplaceWithHeartIcon) {
     return (
-      <Icon name="heart" className="ReactionStaticEmoji" style={size ? `font-size: ${size}px; width: ${size}px; height: ${size}px` : undefined} />
+      <Icon
+        name="heart"
+        className="ReactionStaticEmoji"
+        style={size ? `font-size: ${size}px; width: ${size}px; height: ${size}px` : undefined}
+      />
     );
   }
 

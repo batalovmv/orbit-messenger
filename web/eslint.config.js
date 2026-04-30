@@ -38,6 +38,7 @@ export default tseslint.config(
     'src/lib/secret-sauce/',
     'src/lib/fastBlur.js',
     'src/types/language.d.ts',
+    'scripts/**/*.mjs',
     'dist/',
     'public/',
     'deploy/update_version.js',
@@ -229,6 +230,13 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
       globals: jestPlugin.environments.globals.globals,
+    },
+  },
+  {
+    name: 'test-setup',
+    files: ['tests/init.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 );
