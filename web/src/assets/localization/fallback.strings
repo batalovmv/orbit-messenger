@@ -347,7 +347,7 @@
 "ChatListEmptyChatListFilterText" = "No chats currently belong to this folder.";
 "ChatEmptyChat" = "No messages here yet";
 "ChatListEmptyChatListEditFilter" = "Edit Folder";
-"UpdateTelegram" = "Update Telegram";
+"UpdateTelegram" = "Refresh Orbit";
 "AriaLabelOpenMenu" = "Open menu";
 "AriaLabelBackChatList" = "Return to chat list";
 "SettingsTipsUsername" = "TelegramTips";
@@ -3555,7 +3555,7 @@
 "lng_subscribe_tag_about" = "Subscribe to use tags";
 "lng_subscribe_tag_link" = "Subscribe";
 "lng_sure_logout" = "Are you sure you want to log out?";
-"lng_update_telegram" = "Update Telegram";
+"lng_update_telegram" = "Refresh Orbit";
 "lng_username_link" = "This link opens a chat with you:";
 "lng_username_purchase_available" = "This username is available for purchase";
 "lng_usernames_description" = "You can choose a username on Telegram.";

@@ -2878,12 +2878,12 @@
 "TitleSuggestedPostAmountForAnyTime" = "{amount} за публикацию в любое время";
 "UnlockMoreSimilarBots" = "Показать больше приложений";
 "UnlockTimerPublicPostsSearch" = "бесплатный поиск откроется через {time}";
-"UpdateTelegram" = "Обновить Telegram";
+"UpdateTelegram" = "Перезагрузить Orbit";
 "UpgradeCostDrops" = "Стоимость улучшения снижается каждую минуту.";
 "lng_prizes_results_winners" = "Победители";
 "lng_subscribe_tag_about" = "Оформите подписку для использования тегов";
 "lng_subscribe_tag_link" = "Подписаться";
-"lng_update_telegram" = "Обновить Telegram";
+"lng_update_telegram" = "Перезагрузить Orbit";
 "lng_username_purchase_available" = "Это имя пользователя доступно для покупки";
 "PostsSearchTransaction" = "Поиск по публичным постам";
 "PriceChanged" = "Цена изменилась";

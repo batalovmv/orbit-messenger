@@ -727,7 +727,7 @@ addActionHandler('checkAppVersion', (global, actions, payload): ActionReturnType
     .then((version) => {
       version = version.trim();
 
-      if (getIsAppUpdateNeeded(version, APP_VERSION)) {
+      if (getIsAppUpdateNeeded(version, APP_VERSION, true)) {
         global = getGlobal();
         global = {
           ...global,
