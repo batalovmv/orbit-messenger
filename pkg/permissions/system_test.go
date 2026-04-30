@@ -59,7 +59,7 @@ func TestSystemRolePermissions_Compliance(t *testing.T) {
 
 func TestSystemRolePermissions_Admin(t *testing.T) {
 	got := SystemRolePermissions("admin")
-	expected := SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs
+	expected := SysManageUsers | SysManageInvites | SysManageContent | SysManageBots | SysManageIntegrations | SysViewBotLogs | SysManageSettings | SysViewAuditLog
 	if got != expected {
 		t.Fatalf("admin should get %d, got %d", expected, got)
 	}
@@ -114,13 +114,13 @@ func TestHasSysPermission_ComplianceReadOnly(t *testing.T) {
 }
 
 func TestHasSysPermission_AdminManageOnly(t *testing.T) {
-	should := []int64{SysManageUsers, SysManageInvites, SysManageContent, SysManageBots, SysManageIntegrations, SysViewBotLogs}
+	should := []int64{SysManageUsers, SysManageInvites, SysManageContent, SysManageBots, SysManageIntegrations, SysViewBotLogs, SysManageSettings, SysViewAuditLog}
 	for _, bit := range should {
 		if !HasSysPermission("admin", bit) {
 			t.Errorf("admin should have permission bit %d", bit)
 		}
 	}
-	shouldNot := []int64{SysViewAllChats, SysReadAllContent, SysManageChats, SysManageSettings, SysViewAuditLog, SysExportData, SysAssignRoles, SysManageSecurity}
+	shouldNot := []int64{SysViewAllChats, SysReadAllContent, SysManageChats, SysExportData, SysAssignRoles, SysManageSecurity}
 	for _, bit := range shouldNot {
 		if HasSysPermission("admin", bit) {
 			t.Errorf("admin should NOT have permission bit %d", bit)

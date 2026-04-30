@@ -7,7 +7,6 @@ import { SettingsScreens } from '../../../types';
 import {
   selectIsPremiumPurchaseBlocked,
 } from '../../../global/selectors';
-import { callApi } from '../../../api/saturn';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -43,7 +42,7 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     loadMoreProfilePhotos,
     openSupportChat,
     openSettingsScreen,
-    showNotification,
+    openAdminPanel,
   } = getActions();
 
   const [isSupportDialogOpen, , closeSupportDialog] = useFlag(false);
@@ -66,15 +65,8 @@ const SettingsMain: FC<OwnProps & StateProps> = ({
     closeSupportDialog();
   });
 
-  const handleCreateInvite = useLastCallback(async () => {
-    try {
-      const result = await callApi('createAuthInvite', { role: 'member', maxUses: 1 });
-      if (!result) return;
-      await navigator.clipboard.writeText(result.code);
-      showNotification({ message: `${lang('AdminInviteCreated')}: ${result.code}` });
-    } catch {
-      showNotification({ message: lang('AdminInviteError') });
-    }
+  const handleCreateInvite = useLastCallback(() => {
+    openAdminPanel({ tab: 'welcome' });
   });
 
   return (

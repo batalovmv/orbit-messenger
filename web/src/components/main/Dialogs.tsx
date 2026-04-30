@@ -116,7 +116,7 @@ function getErrorHeader(error: ApiError) {
   }
 
   if (!error.hasErrorKey) {
-    return 'Telegram';
+    return 'Orbit';
   }
 
   return 'Something went wrong';

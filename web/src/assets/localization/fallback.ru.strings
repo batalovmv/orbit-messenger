@@ -634,7 +634,7 @@
 "InviteLinks" = "Ссылки-приглашения";
 "CreateLink" = "Создать ссылку";
 "CreateInviteLink" = "Создать ссылку-приглашение";
-"AdminCreateInvite" = "Создать приглашение";
+"AdminCreateInvite" = "Коды приглашений";
 "AdminInviteCreated" = "Ссылка создана";
 "AdminInviteError" = "Не удалось создать ссылку";
 "RevokeLink" = "Аннулировать ссылку";
@@ -1095,7 +1095,7 @@
 "ActionTopicPlaceholder" = "тема";
 "ActionTopicRenamed" = "{from} переименовал(а) {link} в «{title}»";
 "ActionUserJoinedByLink" = "{from} присоединился(лась) к группе по ссылке-приглашению";
-"ActionUserRegistered" = "{from} зарегистрировался(лась) в Telegram";
+"ActionUserRegistered" = "{from} зарегистрировался(лась) в Orbit";
 "AddToFavorites" = "Добавить в избранное";
 "AiHideTranslation" = "Скрыть перевод";
 "AiSuggestFailed" = "Не удалось загрузить предложения";
@@ -1238,7 +1238,7 @@
 "CheckPrivacyInviteText" = "Вы ограничили, кто может писать вам, но любой по-прежнему может приглашать вас в группы и каналы. Хотите проверить эти настройки?";
 "Checking" = "Проверка...";
 "Clear" = "Очистить";
-"ClearOtherWebSessionsHelp" = "Вы можете входить на сайты, которые поддерживают авторизацию через Telegram.";
+"ClearOtherWebSessionsHelp" = "Вы можете входить на сайты, которые поддерживают авторизацию через Orbit.";
 "Code" = "Код";
 "Common.Done" = "Готово";
 "CommonSelect" = "Выбрать";
@@ -1360,7 +1360,7 @@
 "EnableAllReactionsInfo" = "Все реакции включены";
 "EnableSomeReactionsInfo" = "Некоторые реакции включены";
 "EnabledPasswordText" = "Вы включили двухэтапную проверку.
-Для входа в аккаунт Telegram вам потребуется установленный здесь пароль.";
+Для входа в аккаунт Orbit вам потребуется установленный здесь пароль.";
 "EnterNewPasscode" = "Введите новый код доступа";
 "EnterPassword" = "Введите пароль";
 "EnterPasswordDescription" = "Для выполнения этого действия введите пароль двухэтапной проверки.";
@@ -1461,7 +1461,7 @@
 "LeaveGroupTitle" = "Покинуть {group}?";
 "LimitByPeriod" = "Ограничить по времени";
 "LimitNumberOfUses" = "Ограничить по числу пользователей";
-"LimitReachedChatInFolders" = "К сожалению, нельзя добавить более **{limit}** чатов в папку. Вы можете увеличить этот лимит до **{limit2}**, оформив подписку **Telegram Premium**.";
+"LimitReachedChatInFolders" = "К сожалению, нельзя добавить более **{limit}** чатов в папку. Вы можете увеличить этот лимит до **{limit2}**, оформив подписку **Orbit Premium**.";
 "LinkCreatedeBy" = "Ссылка создана";
 "LinkDescriptionRatingBack" = "Назад >";
 "LinkDescriptionRatingPreview" = "Предпросмотр >";
@@ -1502,9 +1502,9 @@
 "MemberRequests" = "Заявки на вступление";
 "MenuAddAccount" = "Добавить аккаунт";
 "MenuArchivedChats" = "Архивные чаты";
-"MenuAskText" = "Обратите внимание, что поддержка Telegram осуществляется волонтёрами. Мы стараемся отвечать как можно быстрее, но это может занять некоторое время.
+"MenuAskText" = "Обратите внимание, что поддержка Orbit осуществляется волонтёрами. Мы стараемся отвечать как можно быстрее, но это может занять некоторое время.
 
-Пожалуйста, ознакомьтесь с FAQ Telegram: там есть важные советы по устранению неполадок и ответы на большинство вопросов.";
+Пожалуйста, ознакомьтесь с FAQ Orbit: там есть важные советы по устранению неполадок и ответы на большинство вопросов.";
 "MenuBetaChangelog" = "Список изменений бета-версии";
 "MenuContacts" = "Контакты";
 "MenuInstallApp" = "Установить приложение";
@@ -1789,7 +1789,7 @@
 "Updating" = "Обновление...";
 "UploadImage" = "Загрузить изображение";
 "UserBio" = "О себе";
-"UserInfo.BlockConfirmationTitle" = "Заблокировать {user} — запретить сообщения и звонки в Telegram?";
+"UserInfo.BlockConfirmationTitle" = "Заблокировать {user} — запретить сообщения и звонки в Orbit?";
 "UserInfo.CustomPhotoInfo" = "Это фото видно только вам";
 "UserInfo.FirstNamePlaceholder" = "Имя";
 "UserInfo.LastNamePlaceholder" = "Фамилия";
@@ -1813,7 +1813,7 @@
 "UserUpdatedName" = "{user} изменил имя {time}";
 "UserUpdatedPhoto" = "{user} изменил фото {time}";
 "UsernameAlso" = "Также известен как";
-"UsernameHelp" = "Вы можете выбрать имя пользователя в **Telegram**. Тогда люди смогут найти вас по нему и написать, не зная номера телефона.
+"UsernameHelp" = "Вы можете выбрать имя пользователя в **Orbit**. Тогда люди смогут найти вас по нему и написать, не зная номера телефона.
 
 Допустимы **a–z**, **0–9** и знаки подчёркивания.
 Минимальная длина — **5** символов.";
@@ -1836,7 +1836,7 @@
 "VoipGroupVoiceChat" = "Видеочат";
 "VoipStatusConnecting" = "Подключение...";
 "WantsToSpeak" = "хочет выступить";
-"WebSessionsTitle" = "Вход через Telegram";
+"WebSessionsTitle" = "Вход через Orbit";
 "WhoCanAddMe" = "Кто может добавлять меня в группы и каналы?";
 "WithinAMonth" = "был(а) в сети в течение месяца";
 "WithinAWeek" = "был(а) в сети в течение недели";
@@ -1846,7 +1846,7 @@
 "YourEmailSkipWarning" = "Предупреждение";
 "YourEmailSkipWarningText" = "Нет, серьёзно.
 
-Если вы забудете пароль, доступ к аккаунту Telegram будет утерян без возможности восстановления.";
+Если вы забудете пароль, доступ к аккаунту Orbit будет утерян без возможности восстановления.";
 "YourName" = "Ваше имя";
 
 "i18n_dragToSort" = "Перетащите для сортировки";
@@ -1950,10 +1950,10 @@
 "ActionSuggestedChangesPrice" = "цена";
 "ActionSuggestedChangesText" = "текст";
 "ActionSuggestedChangesTime" = "время";
-"ActionSuggestedPhoto" = "{user} предлагает это фото для вашего профиля Telegram.";
+"ActionSuggestedPhoto" = "{user} предлагает это фото для вашего профиля Orbit.";
 "ActionSuggestedPhotoUpdatedDescription" = "Вы можете изменить его в Настройках";
 "ActionSuggestedPhotoUpdatedTitle" = "Фото обновлено";
-"ActionSuggestedPhotoYou" = "Вы предложили это фото для профиля {user} в Telegram.";
+"ActionSuggestedPhotoYou" = "Вы предложили это фото для профиля {user} в Orbit.";
 "ActionSuggestedVideoText" = "Хотите использовать это фото для своего профиля?";
 "ActionSuggestedVideoTitle" = "Предложенное видео";
 "ActionTopicClosed" = "{from} закрыл {topic}";
@@ -1996,7 +1996,7 @@
 "AreYouSureCloseMiniApps" = "Вы уверены, что хотите закрыть все мини-приложения?";
 "AreYouSureShareMyContactInfoBot" = "Бот узнает ваш номер телефона. Это может быть полезно для интеграции с другими сервисами.
 
-Внимание! Никогда не вводите коды входа в Telegram в мини-приложениях.";
+Внимание! Никогда не вводите коды входа в Orbit в мини-приложениях.";
 "AriaAddAttachment" = "Добавить вложение";
 "AriaBackToChatList" = "Вернуться к списку чатов";
 "AriaCancelPollCreation" = "Отменить создание опроса";
@@ -2173,7 +2173,7 @@
 "ContactListEmpty" = "Список контактов пуст";
 "ContactPhone" = "Номер телефона";
 "Contacts" = "Контакты";
-"ContactsPhoneNumberNotRegistred" = "Пользователь с этим номером телефона ещё не зарегистрирован в Telegram.";
+"ContactsPhoneNumberNotRegistred" = "Пользователь с этим номером телефона ещё не зарегистрирован в Orbit.";
 "ContextCopyImage" = "Копировать изображение";
 "ContextCopyMessageLink" = "Копировать ссылку на сообщение";
 "ContextCopySelected" = "Копировать выделенный текст";
@@ -2640,7 +2640,7 @@
 "SecretChat" = "Секретный чат";
 "SendInHighQuality" = "Отправить в высоком качестве";
 "SendInStandardQuality" = "Отправить в стандартном качестве";
-"SentAppCode" = "Мы отправили код в приложение **Telegram** на вашем другом устройстве.";
+"SentAppCode" = "Мы отправили код в приложение **Orbit** на вашем другом устройстве.";
 "SetReminder" = "Установить напоминание";
 "SetUp2FA" = "Настроить двухэтапную аутентификацию";
 "SetUrlInvalid" = "Ссылка содержит недопустимые символы";
@@ -2758,7 +2758,7 @@
 "Undo" = "Отменить";
 
 "User" = "Пользователь";
-"UserInfoBlockConfirmationTitle" = "Вы хотите заблокировать {user}, чтобы он не мог писать вам и звонить в Telegram?";
+"UserInfoBlockConfirmationTitle" = "Вы хотите заблокировать {user}, чтобы он не мог писать вам и звонить в Orbit?";
 "UserInfoFirstNamePlaceholder" = "Имя";
 "UserInfoLastNamePlaceholder" = "Фамилия";
 "UserInfoNotificationsDisabled" = "Отключены";
@@ -2812,7 +2812,7 @@
 "VoipTapToMute" = "Вы в эфире";
 "VoipUnmute" = "Включить микрофон";
 "WaitingForNetwork" = "Ожидание сети...";
-"WebBot.Account.Desclaimer.Desc" = "Этот бот может получить доступ к вашему аккаунту Telegram";
+"WebBot.Account.Desclaimer.Desc" = "Этот бот может получить доступ к вашему аккаунту Orbit";
 "Weekday1" = "Пн";
 "Weekday2" = "Вт";
 "Weekday3" = "Ср";
@@ -2832,7 +2832,7 @@
 "lng_info_bot_title" = "Информация о боте";
 "lng_info_user_title" = "Информация";
 "lng_mini_apps_disclaimer_link" = "Подробнее";
-"lng_mini_apps_disclaimer_text" = "Мини-приложения — сторонние сервисы. Telegram не несёт ответственности за их содержимое.";
+"lng_mini_apps_disclaimer_text" = "Мини-приложения — сторонние сервисы. Orbit не несёт ответственности за их содержимое.";
 "lng_mini_apps_disclaimer_title" = "Мини-приложения";
 "lng_month1" = "Январь";
 "lng_month10" = "Октябрь";
@@ -2895,8 +2895,8 @@
 "PrivacyDescriptionChargeForMessages" = "Взимайте плату за сообщения от людей, не входящих в ваши контакты, или тех, кому вы ещё не писали первыми.";
 "PrivacyPaidMessagesValue" = "Платно";
 "PublicPosts" = "Публичные посты";
-"RatingReflectsActivity" = "Этот рейтинг отражает активность **{name}** в Telegram. Он основан на:";
-"RatingYourReflectsActivity" = "Этот рейтинг отражает вашу активность в Telegram. Он основан на:";
+"RatingReflectsActivity" = "Этот рейтинг отражает активность **{name}** в Orbit. Он основан на:";
+"RatingYourReflectsActivity" = "Этот рейтинг отражает вашу активность в Orbit. Он основан на:";
 "Refunded" = "Возврат";
 "GroupMessagesChargePrice" = "Платные сообщения в группе";
 "HintPublicPostsSearchQuota_one" = "Вы можете выполнить до {count} поискового запроса в день.";
@@ -2944,7 +2944,7 @@
 "ConversationClousStorageInfoDescription2" = "Отправляйте медиафайлы и документы для хранения";
 "ConversationClousStorageInfoDescription3" = "Открывайте этот чат с любого устройства";
 "ConversationClousStorageInfoDescription4" = "Используйте поиск для быстрого нахождения нужного";
-"DescriptionAgeVerificationModal" = "Это одноразовая процедура с использованием камеры вашего телефона. Ваше селфи не будет сохранено Telegram.";
+"DescriptionAgeVerificationModal" = "Это одноразовая процедура с использованием камеры вашего телефона. Ваше селфи не будет сохранено Orbit.";
 "DescriptionFutureRating_one" = "Это будет ваш рейтинг через {time}, после начисления {points} балла. {link}";
 "DescriptionFutureRating_other" = "Это будет ваш рейтинг через {time}, после начисления {points} баллов. {link}";
 "DescriptionPendingRating_one" = "Рейтинг обновится через {time} с учётом покупок. Ожидается {points} балл. {link}";
@@ -2960,16 +2960,16 @@
 "FavoriteStickersLimitTitle" = "Избранные стикеры";
 "FoldersLimitSubtitle" = "Организуйте чаты в {count} папок";
 "FoldersLimitTitle" = "Папки";
-"GroupUsernameCreatePublicLinkHelp" = "Люди смогут делиться этой ссылкой и находить вашу группу через поиск Telegram.";
-"MenuTelegramFaq" = "Telegram FAQ";
+"GroupUsernameCreatePublicLinkHelp" = "Люди смогут делиться этой ссылкой и находить вашу группу через поиск Orbit.";
+"MenuTelegramFaq" = "Orbit Help";
 "MessageSentPaidToastText" = "Вы заплатили {amount}";
 "MessageSentPaidToastTitle_one" = "Сообщение отправлено!";
 "MessageSentPaidToastTitle_other" = "Отправлено сообщений: {count}!";
 "MessagesPlaceholderPaidUser" = "**{peer}** берёт {amount} за каждое сообщение.";
 "MiniAppsMoreTabs_one" = "{botName} и ещё {count} приложение";
 "MiniAppsMoreTabs_other" = "{botName} и ещё {count} приложений";
-"MoreSimilarBotsDescription_one" = "Оформите подписку на **Telegram Premium**, чтобы открыть до {count} похожего бота.";
-"MoreSimilarBotsDescription_other" = "Оформите подписку на **Telegram Premium**, чтобы открыть до {count} похожих ботов.";
+"MoreSimilarBotsDescription_one" = "Оформите подписку на **Orbit Premium**, чтобы открыть до {count} похожего бота.";
+"MoreSimilarBotsDescription_other" = "Оформите подписку на **Orbit Premium**, чтобы открыть до {count} похожих ботов.";
 "Neon" = "Неон";
 "NotificationPaidExtraSearch" = "Потрачено {stars} на расширенный поиск.";
 "OneTimeMedia" = "Одноразовый медиафайл";
@@ -2981,10 +2981,10 @@
 "Role.HR" = "HR-менеджер";
 "Role.Moderator" = "Модератор";
 "SearchTabPublicPosts" = "Публикации";
-"SettingsTipsUsername" = "TelegramTips";
-"SponsoredMessageInfoDescription1" = "В отличие от других приложений, Telegram никогда не использует ваши личные данные для таргетинга рекламы. Спонсируемые сообщения в Telegram основаны исключительно на тематике публичных каналов, в которых они отображаются.";
-"SponsoredMessageInfoDescription2" = "В отличие от других приложений, Telegram не отслеживает, нажимали ли вы на спонсируемое сообщение, и не составляет ваш профиль на основе активности. Мы убеждены, что каждый имеет право на конфиденциальность.";
-"SponsoredMessageInfoDescription3" = "Telegram предоставляет бесплатный сервис сотням миллионов пользователей. Чтобы оставаться независимым, Telegram разработал платный инструмент для продвижения сообщений с учётом конфиденциальности пользователей.";
+"SettingsTipsUsername" = "OrbitTips";
+"SponsoredMessageInfoDescription1" = "В отличие от других приложений, Orbit никогда не использует ваши личные данные для таргетинга рекламы. Спонсируемые сообщения в Orbit основаны исключительно на тематике публичных каналов, в которых они отображаются.";
+"SponsoredMessageInfoDescription2" = "В отличие от других приложений, Orbit не отслеживает, нажимали ли вы на спонсируемое сообщение, и не составляет ваш профиль на основе активности. Мы убеждены, что каждый имеет право на конфиденциальность.";
+"SponsoredMessageInfoDescription3" = "Orbit предоставляет бесплатный сервис сотням миллионов пользователей. Чтобы оставаться независимым, Orbit разработал платный инструмент для продвижения сообщений с учётом конфиденциальности пользователей.";
 "SponsoredMessageInfoDescription4" = "Спонсируемые сообщения в настоящее время находятся в тестовом режиме. После полного запуска мы начнём делиться доходами от рекламы с владельцами публичных каналов.
 
 Онлайн-реклама больше не должна быть синонимом нарушения конфиденциальности. Давайте вместе переосмыслим, как должна работать технологическая компания.";
@@ -3028,9 +3028,9 @@
 "SuggestedPostRejectedWithReasonYou" = "Вы отклонили это сообщение с комментарием:";
 "SuggestedPostRejectedYou" = "Вы отклонили это сообщение.";
 "SuggestedPostSuggestChanges" = "Предложить изменения";
-"Telegram" = "Telegram";
-"TelegramFeatures" = "Возможности Telegram";
-"TelegramFeaturesUsername" = "TelegramTips";
+"Telegram" = "Orbit";
+"TelegramFeatures" = "Возможности Orbit";
+"TelegramFeaturesUsername" = "OrbitTips";
 "TextAgeVerificationModal_one" = "Для доступа к этому контенту необходимо подтвердить, что вам не менее **{count}** года, как того требует законодательство Великобритании.";
 "TextAgeVerificationModal_other" = "Для доступа к этому контенту необходимо подтвердить, что вам не менее **{count}** лет, как того требует законодательство Великобритании.";
 "TextSensitiveModal" = "Этот медиафайл может содержать контент для взрослых. Вы всё равно хотите его просмотреть?";
@@ -3049,11 +3049,11 @@
 "SendPaidReaction" = "Отправить реакцию за {amount}";
 
 // Auto-translated 2026-04-25 (gemini-3.1-pro-preview), reviewed/normalised.
-"LimitReachedFileSize" = "Файл не может быть отправлен, так как он больше **{limit}**. Вы можете удвоить этот лимит до **{limit2}** на файл, подписавшись на **Telegram Premium**.";
-"LimitReachedFolders" = "Вы достигли лимита в **{limit}** папок. Вы можете удвоить лимит до **{limit2}** папок, подписавшись на **Telegram Premium**.";
-"LimitReachedPinDialogs" = "Вы не можете закрепить более {limit} чатов. Открепите некоторые из них — или подпишитесь на **Telegram Premium**, чтобы удвоить лимит до **{limit2}** чатов.";
-"LimitReachedPublicLinks" = "Вы создали слишком много публичных ссылок. Попробуйте отозвать ссылку у старой группы или канала, либо подпишитесь на **Telegram Premium**, чтобы удвоить лимит до **{limit2}** публичных ссылок.";
-"LimitReachedCommunities" = "Вы состоите в **{limit}** группах и каналах. Пожалуйста, покиньте некоторые из них перед вступлением в новые — или подпишитесь на **Telegram Premium**, чтобы удвоить лимит до **{limit2}** групп и каналов.";
+"LimitReachedFileSize" = "Файл не может быть отправлен, так как он больше **{limit}**. Вы можете удвоить этот лимит до **{limit2}** на файл, подписавшись на **Orbit Premium**.";
+"LimitReachedFolders" = "Вы достигли лимита в **{limit}** папок. Вы можете удвоить лимит до **{limit2}** папок, подписавшись на **Orbit Premium**.";
+"LimitReachedPinDialogs" = "Вы не можете закрепить более {limit} чатов. Открепите некоторые из них — или подпишитесь на **Orbit Premium**, чтобы удвоить лимит до **{limit2}** чатов.";
+"LimitReachedPublicLinks" = "Вы создали слишком много публичных ссылок. Попробуйте отозвать ссылку у старой группы или канала, либо подпишитесь на **Orbit Premium**, чтобы удвоить лимит до **{limit2}** публичных ссылок.";
+"LimitReachedCommunities" = "Вы состоите в **{limit}** группах и каналах. Пожалуйста, покиньте некоторые из них перед вступлением в новые — или подпишитесь на **Orbit Premium**, чтобы удвоить лимит до **{limit2}** групп и каналов.";
 "LimitReachedChatInFoldersLocked" = "К сожалению, вы не можете добавить более **{limit}** чатов в папку. Пожалуйста, создайте новую. Мы работаем над тем, чтобы позволить вам увеличить этот лимит в будущем.";
 "LimitReachedFileSizeLocked" = "Документ не может быть отправлен, так как он больше **{limit}**. Мы работаем над тем, чтобы позволить вам увеличить этот лимит в будущем.";
 "LimitReachedFoldersLocked" = "Вы достигли лимита в **{limit}** папок для этого аккаунта. Мы работаем над тем, чтобы позволить вам увеличить этот лимит в будущем.";
@@ -3074,13 +3074,13 @@
 "AccExitFullscreen" = "Выйти из полноэкранного режима";
 "PinMessageAlertChannel" = "Хотите закрепить это сообщение в канале?";
 "ReportButton" = "Пожаловаться";
-"TelegramPremium" = "Telegram Premium";
+"TelegramPremium" = "Orbit Premium";
 "EnterChannelName" = "Название канала";
 "ChatListSearchNoResultsDescription" = "Ничего не найдено.
 Попробуйте изменить запрос.";
 "SettingsAboutBio" = "Любые подробности, например, возраст, род занятий или город.
 Пример: 23 года, дизайнер из Москвы";
-"UsernameHelp" = "Вы можете выбрать публичное имя в **Telegram**. Если вы это сделаете, другие люди смогут найти вас по этому имени и связаться с вами, не зная вашего номера телефона.
+"UsernameHelp" = "Вы можете выбрать публичное имя в **Orbit**. Если вы это сделаете, другие люди смогут найти вас по этому имени и связаться с вами, не зная вашего номера телефона.
 
 Вы можете использовать **a–z**, **0–9** и символы подчеркивания.
 Минимальная длина — **5** символов.";
@@ -3089,27 +3089,27 @@
 "PrivacyLastSeenPremium" = "Точное время последнего визита";
 "PrivacyLastSeenPremiumInfo" = "Подписчики Premium могут видеть точное время последнего визита других пользователей, даже если они решили его скрыть.";
 "EnabledPasswordText" = "Вы включили двухэтапную аутентификацию.
-Вам понадобится установленный здесь пароль для входа в ваш аккаунт Telegram.";
+Вам понадобится установленный здесь пароль для входа в ваш аккаунт Orbit.";
 "YourEmailSkipWarningText" = "Нет, серьезно.
 
-Если вы забудете пароль, вы потеряете доступ к вашему аккаунту Telegram. Восстановить его будет невозможно.";
+Если вы забудете пароль, вы потеряете доступ к вашему аккаунту Orbit. Восстановить его будет невозможно.";
 "WebAppAddToAttachmentText" = "{bot} запрашивает разрешение на добавление в меню вложений, чтобы вы могли открывать его из любого чата.";
 "WebAppShareMessageInfo" = "Мини-приложение {user} предлагает отправить это сообщение в выбранный вами чат.";
-"BotPermissionGameAlert" = "Разрешить боту {bot} передавать ваше имя и ID в Telegram (но не номер телефона) сайтам, которые вы открываете через этого бота?";
+"BotPermissionGameAlert" = "Разрешить боту {bot} передавать ваше имя и ID в Orbit (но не номер телефона) сайтам, которые вы открываете через этого бота?";
 "RequestToJoinChannelSentDescription" = "Вы будете добавлены в канал, как только администраторы одобрят вашу заявку.";
 "MemberRequestsRequestToJoinChannel" = "Заявка на вступление в канал";
 "MemberRequestsRequestToJoinDescriptionChannel" = "Этот канал принимает новых подписчиков только после одобрения администраторами.";
 "AreYouSureShareMyContactInfoBot" = "Бот узнает ваш номер телефона. Это может быть полезно для интеграции с другими сервисами.
 
-⚠️ Внимание! Никогда не вводите коды для входа в Telegram внутри мини-приложений.";
+⚠️ Внимание! Никогда не вводите коды для входа в Orbit внутри мини-приложений.";
 "AttachGame" = "Игра";
 "LimitReached" = "Лимит достигнут";
 "LimitPremium" = "Premium";
 "SubscribeToPremium" = "Подписаться за {price} в месяц";
-"TelegramPremiumUserDialogTitle" = "**{user}** — подписчик Telegram Premium.";
+"TelegramPremiumUserDialogTitle" = "**{user}** — подписчик Orbit Premium.";
 "TelegramPremiumSubscribedTitle" = "Всё готово!";
-"AboutPremiumDescription" = "Бесплатная версия Telegram уже дает больше возможностей, чем любой другой мессенджер, но **Telegram Premium** расширяет их еще сильнее.";
-"AboutPremiumDescription2" = "**Telegram Premium** — это платная опция, так как большинство Premium-функций требуют дополнительных расходов на оплату сторонних услуг, таких как провайдеры дата-центров и производители серверов. Взносы пользователей **Telegram Premium** позволяют нам покрывать эти расходы, а также помогают Telegram оставаться бесплатным для всех.";
+"AboutPremiumDescription" = "Бесплатная версия Orbit уже дает больше возможностей, чем любой другой мессенджер, но **Orbit Premium** расширяет их еще сильнее.";
+"AboutPremiumDescription2" = "**Orbit Premium** — это платная опция, так как большинство Premium-функций требуют дополнительных расходов на оплату сторонних услуг, таких как провайдеры дата-центров и производители серверов. Взносы пользователей **Orbit Premium** позволяют нам покрывать эти расходы, а также помогают Orbit оставаться бесплатным для всех.";
 "WebAppReloadPage" = "Обновить страницу";
 "WebAppRemoveBot" = "Удалить из меню";
 "WebAppAddToAttachmentAdd" = "Добавить";
@@ -3119,9 +3119,9 @@
 "MenuStars" = "Мои Звёзды";
 "MenuTon" = "Мой TON";
 "MenuSendGift" = "Отправить подарок";
-"MenuAskText" = "Обратите внимание, что поддержка Telegram осуществляется волонтерами. Мы стараемся отвечать как можно быстрее, но это может занять некоторое время.
+"MenuAskText" = "Обратите внимание, что поддержка Orbit осуществляется волонтерами. Мы стараемся отвечать как можно быстрее, но это может занять некоторое время.
 
-Пожалуйста, загляните в раздел FAQ Telegram: там есть важные советы по устранению неполадок и ответы на большинство вопросов.";
+Пожалуйста, загляните в раздел FAQ Orbit: там есть важные советы по устранению неполадок и ответы на большинство вопросов.";
 "ErrorEmailUnconfirmed" = "Email не подтверждён";
 "ErrorPasskeyUnknown" = "Этот ключ доступа не привязан ни к одному аккаунту";
 "ProfileJoinChannel" = "Подписаться";
@@ -3145,7 +3145,7 @@
 "EditAdminTransferChannelOwnership" = "Передать права на канал";
 "EditAdminTransferChannelOwnershipSuccess" = "{user} теперь является владельцем канала.";
 "EventLogFilterChannelInfo" = "Информация о канале";
-"PrimaryLinkHelpChannel" = "Любой пользователь Telegram сможет присоединиться к вашему каналу по этой ссылке.";
+"PrimaryLinkHelpChannel" = "Любой пользователь Orbit сможет присоединиться к вашему каналу по этой ссылке.";
 "WebAppAddToAttachmentUnavailableError" = "Этого бота нельзя добавить в меню вложений.";
 "LimitReachedFavoriteGifs" = "Достигнут лимит в {count} GIF";
 "LimitReachedFavoriteGifsSubtitlePremium" = "Старый GIF был заменён на этот.";
@@ -3158,13 +3158,13 @@
 "AttachInvoice" = "Счёт: {description}";
 "AttachGiveaway" = "Розыгрыш";
 "AttachGiveawayResults" = "Результаты розыгрыша";
-"MessageScheduledRepeatPremium" = "Подпишитесь на **Telegram Premium**, чтобы настроить повторяющиеся сообщения.";
+"MessageScheduledRepeatPremium" = "Подпишитесь на **Orbit Premium**, чтобы настроить повторяющиеся сообщения.";
 "GroupsAndChannelsLimitTitle" = "Группы и каналы";
 "GroupsAndChannelsLimitSubtitle" = "Вступайте в {count} каналов и больших групп";
-"TelegramPremiumUserDialogSubtitle" = "Владельцы аккаунтов **Telegram Premium** имеют эксклюзивный доступ к множеству дополнительных функций.";
-"TelegramPremiumSubscribedSubtitle" = "Спасибо за подписку на **Telegram Premium**.
+"TelegramPremiumUserDialogSubtitle" = "Владельцы аккаунтов **Orbit Premium** имеют эксклюзивный доступ к множеству дополнительных функций.";
+"TelegramPremiumSubscribedSubtitle" = "Спасибо за подписку на **Orbit Premium**.
 Вот что теперь вам доступно.";
-"TelegramPremiumSubtitle" = "Выйдите **за пределы лимитов** и **разблокируйте десятки эксклюзивных** функций, подписавшись на **Telegram Premium**.";
+"TelegramPremiumSubtitle" = "Выйдите **за пределы лимитов** и **разблокируйте десятки эксклюзивных** функций, подписавшись на **Orbit Premium**.";
 "ConversationViewChannel" = "ПОСМОТРЕТЬ КАНАЛ";
 "AriaNewChannelContinue" = "Перейти к информации о канале";
 "NewChannelTitleEmptyError" = "Название канала не может быть пустым";
@@ -3187,7 +3187,7 @@
 "ProfileBirthdayTodayValueAge_other" = "🎂 {date} ({age} лет)";
 "MonetizationInfoTONTitle" = "Что такое 💎 TON?";
 "MonetizationBalanceZeroInfo" = "Вы сможете собирать вознаграждения с помощью Fragment — сторонней платформы, которую рекламодатели используют для оплаты рекламы. {link}";
-"CreditsBoxHistoryEntryGiftOutAbout" = "Используя Звёзды, {user} сможет разблокировать контент и услуги в Telegram. {link}";
+"CreditsBoxHistoryEntryGiftOutAbout" = "Используя Звёзды, {user} сможет разблокировать контент и услуги в Orbit. {link}";
 "RemoveGiftDescriptionTitle" = "Удалить описание";
 "RemoveGiftDescriptionConfirmText" = "Вы хотите навсегда удалить это описание из вашего подарка?";
 "RemoveGiftDescriptionButton" = "Удалить за {amount}";
@@ -3207,7 +3207,7 @@
 "PrivacyDisplayGiftsButton" = "Показывать значок подарка в чатах";
 "PrivacyDisplayGift" = "Подарок";
 "PrivacyDisplayGiftIconInChats" = "Отображать значок {icon} {gift} в поле ввода сообщения для обоих собеседников во всех чатах.";
-"PrivacySubscribeToTelegramPremium" = "Подпишитесь на **Telegram Premium**, чтобы выбрать эту опцию.";
+"PrivacySubscribeToTelegramPremium" = "Подпишитесь на **Orbit Premium**, чтобы выбрать эту опцию.";
 "PrivacyDisableLimitedEditionStarGifts" = "Отключить подарки за Звезды (ограниченная серия)";
 "PrivacyEnableLimitedEditionStarGifts" = "Включить подарки за Звезды (ограниченная серия)";
 "PrivacyDisableUnlimitedStarGifts" = "Отключить подарки за Звезды (без ограничений)";
@@ -3336,35 +3336,35 @@
 "ActionStarGiftOfferDeclinedIncoming" = "{peer} отклонил ваше предложение о покупке {gift} за {cost}.";
 "ActionSuggestedPhotoButton" = "Посмотреть фото";
 "ActionWebappBotAllowed" = "Вы разрешили этому боту отправлять вам сообщения в его мини-приложении.";
-"ActionGiveawayStartedGroup" = "{from} только что начал розыгрыш подписок Telegram Premium среди своих участников.";
-"ActionGiveawayStarted" = "{from} только что начал розыгрыш подписок Telegram Premium среди своих подписчиков.";
+"ActionGiveawayStartedGroup" = "{from} только что начал розыгрыш подписок Orbit Premium среди своих участников.";
+"ActionGiveawayStarted" = "{from} только что начал розыгрыш подписок Orbit Premium среди своих подписчиков.";
 "ActionGiveawayStarsStartedGroup" = "{from} только что начал розыгрыш {amount} среди своих участников.";
 "ActionGiveawayStarsStarted" = "{from} только что начал розыгрыш {amount} среди своих подписчиков.";
-"ActionGiveawayResults_one" = "{count} победитель розыгрыша был случайно выбран Telegram и получил личное сообщение с подарочным кодом.";
-"ActionGiveawayResults_other" = "{count} победителей розыгрыша были случайно выбраны Telegram и получили личные сообщения с подарочными кодами.";
-"ActionGiveawayResultsSome" = "Некоторые победители розыгрыша были случайно выбраны Telegram и получили личные сообщения с подарочными кодами.";
-"ActionGiveawayResultsStars_one" = "{count} победитель розыгрыша был случайно выбран Telegram и получил свой приз.";
-"ActionGiveawayResultsStars_other" = "{count} победителей розыгрыша были случайно выбраны Telegram и получили свои призы.";
-"ActionGiveawayResultsStarsSome" = "Некоторые победители розыгрыша были случайно выбраны Telegram и получили свои призы.";
+"ActionGiveawayResults_one" = "{count} победитель розыгрыша был случайно выбран Orbit и получил личное сообщение с подарочным кодом.";
+"ActionGiveawayResults_other" = "{count} победителей розыгрыша были случайно выбраны Orbit и получили личные сообщения с подарочными кодами.";
+"ActionGiveawayResultsSome" = "Некоторые победители розыгрыша были случайно выбраны Orbit и получили личные сообщения с подарочными кодами.";
+"ActionGiveawayResultsStars_one" = "{count} победитель розыгрыша был случайно выбран Orbit и получил свой приз.";
+"ActionGiveawayResultsStars_other" = "{count} победителей розыгрыша были случайно выбраны Orbit и получили свои призы.";
+"ActionGiveawayResultsStarsSome" = "Некоторые победители розыгрыша были случайно выбраны Orbit и получили свои призы.";
 "ActionGiveawayResultsNone" = "Победителей розыгрыша выбрать не удалось.";
 "ActionOpenGiftButton" = "Открыть подарок";
 "ActionViewButton" = "Посмотреть";
 "ActionGiveawayResultTitle" = "Поздравляем!";
 "ActionGiveawayResultPremiumText_one" = "Вы выиграли приз в розыгрыше, организованном {channel}.
 
-Ваш приз — подписка **Telegram Premium** на **{months}** месяц.";
+Ваш приз — подписка **Orbit Premium** на **{months}** месяц.";
 "ActionGiveawayResultPremiumText_other" = "Вы выиграли приз в розыгрыше, организованном {channel}.
 
-Ваш приз — подписка **Telegram Premium** на **{months}** месяцев.";
+Ваш приз — подписка **Orbit Premium** на **{months}** месяцев.";
 "ActionGiveawayResultPremiumDuration" = "Вы выиграли приз в розыгрыше, организованном {channel}.
 
-Ваш приз — подписка **Telegram Premium** на **{duration}**.";
+Ваш приз — подписка **Orbit Premium** на **{duration}**.";
 "ActionGiftCodePremiumText_one" = "Вы получили подарок от {channel}.
 
-Ваш подарок — подписка **Telegram Premium** на {months} месяц.";
+Ваш подарок — подписка **Orbit Premium** на {months} месяц.";
 "ActionGiftCodePremiumText_other" = "Вы получили подарок от {channel}.
 
-Ваш подарок — подписка **Telegram Premium** на {months} месяцев.";
+Ваш подарок — подписка **Orbit Premium** на {months} месяцев.";
 "ActionGiveawayResultStarsText_one" = "Вы выиграли приз в розыгрыше, организованном {channel}.
 
 Ваш приз — **{amount}** Звезда.";
@@ -3373,27 +3373,27 @@
 Ваш приз — **{amount}** Звезд.";
 "ActionGiftCodeSubscriptionText_one" = "Вы получили подарок от {peer}.
 
-Ваш подарок — подписка Telegram Premium на {months} месяц.";
+Ваш подарок — подписка Orbit Premium на {months} месяц.";
 "ActionGiftCodeSubscriptionText_other" = "Вы получили подарок от {peer}.
 
-Ваш подарок — подписка Telegram Premium на {months} месяцев.";
+Ваш подарок — подписка Orbit Premium на {months} месяцев.";
 "ActionGiftCodeSubscriptionDuration" = "Вы получили подарок от {peer}.
 
-Ваш подарок — подписка Telegram Premium на {duration}.";
-"ActionGiftCodeSubscriptionDurationYou" = "Вы отправили {peer} подарочный код на {duration} Telegram Premium.";
+Ваш подарок — подписка Orbit Premium на {duration}.";
+"ActionGiftCodeSubscriptionDurationYou" = "Вы отправили {peer} подарочный код на {duration} Orbit Premium.";
 "ActionGiftCodeSubscriptionTextYou_one" = "Вы отправили подарок пользователю {peer}.
 
-Подарочный код на подписку Telegram Premium на {months} месяц.";
+Подарочный код на подписку Orbit Premium на {months} месяц.";
 "ActionGiftCodeSubscriptionTextYou_other" = "Вы отправили подарок пользователю {peer}.
 
-Подарочный код на подписку Telegram Premium на {months} месяцев.";
+Подарочный код на подписку Orbit Premium на {months} месяцев.";
 "ActionGiftPremiumTitle_one" = "{months} месяц Premium";
 "ActionGiftPremiumTitle_other" = "{months} месяцев Premium";
 "ActionGiftPremiumDuration" = "{duration} Premium";
-"ActionGiftPremiumText" = "Подписка на эксклюзивные функции Telegram.";
+"ActionGiftPremiumText" = "Подписка на эксклюзивные функции Orbit.";
 "ActionGiftStarsTitle_one" = "{amount} Звезда";
 "ActionGiftStarsTitle_other" = "{amount} Звезд";
-"ActionGiftStarsText" = "Используйте Звёзды, чтобы открывать контент и услуги в Telegram.";
+"ActionGiftStarsText" = "Используйте Звёзды, чтобы открывать контент и услуги в Orbit.";
 "TonAmount" = "💎 {amount}";
 "TonAmountText_one" = "{amount} TON";
 "TonAmountText_other" = "{amount} TON";
@@ -3424,10 +3424,10 @@
 "ComposerTitleFrozenAccount" = "Ваш аккаунт заморожен";
 "ComposerSubtitleFrozenAccount" = "Нажмите, чтобы просмотреть подробности";
 "RightsChargeStarsAbout" = "Если вы включите это, обычным участникам группы придется платить Звездами за отправку сообщений.";
-"UnlockButtonTitle" = "Разблокировать с Telegram Premium";
+"UnlockButtonTitle" = "Разблокировать с Orbit Premium";
 "FrozenAccountModalTitle" = "Ваш аккаунт заморожен";
 "FrozenAccountViolationTitle" = "Нарушение Условий использования";
-"FrozenAccountViolationSubtitle" = "Ваш аккаунт был заморожен за нарушение Условий использования Telegram";
+"FrozenAccountViolationSubtitle" = "Ваш аккаунт был заморожен за нарушение Условий использования Orbit";
 "FrozenAccountReadOnlyTitle" = "Режим только для чтения";
 "FrozenAccountReadOnlySubtitle" = "Вы имеете доступ к своему аккаунту, но не можете отправлять сообщения или совершать действия.";
 "FrozenAccountAppealTitle" = "Апелляция перед удалением";
@@ -3470,10 +3470,10 @@
 "ButtonPublish" = "Опубликовать";
 "ButtonPublishAtTime" = "Отправить {time}";
 "MenuButtonAppendTodoList" = "Добавить задачу";
-"SubscribeToTelegramPremiumForToggleTask" = "Подпишитесь на **Telegram Premium**, чтобы отмечать задачи";
-"SubscribeToTelegramPremiumForCreateToDo" = "Подпишитесь на **Telegram Premium**, чтобы создавать списки задач";
-"SubscribeToTelegramPremiumForAppendToDo" = "Подпишитесь на **Telegram Premium**, чтобы добавлять задачи";
-"DescriptionAboutTon" = "Предлагайте TON за публикацию постов в каналах Telegram.";
+"SubscribeToTelegramPremiumForToggleTask" = "Подпишитесь на **Orbit Premium**, чтобы отмечать задачи";
+"SubscribeToTelegramPremiumForCreateToDo" = "Подпишитесь на **Orbit Premium**, чтобы создавать списки задач";
+"SubscribeToTelegramPremiumForAppendToDo" = "Подпишитесь на **Orbit Premium**, чтобы добавлять задачи";
+"DescriptionAboutTon" = "Предлагайте TON за публикацию постов в каналах Orbit.";
 "ButtonTopUpViaFragment" = "Пополнить через Fragment";
 "TonModalHint" = "Вы можете пополнить TON с помощью Fragment.";
 "TonGiftReceived" = "Пополнение TON";
@@ -3482,10 +3482,10 @@
 "ButtonAgeVerification" = "Подтвердить возраст";
 "NotificationGiftsLimit2_one" = "Вы уже отправили **один** из этих подарков, что является лимитом.";
 "NotificationGiftsLimit2_other" = "Вы уже отправили **{count}** из этих подарков, что является лимитом.";
-"DialogTitlePremiumGiftSentTo" = "Вы подарили **{user}** подписку Telegram Premium на {amount}.";
-"DialogTitlePremiumGiftReceivedFrom" = "**{user}** подарил вам подписку Telegram Premium на {amount}.";
-"DescriptionGiftPremiumRequired2_one" = "Подпишитесь на **Telegram Premium**, чтобы отправить **один** из этих подарков и открыть мощные функции.";
-"DescriptionGiftPremiumRequired2_other" = "Подпишитесь на **Telegram Premium**, чтобы отправить до **{count}** этих подарков и открыть мощные функции.";
+"DialogTitlePremiumGiftSentTo" = "Вы подарили **{user}** подписку Orbit Premium на {amount}.";
+"DialogTitlePremiumGiftReceivedFrom" = "**{user}** подарил вам подписку Orbit Premium на {amount}.";
+"DescriptionGiftPremiumRequired2_one" = "Подпишитесь на **Orbit Premium**, чтобы отправить **один** из этих подарков и открыть мощные функции.";
+"DescriptionGiftPremiumRequired2_other" = "Подпишитесь на **Orbit Premium**, чтобы отправить до **{count}** этих подарков и открыть мощные функции.";
 "PriceInStars" = "Цена в Звездах";
 "PriceInTON" = "Цена в TON";
 "DescriptionComposerGiftMinimumCurrencyPrice" = "Минимальная цена: **{amount}**.";
@@ -3502,8 +3502,8 @@
 "PublicPostsPremiumFeatureSubtitle" = "Глобальный поиск — это функция Premium.";
 "PublicPostsSubscribeToPremium" = "Подписаться на Premium";
 "AllStoriesCategory" = "Все истории";
-"RatingGiftsFromTelegram" = "Подарки от Telegram";
-"RatingGiftsFromTelegramDesc" = "100% Звезд, потраченных на подарки, купленные у Telegram.";
+"RatingGiftsFromTelegram" = "Подарки от Orbit";
+"RatingGiftsFromTelegramDesc" = "100% Звезд, потраченных на подарки, купленные у Orbit.";
 "RatingGiftsAndPostsFromUsers" = "Подарки и посты от пользователей";
 "RatingGiftsAndPostsFromUsersDesc" = "20% Звезд, потраченных на подарки или посты от пользователей и каналов.";
 "ConfirmBuyGiftForTonDescription" = "Продавец принимает к оплате только TON.";
@@ -3513,14 +3513,14 @@
 "ActionStarGiftPrepaidUpgradedYou" = "Вы превратили подарок в уникальный коллекционный предмет";
 "AriaStoryTogglerOpen" = "Открыть список историй";
 "InviteBlockedPremiumTitle" = "Подключить Premium";
-"InviteBlockedPremiumButton" = "Подписаться на Telegram Premium";
+"InviteBlockedPremiumButton" = "Подписаться на Orbit Premium";
 "InviteRestrictedPremiumReason" = "доступно только пользователям Premium";
 "InviteViaLinkButton" = "Отправить ссылку-приглашение";
 "InviteRestrictedPremiumReasonSingle" = "**{user}** принимает приглашения в группы от контактов и пользователей **Premium**.";
 "InviteRestrictedPremiumReasonMultiple" = "{list} принимают приглашения в группы только от контактов и пользователей **Premium**.";
 "InviteRestrictedPremiumReasonMultipleMore_one" = "{list} и еще **{count} человек** принимают приглашения в группы только от контактов и пользователей **Premium**.";
 "InviteRestrictedPremiumReasonMultipleMore_other" = "{list} и еще **{count} человек** принимают приглашения в группы только от контактов и пользователей **Premium**.";
-"StealthModeDescriptionPremium" = "Подпишитесь на Telegram Premium, чтобы смотреть истории, не появляясь в списке зрителей.";
+"StealthModeDescriptionPremium" = "Подпишитесь на Orbit Premium, чтобы смотреть истории, не появляясь в списке зрителей.";
 "StealthModeButtonPremium" = "Разблокировать режим невидимки";
 "StealthModeButton" = "Включить режим невидимки";
 "StealthModeButtonToStory" = "Включить и открыть историю";
@@ -3573,7 +3573,7 @@
 "CocoonFeature1Username" = "@cocoon";
 "CocoonFeature1UsernameLink" = "#";
 "CocoonFeature2Title" = "Эффективность";
-"CocoonFeature2Text" = "Cocoon позволил Telegram снизить стоимость переводов в 6 раз.";
+"CocoonFeature2Text" = "Cocoon позволил Orbit снизить стоимость переводов в 6 раз.";
 "CocoonFeature3Title" = "Для всех";
 "CocoonFeature3Text" = "Любой разработчик может использовать Cocoon для ИИ-функций. Узнайте больше на **{link}**.";
 "CocoonFeature3LinkText" = "cocoon.org";
@@ -3864,6 +3864,7 @@
 "AdminErrorRateLimit" = "Слишком частые запросы. Подождите немного.";
 "AdminErrorUnauthorized" = "Сессия истекла. Перезайдите.";
 "AdminErrorForbidden" = "Недостаточно прав для этого действия.";
+"AdminErrorInviteRoleForbidden" = "Этот админ может создавать только пользовательские инвайты.";
 "AdminErrorNotFound" = "Не найдено.";
 "AdminErrorMaintenance" = "Идут технические работы. Попробуйте позже.";
 
@@ -3978,8 +3979,8 @@
 "ChannelDelete" = "Удалить канал";
 "ChannelDeleteAlert" = "Удаление канала приведет к потере всех подписчиков и публикаций. Всё равно удалить канал?";
 "ChannelDiscussionGroupLinkGroup" = "Привязать группу";
-"ChannelEarnAbout" = "Telegram делится 50% дохода от рекламы, показанной в вашем канале, в качестве вознаграждения. {link}";
-"ChannelEarnLearnCoinAbout" = "TON — это блокчейн-платформа и криптовалюта, которую Telegram использует за ее высокую скорость и низкие комиссии при транзакциях. {link}";
+"ChannelEarnAbout" = "Orbit делится 50% дохода от рекламы, показанной в вашем канале, в качестве вознаграждения. {link}";
+"ChannelEarnLearnCoinAbout" = "TON — это блокчейн-платформа и криптовалюта, которую Orbit использует за ее высокую скорость и низкие комиссии при транзакциях. {link}";
 "ChannelEditAdminCannotEdit" = "Вы не можете изменить права этого администратора.";
 "ChannelEditAdminPermissionBanUsers" = "Блокировать пользователей";
 "ChannelHideMembers" = "Скрыть участников";
@@ -4087,7 +4088,7 @@
 "GiftAuctionEnds" = "Заканчивается";
 "GiftAuctionFinished" = "Завершен";
 "GiftAuctionForSaleOnFragment" = "{count} на продаже в Fragment >";
-"GiftAuctionForSaleOnTelegram" = "{count} на продаже в Telegram >";
+"GiftAuctionForSaleOnTelegram" = "{count} на продаже в Orbit >";
 "GiftAuctionGifts_one" = "{count} подарок";
 "GiftAuctionGifts_other" = "{count} подарков";
 "GiftAuctionInfoBidCarryoverSubtitle" = "Если ваша ставка выйдет из топ-{count}, она автоматически перейдёт в следующий раунд.";
@@ -4104,7 +4105,7 @@
 "GiftAuctionItemsBought_other" = "{count} подарков {gift} куплено >";
 "GiftAuctionJoin" = "Присоединиться";
 "GiftAuctionLearnMore" = "Подробнее >";
-"GiftAuctionLearnMoreAboutGifts" = "Подробнее о подарках Telegram >";
+"GiftAuctionLearnMoreAboutGifts" = "Подробнее о подарках Orbit >";
 "GiftAuctionLearnMoreMenuItem" = "Подробнее";
 "GiftAuctionLeft" = "осталось";
 "GiftAuctionListRaiseBid" = "Поднять";
@@ -4243,7 +4244,7 @@
 "GiftInfoWithdraw" = "Вывести";
 "GiftLeftCount" = "Осталось {count}";
 "GiftLimited" = "ограниченный";
-"GiftLockedMessage" = "Этот подарок в данный момент доступен только пользователям, зарегистрировавшимся в Telegram раньше. Он станет доступен для вашего аккаунта примерно через **{relativeDate}**.";
+"GiftLockedMessage" = "Этот подарок в данный момент доступен только пользователям, зарегистрировавшимся в Orbit раньше. Он станет доступен для вашего аккаунта примерно через **{relativeDate}**.";
 "GiftMakeUnique" = "Сделать уникальным за {stars}";
 "GiftMakeUniqueAcc" = "Сделать уникальным";
 "GiftMakeUniqueDescription" = "Включите, чтобы {user} мог(ла) превратить ваш подарок в уникальный коллекционный. {link}";
@@ -4263,9 +4264,9 @@
 "GiftPayForUpgradeButton" = "Заплатить {amount} за улучшение";
 "GiftPeerUpgradeText" = "Позволить {peer} превратить этот подарок в уникальный коллекционный.";
 "GiftPeerUpgradeTradeableDescription" = "{user} сможет продать подарок на сторонних NFT-маркетплейсах.";
-"GiftPeerUpgradeTransferableDescription" = "{user} сможет отправить подарок любому пользователю в Telegram.";
+"GiftPeerUpgradeTransferableDescription" = "{user} сможет отправить подарок любому пользователю в Orbit.";
 "GiftPeerUpgradeUniqueDescription" = "{user} получит уникальный номер, модель, фон и символ для подарка.";
-"GiftPremiumDescription" = "Подарите {user} доступ к эксклюзивным функциям с Telegram Premium. {link}";
+"GiftPremiumDescription" = "Подарите {user} доступ к эксклюзивным функциям с Orbit Premium. {link}";
 "GiftPremiumDescriptionLink" = "#";
 "GiftPremiumDescriptionLinkCaption" = "Смотреть функции >";
 "GiftPremiumDescriptionYourBalance" = "Ваш баланс: **{stars}**. {link}";
@@ -4305,7 +4306,7 @@
 "GiftSortByNumber" = "Сортировать по номеру";
 "GiftSortByPrice" = "Сортировать по цене";
 "GiftSortByValue" = "Сортировать по стоимости";
-"GiftStarsOutgoing" = "С помощью Звезд {user} сможет разблокировать контент и услуги в Telegram.";
+"GiftStarsOutgoing" = "С помощью Звезд {user} сможет разблокировать контент и услуги в Orbit.";
 "GiftTransferConfirmButton" = "Передать за {amount}";
 "GiftTransferConfirmButtonFree" = "Передать";
 "GiftTransferConfirmDescription" = "Вы хотите передать права на **{gift}** пользователю **{peer}** за **{amount}**?";
@@ -4323,15 +4324,15 @@
 "GiftUpgradeTitle" = "Сделать уникальным";
 "GiftUpgradeTradeableDescription" = "Продавайте ваш подарок или выставляйте его на аукцион на сторонних NFT-маркетплейсах.";
 "GiftUpgradeTradeableTitle" = "Можно продавать";
-"GiftUpgradeTransferableDescription" = "Отправьте улучшенный подарок любому своему другу в Telegram.";
+"GiftUpgradeTransferableDescription" = "Отправьте улучшенный подарок любому своему другу в Orbit.";
 "GiftUpgradeTransferableTitle" = "Можно передавать";
 "GiftUpgradeUniqueDescription" = "Превратите свой подарок в уникальный коллекционный предмет, который можно передать или выставить на аукцион.";
 "GiftUpgradeUniqueTitle" = "Уникальный";
 "GiftUpgradedDescription" = "Вы получили уникальный номер, модель, фон и символ для вашего подарка.";
 "GiftUpgradedTitle" = "Теперь это коллекционный подарок";
-"GiftValueDescription" = "Средняя цена продажи подарков **{giftName}** в Telegram и на Fragment за последний месяц.";
+"GiftValueDescription" = "Средняя цена продажи подарков **{giftName}** в Orbit и на Fragment за последний месяц.";
 "GiftValueForSaleOnFragment" = "на продаже в Fragment";
-"GiftValueForSaleOnTelegram" = "на продаже в Telegram";
+"GiftValueForSaleOnTelegram" = "на продаже в Orbit";
 "GiftValueTitleAveragePrice" = "Средняя цена";
 "GiftValueTitleInitialPrice" = "Начальная цена";
 "GiftValueTitleInitialSale" = "Первая продажа";
@@ -4339,11 +4340,11 @@
 "GiftValueTitleLastSale" = "Последняя продажа";
 "GiftValueTitleMinimumPrice" = "Минимальная цена";
 "GiftWasNotFound" = "Подарок не найден";
-"GiftWithdrawDescription" = "Вы можете использовать сторонний сервис Fragment для перевода **{gift}** в блокчейн TON. После этого вы сможете управлять им как NFT через любое приложение кошелька TON.\n\nВы также можете вернуть такие NFT обратно на свой аккаунт Telegram через Fragment.";
+"GiftWithdrawDescription" = "Вы можете использовать сторонний сервис Fragment для перевода **{gift}** в блокчейн TON. После этого вы сможете управлять им как NFT через любое приложение кошелька TON.\n\nВы также можете вернуть такие NFT обратно на свой аккаунт Orbit через Fragment.";
 "GiftWithdrawSubmit" = "Открыть Fragment";
 "GiftWithdrawTitle" = "Управление через Fragment";
-"GiftWithdrawWait_one" = "Через {days} день вы сможете отправить этот коллекционный подарок на любой адрес блокчейна TON вне Telegram для продажи или аукциона.";
-"GiftWithdrawWait_other" = "Через {days} дн. вы сможете отправить этот коллекционный подарок на любой адрес блокчейна TON вне Telegram для продажи или аукциона.";
+"GiftWithdrawWait_one" = "Через {days} день вы сможете отправить этот коллекционный подарок на любой адрес блокчейна TON вне Orbit для продажи или аукциона.";
+"GiftWithdrawWait_other" = "Через {days} дн. вы сможете отправить этот коллекционный подарок на любой адрес блокчейна TON вне Orbit для продажи или аукциона.";
 "PaymentBillingAddress" = "Платежный адрес";
 "PaymentCardExpireDate" = "ММ/ГГ";
 "PaymentCardInfo" = "Платежная информация";
@@ -4377,11 +4378,11 @@
 "PaymentShippingZipPlaceholder" = "Почтовый индекс";
 "PaymentTestInvoice" = "ТЕСТОВЫЙ СЧЕТ";
 "PaymentsCardCvc" = "CVC";
-"PaymentsProvidesNotSupported" = "Извините, Telegram Web A еще не поддерживает платежи через этого провайдера.\nПожалуйста, используйте одно из наших мобильных приложений для завершения платежа.";
+"PaymentsProvidesNotSupported" = "Извините, Orbit еще не поддерживает платежи через этого провайдера.\nПожалуйста, используйте одно из наших мобильных приложений для завершения платежа.";
 "PremiumGiftDescription" = "Premium";
 "PremiumGiftHeader" = "Подарок Premium";
-"PremiumLimitAccounts" = "Вы достигли лимита подключенных аккаунтов. Вы можете освободить еще одно место, подписавшись на Telegram Premium с одного из этих аккаунтов.";
-"PremiumLimitAccountsNoPremium" = "Вы достигли лимита подключенных аккаунтов. Вы можете освободить еще одно место, подписавшись на Telegram Premium.";
+"PremiumLimitAccounts" = "Вы достигли лимита подключенных аккаунтов. Вы можете освободить еще одно место, подписавшись на Orbit Premium с одного из этих аккаунтов.";
+"PremiumLimitAccountsNoPremium" = "Вы достигли лимита подключенных аккаунтов. Вы можете освободить еще одно место, подписавшись на Orbit Premium.";
 "PremiumLimitAccountsTitle" = "Лимит достигнут";
 "PremiumMore" = "Еще";
 "PremiumPreviewAdvancedChatManagement" = "Продвинутое управление чатами";
@@ -4393,9 +4394,9 @@
 "PremiumPreviewLimits" = "Удвоенные лимиты";
 "PremiumPreviewLimitsDescription" = "До {limit1} каналов, {limit2} папок, {limit3} закрепленных чатов, {limit4} публичных ссылок, {limit5} аккаунтов и многое другое.";
 "PremiumPreviewNoAds" = "Отсутствие рекламы";
-"PremiumPreviewNoAdsDescription" = "Больше никакой рекламы в публичных каналах, где Telegram иногда показывает рекламу.";
+"PremiumPreviewNoAdsDescription" = "Больше никакой рекламы в публичных каналах, где Orbit иногда показывает рекламу.";
 "PremiumPreviewProfileBadge" = "Значок в профиле";
-"PremiumPreviewProfileBadgeDescription" = "Эксклюзивный значок рядом с вашим именем, показывающий, что вы подписаны на Telegram Premium.";
+"PremiumPreviewProfileBadgeDescription" = "Эксклюзивный значок рядом с вашим именем, показывающий, что вы подписаны на Orbit Premium.";
 "PremiumPreviewReactions" = "Уникальные реакции";
 "PremiumPreviewReactionsDescription" = "Дополнительные анимированные реакции на сообщения, доступные только подписчикам Premium.";
 "PremiumPreviewStickers" = "Стикеры Premium";
@@ -4417,8 +4418,8 @@
 "StarGiftDescriptionCollectibles" = "Коллекционные подарки — это уникальные цифровые предметы, которые можно обменивать или продавать.";
 "StarGiftDescriptionSelf" = "Купите себе подарок, чтобы добавить в профиль или оставить на потом.\n\nПодарки из ограниченных серий, улучшенные до коллекционных, можно дарить другим.";
 "StarGiftInfoSubtitle" = "Подарки — это коллекционные предметы, которые можно обменивать или демонстрировать в своем профиле.";
-"StarGiftInfoTitle" = "Подарки Telegram";
-"StarGiftInfoTradableSubtitle" = "Продавайте ваш подарок в Telegram или на сторонних NFT-маркетплейсах.";
+"StarGiftInfoTitle" = "Подарки Orbit";
+"StarGiftInfoTradableSubtitle" = "Продавайте ваш подарок в Orbit или на сторонних NFT-маркетплейсах.";
 "StarGiftInfoTradableTitle" = "Можно продавать";
 "StarGiftInfoUniqueSubtitle" = "Улучшайте ваши подарки, чтобы получить уникальный номер, модель, фон и символ.";
 "StarGiftInfoUniqueTitle" = "Уникальный";
@@ -4480,6 +4481,6 @@
 "StoryTooltipGifSent" = "Gif отправлен!";
 "StoryTooltipReactionSent" = "Реакция отправлена!";
 "StoryTooltipStickerSent" = "Стикер отправлен!";
-"StoryUnsupported" = "Эта история не поддерживается в Telegram Web A. Попробуйте просмотреть её в приложении Telegram.";
+"StoryUnsupported" = "Эта история не поддерживается в Orbit. Попробуйте просмотреть её в приложении Orbit.";
 "GiftUpgradeViewAll" = "Смотреть все варианты >";
 "MenuAskText" = "Поддержку Orbit ведут волонтёры. Мы стараемся отвечать как можно быстрее, но это может занять время.\n\nЗагляните в FAQ: там собраны подсказки по типичным проблемам и ответы на большинство вопросов.";

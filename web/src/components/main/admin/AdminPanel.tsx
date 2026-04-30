@@ -1334,9 +1334,10 @@ const WelcomeTab = ({ role }: WelcomeTabProps) => {
     setError(undefined);
     setInfo(undefined);
     try {
+      const safeInviteRole = inviteRoleOptions.includes(inviteRole) ? inviteRole : 'member';
       await createAdminInvite({
         email: inviteEmail.trim() || undefined,
-        role: inviteRole,
+        role: safeInviteRole,
         max_uses: Math.max(1, Number(inviteMaxUses) || 1),
         expires_at: fromDatetimeLocal(inviteExpiresAt) || undefined,
       });
@@ -1424,7 +1425,7 @@ const WelcomeTab = ({ role }: WelcomeTabProps) => {
               onChange={(e) => setInviteRole((e.target as HTMLSelectElement).value as AdminRoleValue)}
             >
               {inviteRoleOptions.map((r) => (
-                <option key={r} value={r} selected={r === inviteRole}>
+                <option key={r} value={r}>
                   {adminRoleLabel(lang, r)}
                 </option>
               ))}

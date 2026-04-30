@@ -27,6 +27,7 @@ type AdminErrorPattern = {
     | 'AdminErrorRateLimit'
     | 'AdminErrorUnauthorized'
     | 'AdminErrorForbidden'
+    | 'AdminErrorInviteRoleForbidden'
     | 'AdminErrorNotFound'
     | 'AdminErrorMaintenance';
 };
@@ -34,6 +35,7 @@ type AdminErrorPattern = {
 const PATTERNS: AdminErrorPattern[] = [
   { match: 'must be strictly after', key: 'AdminErrorMaintenanceWindowInverted' },
   { match: 'unknown feature flag', key: 'AdminErrorUnknownFlag' },
+  { match: 'cannot create invites with this role', key: 'AdminErrorInviteRoleForbidden' },
   { match: 'rate limit', key: 'AdminErrorRateLimit' },
   // HTTP-status passthrough from apiClient — we keep the substring loose so
   // both `HTTP 401` and `unauthorized` route to the same string.

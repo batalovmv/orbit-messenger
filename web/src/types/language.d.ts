@@ -2347,6 +2347,7 @@ export interface LangPair {
   'AdminErrorRateLimit': undefined;
   'AdminErrorUnauthorized': undefined;
   'AdminErrorForbidden': undefined;
+  'AdminErrorInviteRoleForbidden': undefined;
   'AdminErrorNotFound': undefined;
   'AdminErrorMaintenance': undefined;
   'AdminFlagDangerousConfirmTitle': undefined;
