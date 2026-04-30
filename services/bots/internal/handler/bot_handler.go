@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -659,7 +659,10 @@ func (h *BotHandler) sendCallback(c *fiber.Ctx) error {
 
 func (h *BotHandler) waitForCallbackAnswer(ctx context.Context, queryID string) (map[string]any, error) {
 	key := "callback_ack:" + queryID
-	deadline := time.After(30 * time.Second)
+	// The public gateway currently times out proxied bot-management requests
+	// after 15s, so the service must fail open before that for polling bots
+	// that do not answer callback queries.
+	deadline := time.After(10 * time.Second)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 

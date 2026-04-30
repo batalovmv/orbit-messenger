@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -35,15 +35,15 @@ func sanitizeProxyPath(rawPath string) string {
 }
 
 type ProxyConfig struct {
-	AiServiceURL        string
-	AuthServiceURL      string
-	MessagingServiceURL string
-	MediaServiceURL     string
-	CallsServiceURL     string
-	BotsServiceURL      string
+	AiServiceURL           string
+	AuthServiceURL         string
+	MessagingServiceURL    string
+	MediaServiceURL        string
+	CallsServiceURL        string
+	BotsServiceURL         string
 	IntegrationsServiceURL string
-	FrontendURL         string
-	InternalSecret      string
+	FrontendURL            string
+	InternalSecret         string
 }
 
 type AuthProxyMiddlewares struct {
@@ -275,6 +275,9 @@ func RegisterAuthProxyRoutes(authGroup fiber.Router, cfg ProxyConfig, middleware
 	authGroup.Post("/logout", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Get("/sessions", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Delete("/sessions/:id", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Get("/admin/users/:id/sessions", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Delete("/admin/users/:id/sessions", routeHandlers(authProxy, middlewares.Session)...)
+	authGroup.Delete("/admin/users/:id/sessions/:sid", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Post("/2fa/setup", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Post("/2fa/verify", routeHandlers(authProxy, middlewares.Session)...)
 	authGroup.Post("/2fa/disable", routeHandlers(authProxy, middlewares.Session)...)

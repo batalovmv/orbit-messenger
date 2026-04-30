@@ -1,6 +1,6 @@
 import { DEBUG } from '../config';
 import { pause } from '../util/schedulers';
-import { clearAssetCache, respondWithCache, respondWithCacheNetworkFirst } from './assetCache';
+import { clearAssetCache, precacheAppShell, respondWithCache, respondWithCacheNetworkFirst } from './assetCache';
 import { respondForDownload } from './download';
 import { respondForProgressive } from './progressive';
 import {
@@ -45,8 +45,15 @@ self.addEventListener('activate', (e) => {
     }
 
     // Always clear asset cache on activate to prevent stale chunks after deploy.
-    // clearAssetCache must complete before claiming clients — don't let the timeout skip it.
+    // Then seed the app shell before claiming clients so first offline reload
+    // does not depend on a second online navigation.
     await clearAssetCache().catch(() => {});
+    await precacheAppShell().catch((error) => {
+      if (DEBUG) {
+        // eslint-disable-next-line no-console
+        console.warn('[SW] App shell precache failed', error);
+      }
+    });
     await Promise.race([
       // An attempt to fix freezing UI on iOS
       pause(ACTIVATE_TIMEOUT),

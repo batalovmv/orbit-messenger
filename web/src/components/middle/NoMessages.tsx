@@ -23,6 +23,7 @@ type OwnProps = {
   type: MessageListType;
   isGroupChatJustCreated?: boolean;
   topic?: ApiTopic;
+  isOfflineCacheMiss?: boolean;
 };
 
 const NoMessages: FC<OwnProps> = ({
@@ -30,8 +31,13 @@ const NoMessages: FC<OwnProps> = ({
   type,
   isGroupChatJustCreated,
   topic,
+  isOfflineCacheMiss,
 }) => {
   const lang = useOldLang();
+
+  if (isOfflineCacheMiss) {
+    return renderOfflineCacheMiss(lang);
+  }
 
   if (type === 'scheduled') {
     return renderScheduled(lang);
@@ -53,6 +59,18 @@ const NoMessages: FC<OwnProps> = ({
     <div className="empty"><span>{lang('NoMessages')}</span></div>
   );
 };
+
+function renderOfflineCacheMiss(lang: OldLangFn) {
+  return (
+    <div className="NoMessages">
+      <div className="wrapper offline-cache-miss">
+        <Icon name="cloud-download" className="no-messages-icon offline-cache-miss-icon" />
+        <h3 className="title">{lang('ChatOfflineCacheMiss.Title')}</h3>
+        <p className="description offline-cache-miss-description">{lang('ChatOfflineCacheMiss.Text')}</p>
+      </div>
+    </div>
+  );
+}
 
 function renderTopic(lang: OldLangFn, topic: ApiTopic) {
   return (

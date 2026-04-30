@@ -183,6 +183,7 @@ services:
       MEILISEARCH_KEY: ${MEILISEARCH_KEY}
       ORBIT_AI_BOT_USER_ID: ${ORBIT_AI_BOT_USER_ID:-}
       AI_SERVICE_URL: http://ai:8085
+      GATEWAY_URL: http://gateway:8080
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -391,10 +392,40 @@ services:
     volumes:
       - ./monitoring/alertmanager:/etc/alertmanager:ro
       - alertmanager_data:/alertmanager
+    entrypoint:
+      - /bin/sh
+      - -ec
     command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-      - "--config.expand-env=true"
+      - |
+        if [ -n "$$ALERTMANAGER_WEBHOOK_URL" ]; then
+          sed \
+            -e "s|\$${ALERTMANAGER_WEBHOOK_URL}|$$ALERTMANAGER_WEBHOOK_URL|g" \
+            -e "s|\$${ALERTMANAGER_WEBHOOK_SECRET}|$$ALERTMANAGER_WEBHOOK_SECRET|g" \
+            /etc/alertmanager/alertmanager.yml > /tmp/alertmanager.yml
+        else
+          cat > /tmp/alertmanager.yml <<'EOF'
+        global:
+          resolve_timeout: 5m
+
+        route:
+          group_by: ['alertname', 'service']
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+          receiver: noop
+
+        receivers:
+          - name: noop
+
+        inhibit_rules:
+          - source_matchers:
+              - severity="critical"
+            target_matchers:
+              - severity="warning"
+            equal: ['alertname', 'service']
+        EOF
+        fi
+        /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     environment:
       ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}
       ALERTMANAGER_WEBHOOK_SECRET: ${ALERTMANAGER_WEBHOOK_SECRET:-}

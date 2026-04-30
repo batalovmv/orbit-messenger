@@ -153,6 +153,7 @@ import useSendMessageAction from '../../hooks/useSendMessageAction';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
+import useBrowserOnline from '../../hooks/window/useBrowserOnline';
 import useAttachmentModal from '../middle/composer/hooks/useAttachmentModal';
 import useChatCommandTooltip from '../middle/composer/hooks/useChatCommandTooltip';
 import useClipboardPaste from '../middle/composer/hooks/useClipboardPaste';
@@ -465,6 +466,8 @@ const Composer = ({
 
   const oldLang = useOldLang();
   const lang = useLang();
+  const isBrowserOnline = useBrowserOnline();
+  const isBrowserOffline = !isBrowserOnline;
 
   const inputRef = useRef<HTMLDivElement>();
 
@@ -477,6 +480,17 @@ const Composer = ({
   const prevDropAreaState = usePreviousDeprecated(dropAreaState);
   const { width: windowWidth } = windowSize.get();
   const forceUpdate = useForceUpdate();
+
+  const showOfflineActionNotification = useLastCallback(() => {
+    showNotification({ message: lang('ComposerOfflineAction') });
+  });
+
+  const stopOfflineAction = useLastCallback(() => {
+    if (!isBrowserOffline) return false;
+
+    showOfflineActionNotification();
+    return true;
+  });
 
   const isInMessageList = type === 'messageList';
   const isInStoryViewer = type === 'story';
@@ -1167,6 +1181,8 @@ const Composer = ({
     sendGrouped: boolean,
     isInvertedMedia?: true,
   ) => {
+    if (stopOfflineAction()) return;
+
     if (canSendAttachments(attachments)) {
       if (editingMessage) {
         sendAttachments({
@@ -1195,6 +1211,8 @@ const Composer = ({
     isInvertedMedia?: true,
     scheduleRepeatPeriod?: number,
   ) => {
+    if (stopOfflineAction()) return;
+
     if (canSendAttachments(attachments)) {
       sendAttachments({
         attachments,
@@ -1285,6 +1303,8 @@ const Composer = ({
     scheduledAt?: number,
     scheduleRepeatPeriod?: number,
   ) => {
+    if (stopOfflineAction()) return;
+
     if (!currentMessageList && !storyId) {
       return;
     }
@@ -1574,6 +1594,8 @@ const Composer = ({
   });
 
   const handlePollSend = useLastCallback((poll: ApiNewPoll) => {
+    if (stopOfflineAction()) return;
+
     if (!currentMessageList) {
       return;
     }
@@ -1595,6 +1617,8 @@ const Composer = ({
   });
 
   const handleToDoListSend = useLastCallback((todo: ApiNewMediaTodo) => {
+    if (stopOfflineAction()) return;
+
     if (!currentMessageList) {
       return;
     }
@@ -1750,6 +1774,8 @@ const Composer = ({
       return '';
     }
 
+    if (isBrowserOffline) return lang('ComposerPlaceholderOffline');
+
     if (!isComposerBlocked) {
       if (slowModePlaceholder) return slowModePlaceholder;
       if (botKeyboardPlaceholder) return botKeyboardPlaceholder;
@@ -1788,6 +1814,7 @@ const Composer = ({
     activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isComposerBlocked,
     isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth,
     hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil, user?.canManageBotForumTopics,
+    isBrowserOffline,
   ]);
 
   useEffect(() => {
@@ -1806,6 +1833,8 @@ const Composer = ({
     && (!canAttachMedia || !canSendVoiceByPrivacy || !canSendVoices);
 
   const mainButtonHandler = useLastCallback(() => {
+    if (stopOfflineAction()) return;
+
     switch (mainButtonState) {
       case MainButtonState.Forward:
         onForward?.();
@@ -1873,6 +1902,7 @@ const Composer = ({
     !isSelectModeActive && 'shown',
     isHoverDisabled && 'hover-disabled',
     isMounted && 'mounted',
+    isBrowserOffline && 'offline',
     className,
   );
 
@@ -1918,21 +1948,29 @@ const Composer = ({
   });
 
   const handleSendScheduled = useLastCallback(() => {
+    if (stopOfflineAction()) return;
+
     requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
       handleMessageSchedule({}, scheduledAt, scheduleRepeatPeriod, currentMessageList!, undefined);
     });
   });
 
   const handleSendSilent = useLastCallback(() => {
+    if (stopOfflineAction()) return;
+
     sendSilent();
   });
 
   const handleSendWhenOnline = useLastCallback(() => {
+    if (stopOfflineAction()) return;
+
     handleMessageSchedule({}, SCHEDULED_WHEN_ONLINE, undefined, currentMessageList!, effect?.id);
   });
 
   const handleSendScheduledAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
+      if (stopOfflineAction()) return;
+
       requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         handleMessageSchedule(
           { sendCompressed, sendGrouped, isInvertedMedia },
@@ -1947,6 +1985,8 @@ const Composer = ({
 
   const handleSendSilentAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
+      if (stopOfflineAction()) return;
+
       sendSilent({ sendCompressed, sendGrouped, isInvertedMedia });
     },
   );
@@ -1962,13 +2002,17 @@ const Composer = ({
   const onSend = useMemo(() => {
     switch (mainButtonState) {
       case MainButtonState.Edit:
-        return handleEditComplete;
+        return () => {
+          if (stopOfflineAction()) return;
+
+          handleEditComplete();
+        };
       case MainButtonState.Schedule:
         return handleSendScheduled;
       default:
         return handleSendWithConfirmation;
     }
-  }, [mainButtonState, handleEditComplete, handleSendWithConfirmation]);
+  }, [mainButtonState, handleEditComplete, handleSendScheduled, handleSendWithConfirmation, stopOfflineAction]);
 
   const withBotCommands = isChatWithBot && botMenuButton?.type === 'commands' && !editingMessage
     && botCommands !== false && !activeVoiceRecording;

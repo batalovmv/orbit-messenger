@@ -6,6 +6,7 @@ import type { SaturnLoginResponse, SaturnUser } from '../types';
 import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBuilders/users';
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
+import { isOfflineNetworkError } from '../../../util/saturnSession';
 
 export async function validateInviteCode({ code }: { code: string }) {
   const result = await client.request<{ valid: boolean; email?: string; role: string }>(
@@ -178,7 +179,15 @@ export async function checkAuth() {
 
       client.connectWs();
       return true;
-    } catch {
+    } catch (error) {
+      if (isOfflineNetworkError(error)) {
+        sendApiUpdate({
+          '@type': 'updateConnectionState',
+          connectionState: 'connectionStateConnecting',
+        });
+        return false;
+      }
+
       sendApiUpdate({
         '@type': 'updateAuthorizationState',
         authorizationState: 'authorizationStateWaitPhoneNumber',
@@ -207,7 +216,15 @@ export async function checkAuth() {
 
     client.connectWs();
     return true;
-  } catch {
+  } catch (error) {
+    if (isOfflineNetworkError(error)) {
+      sendApiUpdate({
+        '@type': 'updateConnectionState',
+        connectionState: 'connectionStateConnecting',
+      });
+      return false;
+    }
+
     // Token expired, try refresh
     try {
       const result = await client.request<SaturnLoginResponse>(
@@ -240,7 +257,15 @@ export async function checkAuth() {
 
       client.connectWs();
       return true;
-    } catch {
+    } catch (refreshError) {
+      if (isOfflineNetworkError(refreshError)) {
+        sendApiUpdate({
+          '@type': 'updateConnectionState',
+          connectionState: 'connectionStateConnecting',
+        });
+        return false;
+      }
+
       client.clearAuth();
       sendApiUpdate({
         '@type': 'updateAuthorizationState',

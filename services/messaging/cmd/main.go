@@ -1,7 +1,8 @@
-﻿package main
+package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -309,7 +310,13 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ok", "service": "orbit-messaging"})
 	})
 
-	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		token := c.Get("X-Internal-Token")
+		if internalSecret == "" || subtle.ConstantTimeCompare([]byte(token), []byte(internalSecret)) != 1 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		return metricsReg.Handler()(c)
+	})
 
 	// Public unauthenticated config — mounted off the app root, NOT inside
 	// the X-Internal-Token group, so the gateway can proxy it without JWT.

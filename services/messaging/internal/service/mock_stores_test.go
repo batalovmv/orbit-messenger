@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package service
@@ -48,6 +48,7 @@ type mockChatStore struct {
 	joinUserToDefaultsFn         func(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 	setChatDefaultStatusFn       func(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error
 	backfillDefaultMembershipsFn func(ctx context.Context) ([]store.DefaultBackfillInsert, error)
+	previewDefaultMembershipsFn  func(ctx context.Context) (*store.DefaultMembershipPreview, error)
 }
 
 func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -262,6 +263,12 @@ func (m *mockChatStore) BackfillDefaultMemberships(ctx context.Context) ([]store
 		return m.backfillDefaultMembershipsFn(ctx)
 	}
 	return nil, nil
+}
+func (m *mockChatStore) PreviewDefaultMemberships(ctx context.Context) (*store.DefaultMembershipPreview, error) {
+	if m.previewDefaultMembershipsFn != nil {
+		return m.previewDefaultMembershipsFn(ctx)
+	}
+	return &store.DefaultMembershipPreview{}, nil
 }
 
 // ---------------------------------------------------------------------------

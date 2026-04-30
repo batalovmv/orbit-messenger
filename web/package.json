@@ -30,6 +30,7 @@
     "test": "cross-env APP_ENV=test jest --verbose --silent --forceExit",
     "test:playwright": "playwright test",
     "test:playwright:live": "playwright test -c playwright.live.config.ts",
+    "smoke:admin-pwa": "node ./scripts/adminPwaSmoke.mjs",
     "test:record": "playwright codegen localhost:1235",
     "statoscope:validate-diff": "statoscope validate --input input.json --reference reference.json",
     "postinstall": "node -e \"require('fs').rmSync('.cache', { recursive: true, force: true })\"",

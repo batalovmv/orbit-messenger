@@ -279,7 +279,7 @@ async function loadCustomEmoji(id: string) {
 
 let isSubscriptionFailed = false;
 export function checkIfOfflinePushFailed() {
-  return isSubscriptionFailed;
+  return isSubscriptionFailed || !VAPID_PUBLIC_KEY;
 }
 
 export async function subscribe() {

@@ -33,6 +33,7 @@ import { GLOBAL_STATE_CACHE_KEY } from '../util/multiaccount';
 import { encryptSession } from '../util/passcode';
 import { onBeforeUnload, throttle } from '../util/schedulers';
 import { hasStoredSession } from '../util/sessions';
+import { hasSaturnSessionHint } from '../util/saturnSession';
 import { selectThreadInfo } from './selectors/threads';
 import { addActionHandler, getGlobal } from './index';
 import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MED } from './initialState';
@@ -116,6 +117,18 @@ export function initCache() {
     updateCacheForced();
   });
 
+  addActionHandler('apiUpdate', (_global, _actions, update): ActionReturnType => {
+    if (update['@type'] !== 'updateAuthorizationState'
+      || update.authorizationState !== 'authorizationStateReady'
+      || !hasSaturnSessionHint()
+      || isCaching) {
+      return;
+    }
+
+    setupCaching();
+    updateCacheForced();
+  });
+
   addActionHandler('reset', resetCache);
 }
 
@@ -142,7 +155,7 @@ export async function loadCache(initialState: GlobalState): Promise<GlobalState 
     return undefined;
   }
 
-  if (cache.passcode.hasPasscode || hasStoredSession()) {
+  if (cache.passcode.hasPasscode || hasStoredSession() || hasSaturnSessionHint()) {
     setupCaching();
 
     return cache;

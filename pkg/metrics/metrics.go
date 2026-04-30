@@ -8,6 +8,7 @@ package metrics
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -130,8 +131,8 @@ func (r *Registry) HTTPMiddleware() fiber.Handler {
 			route = "unmatched"
 		}
 		labels := prometheus.Labels{
-			"method": c.Method(),
-			"route":  route,
+			"method": strings.Clone(c.Method()),
+			"route":  strings.Clone(route),
 			"status": status,
 		}
 		requests.With(labels).Inc()

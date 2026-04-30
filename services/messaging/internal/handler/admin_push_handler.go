@@ -11,8 +11,8 @@ import (
 	"github.com/mst-corp/orbit/services/messaging/internal/service"
 )
 
-// AdminPushHandler exposes Day 5 Push Inspector endpoint:
-// POST /admin/push/test — admin-only, gated by SysManageSettings, audited.
+// AdminPushHandler exposes the Push Inspector endpoint:
+// POST /admin/push/test — superadmin-only, audited.
 type AdminPushHandler struct {
 	svc *service.PushAdminService
 }

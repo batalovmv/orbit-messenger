@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package store
@@ -143,7 +143,7 @@ func (s *userStore) Search(ctx context.Context, query string, limit int) ([]mode
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+userSelectCols+`
 		 FROM users
-		 WHERE display_name ILIKE $1 OR email ILIKE $1
+		 WHERE display_name ILIKE $1 OR email ILIKE $1 OR username ILIKE $1
 		 ORDER BY display_name
 		 LIMIT $2`,
 		escaped, limit,

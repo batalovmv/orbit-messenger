@@ -76,6 +76,7 @@ import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps
 import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
 import { useStateRef } from '../../hooks/useStateRef';
 import useSyncEffect from '../../hooks/useSyncEffect';
+import useBrowserOnline from '../../hooks/window/useBrowserOnline';
 import { isBackgroundModeActive } from '../../hooks/window/useBackgroundMode';
 import useContainerHeight from './hooks/useContainerHeight';
 import useStickyDates from './hooks/useStickyDates';
@@ -161,6 +162,7 @@ enum Content {
   ContactGreeting,
   // eslint-disable-next-line @typescript-eslint/no-shadow
   NoMessages,
+  OfflineCacheMiss,
   MessageList,
 }
 
@@ -266,6 +268,7 @@ const MessageList = ({
 
   const isSavedDialog = getIsSavedDialog(chatId, threadId, currentUserId);
   const hasOpenChatButton = isSavedDialog && threadId !== ANONYMOUS_USER_ID;
+  const isBrowserOnline = useBrowserOnline();
 
   const areMessagesLoaded = Boolean(messageIds);
 
@@ -787,6 +790,8 @@ const MessageList = ({
     Content.NoMessages
   ) : hasMessages ? (
     Content.MessageList
+  ) : !isBrowserOnline && type === 'thread' ? (
+    Content.OfflineCacheMiss
   ) : (
     Content.Loading
   );
@@ -813,6 +818,12 @@ const MessageList = ({
         type={type}
         isChatWithSelf={isChatWithSelf}
         isGroupChatJustCreated={isGroupChatJustCreated}
+      />
+    ) : activeKey === Content.OfflineCacheMiss ? (
+      <NoMessages
+        chatId={chatId}
+        type={type}
+        isOfflineCacheMiss
       />
     ) : activeKey === Content.MessageList ? (
       <MessageListContent

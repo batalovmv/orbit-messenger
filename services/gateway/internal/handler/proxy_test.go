@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -89,6 +89,27 @@ func TestRegisterAuthProxyRoutes_UsesExpectedMiddlewareBuckets(t *testing.T) {
 			path:           "/api/v1/auth/users/me/notification-priority",
 			expectedBucket: "session",
 			expectedPath:   "/auth/users/me/notification-priority",
+		},
+		{
+			name:           "admin session list uses session bucket",
+			method:         http.MethodGet,
+			path:           "/api/v1/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions",
+			expectedBucket: "session",
+			expectedPath:   "/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions",
+		},
+		{
+			name:           "admin session revoke uses session bucket",
+			method:         http.MethodDelete,
+			path:           "/api/v1/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions/22222222-2222-2222-2222-222222222222",
+			expectedBucket: "session",
+			expectedPath:   "/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions/22222222-2222-2222-2222-222222222222",
+		},
+		{
+			name:           "admin all sessions revoke uses session bucket",
+			method:         http.MethodDelete,
+			path:           "/api/v1/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions",
+			expectedBucket: "session",
+			expectedPath:   "/auth/admin/users/11111111-1111-1111-1111-111111111111/sessions",
 		},
 		{
 			name:           "fallback uses sensitive bucket",

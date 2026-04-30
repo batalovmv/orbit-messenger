@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package store
@@ -75,6 +75,7 @@ type ChatStore interface {
 	// 150-user pilot, would need streaming + batching at order-of-magnitude
 	// scale.
 	BackfillDefaultMemberships(ctx context.Context) ([]DefaultBackfillInsert, error)
+	PreviewDefaultMemberships(ctx context.Context) (*DefaultMembershipPreview, error)
 }
 
 // DefaultBackfillInsert is one (chat_id, user_id) pair that was newly
@@ -83,6 +84,20 @@ type ChatStore interface {
 type DefaultBackfillInsert struct {
 	ChatID uuid.UUID
 	UserID uuid.UUID
+}
+
+type DefaultChatSummary struct {
+	ID               uuid.UUID `json:"id"`
+	Type             string    `json:"type"`
+	Name             string    `json:"name"`
+	DefaultJoinOrder int       `json:"default_join_order"`
+	MemberCount      int       `json:"member_count"`
+}
+
+type DefaultMembershipPreview struct {
+	DefaultChats       []DefaultChatSummary `json:"default_chats"`
+	UserCount          int                  `json:"user_count"`
+	MissingMemberships int                  `json:"missing_memberships"`
 }
 
 type chatStore struct {
@@ -1031,7 +1046,7 @@ func (s *chatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeR
 			id        uuid.UUID
 			title     string
 			chatType  string
-			createdAt string
+			createdAt time.Time
 		)
 		if err := rows.Scan(&id, &title, &chatType, &createdAt); err != nil {
 			return fmt.Errorf("scan export chat row: %w", err)
@@ -1041,7 +1056,7 @@ func (s *chatStore) ExportByUserID(ctx context.Context, userID uuid.UUID, writeR
 			ID:        id.String(),
 			Title:     title,
 			Type:      chatType,
-			CreatedAt: createdAt,
+			CreatedAt: createdAt.Format(time.RFC3339Nano),
 		}
 
 		encoded, err := json.Marshal(row)
@@ -1129,4 +1144,48 @@ func (s *chatStore) BackfillDefaultMemberships(ctx context.Context) ([]DefaultBa
 		return nil, fmt.Errorf("iterate backfill rows: %w", err)
 	}
 	return inserts, nil
+}
+
+// PreviewDefaultMemberships returns the operator-facing blast-radius summary
+// for BackfillDefaultMemberships without mutating chat_members.
+func (s *chatStore) PreviewDefaultMemberships(ctx context.Context) (*DefaultMembershipPreview, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT c.id, c.type, COALESCE(c.name, ''), c.default_join_order,
+		       COUNT(cm.user_id)::int AS member_count
+		FROM chats c
+		LEFT JOIN chat_members cm ON cm.chat_id = c.id
+		WHERE c.is_default_for_new_users = true
+		GROUP BY c.id, c.type, c.name, c.default_join_order
+		ORDER BY c.default_join_order, COALESCE(c.name, ''), c.id`)
+	if err != nil {
+		return nil, fmt.Errorf("list default chats preview: %w", err)
+	}
+	defer rows.Close()
+
+	preview := &DefaultMembershipPreview{}
+	for rows.Next() {
+		var row DefaultChatSummary
+		if err := rows.Scan(&row.ID, &row.Type, &row.Name, &row.DefaultJoinOrder, &row.MemberCount); err != nil {
+			return nil, fmt.Errorf("scan default chat preview: %w", err)
+		}
+		preview.DefaultChats = append(preview.DefaultChats, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate default chat preview: %w", err)
+	}
+
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*)::int FROM users`).Scan(&preview.UserCount); err != nil {
+		return nil, fmt.Errorf("count users for default chat preview: %w", err)
+	}
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int
+		FROM chats c
+		CROSS JOIN users u
+		LEFT JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = u.id
+		WHERE c.is_default_for_new_users = true
+		  AND cm.user_id IS NULL`).Scan(&preview.MissingMemberships); err != nil {
+		return nil, fmt.Errorf("count missing default memberships: %w", err)
+	}
+
+	return preview, nil
 }

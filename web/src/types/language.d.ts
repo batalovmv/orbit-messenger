@@ -2279,8 +2279,52 @@ export interface LangPair {
   'AdminPanelTitle': undefined;
   'AdminOpenPanel': undefined;
   'AdminTabFeatureFlags': undefined;
+  'AdminTabFeatureFlagsShort': undefined;
+  'AdminTabUsers': undefined;
+  'AdminTabUsersShort': undefined;
   'AdminTabMaintenance': undefined;
+  'AdminTabMaintenanceShort': undefined;
   'AdminTabAuditLog': undefined;
+  'AdminTabAuditLogShort': undefined;
+  'AdminUsersIntro': undefined;
+  'AdminUsersSearchPlaceholder': undefined;
+  'AdminUsersListTitle': undefined;
+  'AdminUsersEmpty': undefined;
+  'AdminUsersSelectEmpty': undefined;
+  'AdminUsersSummaryLoaded': undefined;
+  'AdminUsersSummaryActive': undefined;
+  'AdminUsersSummaryInactive': undefined;
+  'AdminUsersSummaryPrivileged': undefined;
+  'AdminUsersStatusActive': undefined;
+  'AdminUsersStatusInactive': undefined;
+  'AdminUsersFieldId': undefined;
+  'AdminUsersFieldUsername': undefined;
+  'AdminUsersFieldRole': undefined;
+  'AdminUsersFieldStatus': undefined;
+  'AdminUsersFieldLastSeen': undefined;
+  'AdminUsersFieldCreated': undefined;
+  'AdminUsersFieldDeactivated': undefined;
+  'AdminUserRoleMember': undefined;
+  'AdminUserRoleAdmin': undefined;
+  'AdminUserRoleCompliance': undefined;
+  'AdminUserRoleSuperadmin': undefined;
+  'AdminUsersRoleSelectLabel': undefined;
+  'AdminUsersDeactivate': undefined;
+  'AdminUsersReactivate': undefined;
+  'AdminUsersExportData': undefined;
+  'AdminUsersSessionsTitle': undefined;
+  'AdminUsersSessionsEmpty': undefined;
+  'AdminUsersSessionUnknownDevice': undefined;
+  'AdminUsersRevokeSession': undefined;
+  'AdminUsersRevokeAllSessions': undefined;
+  'AdminUsersConfirmTitle': undefined;
+  'AdminUsersDeactivateReasonPlaceholder': undefined;
+  'AdminUsersConfirmAction': undefined;
+  'AdminUsersDeactivateSuccess': undefined;
+  'AdminUsersReactivateSuccess': undefined;
+  'AdminUsersRoleChangeSuccess': undefined;
+  'AdminUsersSessionRevoked': undefined;
+  'AdminUsersAllSessionsRevoked': undefined;
   'AdminFlagOn': undefined;
   'AdminFlagOff': undefined;
   'AdminFlagUnknown': undefined;
@@ -2293,6 +2337,11 @@ export interface LangPair {
   'AdminFlagHistory': undefined;
   'AdminFlagHistoryEmpty': undefined;
   'AdminFlagHistoryClose': undefined;
+  'AdminFlagSectionUnauth': undefined;
+  'AdminFlagSectionAuth': undefined;
+  'AdminFlagSectionAdmin': undefined;
+  'AdminFlagSectionServerOnly': undefined;
+  'AdminFlagSectionUnknown': undefined;
   'AdminErrorMaintenanceWindowInverted': undefined;
   'AdminErrorUnknownFlag': undefined;
   'AdminErrorRateLimit': undefined;
@@ -2331,18 +2380,110 @@ export interface LangPair {
   'AdminAuditExport': undefined;
   'AdminAuditExportRunning': undefined;
   'AdminAuditExportForbidden': undefined;
+  'AdminAuditActionChatPrivilegedRead': undefined;
+  'AdminAuditActionUserDeactivate': undefined;
+  'AdminAuditActionUserReactivate': undefined;
+  'AdminAuditActionUserRoleChange': undefined;
+  'AdminAuditActionUserSessionsRevoked': undefined;
+  'AdminAuditActionInviteCreate': undefined;
+  'AdminAuditActionInviteRevoke': undefined;
+  'AdminAuditActionAuditView': undefined;
+  'AdminAuditActionAuditExport': undefined;
+  'AdminAuditActionUserListRead': undefined;
+  'AdminAuditActionDataExport': undefined;
+  'AdminAuditActionFeatureFlagList': undefined;
+  'AdminAuditActionFeatureFlagSet': undefined;
+  'AdminAuditActionMaintenanceEnable': undefined;
+  'AdminAuditActionMaintenanceUpdate': undefined;
+  'AdminAuditActionMaintenanceDisable': undefined;
+  'AdminAuditActionChatDefaultStatusSet': undefined;
+  'AdminAuditActionDefaultChatsBackfill': undefined;
+  'AdminAuditActionPushTestSent': undefined;
+  'AdminAuditTargetSystem': undefined;
+  'AdminAuditTargetUser': undefined;
+  'AdminAuditTargetChat': undefined;
+  'AdminAuditTargetMessage': undefined;
+  'AdminAuditTargetFeatureFlag': undefined;
+  'AdminAuditTechnicalDetails': undefined;
+  'AdminAuditEnabled': undefined;
+  'AdminAuditDisabled': undefined;
+  'AdminAuditDetailUserDeactivate': undefined;
+  'AdminAuditDetailUserReactivate': undefined;
+  'AdminAuditDetailSessionsRevoked': undefined;
+  'AdminAuditDetailInviteCreate': undefined;
+  'AdminAuditDetailInviteRevoke': undefined;
+  'AdminAuditDetailAuditView': undefined;
+  'AdminAuditDetailNoTitle': undefined;
+  'AdminAuditDetailAnyTime': undefined;
+  'AdminAuditDetailBackfillStarted': undefined;
+  'AdminAuditDetailTechnical': undefined;
+  'AdminAuditDetailKeyReason': undefined;
+  'AdminAuditDetailKeyOldRole': undefined;
+  'AdminAuditDetailKeyNewRole': undefined;
+  'AdminAuditDetailKeyTargetUser': undefined;
+  'AdminAuditDetailKeyDevices': undefined;
+  'AdminAuditDetailKeySent': undefined;
+  'AdminAuditDetailKeyFailed': undefined;
+  'AdminAuditDetailKeyStale': undefined;
+  'AdminAuditDetailKeyTitle': undefined;
+  'AdminAuditDetailKeyDefaultChat': undefined;
+  'AdminAuditDetailKeyJoinOrder': undefined;
+  'AdminAuditDetailKeyFlag': undefined;
+  'AdminAuditDetailKeyPrevious': undefined;
+  'AdminAuditDetailKeyNext': undefined;
+  'AdminAuditDetailKeyFormat': undefined;
+  'AdminAuditDetailKeyCount': undefined;
+  'AdminAuditDetailKeyHardCap': undefined;
+  'AdminAuditDetailKeyAction': undefined;
+  'AdminAuditDetailKeyTargetType': undefined;
+  'AdminAuditDetailKeyTargetId': undefined;
+  'AdminAuditDetailKeyActorId': undefined;
+  'AdminAuditDetailKeySince': undefined;
+  'AdminAuditDetailKeyUntil': undefined;
+  'AdminAuditDetailKeyQuery': undefined;
   'AdminTabWelcome': undefined;
+  'AdminTabWelcomeShort': undefined;
   'AdminWelcomeIntro': undefined;
   'AdminWelcomeBackfillDescription': undefined;
   'AdminWelcomeBackfillWarning': undefined;
+  'AdminInvitesTitle': undefined;
+  'AdminInvitesDescription': undefined;
+  'AdminInvitesEmail': undefined;
+  'AdminInvitesEmailPlaceholder': undefined;
+  'AdminInvitesRole': undefined;
+  'AdminInvitesMaxUses': undefined;
+  'AdminInvitesExpiresAt': undefined;
+  'AdminInvitesCreate': undefined;
+  'AdminInvitesEmpty': undefined;
+  'AdminInvitesCopied': undefined;
+  'AdminInvitesCreated': undefined;
+  'AdminInvitesRevoked': undefined;
+  'AdminInvitesRevoke': undefined;
+  'AdminInvitesCopyCode': undefined;
+  'AdminInvitesAllEmails': undefined;
+  'AdminInvitesNeverExpires': undefined;
+  'AdminInvitesStatusActive': undefined;
+  'AdminInvitesStatusInactive': undefined;
+  'AdminInvitesNoActive': undefined;
+  'AdminInvitesHideInactive': undefined;
+  'AdminWelcomeDefaultChatsTitle': undefined;
+  'AdminWelcomeDefaultChatsCount': undefined;
+  'AdminWelcomeUsersCount': undefined;
+  'AdminWelcomeMissingCount': undefined;
+  'AdminWelcomeNoDefaultChats': undefined;
+  'AdminWelcomeNoMissingMemberships': undefined;
+  'AdminWelcomeUnnamedChat': undefined;
   'AdminWelcomeBackfillButton': undefined;
   'AdminWelcomeBackfillConfirmTitle': undefined;
-  'AdminWelcomeBackfillConfirmBody': undefined;
   'AdminWelcomeBackfillConfirmAction': undefined;
   'AdminTabPushInspector': undefined;
+  'AdminTabPushInspectorShort': undefined;
   'AdminPushInspectorIntro': undefined;
   'AdminPushInspectorIdentifier': undefined;
   'AdminPushInspectorIdentifierPlaceholder': undefined;
+  'AdminPushInspectorSearchEmpty': undefined;
+  'AdminPushInspectorSelectedUser': undefined;
+  'AdminPushInspectorUserInactive': undefined;
   'AdminPushInspectorTitle': undefined;
   'AdminPushInspectorTitlePlaceholder': undefined;
   'AdminPushInspectorBody': undefined;
@@ -2578,6 +2719,15 @@ export interface LangPair {
   'WebBot.Account.Desclaimer.Desc': undefined;
   'IosInstallBanner.Title': undefined;
   'IosInstallBanner.Hint': undefined;
+  'InstallAppBanner.Title': undefined;
+  'InstallAppBanner.Hint': undefined;
+  'InstallAppBanner.Action': undefined;
+  'OfflineStatusBanner.Title': undefined;
+  'OfflineStatusBanner.Hint': undefined;
+  'ComposerPlaceholderOffline': undefined;
+  'ComposerOfflineAction': undefined;
+  'ChatOfflineCacheMiss.Title': undefined;
+  'ChatOfflineCacheMiss.Text': undefined;
   'Confirm': undefined;
   'EditMessage': undefined;
   'Hide': undefined;
@@ -4133,8 +4283,38 @@ export interface LangPairWithVariables<V = LangVariable> {
   'ExactTextCopied': {
     '0': V;
   };
+  'AdminUsersSessionsCount': {
+    'count': V;
+  };
+  'AdminUsersSessionDevice': {
+    'id': V;
+  };
+  'AdminUsersConfirmDeactivate': {
+    'user': V;
+  };
+  'AdminUsersConfirmReactivate': {
+    'user': V;
+  };
+  'AdminUsersConfirmRole': {
+    'user': V;
+    'role': V;
+  };
+  'AdminUsersConfirmRevokeSession': {
+    'user': V;
+  };
+  'AdminUsersConfirmRevokeAllSessions': {
+    'user': V;
+  };
+  'AdminUsersExportFailed': {
+    'error': V;
+  };
   'AdminFlagHistoryTitle': {
     'key': V;
+  };
+  'AdminFlagSummary': {
+    'enabled': V;
+    'total': V;
+    'dangerous': V;
   };
   'AdminFlagDangerousConfirmBody': {
     'key': V;
@@ -4148,6 +4328,61 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'AdminAuditExportFailed': {
     'error': V;
+  };
+  'AdminAuditActor': {
+    'actor': V;
+  };
+  'AdminAuditDetailUserDeactivateReason': {
+    'reason': V;
+  };
+  'AdminAuditDetailRoleChange': {
+    'oldRole': V;
+    'newRole': V;
+  };
+  'AdminAuditDetailPushTest': {
+    'title': V;
+    'devices': V;
+    'sent': V;
+    'failed': V;
+    'stale': V;
+  };
+  'AdminAuditDetailDefaultChat': {
+    'status': V;
+    'order': V;
+  };
+  'AdminAuditDetailFlagState': {
+    'state': V;
+  };
+  'AdminAuditDetailCount': {
+    'count': V;
+  };
+  'AdminAuditDetailExportFormat': {
+    'format': V;
+  };
+  'AdminAuditDetailAuditExport': {
+    'since': V;
+    'until': V;
+    'cap': V;
+  };
+  'AdminInvitesUsage': {
+    'used': V;
+    'max': V;
+  };
+  'AdminInvitesExpires': {
+    'date': V;
+  };
+  'AdminInvitesShowInactive': {
+    'count': V;
+  };
+  'AdminWelcomeChatMeta': {
+    'type': V;
+    'members': V;
+    'order': V;
+  };
+  'AdminWelcomeBackfillConfirmBody': {
+    'chats': V;
+    'users': V;
+    'missing': V;
   };
   'AdminWelcomeBackfillResult': {
     'count': V;
@@ -4215,6 +4450,7 @@ export interface LangPairPlural {
   'Chat.DeleteMessagesConfirmation': undefined;
   'lng': undefined;
   'MediaReplaceInvalidError': undefined;
+  'AdminFlagName': undefined;
   'AdminFlagDesc': undefined;
   'ChannelStats.SharesCount': undefined;
   'i18n': undefined;

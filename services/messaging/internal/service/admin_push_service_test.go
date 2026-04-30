@@ -47,16 +47,16 @@ func newJSONResp(status int, body string) *http.Response {
 	}
 }
 
-// TestPushAdmin_RequiresSysManageSettings rejects 'member' role with 403 even
-// before any DB lookup happens — perm check is the first gate.
-func TestPushAdmin_RequiresSysManageSettings(t *testing.T) {
+// TestPushAdmin_RequiresSuperadmin rejects regular admins with 403 even
+// before any DB lookup happens — role check is the first gate.
+func TestPushAdmin_RequiresSuperadmin(t *testing.T) {
 	svc := newPushAdminSvc(&mockUserStore{}, &mockAuditStore{}, func(*http.Request) (*http.Response, error) {
 		t.Fatal("HTTP client must not be called when perm check fails")
 		return nil, nil
 	})
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "member",
+		ActorRole: "admin",
 		UserID:    uuid.NewString(),
 	})
 	var ae *apperror.AppError
@@ -69,7 +69,7 @@ func TestPushAdmin_RejectsBothIdentifiers(t *testing.T) {
 	svc := newPushAdminSvc(&mockUserStore{}, &mockAuditStore{}, nil)
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		UserID:    uuid.NewString(),
 		Email:     "a@b.com",
 	})
@@ -83,7 +83,7 @@ func TestPushAdmin_RejectsNeitherIdentifier(t *testing.T) {
 	svc := newPushAdminSvc(&mockUserStore{}, &mockAuditStore{}, nil)
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 	})
 	var ae *apperror.AppError
 	if !errors.As(err, &ae) || ae.Status != 400 {
@@ -103,7 +103,7 @@ func TestPushAdmin_NotFound(t *testing.T) {
 		})
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "missing@example.com",
 	})
 	var ae *apperror.AppError
@@ -132,7 +132,7 @@ func TestPushAdmin_DeactivatedUser(t *testing.T) {
 
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "deactivated@example.com",
 	})
 	var ae *apperror.AppError
@@ -162,7 +162,7 @@ func TestPushAdmin_AuditFailureBlocksDispatch(t *testing.T) {
 
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "ok@example.com",
 	})
 	if err == nil {
@@ -188,7 +188,7 @@ func TestPushAdmin_GatewayTimeoutMapsTo504(t *testing.T) {
 
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "u@e.com",
 	})
 	var ae *apperror.AppError
@@ -214,7 +214,7 @@ func TestPushAdmin_GatewayNon200MapsTo502(t *testing.T) {
 
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "u@e.com",
 	})
 	var ae *apperror.AppError
@@ -282,7 +282,7 @@ func TestPushAdmin_HappyPath(t *testing.T) {
 
 	report, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		Email:     "happy@example.com",
 		Title:     "Test from admin",
 		Body:      "test body",
@@ -337,7 +337,7 @@ func TestPushAdmin_HappyByUUID(t *testing.T) {
 
 	report, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		UserID:    targetID.String(),
 	})
 	if err != nil {
@@ -358,7 +358,7 @@ func TestPushAdmin_InvalidUUID(t *testing.T) {
 	})
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		UserID:    "not-a-uuid",
 	})
 	var ae *apperror.AppError
@@ -374,7 +374,7 @@ func TestPushAdmin_TitleBodyCaps(t *testing.T) {
 	huge := strings.Repeat("a", pushTestMaxTitleLen+1)
 	_, err := svc.SendTestPush(context.Background(), SendTestPushParams{
 		ActorID:   uuid.New(),
-		ActorRole: "admin",
+		ActorRole: "superadmin",
 		UserID:    uuid.NewString(),
 		Title:     huge,
 	})

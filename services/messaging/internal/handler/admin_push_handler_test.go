@@ -51,7 +51,7 @@ func gatewayHappy(targetID string) func(*http.Request) (*http.Response, error) {
 	}
 }
 
-func TestAdminPush_RequiresAdminRole(t *testing.T) {
+func TestAdminPush_RequiresSuperadminRole(t *testing.T) {
 	users := &mockAdminUserStore{}
 	audit := &mockAdminAuditStore{}
 	app := newAdminPushApp(users, audit, func(*http.Request) (*http.Response, error) {
@@ -62,7 +62,7 @@ func TestAdminPush_RequiresAdminRole(t *testing.T) {
 	body := `{"user_id":"` + uuid.NewString() + `"}`
 	req, _ := http.NewRequest(http.MethodPost, "/admin/push/test", strings.NewReader(body))
 	req.Header.Set("X-User-ID", uuid.NewString())
-	req.Header.Set("X-User-Role", "member") // not admin
+	req.Header.Set("X-User-Role", "member") // not superadmin
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -99,7 +99,7 @@ func TestAdminPush_HappyEndToEnd(t *testing.T) {
 	reqBody := `{"email":"t@e.com","title":"hi","body":"yo"}`
 	req, _ := http.NewRequest(http.MethodPost, "/admin/push/test", strings.NewReader(reqBody))
 	req.Header.Set("X-User-ID", uuid.NewString())
-	req.Header.Set("X-User-Role", "admin")
+	req.Header.Set("X-User-Role", "superadmin")
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := app.Test(req, -1)
@@ -141,4 +141,3 @@ func TestAdminPush_BadJSON(t *testing.T) {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
 	}
 }
-

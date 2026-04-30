@@ -444,6 +444,13 @@
     }
   }
 
+  &.offline {
+    > .Button,
+    .composer-action-button {
+      color: var(--color-placeholders);
+    }
+  }
+
   @media (max-width: 600px) {
     max-width: calc(100% - 3.375rem);
   }

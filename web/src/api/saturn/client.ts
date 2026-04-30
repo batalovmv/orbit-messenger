@@ -5,6 +5,12 @@ import type { OnApiUpdate } from '../types';
 import type { SaturnErrorResponse, SaturnLoginResponse, SaturnWsMessage } from './types';
 
 import { DEBUG } from '../../config';
+import {
+  clearSaturnSessionHint,
+  hasSaturnSessionHint,
+  isOfflineNetworkError,
+  setSaturnSessionHint,
+} from '../../util/saturnSession';
 
 const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 60s before expiry
 const WS_PING_INTERVAL_MS = 25 * 1000;
@@ -12,7 +18,6 @@ const WS_RECONNECT_BASE_MS = 1000;
 const WS_RECONNECT_MAX_MS = 30 * 1000;
 const ACCESS_TOKEN_STORAGE_KEY = 'saturn_access_token';
 const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'saturn_access_token_expires_at';
-const HAS_SESSION_KEY = 'saturn_has_session';
 const SESSION_ID_STORAGE_KEY = 'saturn_session_id';
 
 let cachedSessionId: string | undefined;
@@ -95,7 +100,7 @@ export function setAccessToken(token: string, expiresIn: number) {
   accessToken = token;
   tokenExpiresAt = Date.now() + expiresIn * 1000;
   persistAccessToken();
-  try { localStorage.setItem(HAS_SESSION_KEY, '1'); } catch { /* noop */ }
+  setSaturnSessionHint();
 }
 
 export function getAccessToken() {
@@ -103,7 +108,7 @@ export function getAccessToken() {
 }
 
 export function hasSessionHint(): boolean {
-  try { return localStorage.getItem(HAS_SESSION_KEY) === '1'; } catch { return false; }
+  return hasSaturnSessionHint();
 }
 
 export async function ensureAuth(): Promise<string | undefined> {
@@ -118,7 +123,7 @@ export function clearAuth() {
   accessToken = undefined;
   tokenExpiresAt = 0;
   clearPersistedAccessToken();
-  try { localStorage.removeItem(HAS_SESSION_KEY); } catch { /* noop */ }
+  clearSaturnSessionHint();
 }
 
 async function ensureToken() {
@@ -155,7 +160,12 @@ async function refreshToken(): Promise<void> {
     // authorizationState update arrives). Without this, JWT expiry forces
     // users to hard-reload to escape the spinner.
     onUpdate?.({ '@type': 'updateAuthorizationState', authorizationState: 'authorizationStateReady' });
-  } catch {
+  } catch (error) {
+    if (hasSessionHint() && isOfflineNetworkError(error)) {
+      onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
+      return;
+    }
+
     clearAuth();
     onUpdate?.({ '@type': 'updateAuthorizationState', authorizationState: 'authorizationStateWaitPhoneNumber' });
   } finally {
@@ -482,6 +492,12 @@ function scheduleReconnect() {
     await ensureToken();
     // If refresh failed (no access token), stop reconnecting — user will be signed out
     if (!accessToken) {
+      if (hasSessionHint() && typeof navigator !== 'undefined' && !navigator.onLine) {
+        onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
+        scheduleReconnect();
+        return;
+      }
+
       wsIntentionalClose = true;
       onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateBroken' });
       return;

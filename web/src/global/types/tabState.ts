@@ -551,7 +551,7 @@ export type TabState = {
   // exact bitmask — backend is the source of truth, the panel is just a wrapper).
   adminPanel?: {
     isOpen: boolean;
-    tab?: 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
+    tab?: 'users' | 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
   };
 
   isWebAppsCloseConfirmationModalOpen?: boolean;

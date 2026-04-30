@@ -1,10 +1,11 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -146,7 +147,13 @@ func main() {
 		})
 	})
 
-	app.Get("/metrics", handler.RequireInternalToken(internalSecret), metricsReg.Handler())
+	app.Get("/metrics", func(c *fiber.Ctx) error {
+		token := c.Get("X-Internal-Token")
+		if internalSecret == "" || subtle.ConstantTimeCompare([]byte(token), []byte(internalSecret)) != 1 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+		return metricsReg.Handler()(c)
+	})
 
 	api := app.Group("/api/v1", handler.RequireInternalToken(internalSecret))
 	aiHandler.Register(api)

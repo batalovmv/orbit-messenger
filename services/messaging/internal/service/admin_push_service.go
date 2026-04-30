@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
-	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/services/messaging/internal/model"
 	"github.com/mst-corp/orbit/services/messaging/internal/store"
 )
@@ -135,8 +134,8 @@ const (
 // per-device report. Audit always lands BEFORE dispatch — partial failure
 // after audit is preferable to a successful push with no audit trail.
 func (s *PushAdminService) SendTestPush(ctx context.Context, p SendTestPushParams) (*PushTestReport, error) {
-	if !permissions.HasSysPermission(p.ActorRole, permissions.SysManageSettings) {
-		return nil, apperror.Forbidden("Insufficient permissions")
+	if p.ActorRole != "superadmin" {
+		return nil, apperror.Forbidden("Push inspector requires superadmin")
 	}
 	if len(p.Title) > pushTestMaxTitleLen {
 		return nil, apperror.BadRequest("title too long")

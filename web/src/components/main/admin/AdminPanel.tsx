@@ -8,13 +8,17 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { GlobalState } from '../../../global/types';
 import type {
-  AdminFlag, AuditEntry,
+  AdminFlag, AdminInvite, AdminSession, AdminUser, AuditEntry, DefaultChatsPreview,
 } from '../../../api/saturn/methods/admin';
+import type { IconName } from '../../../types/icons';
 import type { TabWithProperties } from '../../ui/TabList';
 
 import {
   AUDIT_ACTIONS, AUDIT_EXPORT_HARD_CAP, AUDIT_TARGET_TYPES,
-  backfillDefaultChats, fetchAdminFlags, fetchAuditLog, fetchAuditLogExport,
+  backfillDefaultChats, changeAdminUserRole, createAdminInvite, deactivateAdminUser, fetchAdminFlags,
+  fetchAdminInvites, fetchAdminUserExport, fetchAdminUserSessions, fetchAdminUsers, fetchAuditLog,
+  fetchAuditLogExport, fetchDefaultChatsPreview, reactivateAdminUser, revokeAdminInvite,
+  revokeAdminUserSession, revokeAllAdminUserSessions,
   sendAdminTestPush,
   setAdminFlag, setAdminMaintenance,
 } from '../../../api/saturn/methods/admin';
@@ -28,6 +32,8 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import { MaintenanceBannerView } from '../MaintenanceBanner';
 import Modal from '../../ui/Modal';
 import TabList from '../../ui/TabList';
+import ListItem from '../../ui/ListItem';
+import Switcher from '../../ui/Switcher';
 
 import { localizeAdminError } from './adminErrors';
 
@@ -37,10 +43,11 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
-type AdminTab = 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
+type AdminTab = 'users' | 'flags' | 'maintenance' | 'audit' | 'welcome' | 'push';
 
 type StateProps = {
   saturnRole?: GlobalState['saturnRole'];
+  currentUserId?: string;
   tab?: AdminTab;
 };
 
@@ -49,6 +56,7 @@ const AUDIT_SEARCH_DEBOUNCE_MS = 300;
 
 const tabLangKey = (tab: AdminTab) => {
   switch (tab) {
+    case 'users': return 'AdminTabUsers';
     case 'flags': return 'AdminTabFeatureFlags';
     case 'maintenance': return 'AdminTabMaintenance';
     case 'audit': return 'AdminTabAuditLog';
@@ -57,9 +65,20 @@ const tabLangKey = (tab: AdminTab) => {
   }
 };
 
+const tabShortLangKey = (tab: AdminTab) => {
+  switch (tab) {
+    case 'users': return 'AdminTabUsersShort';
+    case 'flags': return 'AdminTabFeatureFlagsShort';
+    case 'maintenance': return 'AdminTabMaintenanceShort';
+    case 'audit': return 'AdminTabAuditLogShort';
+    case 'welcome': return 'AdminTabWelcomeShort';
+    case 'push': return 'AdminTabPushInspectorShort';
+  }
+};
+
 // flagDescription resolves the per-flag description with three priorities:
-//  1. Frontend localization key `AdminFlagDesc_<flag.key>` — russian-first
-//     editorial copy (see fallback.strings / fallback.ru.strings).
+//  1. Frontend localization key `AdminFlagDesc_<flag.key>` — editorial copy
+//     for the active UI locale (see fallback.strings / fallback.ru.strings).
 //  2. Backend `flag.description` from pkg/featureflags/registry.go — used
 //     as a fallback for unknown / future keys, so adding a flag without
 //     touching the strings file still shows the operator-doc text.
@@ -84,18 +103,24 @@ function flagDescription(
 // and SysViewAuditLog (audit). compliance is audit-only — no write access
 // to system settings.
 const tabsForRole = (role?: GlobalState['saturnRole']): readonly AdminTab[] => {
-  if (role === 'admin' || role === 'superadmin') return ['flags', 'maintenance', 'welcome', 'push', 'audit'];
+  // Runtime audit 2026-04-29: the generic feature-flag tab had no standalone
+  // actionable controls. `maintenance_mode` has a richer dedicated tab, while
+  // the E2E/group-call/screen-share flags are currently not wired to product
+  // behavior. Keep operators on real controls only.
+  if (role === 'superadmin') return ['users', 'maintenance', 'welcome', 'push', 'audit'];
+  if (role === 'admin') return ['users', 'maintenance', 'welcome', 'audit'];
   if (role === 'compliance') return ['audit'];
   return [];
 };
 
-const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
+const AdminPanel = ({
+  isOpen, saturnRole, currentUserId, tab,
+}: OwnProps & StateProps) => {
   const { closeAdminPanel, selectAdminTab } = getActions();
   const lang = useLang();
 
   const visibleTabs = useMemo(() => tabsForRole(saturnRole), [saturnRole]);
   const hasAccess = visibleTabs.length > 0;
-  const shouldRender = Boolean(isOpen && hasAccess);
 
   const activeTab: AdminTab = tab && visibleTabs.includes(tab) ? tab : visibleTabs[0] ?? 'audit';
   const activeTabIdx = Math.max(0, visibleTabs.indexOf(activeTab));
@@ -104,7 +129,15 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
   // both as id and as the click-arg, then map back to the AdminTab string in
   // handleSwitchTab. lang() runs on every render anyway — no extra deps.
   const tabListItems: TabWithProperties[] = useMemo(
-    () => visibleTabs.map((t, i) => ({ id: i, title: lang(tabLangKey(t)) })),
+    () => visibleTabs.map((t, i) => ({
+      id: i,
+      title: (
+        <span className={styles.tabTitle}>
+          <span className={styles.tabTitleFull}>{lang(tabLangKey(t))}</span>
+          <span className={styles.tabTitleCompact}>{lang(tabShortLangKey(t))}</span>
+        </span>
+      ),
+    })),
     [visibleTabs, lang],
   );
 
@@ -115,7 +148,7 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
 
   const handleClose = useLastCallback(() => closeAdminPanel());
 
-  if (!shouldRender) return undefined;
+  if (!hasAccess) return undefined;
 
   return (
     <Modal
@@ -134,9 +167,10 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
         className={styles.tabs}
       />
       <div className={styles.body}>
+        {activeTab === 'users' && <UsersTab role={saturnRole} currentUserId={currentUserId} />}
         {activeTab === 'flags' && <FlagsTab />}
         {activeTab === 'maintenance' && <MaintenanceTab />}
-        {activeTab === 'welcome' && <WelcomeTab />}
+        {activeTab === 'welcome' && <WelcomeTab role={saturnRole} />}
         {activeTab === 'push' && <PushInspectorTab />}
         {activeTab === 'audit' && <AuditTab role={saturnRole} />}
       </div>
@@ -145,37 +179,573 @@ const AdminPanel = ({ isOpen, saturnRole, tab }: OwnProps & StateProps) => {
 };
 
 // ===========================================================================
+// Users tab
+// ===========================================================================
+//
+// This is the daily admin workspace for a 150+ person internal messenger:
+// find a user, understand their account state, block/reactivate access, adjust
+// system role when allowed, and revoke stale sessions without leaving the UI.
+
+const ADMIN_ROLE_OPTIONS = ['member', 'admin', 'compliance', 'superadmin'] as const;
+
+type AdminRoleValue = typeof ADMIN_ROLE_OPTIONS[number];
+
+type UsersTabProps = {
+  role?: GlobalState['saturnRole'];
+  currentUserId?: string;
+};
+
+type PendingUserAction =
+  | { type: 'deactivate'; user: AdminUser }
+  | { type: 'reactivate'; user: AdminUser }
+  | { type: 'role'; user: AdminUser; nextRole: AdminRoleValue }
+  | { type: 'session'; user: AdminUser; session: AdminSession }
+  | { type: 'all-sessions'; user: AdminUser };
+
+const normalizeAdminRole = (role?: string): AdminRoleValue | undefined => {
+  const normalized = role?.trim().toLowerCase();
+  return ADMIN_ROLE_OPTIONS.includes(normalized as AdminRoleValue)
+    ? normalized as AdminRoleValue
+    : undefined;
+};
+
+const roleRank = (role?: string) => {
+  switch (normalizeAdminRole(role)) {
+    case 'superadmin': return 4;
+    case 'compliance': return 3;
+    case 'admin': return 2;
+    case 'member': return 1;
+    default: return 0;
+  }
+};
+
+const adminRoleLabel = (lang: ReturnType<typeof useLang>, role: string) => {
+  switch (normalizeAdminRole(role)) {
+    case 'superadmin': return lang('AdminUserRoleSuperadmin');
+    case 'compliance': return lang('AdminUserRoleCompliance');
+    case 'admin': return lang('AdminUserRoleAdmin');
+    case 'member': return lang('AdminUserRoleMember');
+    default: return role;
+  }
+};
+
+const formatAdminDate = (value?: string) => {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString();
+};
+
+const shortAdminId = (id: string) => (id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id);
+
+const canManageAdminUser = (
+  actorRole: GlobalState['saturnRole'] | undefined,
+  target: AdminUser,
+  currentUserId?: string,
+) => {
+  if (!actorRole || target.id === currentUserId) return false;
+  if (actorRole === 'superadmin') return true;
+  return actorRole === 'admin' && roleRank(actorRole) > roleRank(target.role);
+};
+
+const UsersTab = ({ role, currentUserId }: UsersTabProps) => {
+  const lang = useLang();
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | undefined>();
+  const [sessions, setSessions] = useState<AdminSession[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const [info, setInfo] = useState<string | undefined>();
+  const [isBusy, setIsBusy] = useState(false);
+  const [isSessionsBusy, setIsSessionsBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingUserAction | undefined>();
+  const [deactivateReason, setDeactivateReason] = useState('');
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(query.trim()), AUDIT_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  const patchUser = useLastCallback((userId: string, patch: Partial<AdminUser>) => {
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)));
+    setSelectedUser((prev) => (prev?.id === userId ? { ...prev, ...patch } : prev));
+  });
+
+  const reloadUsers = useLastCallback(async () => {
+    setIsBusy(true);
+    try {
+      const list = await fetchAdminUsers({ q: debouncedQuery || undefined, limit: 80 });
+      setUsers(list);
+      setSelectedUser((prev) => {
+        if (!list.length) return undefined;
+        if (prev) {
+          const updated = list.find((u) => u.id === prev.id);
+          if (updated) return updated;
+        }
+        return list[0];
+      });
+      setError(undefined);
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'load failed'));
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  useEffect(() => { reloadUsers(); }, [debouncedQuery, reloadUsers]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setSessions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setIsSessionsBusy(true);
+    fetchAdminUserSessions(selectedUser.id)
+      .then((list) => {
+        if (cancelled) return;
+        setSessions(list);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setSessions([]);
+        setError(localizeAdminError(lang, e, 'load failed'));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsSessionsBusy(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedUser?.id]);
+
+  const summary = useMemo(() => ({
+    total: users.length,
+    active: users.filter((u) => u.is_active).length,
+    inactive: users.filter((u) => !u.is_active).length,
+    privileged: users.filter((u) => roleRank(u.role) > roleRank('member')).length,
+  }), [users]);
+
+  const handleOpenAction = useLastCallback((action: PendingUserAction) => {
+    setDeactivateReason('');
+    setPendingAction(action);
+  });
+
+  const handleCloseAction = useLastCallback(() => {
+    setPendingAction(undefined);
+    setDeactivateReason('');
+  });
+
+  const handleConfirmAction = useLastCallback(async () => {
+    if (!pendingAction) return;
+    setIsBusy(true);
+    setError(undefined);
+    setInfo(undefined);
+
+    try {
+      if (pendingAction.type === 'deactivate') {
+        await deactivateAdminUser(pendingAction.user.id, deactivateReason.trim());
+        patchUser(pendingAction.user.id, {
+          is_active: false,
+          deactivated_at: new Date().toISOString(),
+        });
+        setInfo(lang('AdminUsersDeactivateSuccess'));
+      } else if (pendingAction.type === 'reactivate') {
+        await reactivateAdminUser(pendingAction.user.id);
+        patchUser(pendingAction.user.id, {
+          is_active: true,
+          deactivated_at: undefined,
+          deactivated_by: undefined,
+        });
+        setInfo(lang('AdminUsersReactivateSuccess'));
+      } else if (pendingAction.type === 'role') {
+        await changeAdminUserRole(pendingAction.user.id, pendingAction.nextRole);
+        patchUser(pendingAction.user.id, { role: pendingAction.nextRole });
+        setInfo(lang('AdminUsersRoleChangeSuccess'));
+      } else if (pendingAction.type === 'session') {
+        await revokeAdminUserSession(pendingAction.user.id, pendingAction.session.id);
+        setSessions((prev) => prev.filter((s) => s.id !== pendingAction.session.id));
+        setInfo(lang('AdminUsersSessionRevoked'));
+      } else if (pendingAction.type === 'all-sessions') {
+        await revokeAllAdminUserSessions(pendingAction.user.id);
+        setSessions([]);
+        setInfo(lang('AdminUsersAllSessionsRevoked'));
+      }
+      handleCloseAction();
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'update failed'));
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  const handleExportUser = useLastCallback(async () => {
+    if (!selectedUser) return;
+    setIsBusy(true);
+    setError(undefined);
+    try {
+      const res = await fetchAdminUserExport(selectedUser.id);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      a.href = url;
+      a.download = `orbit-user-${selectedUser.id}-${stamp}.ndjson`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      setError(lang('AdminUsersExportFailed', { error: (e as Error).message || 'unknown' }));
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  const canManageSelected = selectedUser ? canManageAdminUser(role, selectedUser, currentUserId) : false;
+  const canChangeRole = role === 'superadmin' && selectedUser && selectedUser.id !== currentUserId;
+  const canExportSelected = role === 'superadmin';
+  const selectedRoleValue = normalizeAdminRole(selectedUser?.role);
+
+  return (
+    <div className={styles.tabBody}>
+      <div className={styles.usersIntro}>{lang('AdminUsersIntro')}</div>
+      <div className={buildClassName(styles.summaryGrid, styles.usersSummaryGrid)}>
+        <div className={styles.summaryCard}>
+          <span className={styles.summaryValue}>{summary.total}</span>
+          <span className={styles.summaryLabel}>{lang('AdminUsersSummaryLoaded')}</span>
+        </div>
+        <div className={styles.summaryCard}>
+          <span className={styles.summaryValue}>{summary.active}</span>
+          <span className={styles.summaryLabel}>{lang('AdminUsersSummaryActive')}</span>
+        </div>
+        <div className={buildClassName(styles.summaryCard, summary.inactive > 0 && styles.summaryCardWarn)}>
+          <span className={styles.summaryValue}>{summary.inactive}</span>
+          <span className={styles.summaryLabel}>{lang('AdminUsersSummaryInactive')}</span>
+        </div>
+        <div className={styles.summaryCard}>
+          <span className={styles.summaryValue}>{summary.privileged}</span>
+          <span className={styles.summaryLabel}>{lang('AdminUsersSummaryPrivileged')}</span>
+        </div>
+      </div>
+
+      <div className={styles.formRow}>
+        <input
+          type="text"
+          className={styles.searchInput}
+          value={query}
+          maxLength={200}
+          placeholder={lang('AdminUsersSearchPlaceholder')}
+          onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
+        />
+      </div>
+
+      {error && <div className={styles.error}>{error}</div>}
+      {info && <div className={styles.success}>{info}</div>}
+
+      <div className={styles.usersLayout}>
+        <div className={buildClassName('settings-item', 'no-border', styles.usersList)}>
+          <h4 className="settings-item-header">{lang('AdminUsersListTitle')}</h4>
+          {users.length === 0 && !isBusy && (
+            <div className={styles.empty}>{lang('AdminUsersEmpty')}</div>
+          )}
+          {users.map((user) => {
+            const isSelected = selectedUser?.id === user.id;
+            return (
+              <ListItem
+                key={user.id}
+                icon={user.is_active ? 'user' : 'delete-user'}
+                className={buildClassName(
+                  styles.userItem,
+                  isSelected && styles.userItemSelected,
+                  !user.is_active && styles.userItemInactive,
+                )}
+                multiline
+                narrow
+                ripple
+                onClick={() => setSelectedUser(user)}
+                rightElement={(
+                  <span className={buildClassName(
+                    styles.statusPill,
+                    user.is_active ? styles.statusPillActive : styles.statusPillInactive,
+                  )}
+                  >
+                    {lang(user.is_active ? 'AdminUsersStatusActive' : 'AdminUsersStatusInactive')}
+                  </span>
+                )}
+              >
+                <span className="title">{user.display_name || user.email}</span>
+                <span className="subtitle">
+                  {user.email} · {adminRoleLabel(lang, user.role)}
+                </span>
+              </ListItem>
+            );
+          })}
+        </div>
+
+        <div className={styles.userDetails}>
+          {!selectedUser && (
+            <div className={styles.empty}>{lang(isBusy ? 'Loading' : 'AdminUsersSelectEmpty')}</div>
+          )}
+          {selectedUser && (
+            <>
+              <div className={styles.userDetailsHeader}>
+                <div className={styles.userDetailsTitle}>
+                  <span>{selectedUser.display_name || selectedUser.email}</span>
+                  <span className={styles.userDetailsEmail}>{selectedUser.email}</span>
+                </div>
+                <span className={buildClassName(
+                  styles.statusPill,
+                  selectedUser.is_active ? styles.statusPillActive : styles.statusPillInactive,
+                )}
+                >
+                  {lang(selectedUser.is_active ? 'AdminUsersStatusActive' : 'AdminUsersStatusInactive')}
+                </span>
+              </div>
+
+              <div className={styles.userDetailsGrid}>
+                <span>{lang('AdminUsersFieldId')}</span>
+                <code>{selectedUser.id}</code>
+                <span>{lang('AdminUsersFieldUsername')}</span>
+                <span>{selectedUser.username || '—'}</span>
+                <span>{lang('AdminUsersFieldRole')}</span>
+                <span>{adminRoleLabel(lang, selectedUser.role)}</span>
+                <span>{lang('AdminUsersFieldStatus')}</span>
+                <span>{selectedUser.status || '—'}</span>
+                <span>{lang('AdminUsersFieldLastSeen')}</span>
+                <span>{formatAdminDate(selectedUser.last_seen_at)}</span>
+                <span>{lang('AdminUsersFieldCreated')}</span>
+                <span>{formatAdminDate(selectedUser.created_at)}</span>
+                {!selectedUser.is_active && (
+                  <>
+                    <span>{lang('AdminUsersFieldDeactivated')}</span>
+                    <span>{formatAdminDate(selectedUser.deactivated_at)}</span>
+                  </>
+                )}
+              </div>
+
+              {canChangeRole && (
+                <div className={styles.formRow}>
+                  <span className={styles.formLabelText}>{lang('AdminUsersRoleSelectLabel')}</span>
+                  <select
+                    key={`${selectedUser.id}-${selectedRoleValue || selectedUser.role}`}
+                    className={styles.auditFilterSelect}
+                    value={selectedRoleValue || 'member'}
+                    disabled={isBusy}
+                    onChange={(e) => {
+                      const nextRole = (e.target as HTMLSelectElement).value as AdminRoleValue;
+                      if (nextRole !== selectedRoleValue) {
+                        handleOpenAction({ type: 'role', user: selectedUser, nextRole });
+                      }
+                    }}
+                  >
+                    {ADMIN_ROLE_OPTIONS.map((r) => (
+                      <option key={r} value={r} selected={r === selectedRoleValue}>
+                        {adminRoleLabel(lang, r)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className={styles.actions}>
+                {selectedUser.is_active ? (
+                  <button
+                    type="button"
+                    className={styles.dangerBtn}
+                    disabled={!canManageSelected || isBusy}
+                    onClick={() => handleOpenAction({ type: 'deactivate', user: selectedUser })}
+                  >
+                    {lang('AdminUsersDeactivate')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.primaryBtn}
+                    disabled={!canManageSelected || isBusy}
+                    onClick={() => handleOpenAction({ type: 'reactivate', user: selectedUser })}
+                  >
+                    {lang('AdminUsersReactivate')}
+                  </button>
+                )}
+                {canExportSelected && (
+                  <button
+                    type="button"
+                    className={styles.secondaryBtn}
+                    disabled={isBusy}
+                    onClick={handleExportUser}
+                  >
+                    {lang('AdminUsersExportData')}
+                  </button>
+                )}
+              </div>
+
+              <div className={styles.userSessions}>
+                <div className={styles.userSessionsHeader}>
+                  <div className={styles.userSessionsTitle}>
+                    <span className={styles.sectionTitle}>{lang('AdminUsersSessionsTitle')}</span>
+                    <span className={styles.userSearchMeta}>
+                      {isSessionsBusy ? lang('Loading') : lang('AdminUsersSessionsCount', { count: sessions.length })}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.dangerBtn}
+                    disabled={!canManageSelected || isBusy || isSessionsBusy || sessions.length === 0}
+                    onClick={() => handleOpenAction({ type: 'all-sessions', user: selectedUser })}
+                  >
+                    {lang('AdminUsersRevokeAllSessions')}
+                  </button>
+                </div>
+                {sessions.length === 0 && !isSessionsBusy && (
+                  <div className={styles.empty}>{lang('AdminUsersSessionsEmpty')}</div>
+                )}
+                {sessions.map((session) => (
+                  <div key={session.id} className={styles.sessionRow}>
+                    <div className={styles.sessionMain}>
+                      <span className={styles.sessionTitle}>
+                        {session.device_id
+                          ? lang('AdminUsersSessionDevice', { id: shortAdminId(session.device_id) })
+                          : lang('AdminUsersSessionUnknownDevice')}
+                      </span>
+                      <span className={styles.userSearchMeta}>
+                        {session.ip_address || '—'} · {formatAdminDate(session.created_at)}
+                      </span>
+                      {session.user_agent && (
+                        <span className={styles.sessionAgent}>{session.user_agent}</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.secondaryBtn}
+                      disabled={!canManageSelected || isBusy}
+                      onClick={() => handleOpenAction({ type: 'session', user: selectedUser, session })}
+                    >
+                      {lang('AdminUsersRevokeSession')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {pendingAction && (
+        <Modal
+          isOpen
+          onClose={handleCloseAction}
+          title={lang('AdminUsersConfirmTitle')}
+          hasCloseButton={!isBusy}
+        >
+          <div className={styles.confirmBody}>
+            {pendingAction.type === 'deactivate' && (
+              <>
+                <p>{lang('AdminUsersConfirmDeactivate', { user: pendingAction.user.email })}</p>
+                <textarea
+                  value={deactivateReason}
+                  maxLength={500}
+                  rows={3}
+                  placeholder={lang('AdminUsersDeactivateReasonPlaceholder')}
+                  onChange={(e) => setDeactivateReason((e.target as HTMLTextAreaElement).value)}
+                  className={styles.formTextarea}
+                />
+              </>
+            )}
+            {pendingAction.type === 'reactivate' && (
+              <p>{lang('AdminUsersConfirmReactivate', { user: pendingAction.user.email })}</p>
+            )}
+            {pendingAction.type === 'role' && (
+              <p>
+                {lang('AdminUsersConfirmRole', {
+                  user: pendingAction.user.email,
+                  role: adminRoleLabel(lang, pendingAction.nextRole),
+                })}
+              </p>
+            )}
+            {pendingAction.type === 'session' && (
+              <p>{lang('AdminUsersConfirmRevokeSession', { user: pendingAction.user.email })}</p>
+            )}
+            {pendingAction.type === 'all-sessions' && (
+              <p>{lang('AdminUsersConfirmRevokeAllSessions', { user: pendingAction.user.email })}</p>
+            )}
+          </div>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              disabled={isBusy}
+              onClick={handleCloseAction}
+            >
+              {lang('Cancel')}
+            </button>
+            <button
+              type="button"
+              className={pendingAction.type === 'deactivate' || pendingAction.type === 'session'
+                || pendingAction.type === 'all-sessions'
+                ? styles.dangerBtn
+                : styles.primaryBtn}
+              disabled={isBusy}
+              onClick={handleConfirmAction}
+            >
+              {lang(isBusy ? 'Loading' : 'AdminUsersConfirmAction')}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+// ===========================================================================
 // Feature Flags tab
 // ===========================================================================
 //
-// Three additions on top of the basic toggle list:
-//  1. Exposure filter (segmented control) — `unauth` / `auth` / `admin` /
-//     `server_only`. "All" is the default. Filter is purely client-side
-//     since the dataset is the small in-code registry (≤20 entries).
-//  2. Per-row "History" button — opens a modal showing the audit feed
-//     filtered to this flag (`target_type=feature_flag&target_id=<key>`).
-//     Reuses the existing GET /admin/audit-log endpoint, no new backend.
-//  3. Per-row Dangerous badge + confirmation modal when toggling ON.
-//     Backend annotation is `featureflags.Definition.Dangerous` and ships
-//     in the AdminFlag JSON. Toggle OFF never asks (turning a danger flag
-//     off is always safe — that's why it's marked dangerous).
+// Flags are grouped by exposure and rendered as Telegram-style settings rows:
+// icon + title/description + Switcher. Dangerous flags keep the existing
+// confirmation modal when toggling ON and get an extra visual warning on the
+// row itself.
 
-type ExposureFilter = '' | AdminFlag['exposure'];
-
-const EXPOSURE_FILTERS: { value: ExposureFilter; labelKey: 'AdminFlagFilterAll' | 'AdminFlagFilterUnauth' | 'AdminFlagFilterAuth' | 'AdminFlagFilterAdmin' | 'AdminFlagFilterServerOnly' }[] = [
-  { value: '', labelKey: 'AdminFlagFilterAll' },
-  { value: 'unauth', labelKey: 'AdminFlagFilterUnauth' },
-  { value: 'auth', labelKey: 'AdminFlagFilterAuth' },
-  { value: 'admin', labelKey: 'AdminFlagFilterAdmin' },
-  { value: 'server_only', labelKey: 'AdminFlagFilterServerOnly' },
+// Human-readable section ordering for the flag list. Maps the registry's
+// `exposure` field to the localized section header operators understand.
+// Adding a new exposure means adding it here AND in the translation pack.
+const FLAG_SECTION_ORDER: Array<{
+  exposure: AdminFlag['exposure'] | 'unknown';
+  labelKey: 'AdminFlagSectionUnauth' | 'AdminFlagSectionAuth' | 'AdminFlagSectionAdmin' | 'AdminFlagSectionServerOnly' | 'AdminFlagSectionUnknown';
+}> = [
+  { exposure: 'unauth', labelKey: 'AdminFlagSectionUnauth' },
+  { exposure: 'auth', labelKey: 'AdminFlagSectionAuth' },
+  { exposure: 'admin', labelKey: 'AdminFlagSectionAdmin' },
+  { exposure: 'server_only', labelKey: 'AdminFlagSectionServerOnly' },
+  { exposure: 'unknown', labelKey: 'AdminFlagSectionUnknown' },
 ];
+
+const FLAG_ICON_NAME: Record<string, IconName> = {
+  e2e_dm_enabled: 'lock',
+  maintenance_mode: 'tools',
+  calls_group_enabled: 'phone',
+  calls_screen_share_enabled: 'share-screen',
+};
+
+const flagIconName = (flag: AdminFlag): IconName => {
+  return FLAG_ICON_NAME[flag.key] || (flag.dangerous ? 'warning' : 'settings');
+};
+
+const flagHumanName = (lang: ReturnType<typeof useLang>, key: string) => {
+  const nameKey = `AdminFlagName_${key}`;
+  const localized = (lang as unknown as (k: string) => string)(nameKey);
+  if (localized && localized !== nameKey) return localized;
+  return key;
+};
 
 const FlagsTab = () => {
   const lang = useLang();
   const [flags, setFlags] = useState<AdminFlag[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [busyKey, setBusyKey] = useState<string | undefined>();
-  const [exposureFilter, setExposureFilter] = useState<ExposureFilter>('');
   const [pendingDangerous, setPendingDangerous] = useState<AdminFlag | undefined>();
   const [historyFor, setHistoryFor] = useState<AdminFlag | undefined>();
 
@@ -225,79 +795,87 @@ const FlagsTab = () => {
   const handleCancelDangerous = useLastCallback(() => setPendingDangerous(undefined));
   const handleCloseHistory = useLastCallback(() => setHistoryFor(undefined));
 
-  const visibleFlags = useMemo(() => {
-    if (!exposureFilter) return flags;
-    return flags.filter((f) => f.exposure === exposureFilter);
-  }, [flags, exposureFilter]);
+  // Group flags by exposure so each section reads as a self-contained
+  // settings card (Telegram-Web-A canonical pattern). Sections render only
+  // when non-empty so the unauth-only registry today shows just two cards
+  // instead of five empty stubs.
+  const flagsBySection = useMemo(() => {
+    const map = new Map<string, AdminFlag[]>();
+    for (const f of flags) {
+      const bucket = f.known ? f.exposure : 'unknown';
+      if (!map.has(bucket)) map.set(bucket, []);
+      map.get(bucket)!.push(f);
+    }
+    return map;
+  }, [flags]);
+
+  const summary = useMemo(() => {
+    const enabled = flags.filter((f) => f.enabled).length;
+    const dangerous = flags.filter((f) => f.dangerous && f.enabled).length;
+    return { enabled, total: flags.length, dangerous };
+  }, [flags]);
 
   return (
     <div className={styles.tabBody}>
-      <div className={styles.flagFilterBar} role="tablist">
-        {EXPOSURE_FILTERS.map((opt) => (
-          <button
-            key={opt.value || 'all'}
-            type="button"
-            role="tab"
-            aria-selected={exposureFilter === opt.value}
-            className={buildClassName(
-              styles.flagFilterChip,
-              exposureFilter === opt.value && styles.flagFilterChipActive,
-            )}
-            onClick={() => setExposureFilter(opt.value)}
-          >
-            {lang(opt.labelKey)}
-          </button>
-        ))}
-      </div>
       {error && <div className={styles.error}>{error}</div>}
       {flags.length === 0 && !error && <div className={styles.empty}>{lang('Loading')}</div>}
-      {flags.length > 0 && visibleFlags.length === 0 && (
-        <div className={styles.empty}>{lang('AdminAuditEmpty')}</div>
+
+      {flags.length > 0 && (
+        <div className={styles.flagSummary}>
+          {lang('AdminFlagSummary', {
+            enabled: summary.enabled,
+            total: summary.total,
+            dangerous: summary.dangerous,
+          })}
+        </div>
       )}
-      <ul className={styles.flagList}>
-        {visibleFlags.map((flag) => (
-          <li key={flag.key} className={styles.flagRow}>
-            <div className={styles.flagInfo}>
-              <div className={styles.flagKey}>
-                {flag.key}
-                {!flag.known && (
-                  <span className={styles.flagBadge}>{lang('AdminFlagUnknown')}</span>
-                )}
-                {flag.dangerous && (
-                  <span className={styles.flagBadge}>{lang('AdminFlagDangerous')}</span>
-                )}
-                <span className={styles.flagExposure}>{flag.exposure}</span>
-              </div>
-              {(flagDescription(lang, flag) ?? '') !== ''
-                && <div className={styles.flagDesc}>{flagDescription(lang, flag)}</div>}
-            </div>
-            <div className={styles.flagControls}>
-              <button
-                type="button"
-                className={styles.flagHistoryBtn}
-                onClick={() => setHistoryFor(flag)}
-              >
-                {lang('AdminFlagHistory')}
-              </button>
-              {/* Unknown DB rows (no registry entry) are read-only — the
-                  backend Set() rejects them with "Unknown feature flag", so
-                  rendering a toggle would be a dead control. The "не в
-                  реестре" badge surfaces the state. */}
-              <button
-                type="button"
-                className={buildClassName(
-                  styles.flagToggle,
-                  flag.enabled && styles.flagToggleOn,
-                )}
-                disabled={busyKey === flag.key || !flag.known}
-                onClick={() => handleToggle(flag)}
-              >
-                {flag.enabled ? lang('AdminFlagOn') : lang('AdminFlagOff')}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+
+      {FLAG_SECTION_ORDER.map(({ exposure, labelKey }) => {
+        const bucket = flagsBySection.get(exposure);
+        if (!bucket || bucket.length === 0) return undefined;
+        return (
+          <div key={exposure} className={buildClassName('settings-item', 'no-border', styles.flagSection)}>
+            <h4 className="settings-item-header">{lang(labelKey)}</h4>
+            {bucket.map((flag) => {
+              const desc = flagDescription(lang, flag);
+              const humanName = flagHumanName(lang, flag.key);
+              const isDisabled = busyKey === flag.key || !flag.known;
+              return (
+                <ListItem
+                  key={flag.key}
+                  className={buildClassName(
+                    styles.flagItem,
+                    flag.dangerous && styles.flagItemDangerous,
+                  )}
+                  icon={flagIconName(flag)}
+                  multiline
+                  narrow
+                  ripple
+                  // Unknown DB rows (no registry entry) are read-only — the
+                  // backend Set() rejects them with "Unknown feature flag",
+                  // so rendering a toggle would be a dead control.
+                  disabled={isDisabled}
+                  onClick={() => handleToggle(flag)}
+                  rightElement={(
+                    <Switcher
+                      label={humanName}
+                      checked={flag.enabled}
+                      disabled={isDisabled}
+                      inactive
+                      onChange={() => handleToggle(flag)}
+                    />
+                  )}
+                >
+                  <span className="title">{humanName}</span>
+                  <span className="subtitle" title={desc || flag.key}>
+                    {desc || flag.key}
+                  </span>
+                </ListItem>
+              );
+            })}
+          </div>
+        );
+      })}
 
       {pendingDangerous && (
         <Modal
@@ -307,13 +885,12 @@ const FlagsTab = () => {
           hasCloseButton
         >
           {/* Render the prompt as separate paragraphs instead of stuffing the
-              flag description into the {description} placeholder — when the
-              description didn't end with a period, the legacy single-line
-              format produced runs like "DM chats Точно включаете?". */}
+              flag description into the {description} placeholder. Otherwise
+              localized sentences can be glued together without punctuation. */}
           <div className={styles.confirmBody}>
             <p>{lang('AdminFlagDangerousConfirmIntro', { key: pendingDangerous.key })}</p>
             {flagDescription(lang, pendingDangerous) && (
-              <p className={styles.flagDesc}>{flagDescription(lang, pendingDangerous)}</p>
+              <p className={styles.confirmDescription}>{flagDescription(lang, pendingDangerous)}</p>
             )}
             <p>{lang('AdminFlagDangerousConfirmQuestion')}</p>
           </div>
@@ -473,6 +1050,12 @@ function fromDatetimeLocal(local: string): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toISOString();
 }
+
+const isInviteUsable = (invite: AdminInvite) => {
+  const expiresAt = invite.expires_at ? new Date(invite.expires_at).getTime() : 0;
+  const isExpired = Boolean(expiresAt && expiresAt <= Date.now());
+  return invite.is_active && invite.use_count < invite.max_uses && !isExpired;
+};
 
 const MaintenanceTab = () => {
   const lang = useLang();
@@ -658,15 +1241,70 @@ const MaintenanceTab = () => {
 // every existing user's list). This tab is the operator-driven safety net:
 // click → confirm → POST /admin/default-chats/backfill → server returns the
 // number of newly-inserted memberships.
-const WelcomeTab = () => {
+type WelcomeTabProps = {
+  role?: GlobalState['saturnRole'];
+};
+
+const WelcomeTab = ({ role }: WelcomeTabProps) => {
   const lang = useLang();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isPreviewBusy, setIsPreviewBusy] = useState(true);
+  const [preview, setPreview] = useState<DefaultChatsPreview | undefined>();
   const [insertedCount, setInsertedCount] = useState<number | undefined>();
+  const [invites, setInvites] = useState<AdminInvite[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<AdminRoleValue>('member');
+  const [inviteMaxUses, setInviteMaxUses] = useState('1');
+  const [inviteExpiresAt, setInviteExpiresAt] = useState('');
+  const [isInvitesBusy, setIsInvitesBusy] = useState(true);
+  const [areInactiveInvitesShown, setAreInactiveInvitesShown] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [info, setInfo] = useState<string | undefined>();
+
+  const inviteRoleOptions = useMemo(
+    (): readonly AdminRoleValue[] => (role === 'superadmin' ? ADMIN_ROLE_OPTIONS : ['member']),
+    [role],
+  );
+
+  const reloadPreview = useLastCallback(async () => {
+    setIsPreviewBusy(true);
+    try {
+      const nextPreview = await fetchDefaultChatsPreview();
+      setPreview(nextPreview);
+      setError(undefined);
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'load failed'));
+    } finally {
+      setIsPreviewBusy(false);
+    }
+  });
+
+  const reloadInvites = useLastCallback(async () => {
+    setIsInvitesBusy(true);
+    try {
+      const list = await fetchAdminInvites();
+      setInvites(list);
+      setError(undefined);
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'load failed'));
+    } finally {
+      setIsInvitesBusy(false);
+    }
+  });
+
+  useEffect(() => {
+    reloadPreview();
+    reloadInvites();
+  }, [reloadPreview, reloadInvites]);
+
+  useEffect(() => {
+    if (!inviteRoleOptions.includes(inviteRole)) setInviteRole('member');
+  }, [inviteRole, inviteRoleOptions]);
 
   const handleStart = useLastCallback(() => {
     setError(undefined);
+    setInfo(undefined);
     setInsertedCount(undefined);
     setIsConfirming(true);
   });
@@ -681,7 +1319,9 @@ const WelcomeTab = () => {
     try {
       const result = await backfillDefaultChats();
       setInsertedCount(result.inserted);
+      setInfo(undefined);
       setIsConfirming(false);
+      await reloadPreview();
     } catch (e) {
       setError(localizeAdminError(lang, e, 'backfill failed'));
     } finally {
@@ -689,14 +1329,263 @@ const WelcomeTab = () => {
     }
   });
 
+  const handleCreateInvite = useLastCallback(async () => {
+    setIsBusy(true);
+    setError(undefined);
+    setInfo(undefined);
+    try {
+      await createAdminInvite({
+        email: inviteEmail.trim() || undefined,
+        role: inviteRole,
+        max_uses: Math.max(1, Number(inviteMaxUses) || 1),
+        expires_at: fromDatetimeLocal(inviteExpiresAt) || undefined,
+      });
+      setInviteEmail('');
+      setInviteMaxUses('1');
+      setInviteExpiresAt('');
+      setInfo(lang('AdminInvitesCreated'));
+      await reloadInvites();
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'invite create failed'));
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  const handleCopyInvite = useLastCallback(async (invite: AdminInvite) => {
+    try {
+      await navigator.clipboard?.writeText(invite.code);
+      setInfo(lang('AdminInvitesCopied'));
+      setError(undefined);
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'copy failed'));
+    }
+  });
+
+  const handleRevokeInvite = useLastCallback(async (invite: AdminInvite) => {
+    setIsBusy(true);
+    setError(undefined);
+    setInfo(undefined);
+    try {
+      await revokeAdminInvite(invite.id);
+      setInvites((prev) => prev.map((item) => (
+        item.id === invite.id ? { ...item, is_active: false } : item
+      )));
+      setInfo(lang('AdminInvitesRevoked'));
+    } catch (e) {
+      setError(localizeAdminError(lang, e, 'invite revoke failed'));
+    } finally {
+      setIsBusy(false);
+    }
+  });
+
+  const defaultChats = preview?.default_chats || [];
+  const sortedInvites = useMemo(
+    () => [...invites].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+    [invites],
+  );
+  const inviteRows = useMemo(() => sortedInvites.map((invite) => ({
+    invite,
+    isActive: isInviteUsable(invite),
+  })), [sortedInvites]);
+  const visibleInviteRows = useMemo(() => (
+    areInactiveInvitesShown ? inviteRows : inviteRows.filter((row) => row.isActive)
+  ), [areInactiveInvitesShown, inviteRows]);
+  const inactiveInviteCount = inviteRows.filter((row) => !row.isActive).length;
+  const shouldDisableBackfill = isBusy || isPreviewBusy || !preview
+    || defaultChats.length === 0 || preview.missing_memberships === 0;
+
   return (
     <div className={styles.tabBody}>
       <div className={styles.welcomeIntro}>
         {lang('AdminWelcomeIntro')}
       </div>
+      <div className={styles.defaultChatBlock}>
+        <div className={styles.sectionTitle}>{lang('AdminInvitesTitle')}</div>
+        <div className={styles.formHelp}>{lang('AdminInvitesDescription')}</div>
+        <div className={styles.inviteFormGrid}>
+          <label className={styles.auditFilterField}>
+            <span className={styles.formLabelText}>{lang('AdminInvitesEmail')}</span>
+            <input
+              type="email"
+              className={styles.searchInput}
+              value={inviteEmail}
+              maxLength={200}
+              placeholder={lang('AdminInvitesEmailPlaceholder')}
+              onChange={(e) => setInviteEmail((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label className={styles.auditFilterField}>
+            <span className={styles.formLabelText}>{lang('AdminInvitesRole')}</span>
+            <select
+              className={styles.auditFilterSelect}
+              value={inviteRole}
+              disabled={isBusy}
+              onChange={(e) => setInviteRole((e.target as HTMLSelectElement).value as AdminRoleValue)}
+            >
+              {inviteRoleOptions.map((r) => (
+                <option key={r} value={r} selected={r === inviteRole}>
+                  {adminRoleLabel(lang, r)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.auditFilterField}>
+            <span className={styles.formLabelText}>{lang('AdminInvitesMaxUses')}</span>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              className={styles.searchInput}
+              value={inviteMaxUses}
+              onChange={(e) => setInviteMaxUses((e.target as HTMLInputElement).value)}
+            />
+          </label>
+          <label className={styles.auditFilterField}>
+            <span className={styles.formLabelText}>{lang('AdminInvitesExpiresAt')}</span>
+            <input
+              type="datetime-local"
+              className={styles.maintenanceDate}
+              value={inviteExpiresAt}
+              onChange={(e) => setInviteExpiresAt((e.target as HTMLInputElement).value)}
+            />
+          </label>
+        </div>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={isBusy}
+            onClick={handleCreateInvite}
+          >
+            {lang(isBusy ? 'Loading' : 'AdminInvitesCreate')}
+          </button>
+        </div>
+        {isInvitesBusy && sortedInvites.length === 0 && (
+          <div className={styles.empty}>{lang('Loading')}</div>
+        )}
+        {!isInvitesBusy && sortedInvites.length === 0 && (
+          <div className={styles.empty}>{lang('AdminInvitesEmpty')}</div>
+        )}
+        {!isInvitesBusy && sortedInvites.length > 0 && visibleInviteRows.length === 0 && (
+          <div className={styles.empty}>{lang('AdminInvitesNoActive')}</div>
+        )}
+        {sortedInvites.length > 0 && (
+          <div className={styles.inviteList}>
+            {visibleInviteRows.map(({ invite, isActive }) => {
+              return (
+                <div
+                  key={invite.id}
+                  className={buildClassName(styles.inviteRow, !isActive && styles.inviteRowInactive)}
+                >
+                  <div className={styles.inviteMain}>
+                    <div className={styles.inviteTitleLine}>
+                      <code className={styles.inviteCode} title={invite.code}>{invite.code}</code>
+                      <span className={buildClassName(
+                        styles.statusPill,
+                        isActive ? styles.statusPillActive : styles.statusPillInactive,
+                      )}
+                      >
+                        {lang(isActive ? 'AdminInvitesStatusActive' : 'AdminInvitesStatusInactive')}
+                      </span>
+                    </div>
+                    <span className={styles.inviteMeta}>
+                      {invite.email || lang('AdminInvitesAllEmails')} · {adminRoleLabel(lang, invite.role)}
+                    </span>
+                    <span className={styles.inviteMeta}>
+                      {lang('AdminInvitesUsage', { used: invite.use_count, max: invite.max_uses })} · {' '}
+                      {invite.expires_at
+                        ? lang('AdminInvitesExpires', { date: formatAdminDate(invite.expires_at) })
+                        : lang('AdminInvitesNeverExpires')}
+                    </span>
+                  </div>
+                  <div className={styles.inviteActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryBtn}
+                      disabled={isBusy}
+                      onClick={() => handleCopyInvite(invite)}
+                    >
+                      {lang('AdminInvitesCopyCode')}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.dangerBtn}
+                      disabled={isBusy || !isActive}
+                      onClick={() => handleRevokeInvite(invite)}
+                    >
+                      {lang('AdminInvitesRevoke')}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {inactiveInviteCount > 0 && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            disabled={isBusy}
+            onClick={() => setAreInactiveInvitesShown((value) => !value)}
+          >
+            {areInactiveInvitesShown
+              ? lang('AdminInvitesHideInactive')
+              : lang('AdminInvitesShowInactive', { count: inactiveInviteCount })}
+          </button>
+        )}
+      </div>
       <div className={styles.welcomeBody}>
         <p>{lang('AdminWelcomeBackfillDescription')}</p>
         <p className={styles.welcomeWarn}>{lang('AdminWelcomeBackfillWarning')}</p>
+      </div>
+      <div className={styles.summaryGrid}>
+        <div className={styles.summaryCard}>
+          <span className={styles.summaryValue}>{isPreviewBusy && !preview ? '...' : defaultChats.length}</span>
+          <span className={styles.summaryLabel}>{lang('AdminWelcomeDefaultChatsCount')}</span>
+        </div>
+        <div className={styles.summaryCard}>
+          <span className={styles.summaryValue}>{isPreviewBusy && !preview ? '...' : preview?.user_count ?? 0}</span>
+          <span className={styles.summaryLabel}>{lang('AdminWelcomeUsersCount')}</span>
+        </div>
+        <div className={buildClassName(styles.summaryCard, (preview?.missing_memberships || 0) > 0 && styles.summaryCardWarn)}>
+          <span className={styles.summaryValue}>
+            {isPreviewBusy && !preview ? '...' : preview?.missing_memberships ?? 0}
+          </span>
+          <span className={styles.summaryLabel}>{lang('AdminWelcomeMissingCount')}</span>
+        </div>
+      </div>
+      <div className={styles.defaultChatBlock}>
+        <div className={styles.sectionTitle}>{lang('AdminWelcomeDefaultChatsTitle')}</div>
+        {isPreviewBusy && defaultChats.length === 0 && (
+          <div className={styles.empty}>{lang('Loading')}</div>
+        )}
+        {!isPreviewBusy && defaultChats.length === 0 && (
+          <div className={styles.empty}>{lang('AdminWelcomeNoDefaultChats')}</div>
+        )}
+        {defaultChats.length > 0 && (
+          <div className={styles.defaultChatList}>
+            {defaultChats.map((chat) => (
+              <div key={chat.id} className={styles.defaultChatRow}>
+                <div className={styles.defaultChatMain}>
+                  <span className={styles.defaultChatName}>
+                    {chat.name || lang('AdminWelcomeUnnamedChat')}
+                  </span>
+                  <span className={styles.defaultChatMeta}>
+                    {lang('AdminWelcomeChatMeta', {
+                      type: chat.type,
+                      members: chat.member_count,
+                      order: chat.default_join_order,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {preview && defaultChats.length > 0 && preview.missing_memberships === 0 && (
+          <div className={styles.success}>{lang('AdminWelcomeNoMissingMemberships')}</div>
+        )}
       </div>
       {insertedCount !== undefined && (
         <div className={styles.success}>
@@ -704,14 +1593,15 @@ const WelcomeTab = () => {
         </div>
       )}
       {error && <div className={styles.error}>{error}</div>}
+      {info && <div className={styles.success}>{info}</div>}
       <div className={styles.actions}>
         <button
           type="button"
           className={styles.primaryBtn}
-          disabled={isBusy}
+          disabled={shouldDisableBackfill}
           onClick={handleStart}
         >
-          {lang('AdminWelcomeBackfillButton')}
+          {lang(isPreviewBusy ? 'Loading' : 'AdminWelcomeBackfillButton')}
         </button>
       </div>
 
@@ -723,7 +1613,13 @@ const WelcomeTab = () => {
           hasCloseButton={!isBusy}
         >
           <div className={styles.confirmBody}>
-            <p>{lang('AdminWelcomeBackfillConfirmBody')}</p>
+            <p>
+              {lang('AdminWelcomeBackfillConfirmBody', {
+                chats: defaultChats.length,
+                users: preview?.user_count ?? 0,
+                missing: preview?.missing_memberships ?? 0,
+              })}
+            </p>
           </div>
           <div className={styles.actions}>
             <button
@@ -760,22 +1656,71 @@ const WelcomeTab = () => {
 const PushInspectorTab = () => {
   const lang = useLang();
   const [identifier, setIdentifier] = useState('');
+  const [userResults, setUserResults] = useState<AdminUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | undefined>();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [report, setReport] = useState<PushTestReport | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [isBusy, setIsBusy] = useState(false);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+
+  useEffect(() => {
+    const query = identifier.trim();
+    if (selectedUser || query.length < 2) {
+      setUserResults([]);
+      setIsSearchingUsers(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setIsSearchingUsers(true);
+    const timeout = window.setTimeout(() => {
+      fetchAdminUsers({ q: query, limit: 8 })
+        .then((users) => {
+          if (cancelled) return;
+          setUserResults(users);
+          setError(undefined);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setUserResults([]);
+          setError(localizeAdminError(lang, e, 'search failed'));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setIsSearchingUsers(false);
+        });
+    }, AUDIT_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [identifier, selectedUser]);
+
+  const handleIdentifierChange = useLastCallback((value: string) => {
+    setIdentifier(value);
+    setSelectedUser(undefined);
+    setReport(undefined);
+  });
+
+  const handleSelectUser = useLastCallback((user: AdminUser) => {
+    setSelectedUser(user);
+    setIdentifier(user.display_name || user.email);
+    setUserResults([]);
+    setError(undefined);
+  });
 
   const handleSend = useLastCallback(async () => {
     setError(undefined);
     setReport(undefined);
     setIsBusy(true);
     try {
-      // identifier is email if it has '@', else UUID — let server validate.
       const isEmail = identifier.includes('@');
       const result = await sendAdminTestPush({
-        user_id: isEmail ? undefined : identifier.trim() || undefined,
-        email: isEmail ? identifier.trim() : undefined,
+        user_id: selectedUser ? selectedUser.id : isEmail ? undefined : identifier.trim() || undefined,
+        email: selectedUser ? undefined : isEmail ? identifier.trim() : undefined,
         title: title || undefined,
         body: body || undefined,
       });
@@ -800,8 +1745,38 @@ const PushInspectorTab = () => {
           value={identifier}
           maxLength={200}
           placeholder={lang('AdminPushInspectorIdentifierPlaceholder')}
-          onChange={(e) => setIdentifier((e.target as HTMLInputElement).value)}
+          onChange={(e) => handleIdentifierChange((e.target as HTMLInputElement).value)}
         />
+        {isSearchingUsers && (
+          <div className={styles.formHelp}>{lang('Loading')}</div>
+        )}
+        {!isSearchingUsers && identifier.trim().length >= 2 && !selectedUser && userResults.length === 0 && (
+          <div className={styles.formHelp}>{lang('AdminPushInspectorSearchEmpty')}</div>
+        )}
+        {userResults.length > 0 && (
+          <div className={styles.userSearchResults}>
+            {userResults.map((user) => (
+              <button
+                key={user.id}
+                type="button"
+                className={styles.userSearchResult}
+                onClick={() => handleSelectUser(user)}
+              >
+                <span className={styles.userSearchName}>{user.display_name || user.email}</span>
+                <span className={styles.userSearchMeta}>
+                  {user.email} · {user.role}{user.is_active ? '' : ` · ${lang('AdminPushInspectorUserInactive')}`}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {selectedUser && (
+          <div className={styles.selectedUser}>
+            <span className={styles.formLabelText}>{lang('AdminPushInspectorSelectedUser')}</span>
+            <span>{selectedUser.display_name || selectedUser.email}</span>
+            <span className={styles.userSearchMeta}>{selectedUser.email} · {selectedUser.id}</span>
+          </div>
+        )}
       </div>
       <div className={styles.formRow}>
         <span className={styles.formLabelText}>{lang('AdminPushInspectorTitle')}</span>
@@ -829,7 +1804,7 @@ const PushInspectorTab = () => {
         <button
           type="button"
           className={styles.primaryBtn}
-          disabled={isBusy || !identifier.trim()}
+          disabled={isBusy || (!selectedUser && !identifier.trim())}
           onClick={handleSend}
         >
           {lang(isBusy ? 'Loading' : 'AdminPushInspectorSend')}
@@ -911,11 +1886,236 @@ const canExportAudit = (role?: GlobalState['saturnRole']) => (
 // AUDIT_FILTER_ALL is the sentinel value for "no filter" on the action /
 // target_type dropdowns. We CANNOT use the empty string here — Teact drops
 // `value=""` from rendered <option> attributes, which makes the browser fall
-// back to option.text (the localized label like "Все действия") for
-// `option.value`. That value would then be sent as `?action=Все действия`
+// back to option.text (the localized label) for `option.value`. That value
+// would then be sent as an invalid action filter
 // and the backend whitelist would reject it with 400 "unknown action". Use
 // a non-empty sentinel and convert to '' before request-building.
 const AUDIT_FILTER_ALL = '__all__';
+
+const auditActionLabel = (lang: ReturnType<typeof useLang>, action: string) => {
+  switch (action) {
+    case 'chat.privileged_read': return lang('AdminAuditActionChatPrivilegedRead');
+    case 'user.deactivate': return lang('AdminAuditActionUserDeactivate');
+    case 'user.reactivate': return lang('AdminAuditActionUserReactivate');
+    case 'user.role_change': return lang('AdminAuditActionUserRoleChange');
+    case 'user.sessions_revoked': return lang('AdminAuditActionUserSessionsRevoked');
+    case 'invite.create': return lang('AdminAuditActionInviteCreate');
+    case 'invite.revoke': return lang('AdminAuditActionInviteRevoke');
+    case 'audit.view': return lang('AdminAuditActionAuditView');
+    case 'audit.export': return lang('AdminAuditActionAuditExport');
+    case 'user.list_read': return lang('AdminAuditActionUserListRead');
+    case 'data.export': return lang('AdminAuditActionDataExport');
+    case 'feature_flag.list': return lang('AdminAuditActionFeatureFlagList');
+    case 'feature_flag.set': return lang('AdminAuditActionFeatureFlagSet');
+    case 'maintenance.enable': return lang('AdminAuditActionMaintenanceEnable');
+    case 'maintenance.update': return lang('AdminAuditActionMaintenanceUpdate');
+    case 'maintenance.disable': return lang('AdminAuditActionMaintenanceDisable');
+    case 'chat.default_status_set': return lang('AdminAuditActionChatDefaultStatusSet');
+    case 'default_chats.backfill': return lang('AdminAuditActionDefaultChatsBackfill');
+    case 'push.test_sent': return lang('AdminAuditActionPushTestSent');
+    default: return action;
+  }
+};
+
+const auditTargetTypeLabel = (lang: ReturnType<typeof useLang>, targetType: string) => {
+  switch (targetType) {
+    case 'system': return lang('AdminAuditTargetSystem');
+    case 'user': return lang('AdminAuditTargetUser');
+    case 'chat': return lang('AdminAuditTargetChat');
+    case 'message': return lang('AdminAuditTargetMessage');
+    case 'feature_flag': return lang('AdminAuditTargetFeatureFlag');
+    default: return targetType;
+  }
+};
+
+const auditTargetLabel = (lang: ReturnType<typeof useLang>, row: AuditEntry) => {
+  const target = auditTargetTypeLabel(lang, row.target_type);
+  return row.target_id ? `${target} · ${row.target_id}` : target;
+};
+
+const detailString = (details: Record<string, unknown> | undefined, key: string) => {
+  const value = details?.[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+const detailNumber = (details: Record<string, unknown> | undefined, key: string) => {
+  const value = details?.[key];
+  return typeof value === 'number' ? value : undefined;
+};
+
+const detailBoolean = (details: Record<string, unknown> | undefined, key: string) => {
+  const value = details?.[key];
+  return typeof value === 'boolean' ? value : undefined;
+};
+
+const detailDate = (details: Record<string, unknown> | undefined, key: string) => {
+  const value = detailString(details, key);
+  if (!value) return undefined;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return value;
+  return new Date(time).toLocaleString();
+};
+
+const formatDetailValue = (value: unknown) => {
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value;
+  return undefined;
+};
+
+const auditDetailKeyLabel = (lang: ReturnType<typeof useLang>, key: string) => {
+  switch (key) {
+    case 'reason': return lang('AdminAuditDetailKeyReason');
+    case 'old_role': return lang('AdminAuditDetailKeyOldRole');
+    case 'new_role': return lang('AdminAuditDetailKeyNewRole');
+    case 'target_user_id': return lang('AdminAuditDetailKeyTargetUser');
+    case 'device_count': return lang('AdminAuditDetailKeyDevices');
+    case 'sent': return lang('AdminAuditDetailKeySent');
+    case 'failed': return lang('AdminAuditDetailKeyFailed');
+    case 'stale': return lang('AdminAuditDetailKeyStale');
+    case 'title': return lang('AdminAuditDetailKeyTitle');
+    case 'is_default': return lang('AdminAuditDetailKeyDefaultChat');
+    case 'default_join_order': return lang('AdminAuditDetailKeyJoinOrder');
+    case 'key': return lang('AdminAuditDetailKeyFlag');
+    case 'prev': return lang('AdminAuditDetailKeyPrevious');
+    case 'next': return lang('AdminAuditDetailKeyNext');
+    case 'format': return lang('AdminAuditDetailKeyFormat');
+    case 'count': return lang('AdminAuditDetailKeyCount');
+    case 'hard_cap': return lang('AdminAuditDetailKeyHardCap');
+    case 'action': return lang('AdminAuditDetailKeyAction');
+    case 'target_type': return lang('AdminAuditDetailKeyTargetType');
+    case 'target_id': return lang('AdminAuditDetailKeyTargetId');
+    case 'actor_id': return lang('AdminAuditDetailKeyActorId');
+    case 'since': return lang('AdminAuditDetailKeySince');
+    case 'until': return lang('AdminAuditDetailKeyUntil');
+    case 'q': return lang('AdminAuditDetailKeyQuery');
+    default: return key;
+  }
+};
+
+const auditDetailValueLabel = (lang: ReturnType<typeof useLang>, key: string, value: unknown) => {
+  if (key === 'prev' || key === 'next' || key === 'is_default') {
+    return value === true ? lang('AdminAuditEnabled') : value === false ? lang('AdminAuditDisabled') : undefined;
+  }
+  if (key === 'old_role' || key === 'new_role') {
+    const role = formatDetailValue(value);
+    return role ? adminRoleLabel(lang, role) : undefined;
+  }
+  if (key === 'action') {
+    const action = formatDetailValue(value);
+    return action ? auditActionLabel(lang, action) : undefined;
+  }
+  if (key === 'target_type') {
+    const targetType = formatDetailValue(value);
+    return targetType ? auditTargetTypeLabel(lang, targetType) : undefined;
+  }
+  if (key === 'since' || key === 'until') {
+    const asDate = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+    return Number.isFinite(asDate) ? new Date(asDate).toLocaleString() : formatDetailValue(value);
+  }
+  return formatDetailValue(value);
+};
+
+const auditDetailEntries = (lang: ReturnType<typeof useLang>, row: AuditEntry) => {
+  const { details } = row;
+  if (!details) return [];
+  const preferredKeys = [
+    'reason', 'old_role', 'new_role', 'target_user_id', 'device_count', 'sent', 'failed', 'stale', 'title',
+    'is_default', 'default_join_order', 'key', 'prev', 'next', 'format', 'count', 'hard_cap',
+    'action', 'target_type', 'target_id', 'actor_id', 'since', 'until', 'q',
+  ];
+  const orderedKeys = [
+    ...preferredKeys.filter((key) => Object.prototype.hasOwnProperty.call(details, key)),
+    ...Object.keys(details).filter((key) => !preferredKeys.includes(key)),
+  ];
+
+  return orderedKeys
+    .map((key) => {
+      const value = auditDetailValueLabel(lang, key, details[key]);
+      return value ? { key, label: auditDetailKeyLabel(lang, key), value } : undefined;
+    })
+    .filter(Boolean);
+};
+
+const auditDetailsSummary = (lang: ReturnType<typeof useLang>, row: AuditEntry) => {
+  const { details } = row;
+  if (!details || Object.keys(details).length === 0) {
+    if (row.action === 'user.reactivate') return lang('AdminAuditDetailUserReactivate');
+    if (row.action === 'audit.view') return lang('AdminAuditDetailAuditView');
+    if (row.action === 'default_chats.backfill') return lang('AdminAuditDetailBackfillStarted');
+    return undefined;
+  }
+
+  if (row.action === 'user.deactivate') {
+    const reason = detailString(details, 'reason');
+    return reason
+      ? lang('AdminAuditDetailUserDeactivateReason', { reason })
+      : lang('AdminAuditDetailUserDeactivate');
+  }
+  if (row.action === 'user.role_change') {
+    return lang('AdminAuditDetailRoleChange', {
+      oldRole: adminRoleLabel(lang, detailString(details, 'old_role') || 'member'),
+      newRole: adminRoleLabel(lang, detailString(details, 'new_role') || 'member'),
+    });
+  }
+  if (row.action === 'user.sessions_revoked') {
+    return lang('AdminAuditDetailSessionsRevoked');
+  }
+  if (row.action === 'invite.create') {
+    return lang('AdminAuditDetailInviteCreate');
+  }
+  if (row.action === 'invite.revoke') {
+    return lang('AdminAuditDetailInviteRevoke');
+  }
+  if (row.action === 'audit.view') {
+    return lang('AdminAuditDetailAuditView');
+  }
+  if (row.action === 'push.test_sent') {
+    const title = detailString(details, 'title');
+    return lang('AdminAuditDetailPushTest', {
+      devices: detailNumber(details, 'device_count') ?? 0,
+      sent: detailNumber(details, 'sent') ?? 0,
+      failed: detailNumber(details, 'failed') ?? 0,
+      stale: detailNumber(details, 'stale') ?? 0,
+      title: title || lang('AdminAuditDetailNoTitle'),
+    });
+  }
+  if (row.action === 'chat.default_status_set') {
+    const isDefault = detailBoolean(details, 'is_default');
+    return lang('AdminAuditDetailDefaultChat', {
+      status: isDefault ? lang('AdminAuditEnabled') : lang('AdminAuditDisabled'),
+      order: detailNumber(details, 'default_join_order') ?? 0,
+    });
+  }
+  if (row.action === 'feature_flag.set'
+    || row.action === 'maintenance.enable'
+    || row.action === 'maintenance.update'
+    || row.action === 'maintenance.disable') {
+    const enabled = detailBoolean(details, 'next');
+    if (enabled !== undefined) {
+      return lang('AdminAuditDetailFlagState', {
+        state: enabled ? lang('AdminAuditEnabled') : lang('AdminAuditDisabled'),
+      });
+    }
+  }
+  if (row.action === 'user.list_read' || row.action === 'chat.privileged_read') {
+    return lang('AdminAuditDetailCount', { count: detailNumber(details, 'count') ?? 0 });
+  }
+  if (row.action === 'data.export') {
+    return lang('AdminAuditDetailExportFormat', { format: detailString(details, 'format') || '?' });
+  }
+  if (row.action === 'audit.export') {
+    const since = detailDate(details, 'since') || lang('AdminAuditDetailAnyTime');
+    const until = detailDate(details, 'until') || lang('AdminAuditDetailAnyTime');
+    return lang('AdminAuditDetailAuditExport', {
+      cap: detailNumber(details, 'hard_cap') ?? 0,
+      since,
+      until,
+    });
+  }
+
+  return lang('AdminAuditDetailTechnical');
+};
 
 const AuditTab = ({ role }: AuditTabProps) => {
   const lang = useLang();
@@ -1043,7 +2243,7 @@ const AuditTab = ({ role }: AuditTabProps) => {
           >
             <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterActionAll')}</option>
             {AUDIT_ACTIONS.map((a) => (
-              <option key={a} value={a}>{a}</option>
+              <option key={a} value={a}>{auditActionLabel(lang, a)}</option>
             ))}
           </select>
         </div>
@@ -1059,7 +2259,7 @@ const AuditTab = ({ role }: AuditTabProps) => {
           >
             <option value={AUDIT_FILTER_ALL}>{lang('AdminAuditFilterTargetTypeAll')}</option>
             {AUDIT_TARGET_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{auditTargetTypeLabel(lang, t)}</option>
             ))}
           </select>
         </div>
@@ -1122,32 +2322,53 @@ const AuditTab = ({ role }: AuditTabProps) => {
         <div className={styles.empty}>{lang('AdminAuditEmpty')}</div>
       )}
       <div className={styles.auditList}>
-        {rows.map((row) => (
-          <div key={row.id} className={styles.auditRow}>
-            <div className={styles.auditMeta}>
-              <span className={styles.auditAction}>{row.action}</span>
-              <span className={styles.auditWhen}>
-                {new Date(row.created_at).toLocaleString()}
-              </span>
-            </div>
-            <div className={styles.auditDetails}>
-              <span className={styles.auditActor}>
-                {row.actor_name || row.actor_id}
-              </span>
-              {row.target_type && row.target_type !== 'system' && (
-                <span className={styles.auditTarget}>
-                  → {row.target_type}{row.target_id ? `:${row.target_id}` : ''}
+        {rows.map((row) => {
+          const detailsSummary = auditDetailsSummary(lang, row);
+          const detailEntries = auditDetailEntries(lang, row);
+          return (
+            <div key={row.id} className={styles.auditRow}>
+              <div className={styles.auditMeta}>
+                <div className={styles.auditTitleLine}>
+                  <span className={styles.auditTitle}>{auditActionLabel(lang, row.action)}</span>
+                  <span className={styles.auditBadge}>{row.action}</span>
+                </div>
+                <span className={styles.auditWhen}>
+                  {new Date(row.created_at).toLocaleString()}
                 </span>
+              </div>
+              <div className={styles.auditDetails}>
+                <span className={styles.auditActor}>
+                  {lang('AdminAuditActor', { actor: row.actor_name || row.actor_id })}
+                </span>
+                <span className={styles.auditTarget}>
+                  {auditTargetLabel(lang, row)}
+                </span>
+                {row.ip_address && (
+                  <span className={styles.auditIp}>{row.ip_address}</span>
+                )}
+              </div>
+              {detailsSummary && (
+                <div className={styles.auditSubtitle}>{detailsSummary}</div>
               )}
-              {row.ip_address && (
-                <span className={styles.auditIp}>{row.ip_address}</span>
+              {detailEntries.length > 0 && (
+                <div className={styles.auditDetailChips}>
+                  {detailEntries.map(({ key, label, value }) => (
+                    <span key={key} className={styles.auditDetailChip}>
+                      <span className={styles.auditDetailChipLabel}>{label}</span>
+                      <span className={styles.auditDetailChipValue}>{value}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {row.details && Object.keys(row.details).length > 0 && (
+                <details className={styles.auditTechnical}>
+                  <summary>{lang('AdminAuditTechnicalDetails')}</summary>
+                  <pre className={styles.auditDump}>{JSON.stringify(row.details, undefined, 2)}</pre>
+                </details>
               )}
             </div>
-            {row.details && Object.keys(row.details).length > 0 && (
-              <pre className={styles.auditDump}>{JSON.stringify(row.details, undefined, 2)}</pre>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
       {hasMore && (
         <div className={styles.actions}>
@@ -1170,6 +2391,7 @@ export default memo(withGlobal<OwnProps>(
     const tabState = selectTabState(global);
     return {
       saturnRole: global.saturnRole,
+      currentUserId: global.currentUserId,
       tab: tabState.adminPanel?.tab,
     };
   },

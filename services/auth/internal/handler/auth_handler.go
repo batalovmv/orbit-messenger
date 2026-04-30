@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -88,6 +88,7 @@ func (h *AuthHandler) Register(app *fiber.App, rateLimits RateLimitMiddlewares) 
 	auth.Get("/invites", h.requireAuth, h.requireAdmin, h.ListInvites)
 	auth.Delete("/invites/:id", h.requireAuth, h.requireAdmin, h.RevokeInvite)
 	auth.Get("/admin/users/:id/sessions", h.requireAuth, h.requireSysManageUsers, h.AdminListUserSessions)
+	auth.Delete("/admin/users/:id/sessions", h.requireAuth, h.requireSysManageUsers, h.AdminRevokeAllUserSessions)
 	auth.Delete("/admin/users/:id/sessions/:sid", h.requireAuth, h.requireSysManageUsers, h.AdminRevokeSession)
 
 	// User settings routes (proxied from gateway as /users/me/*)
@@ -148,6 +149,11 @@ func getUserID(c *fiber.Ctx) (uuid.UUID, error) {
 		return uuid.Nil, apperror.Unauthorized("Missing user context")
 	}
 	return uuid.Parse(idStr)
+}
+
+func getUserRole(c *fiber.Ctx) string {
+	role, _ := c.Locals("user_role").(string)
+	return role
 }
 
 func extractBearerToken(c *fiber.Ctx) string {
@@ -473,7 +479,7 @@ func (h *AuthHandler) ValidateInvite(c *fiber.Ctx) error {
 	}
 
 	result := fiber.Map{
-		"valid":    true,
+		"valid":     true,
 		"has_email": inv.Email != nil,
 	}
 	return response.JSON(c, fiber.StatusOK, result)
@@ -593,11 +599,22 @@ func (h *AuthHandler) AdminListUserSessions(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid user ID"))
 	}
-	sessions, err := h.svc.AdminListUserSessions(c.Context(), c.Get("X-User-Role"), targetID)
+	sessions, err := h.svc.AdminListUserSessions(c.Context(), getUserRole(c), targetID)
 	if err != nil {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, fiber.StatusOK, sessions)
+}
+
+func (h *AuthHandler) AdminRevokeAllUserSessions(c *fiber.Ctx) error {
+	targetID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, apperror.BadRequest("Invalid user ID"))
+	}
+	if err := h.svc.AdminRevokeAllUserSessions(c.Context(), getUserRole(c), targetID); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "revoked"})
 }
 
 func (h *AuthHandler) AdminRevokeSession(c *fiber.Ctx) error {
@@ -609,7 +626,7 @@ func (h *AuthHandler) AdminRevokeSession(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, apperror.BadRequest("Invalid session ID"))
 	}
-	if err := h.svc.AdminRevokeSession(c.Context(), c.Get("X-User-Role"), targetID, sessionID); err != nil {
+	if err := h.svc.AdminRevokeSession(c.Context(), getUserRole(c), targetID, sessionID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.JSON(c, fiber.StatusOK, fiber.Map{"status": "revoked"})

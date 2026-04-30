@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -266,6 +266,9 @@ func (m *mockChatStore) SetChatDefaultStatus(ctx context.Context, chatID uuid.UU
 }
 func (m *mockChatStore) BackfillDefaultMemberships(ctx context.Context) ([]store.DefaultBackfillInsert, error) {
 	return nil, nil
+}
+func (m *mockChatStore) PreviewDefaultMemberships(ctx context.Context) (*store.DefaultMembershipPreview, error) {
+	return &store.DefaultMembershipPreview{}, nil
 }
 
 // ---------------------------------------------------------------------------

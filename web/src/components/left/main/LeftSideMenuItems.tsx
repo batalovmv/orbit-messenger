@@ -99,7 +99,7 @@ const LeftSideMenuItems = ({
     openCompliancePanel();
   });
   const handleOpenAdmin = useLastCallback(() => {
-    openAdminPanel({ tab: 'flags' });
+    openAdminPanel({ tab: 'users' });
   });
   const lang = useLang();
 

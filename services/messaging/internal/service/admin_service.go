@@ -1,10 +1,11 @@
-﻿package service
+package service
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,12 +50,24 @@ func (s *AdminService) ListAllChats(ctx context.Context, actorID uuid.UUID, acto
 }
 
 // ListAllUsers returns all users (for privileged users with SysManageUsers).
-func (s *AdminService) ListAllUsers(ctx context.Context, actorID uuid.UUID, actorRole, cursor string, limit int, ip, ua string) ([]model.User, string, bool, error) {
+func (s *AdminService) ListAllUsers(ctx context.Context, actorID uuid.UUID, actorRole, cursor string, limit int, q string, ip, ua string) ([]model.User, string, bool, error) {
 	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
 		return nil, "", false, apperror.Forbidden("Insufficient permissions")
 	}
 
-	users, nextCursor, hasMore, err := s.users.ListAllPaginated(ctx, cursor, limit)
+	q = strings.TrimSpace(q)
+
+	var (
+		users      []model.User
+		nextCursor string
+		hasMore    bool
+		err        error
+	)
+	if q != "" {
+		users, err = s.users.Search(ctx, q, limit)
+	} else {
+		users, nextCursor, hasMore, err = s.users.ListAllPaginated(ctx, cursor, limit)
+	}
 	if err != nil {
 		return nil, "", false, fmt.Errorf("list all users: %w", err)
 	}
@@ -407,8 +420,8 @@ func (s *AdminService) SetChatDefaultStatus(ctx context.Context, actorID uuid.UU
 
 	if err := s.writeAudit(ctx, actorID, model.AuditChatDefaultStatusSet, "chat", strPtr(chatID.String()),
 		map[string]interface{}{
-			"is_default":          isDefault,
-			"default_join_order":  joinOrder,
+			"is_default":         isDefault,
+			"default_join_order": joinOrder,
 		}, ip, ua); err != nil {
 		return apperror.Internal("audit log write failed")
 	}
@@ -417,6 +430,17 @@ func (s *AdminService) SetChatDefaultStatus(ctx context.Context, actorID uuid.UU
 		return fmt.Errorf("set chat default status: %w", err)
 	}
 	return nil
+}
+
+func (s *AdminService) PreviewDefaultMemberships(ctx context.Context, actorID uuid.UUID, actorRole, ip, ua string) (*store.DefaultMembershipPreview, error) {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageSettings) {
+		return nil, apperror.Forbidden("Insufficient permissions")
+	}
+	preview, err := s.chats.PreviewDefaultMemberships(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("preview default memberships: %w", err)
+	}
+	return preview, nil
 }
 
 // BackfillDefaultMemberships joins every existing user to every chat marked

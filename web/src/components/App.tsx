@@ -8,10 +8,12 @@ import type { UiLoaderPage } from './common/UiLoader';
 import { DARK_THEME_BG_COLOR, INACTIVE_MARKER, LIGHT_THEME_BG_COLOR, PAGE_TITLE, PAGE_TITLE_TAURI } from '../config';
 import { forceMutation, suppressStrict } from '../lib/fasterdom/stricterdom.ts';
 import { selectActionMessageBg, selectTabState, selectTheme } from '../global/selectors';
+import { selectSharedSettings } from '../global/selectors/sharedState';
 import { IS_TAURI } from '../util/browser/globalEnvironment';
 import { IS_INSTALL_PROMPT_SUPPORTED, PLATFORM_ENV } from '../util/browser/windowEnvironment';
 import buildClassName from '../util/buildClassName';
 import { setupBeforeInstallPrompt } from '../util/installPrompt';
+import { syncManifestWithLanguage } from '../util/manifest';
 import { requestPersistentStorage } from '../util/persistentStorage';
 import { ACCOUNT_SLOT, getAccountsInfo, getAccountSlotUrl } from '../util/multiaccount';
 import { hasEncryptedSession } from '../util/passcode';
@@ -31,8 +33,11 @@ import NotificationBanners from './common/NotificationBanners';
 import Notifications from './common/Notifications';
 import UiLoader from './common/UiLoader';
 import AppInactive from './main/AppInactive';
+import InstallAppBanner from './main/InstallAppBanner';
+import IosInstallBanner from './main/IosInstallBanner';
 import LockScreen from './main/LockScreen.async';
 import Main from './main/Main.async';
+import OfflineStatusBanner from './main/OfflineStatusBanner';
 import Transition from './ui/Transition';
 
 import styles from './App.module.scss';
@@ -45,6 +50,7 @@ type StateProps = {
   hasWebAuthTokenFailed?: boolean;
   isTestServer?: boolean;
   theme: ThemeKey;
+  language: string;
   actionMessageBg?: string;
 };
 
@@ -67,6 +73,7 @@ const App = ({
   hasWebAuthTokenFailed,
   isTestServer,
   theme,
+  language,
   actionMessageBg,
 }: StateProps) => {
   const { isMobile } = useAppLayout();
@@ -78,6 +85,10 @@ const App = ({
     }
     void requestPersistentStorage();
   }, []);
+
+  useEffect(() => {
+    syncManifestWithLanguage(language);
+  }, [language]);
 
   useEffect(() => {
     const hash = getInitialLocationHash();
@@ -266,6 +277,9 @@ const App = ({
         {renderContent}
       </Transition>
       {activeKey === AppScreens.auth && isTestServer && <div className="test-server-badge">Test server</div>}
+      <OfflineStatusBanner />
+      <InstallAppBanner />
+      <IosInstallBanner />
       <NotificationBanners />
       <Notifications />
     </UiLoader>
@@ -275,6 +289,7 @@ const App = ({
 export default withGlobal(
   (global): Complete<StateProps> => {
     const { state: authState, hasWebAuthTokenFailed, hasWebAuthTokenPasswordRequired } = global.auth;
+    const { language } = selectSharedSettings(global);
     return {
       authState,
       isScreenLocked: global.passcode?.isScreenLocked,
@@ -282,6 +297,7 @@ export default withGlobal(
       inactiveReason: selectTabState(global).inactiveReason,
       hasWebAuthTokenFailed: hasWebAuthTokenFailed || hasWebAuthTokenPasswordRequired,
       theme: selectTheme(global),
+      language,
       isTestServer: global.config?.isTestServer,
       actionMessageBg: selectActionMessageBg(global),
     };

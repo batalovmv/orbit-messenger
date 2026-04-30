@@ -5,6 +5,36 @@ declare const self: ServiceWorkerGlobalScope;
 
 // An attempt to fix freezing UI on iOS
 const TIMEOUT = 3000;
+const CORE_ASSET_PATHS = [
+  'favicon.svg',
+  'favicon-32x32.png',
+  'icon-192x192.png',
+  'icon-square-192x192.png',
+  'site.webmanifest',
+  'site_ru.webmanifest',
+  'site_dev.webmanifest',
+  'site_dev_ru.webmanifest',
+];
+
+export async function precacheAppShell() {
+  const cache = await self.caches.open(ASSET_CACHE_NAME);
+  const scopeUrl = new URL(self.registration.scope);
+
+  const shellResponse = await fetch(scopeUrl.href, { cache: 'reload' });
+  if (!shellResponse.ok) return;
+
+  await cache.put(scopeUrl.href, shellResponse.clone());
+
+  const html = await shellResponse.text();
+  const assetUrls = collectAppShellAssetUrls(html, scopeUrl);
+
+  await Promise.allSettled(assetUrls.map(async (url) => {
+    const response = await fetch(url.href, { cache: 'reload' });
+    if (response.ok) {
+      await cache.put(url.href, response);
+    }
+  }));
+}
 
 export async function respondWithCacheNetworkFirst(e: FetchEvent) {
   // Navigation Preload (enabled in activate) may have already started this
@@ -111,4 +141,33 @@ async function withTimeout<T>(cb: () => Promise<T>, timeout: number) {
 
 export function clearAssetCache() {
   return self.caches.delete(ASSET_CACHE_NAME);
+}
+
+function collectAppShellAssetUrls(html: string, baseUrl: URL) {
+  const urls = new Map<string, URL>();
+
+  CORE_ASSET_PATHS.forEach((path) => {
+    const url = new URL(path, baseUrl);
+    urls.set(url.href, url);
+  });
+
+  const attrRe = /\b(?:src|href)="([^"]+)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = attrRe.exec(html))) {
+    const value = match[1];
+    if (!value || value.startsWith('data:') || value.startsWith('blob:')) continue;
+
+    const url = new URL(value, baseUrl);
+    if (url.origin !== baseUrl.origin || !url.pathname.startsWith(baseUrl.pathname)) continue;
+
+    if (isCacheableShellAsset(url.pathname)) {
+      urls.set(url.href, url);
+    }
+  }
+
+  return Array.from(urls.values());
+}
+
+function isCacheableShellAsset(pathname: string) {
+  return /\.(js|css|woff2?|svg|png|jpg|jpeg|webmanifest|ico)$/i.test(pathname);
 }

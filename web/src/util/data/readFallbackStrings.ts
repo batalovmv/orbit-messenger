@@ -7,7 +7,8 @@ import ruStrings from '../../assets/localization/fallback.ru.strings';
 import readStrings from './readStrings';
 
 const DEFAULT_LANG_CODE = 'en';
-const FALLBACK_VERSION = 0;
+// Bump when bundled fallback strings change so cached PWA langpacks refresh.
+const FALLBACK_VERSION = 20260429;
 const TRANSLATE_URL_BASE = 'https://translations.telegram.org';
 
 const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package service
@@ -742,6 +742,23 @@ func (s *AuthService) AdminListUserSessions(ctx context.Context, actorRole strin
 		return nil, apperror.Forbidden("Insufficient permissions")
 	}
 	return s.sessions.ListByUser(ctx, targetID)
+}
+
+// AdminRevokeAllUserSessions deletes all sessions for a target user.
+// Gated by SysManageUsers and invalidates already-issued access tokens.
+func (s *AuthService) AdminRevokeAllUserSessions(ctx context.Context, actorRole string, targetID uuid.UUID) error {
+	if !permissions.HasSysPermission(actorRole, permissions.SysManageUsers) {
+		return apperror.Forbidden("Insufficient permissions")
+	}
+	if err := s.sessions.DeleteAllByUser(ctx, targetID); err != nil {
+		return fmt.Errorf("delete user sessions: %w", err)
+	}
+	invalidateKey := "user_tokens_invalid_before:" + targetID.String()
+	if err := s.redis.Set(ctx, invalidateKey, fmt.Sprintf("%d", time.Now().Unix()), s.cfg.AccessTTL).Err(); err != nil {
+		s.logger.Error("failed to set user token invalidation after admin session revoke", "error", err, "user_id", targetID)
+		return fmt.Errorf("jwt invalidation failed: %w", err)
+	}
+	return nil
 }
 
 // AdminRevokeSession deletes a specific session for a target user and invalidates their JWTs.

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package botapi
@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,8 @@ import (
 
 const botAPIRateLimitPerSec = 30
 const botAPIIPRateLimitPerSec = 60
+
+var botAPICommandNameRegex = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 var botRateLimitScript = redis.NewScript(`
 local count = redis.call('INCR', KEYS[1])
@@ -61,7 +64,7 @@ type BotService interface {
 type CommandStore interface {
 	SetCommands(ctx context.Context, botID uuid.UUID, commands []model.BotCommand) error
 	GetCommands(ctx context.Context, botID uuid.UUID) ([]model.BotCommand, error)
-	DeleteCommands(ctx context.Context, botID uuid.UUID) error
+	DeleteAllForBot(ctx context.Context, botID uuid.UUID) error
 }
 
 type UpdateQueue interface {
@@ -1163,13 +1166,29 @@ func (h *BotAPIHandler) setMyCommands(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return botError(c, apperror.BadRequest("Invalid request body"))
 	}
+	if len(req.Commands) > 100 {
+		return botError(c, apperror.BadRequest("Too many commands (max 100)"))
+	}
 
 	commands := make([]model.BotCommand, len(req.Commands))
 	for i, item := range req.Commands {
+		command := strings.TrimSpace(item.Command)
+		description := strings.TrimSpace(item.Description)
+
+		if err := validator.RequireString(command, "command", 1, 32); err != nil {
+			return botError(c, err)
+		}
+		if !botAPICommandNameRegex.MatchString(command) {
+			return botError(c, apperror.BadRequest("command must match ^[a-z0-9_]+$"))
+		}
+		if err := validator.RequireString(description, "description", 1, 256); err != nil {
+			return botError(c, err)
+		}
+
 		commands[i] = model.BotCommand{
 			BotID:       bot.ID,
-			Command:     item.Command,
-			Description: item.Description,
+			Command:     command,
+			Description: description,
 		}
 	}
 
@@ -1214,7 +1233,7 @@ func (h *BotAPIHandler) deleteMyCommands(c *fiber.Ctx) error {
 		return botSuccess(c, true)
 	}
 
-	if err := h.commandStore.DeleteCommands(c.Context(), bot.ID); err != nil {
+	if err := h.commandStore.DeleteAllForBot(c.Context(), bot.ID); err != nil {
 		return botError(c, err)
 	}
 

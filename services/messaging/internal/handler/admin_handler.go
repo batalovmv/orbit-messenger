@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"bufio"
@@ -50,6 +50,7 @@ func (h *AdminHandler) Register(app fiber.Router) {
 	// Welcome flow (mig 069). Both endpoints gated by SysManageSettings inside
 	// the service layer; the handler only deals with parsing + auth context.
 	admin.Put("/chats/:id/default-status", h.SetChatDefaultStatus)
+	admin.Get("/default-chats/preview", h.PreviewDefaultMemberships)
 	admin.Post("/default-chats/backfill", h.BackfillDefaultMemberships)
 }
 
@@ -81,9 +82,10 @@ func (h *AdminHandler) ListAllUsers(c *fiber.Ctx) error {
 
 	cursor := c.Query("cursor")
 	limit := c.QueryInt("limit", 50)
+	q := c.Query("q")
 
 	users, nextCursor, hasMore, err := h.svc.ListAllUsers(
-		c.Context(), actorID, getUserRole(c), cursor, limit,
+		c.Context(), actorID, getUserRole(c), cursor, limit, q,
 		c.IP(), c.Get("User-Agent"),
 	)
 	if err != nil {
@@ -510,6 +512,19 @@ func (h *AdminHandler) SetChatDefaultStatus(c *fiber.Ctx) error {
 		"is_default":         req.IsDefault,
 		"default_join_order": req.DefaultJoinOrder,
 	})
+}
+
+func (h *AdminHandler) PreviewDefaultMemberships(c *fiber.Ctx) error {
+	actorID, err := getUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	preview, err := h.svc.PreviewDefaultMemberships(c.Context(), actorID, getUserRole(c),
+		c.IP(), c.Get("User-Agent"))
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, preview)
 }
 
 // BackfillDefaultMemberships joins every existing user to every chat marked

@@ -31,6 +31,10 @@ const {
 
 const DEFAULT_APP_TITLE = `Orbit Messenger${APP_ENV !== 'production' ? ' Beta' : ''}`;
 
+if (APP_ENV === 'production' && !process.env.VAPID_PUBLIC_KEY) {
+  throw new Error('VAPID_PUBLIC_KEY is required for production web push.');
+}
+
 // GitHub workflow uses an empty string as the default value if it's not in repository variables, so we cannot define a default value here
 process.env.BASE_URL = process.env.BASE_URL || PRODUCTION_URL;
 

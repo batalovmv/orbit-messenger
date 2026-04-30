@@ -78,7 +78,6 @@ import DraftRecipientPicker from './DraftRecipientPicker.async';
 import FoldersSidebar from './FoldersSidebar';
 import ForwardRecipientPicker from './ForwardRecipientPicker.async';
 import HistoryCalendar from './HistoryCalendar.async';
-import IosInstallBanner from './IosInstallBanner';
 import NewContactModal from './NewContactModal.async';
 import SafeLinkModal from './SafeLinkModal.async';
 import ConfettiContainer from './visualEffects/ConfettiContainer';
@@ -558,7 +557,6 @@ const Main = ({
       <DeleteFolderDialog folder={deleteFolderDialog} />
       <ReactionPicker isOpen={isReactionPickerOpen} />
       <DeleteMessageModal isOpen={isDeleteMessageModalOpen} />
-      <IosInstallBanner />
     </div>
   );
 };

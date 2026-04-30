@@ -42,6 +42,143 @@ export async function fetchAdminUserExport(userId: string): Promise<Response> {
   });
 }
 
+export type AdminSession = {
+  id: string;
+  user_id: string;
+  device_id?: string;
+  ip_address?: string;
+  user_agent?: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  username?: string;
+  display_name: string;
+  avatar_url?: string;
+  status: string;
+  role: string;
+  account_type: string;
+  is_active: boolean;
+  deactivated_at?: string;
+  deactivated_by?: string;
+  last_seen_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminInvite = {
+  id: string;
+  code: string;
+  created_by?: string;
+  email?: string;
+  role: string;
+  max_uses: number;
+  use_count: number;
+  used_by?: string;
+  used_at?: string;
+  expires_at?: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type CreateAdminInviteRequest = {
+  email?: string;
+  role?: string;
+  max_uses?: number;
+  expires_at?: string;
+};
+
+export async function fetchAdminUsers(query: { q?: string; limit?: number } = {}): Promise<AdminUser[]> {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.limit) params.set('limit', String(query.limit));
+
+  const qs = params.toString();
+  const res = await fetch(`${API_PREFIX}/admin/users${qs ? `?${qs}` : ''}`, {
+    headers: await authHeader(),
+  });
+  const raw = await jsonOrThrow<{ data?: AdminUser[] }>(res);
+  return raw.data || [];
+}
+
+export async function deactivateAdminUser(userId: string, reason?: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/admin/users/${userId}/deactivate`, {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: reason || undefined }),
+  });
+  await jsonOrThrow(res);
+}
+
+export async function reactivateAdminUser(userId: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/admin/users/${userId}/reactivate`, {
+    method: 'POST',
+    headers: await authHeader(),
+  });
+  await jsonOrThrow(res);
+}
+
+export async function changeAdminUserRole(userId: string, role: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/admin/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+  await jsonOrThrow(res);
+}
+
+export async function fetchAdminUserSessions(userId: string): Promise<AdminSession[]> {
+  const res = await fetch(`${API_PREFIX}/auth/admin/users/${userId}/sessions`, {
+    headers: await authHeader(),
+  });
+  const raw = await jsonOrThrow<AdminSession[] | null>(res);
+  return raw || [];
+}
+
+export async function revokeAdminUserSession(userId: string, sessionId: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/auth/admin/users/${userId}/sessions/${sessionId}`, {
+    method: 'DELETE',
+    headers: await authHeader(),
+  });
+  await jsonOrThrow(res);
+}
+
+export async function revokeAllAdminUserSessions(userId: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/auth/admin/users/${userId}/sessions`, {
+    method: 'DELETE',
+    headers: await authHeader(),
+  });
+  await jsonOrThrow(res);
+}
+
+export async function fetchAdminInvites(): Promise<AdminInvite[]> {
+  const res = await fetch(`${API_PREFIX}/auth/invites`, {
+    headers: await authHeader(),
+  });
+  const raw = await jsonOrThrow<{ invites?: AdminInvite[] }>(res);
+  return raw.invites || [];
+}
+
+export async function createAdminInvite(req: CreateAdminInviteRequest): Promise<AdminInvite> {
+  const res = await fetch(`${API_PREFIX}/auth/invites`, {
+    method: 'POST',
+    headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  return jsonOrThrow<AdminInvite>(res);
+}
+
+export async function revokeAdminInvite(inviteId: string): Promise<void> {
+  const res = await fetch(`${API_PREFIX}/auth/invites/${inviteId}`, {
+    method: 'DELETE',
+    headers: await authHeader(),
+  });
+  await jsonOrThrow(res);
+}
+
 // ---------------------------------------------------------------------------
 // Feature flags
 // ---------------------------------------------------------------------------
@@ -240,6 +377,27 @@ function buildAuditParams(query: Record<string, unknown>): string {
 // ---------------------------------------------------------------------------
 // Welcome flow (mig 069)
 // ---------------------------------------------------------------------------
+
+export type DefaultChatSummary = {
+  id: string;
+  type: string;
+  name: string;
+  default_join_order: number;
+  member_count: number;
+};
+
+export type DefaultChatsPreview = {
+  default_chats: DefaultChatSummary[];
+  user_count: number;
+  missing_memberships: number;
+};
+
+export async function fetchDefaultChatsPreview(): Promise<DefaultChatsPreview> {
+  const res = await fetch(`${API_PREFIX}/admin/default-chats/preview`, {
+    headers: await authHeader(),
+  });
+  return jsonOrThrow(res);
+}
 
 // setChatDefaultStatus toggles the per-chat is_default_for_new_users flag.
 // Used by the chat-settings Switcher (admin/superadmin only — gateway proxies

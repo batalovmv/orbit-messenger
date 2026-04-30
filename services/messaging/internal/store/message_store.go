@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package store
@@ -70,8 +70,8 @@ type MessageStore interface {
 }
 
 type messageStore struct {
-	pool    *pgxpool.Pool
-	atRest  []byte // master key for server-side AES-256-GCM content encryption
+	pool   *pgxpool.Pool
+	atRest []byte // master key for server-side AES-256-GCM content encryption
 }
 
 type messageScanner interface {
@@ -605,7 +605,7 @@ func (s *messageStore) ExportByChatID(ctx context.Context, chatID uuid.UUID, wri
 			senderID  *uuid.UUID
 			msgType   string
 			content   *string
-			createdAt string
+			createdAt time.Time
 		)
 		if err := rows.Scan(&id, &cid, &senderID, &msgType, &content, &createdAt); err != nil {
 			return fmt.Errorf("scan export row: %w", err)
@@ -619,7 +619,7 @@ func (s *messageStore) ExportByChatID(ctx context.Context, chatID uuid.UUID, wri
 			ChatID:    cid.String(),
 			Type:      msgType,
 			Content:   content,
-			CreatedAt: createdAt,
+			CreatedAt: createdAt.Format(time.RFC3339Nano),
 		}
 		if senderID != nil {
 			sid := senderID.String()
