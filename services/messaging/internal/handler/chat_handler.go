@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -120,9 +120,9 @@ func (h *ChatHandler) CreateChat(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid request body"))
 	}
 
-	validChatTypes := map[string]bool{"group": true, "supergroup": true}
+	validChatTypes := map[string]bool{"group": true}
 	if !validChatTypes[req.Type] {
-		return response.Error(c, apperror.BadRequest("type must be 'group' or 'supergroup'"))
+		return response.Error(c, apperror.BadRequest("type must be 'group'"))
 	}
 	if appErr := validator.RequireString(req.Name, "name", 1, 255); appErr != nil {
 		return response.Error(c, appErr)

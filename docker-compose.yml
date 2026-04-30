@@ -119,13 +119,13 @@ services:
       PORT: "8080"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
-      AUTH_SERVICE_URL: http://auth:8081
-      MESSAGING_SERVICE_URL: http://messaging:8082
-      MEDIA_SERVICE_URL: http://media:8083
-      CALLS_SERVICE_URL: http://calls:8084
-      BOTS_SERVICE_URL: http://bots:8086
-      INTEGRATIONS_SERVICE_URL: http://integrations:8087
-      AI_SERVICE_URL: http://ai:8085
+      AUTH_URL: http://auth:8081
+      MESSAGING_URL: http://messaging:8082
+      MEDIA_URL: http://media:8083
+      CALLS_URL: http://calls:8084
+      BOTS_URL: http://bots:8086
+      INTEGRATIONS_URL: http://integrations:8087
+      AI_URL: http://ai:8085
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
       JWT_SECRET: ${JWT_SECRET}
       INTERNAL_SECRET: ${INTERNAL_SECRET}
@@ -158,6 +158,7 @@ services:
       ORBIT_ADMIN_RESET_KEY: ${ORBIT_ADMIN_RESET_KEY}
       BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000,http://localhost:3300}
+      MESSAGING_URL: http://messaging:8082
       INTERNAL_SECRET: ${INTERNAL_SECRET}
       MIGRATIONS_DIR: /migrations
     volumes:
@@ -182,7 +183,8 @@ services:
       MEILISEARCH_URL: http://meilisearch:7700
       MEILISEARCH_KEY: ${MEILISEARCH_KEY}
       ORBIT_AI_BOT_USER_ID: ${ORBIT_AI_BOT_USER_ID:-}
-      AI_SERVICE_URL: http://ai:8085
+      MEDIA_URL: http://media:8083
+      AI_URL: http://ai:8085
       GATEWAY_URL: http://gateway:8080
     depends_on:
       postgres: { condition: service_healthy }
@@ -248,8 +250,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      MESSAGING_SERVICE_URL: http://messaging:8082
-      MEDIA_SERVICE_URL: http://media:8083
+      MESSAGING_URL: http://messaging:8082
+      MEDIA_URL: http://media:8083
       BOT_TOKEN_SECRET: ${BOT_TOKEN_SECRET}
       INTEGRATIONS_URL: http://integrations:8087
     depends_on:
@@ -272,7 +274,7 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       ORBIT_NATS_URL: nats://${NATS_TOKEN}@nats:4222
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      MESSAGING_SERVICE_URL: http://messaging:8082
+      MESSAGING_URL: http://messaging:8082
     depends_on:
       - postgres
       - redis
@@ -291,8 +293,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       INTERNAL_SECRET: ${INTERNAL_SECRET}
-      MESSAGING_SERVICE_URL: http://messaging:8082
-      MEDIA_SERVICE_URL: http://media:8083
+      MESSAGING_URL: http://messaging:8082
+      MEDIA_URL: http://media:8083
       # AI provider keys — placeholder by default so the service starts and
       # returns 503 ai_unavailable from every endpoint until real keys are
       # dropped into Saturn.ac dashboard. No rebuild needed to swap them in.

@@ -163,7 +163,7 @@ func main() {
 	folderStore := store.NewFolderStore(pool)
 	featureFlagStore := store.NewFeatureFlagStore(pool)
 
-	aiServiceURL := config.EnvOr("AI_SERVICE_URL", "http://localhost:8085")
+	aiServiceURL := config.EnvOr("AI_URL", config.EnvOr("AI_SERVICE_URL", "http://localhost:8085"))
 
 	// Services
 	searchSvc := service.NewSearchService(searchClient, chatStore, userStore)

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -81,6 +81,34 @@ func TestCreateChat_WithMembers(t *testing.T) {
 	// Initial members must be batch-added
 	if len(batchAdded) != 2 {
 		t.Errorf("expected 2 batch-added members, got %d", len(batchAdded))
+	}
+}
+
+func TestCreateChat_RejectsSupergroupType(t *testing.T) {
+	ownerID := uuid.New()
+	created := false
+	cs := &mockChatStore{
+		createFn: func(_ context.Context, _ *model.Chat) error {
+			created = true
+			return nil
+		},
+	}
+
+	app := newChatApp(cs)
+	req, _ := http.NewRequest(http.MethodPost, "/chats", bytes.NewBufferString(`{"type":"supergroup","name":"Team"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", ownerID.String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
+	}
+	if created {
+		t.Fatal("handler must reject supergroup before creating a chat")
 	}
 }
 

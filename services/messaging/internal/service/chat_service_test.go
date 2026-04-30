@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package service
@@ -678,6 +678,9 @@ func TestCreateChat_InvalidType_Rejected(t *testing.T) {
 
 	svc := newTestChatService(cs, rec)
 	_, err := svc.CreateChat(context.Background(), uuid.New(), "supergroup", "Oops", "", nil)
+	assertAppError(t, err, 400)
+
+	_, err = svc.CreateChat(context.Background(), uuid.New(), "channel", "Oops", "", nil)
 	assertAppError(t, err, 400)
 }
 

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package service
@@ -204,8 +204,9 @@ func (s *ChatService) isFeatureEnabled(ctx context.Context, key string) bool {
 
 // CreateChat creates a group chat.
 func (s *ChatService) CreateChat(ctx context.Context, userID uuid.UUID, chatType, name, description string, memberIDs []uuid.UUID) (*model.Chat, error) {
-	// Validate chat type - allowlist (fail-closed)
-	allowedTypes := map[string]bool{"group": true, "channel": true}
+	// Validate chat type - allowlist (fail-closed). Orbit only supports DMs
+	// and group chats; direct chats are created through CreateDirectChat.
+	allowedTypes := map[string]bool{"group": true}
 	if !allowedTypes[chatType] {
 		return nil, apperror.BadRequest("Invalid chat type")
 	}
