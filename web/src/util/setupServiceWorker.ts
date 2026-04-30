@@ -116,7 +116,7 @@ function handleWorkerMessage(e: MessageEvent) {
     case 'staleChunkDetected': {
       // A deploy has invalidated a cached JS chunk. Don't reload immediately —
       // the user may be mid-composition. Surface the existing update banner
-      // (`isAppUpdateAvailable`) so they can finish typing and click "Update"
+      // (`isAppUpdateAvailable`) so they can finish typing and click "Refresh"
       // when ready; the banner path runs `prepareUpdateRescue` first.
       // eslint-disable-next-line no-console
       console.warn('[SW] Stale chunk detected after deploy, showing update banner');

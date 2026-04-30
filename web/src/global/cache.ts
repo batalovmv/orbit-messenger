@@ -228,6 +228,10 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
     },
   };
 
+  // App update prompts are per-load signals. Restoring a cached `true` makes
+  // the refresh banner appear on a fresh online visit after a previous deploy.
+  newState.isAppUpdateAvailable = false;
+
   // Saturn: ensure all cached messages have content object (prevents TG Web A crashes)
   if (newState.messages?.byChatId) {
     for (const chatMessages of Object.values(newState.messages.byChatId)) {
