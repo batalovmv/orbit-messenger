@@ -1,9 +1,10 @@
 // Lightweight Web Vitals collector — no third-party libs. Captures the
 // metrics we actually want for an internal IM PWA: FCP, LCP, INP, CLS,
 // TTFB, plus long-task counts and JS heap when supported. One beacon per
-// tab visit, posted on `pagehide` / `visibilitychange:hidden` via
-// navigator.sendBeacon so the request survives tear-down.
+// tab visit, posted on `pagehide` / `visibilitychange:hidden` via keepalive
+// fetch so the request survives tear-down and can carry the Saturn JWT.
 
+import { getAccessToken, getBaseUrl, getSessionId } from '../api/saturn/client';
 import { IS_ANDROID, IS_IOS, IS_PWA } from './browser/windowEnvironment';
 
 type Vitals = {
@@ -24,10 +25,13 @@ type Vitals = {
   tapNative?: number;
 };
 
-const RUM_ENDPOINT = '/api/v1/rum';
-
 let installed = false;
 let beaconSent = false;
+
+export function resetWebVitalsForTest() {
+  installed = false;
+  beaconSent = false;
+}
 
 function detectPlatform(): Vitals['platform'] {
   if (IS_IOS) return 'ios';
@@ -159,19 +163,22 @@ export function installWebVitals() {
     // Drop the helper before serializing.
     delete (vitals as Vitals & { __memorySnapshot?: () => number }).__memorySnapshot;
 
+    const token = getAccessToken();
+    if (!token) return;
+
+    const baseUrl = getBaseUrl() || `${window.location.origin}/api/v1`;
+    const endpoint = `${baseUrl.replace(/\/$/, '')}/rum`;
     const payload = JSON.stringify(vitals);
     try {
-      if (navigator.sendBeacon) {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(RUM_ENDPOINT, blob);
-        return;
-      }
-    } catch { /* fall through to fetch */ }
-    try {
-      void fetch(RUM_ENDPOINT, {
+      void fetch(endpoint, {
         method: 'POST',
         body: payload,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-Session-ID': getSessionId(),
+          Authorization: `Bearer ${token}`,
+        },
         keepalive: true,
         credentials: 'include',
       });
@@ -179,7 +186,7 @@ export function installWebVitals() {
   };
 
   // Fire on the earliest reliable signal — pagehide on iOS, visibilitychange
-  // elsewhere. Both are racy on tear-down; sendBeacon survives either.
+  // elsewhere. Both are racy on tear-down; keepalive fetch survives either.
   window.addEventListener('pagehide', flush, { capture: true });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flush();
