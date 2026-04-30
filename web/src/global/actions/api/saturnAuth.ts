@@ -16,12 +16,14 @@ addActionHandler('saturnLoginWithEmail', async (global, actions, payload): Promi
   const result = await callApi('loginWithEmail', { email, password, totpCode });
 
   if (result) {
-    // Wait a tick for WS to connect and dispatch connectionStateReady
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-    global = getGlobal();
-    if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
-      actions.sync();
+      global = getGlobal();
+      if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
+        actions.sync();
+        break;
+      }
     }
   }
 });
@@ -87,11 +89,14 @@ addActionHandler('saturnRegister', async (global, actions, payload): Promise<voi
   }
 
   if (result) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-    global = getGlobal();
-    if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
-      actions.sync();
+      global = getGlobal();
+      if (global.connectionState === 'connectionStateReady' && global.auth.state === 'authorizationStateReady') {
+        actions.sync();
+        break;
+      }
     }
   } else {
     global = getGlobal();

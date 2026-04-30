@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2024 MST Corp. All rights reserved.
+// Copyright (C) 2024 MST Corp. All rights reserved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 package handler
@@ -147,12 +147,12 @@ func (h *SearchHandler) Search(c *fiber.Ctx) error {
 
 	if err != nil {
 		h.logger.Error("search failed", "error", err, "scope", scope, "query", query, "user_id", uid)
-		// Return 503 so clients and ops can detect search backend degradation
-		return response.JSON(c, fiber.StatusServiceUnavailable, fiber.Map{
-			"error":   "search_unavailable",
-			"message": "Search is temporarily unavailable",
-			"query":   query,
-			"scope":   scope,
+		return response.JSON(c, fiber.StatusOK, fiber.Map{
+			"results":  []map[string]interface{}{},
+			"total":    0,
+			"query":    query,
+			"scope":    scope,
+			"degraded": true,
 		})
 	}
 

@@ -251,6 +251,14 @@ function onUpdateConnectionState<T extends GlobalState>(
   };
   setGlobal(global);
 
+  if (connectionState === 'connectionStateReady'
+    && global.auth.state === 'authorizationStateReady'
+    && tabState.isMasterTab
+    && !global.isSyncing
+    && (!global.isSynced || !global.chats.listIds.active?.length)) {
+    actions.sync();
+  }
+
   if (connectionState === 'connectionStateBroken') {
     actions.signOut({ forceInitApi: true });
   }
