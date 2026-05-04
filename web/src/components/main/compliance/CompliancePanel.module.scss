@@ -6,6 +6,11 @@
   :global(.modal-container) {
     align-items: stretch;
     justify-content: flex-start;
+
+    @media (min-width: 64rem) {
+      align-items: center;
+      justify-content: center;
+    }
   }
 
   :global(.modal-backdrop) {
@@ -37,6 +42,10 @@
       min-width: 100vw !important;
       max-width: none !important;
     }
+
+    @media (min-width: 64rem) {
+      transform: translate3d(0, 0, 0);
+    }
   }
 
   &:global(.open) {
@@ -50,6 +59,10 @@
 
     :global(.modal-dialog).dialog {
       transform: translate3d(-100%, 0, 0);
+
+      @media (min-width: 64rem) {
+        transform: translate3d(0, 0, 0);
+      }
     }
   }
 
@@ -73,6 +86,8 @@
 
   @media (min-width: 64rem) {
     width: min(54rem, calc(100vw - 4rem)) !important;
+    height: min(86vh, 50rem);
+    border-radius: var(--border-radius-modal);
     box-shadow: 0 0.25rem 1.5rem 0.25rem var(--color-default-shadow);
   }
 }
