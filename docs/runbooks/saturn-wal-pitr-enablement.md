@@ -10,6 +10,17 @@
 
 ---
 
+## 0. Pre-flight — wire monitoring before flipping the switch
+
+Silent `archive_command` failures are the canonical wal-g foot-gun. **Before** Section 2, confirm that `monitoring/prometheus/rules/orbit.yml` (group `orbit.postgres`) is loaded by Saturn's Prom and that `postgres-exporter` is scraping pg metrics. The two rules to verify firing logic on:
+
+- `WalArchiveStalled` — fires when `pg_stat_archiver_last_archive_age{job="postgres"} > 300` for 2 m
+- `WalArchiveFailures` — fires on `increase(pg_stat_archiver_failed_count[10m]) > 0`
+
+If Saturn's managed monitoring does not yet expose `pg_stat_archiver`, request the same exporter+rules in their stack first. Activation without alerts means the next R2 outage degrades RPO without anyone noticing.
+
+---
+
 ## 1. Verification (read-only)
 
 Run from the Saturn shell against the live `postgres` container.
@@ -151,6 +162,19 @@ Recommended schedule for a 150-user pilot tenant:
 | Encrypted `pg_dump` | every 4 h (existing supercronic container) | R2 lifecycle: 7 daily / 4 weekly / 12 monthly |
 
 Belt-and-braces is intentional: WAL-G gives PITR; pg_dump gives a logical fallback that can be restored partial-table or onto a different major version.
+
+---
+
+## 3.1 Rollback (if wal-g wal-push fails after activation)
+
+If `pg_stat_archiver.failed_count` starts ticking up after Section 2 and the cause is not fixable inside the maintenance window (R2 down, creds wrong, network policy), revert immediately so postgres does not pile up unarchived WAL on disk:
+
+```bash
+docker exec orbit-postgres-1 psql -U orbit -d orbit -c "ALTER SYSTEM SET archive_mode = 'off';"
+docker restart orbit-postgres-1
+```
+
+After restart, `archive_mode=off` and the failed segments are dropped on the next checkpoint. RPO falls back to the hourly Saturn managed backup + 4h pg_dump baseline. Open an incident, fix the underlying cause, then re-run Section 2 from the top.
 
 ---
 

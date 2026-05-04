@@ -387,6 +387,20 @@ services:
       - gateway
     restart: unless-stopped
 
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    profiles:
+      - monitoring
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-orbit}?sslmode=disable"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "false"
+      # Enable pg_stat_archiver collector — drives WAL/PITR alerts
+      PG_EXPORTER_INCLUDE_DATABASES: "${POSTGRES_DB:-orbit}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     profiles:
@@ -481,6 +495,12 @@ configs:
             X-Internal-Token:
               values:
                 - ${INTERNAL_SECRET}
+
+        - job_name: postgres
+          metrics_path: /metrics
+          static_configs:
+            - targets:
+                - postgres-exporter:9187
 
       alerting:
         alertmanagers:

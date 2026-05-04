@@ -143,3 +143,38 @@ groups:
         annotations:
           summary: "Gateway push dispatcher is disabled"
           description: "VAPID env vars are missing on gateway — all web push (incl. cross-device read-sync) silently no-ops. Check VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY/MESSAGING_URL on orbit-gateway and restart."
+
+  # WAL archiving health. Source: postgres-exporter (monitoring profile).
+  # Both alerts assume `archive_mode=on` per saturn-wal-pitr-enablement.md.
+  # If the exporter is not running these silently never fire — pair with
+  # ServiceDown on `up{job="postgres"} == 0`.
+  - name: orbit.postgres
+    interval: 60s
+    rules:
+      # Archiver has not pushed a WAL in 5 min. With archive_timeout=60s a
+      # healthy stack pushes at least one WAL per minute under any non-zero
+      # write load, and the archiver also force-rotates on idle. 5 min gives
+      # us slack for true zero-write windows on dev. On prod under traffic,
+      # 5 min of no archive == archive_command failing or postgres stuck.
+      - alert: WalArchiveStalled
+        expr: pg_stat_archiver_last_archive_age{job="postgres"} > 300
+        for: 2m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "WAL archiving stalled (no push in {{ $value | humanizeDuration }})"
+          description: "pg_stat_archiver.last_archived_time is older than 5 min. Either archive_command is failing (check postgres logs for wal-g errors) or wal-g cannot reach R2. RPO degrades to the timestamp of the last successful push."
+
+      # Any archive_command failure since startup. failed_count is monotonic
+      # so we alert on growth, not absolute value — a stale failure from
+      # weeks ago should not page once recovered.
+      - alert: WalArchiveFailures
+        expr: increase(pg_stat_archiver_failed_count{job="postgres"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "WAL push failed {{ $value }} time(s) in 10 min"
+          description: "wal-g rejected at least one WAL push. Investigate before failed_count climbs further — every failed segment is a gap in PITR coverage. Check R2 credentials, network from postgres container, and disk space in pg_wal."
