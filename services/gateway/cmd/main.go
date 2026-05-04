@@ -113,8 +113,8 @@ func main() {
 	metricsReg := metrics.New("gateway")
 	pushAttemptsCounter := metricsReg.Counter(
 		"orbit_push_attempts_total",
-		"Web push delivery attempts grouped by outcome (ok / fail / stale).",
-		"result",
+		"Web push delivery attempts grouped by outcome (ok / fail / stale) and payload type (message / call / read_sync).",
+		"result", "type",
 	)
 	// Day 5.1 VAPID hardening: surface dispatcher state as a gauge so prod
 	// dashboards/alerts can flag "push has been silently broken for hours".

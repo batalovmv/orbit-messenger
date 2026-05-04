@@ -318,7 +318,7 @@ func TestDispatcher_AttemptsCounter_TallyByOutcome(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			counter := prometheus.NewCounterVec(
 				prometheus.CounterOpts{Name: "test_push_attempts_total"},
-				[]string{"result"},
+				[]string{"result", "type"},
 			)
 
 			client := &mockHTTPClient{
@@ -354,17 +354,20 @@ func TestDispatcher_AttemptsCounter_TallyByOutcome(t *testing.T) {
 			_ = dispatcher.SendToUser(tc.userID, []byte(`{"title":"Orbit"}`))
 			_ = pushReq{userID: tc.userID}
 
-			if got := readCounter(t, counter, tc.wantLabel); got != 1 {
-				t.Fatalf("counter %q = %v, want 1", tc.wantLabel, got)
+			// Default SendToUser path → type="message".
+			if got := readCounter(t, counter, tc.wantLabel, "message"); got != 1 {
+				t.Fatalf("counter %q/message = %v, want 1", tc.wantLabel, got)
 			}
 
-			// And every other label must stay at zero — one outcome per send.
-			for _, other := range []string{"ok", "fail", "stale"} {
-				if other == tc.wantLabel {
-					continue
-				}
-				if got := readCounter(t, counter, other); got != 0 {
-					t.Fatalf("counter %q expected 0, got %v", other, got)
+			// And every other (result, type) combination must stay at zero.
+			for _, otherResult := range []string{"ok", "fail", "stale"} {
+				for _, otherType := range []string{"message", "call", "read_sync", "admin_test"} {
+					if otherResult == tc.wantLabel && otherType == "message" {
+						continue
+					}
+					if got := readCounter(t, counter, otherResult, otherType); got != 0 {
+						t.Fatalf("counter %q/%s expected 0, got %v", otherResult, otherType, got)
+					}
 				}
 			}
 		})
@@ -446,15 +449,15 @@ func TestDispatcher_Enabled_ContractMatrix(t *testing.T) {
 	}
 }
 
-func readCounter(t *testing.T, vec *prometheus.CounterVec, label string) float64 {
+func readCounter(t *testing.T, vec *prometheus.CounterVec, labels ...string) float64 {
 	t.Helper()
-	c, err := vec.GetMetricWithLabelValues(label)
+	c, err := vec.GetMetricWithLabelValues(labels...)
 	if err != nil {
-		t.Fatalf("get counter %q: %v", label, err)
+		t.Fatalf("get counter %v: %v", labels, err)
 	}
 	var m dto.Metric
 	if err := c.Write(&m); err != nil {
-		t.Fatalf("write counter %q: %v", label, err)
+		t.Fatalf("write counter %v: %v", labels, err)
 	}
 	return m.GetCounter().GetValue()
 }

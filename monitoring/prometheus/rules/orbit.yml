@@ -109,13 +109,16 @@ groups:
       # gateway push dispatcher with result={ok,fail,stale}. `stale` is the
       # 410/404 path where the subscription is gone — that is housekeeping,
       # not a delivery failure, so it is excluded from both numerator and
-      # denominator.
+      # denominator. The `type` label (added 2026-05-04) is excluded from
+      # aggregation so all real-traffic types (message, call, read_sync) feed
+      # the same alert; admin_test is excluded so Push Inspector usage cannot
+      # skew prod alerting.
       - alert: PushDeliveryFailureRate
         expr: |
-          sum(rate(orbit_push_attempts_total{result="fail"}[5m]))
+          sum(rate(orbit_push_attempts_total{result="fail",type!="admin_test"}[5m]))
           /
           clamp_min(
-            sum(rate(orbit_push_attempts_total{result=~"ok|fail"}[5m])),
+            sum(rate(orbit_push_attempts_total{result=~"ok|fail",type!="admin_test"}[5m])),
             0.001
           ) > 0.01
         for: 5m
@@ -125,6 +128,26 @@ groups:
         annotations:
           summary: "Web push delivery failure rate >1%"
           description: "Push delivery failure rate is {{ $value | humanizePercentage }} over the last 5 min (threshold: 1%). Check VAPID config, APNs/FCM provider status, and gateway logs."
+
+      # Per-type breakdown so a regression isolated to call-push (incoming
+      # ringer) does not get masked by a healthy message-push baseline. Higher
+      # threshold — calls are spiky and a single failed device pushes the rate
+      # above 1% trivially. 5% sustained for 10 min is the page-worthy floor.
+      - alert: CallPushFailureRate
+        expr: |
+          sum(rate(orbit_push_attempts_total{result="fail",type="call"}[10m]))
+          /
+          clamp_min(
+            sum(rate(orbit_push_attempts_total{result=~"ok|fail",type="call"}[10m])),
+            0.001
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: gateway
+        annotations:
+          summary: "Incoming call push failure rate >5%"
+          description: "Call push failure rate is {{ $value | humanizePercentage }} over 10 min. Offline users on PWA are not getting incoming-call notifications. Check VAPID, recipient subscription validity, and gateway error logs for 'call push dispatch failed'."
 
       # Catches the failure mode the rate-based alert above silently misses:
       # if VAPID env vars are empty at gateway startup, the dispatcher's

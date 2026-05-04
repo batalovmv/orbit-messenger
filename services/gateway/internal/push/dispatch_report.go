@@ -81,6 +81,10 @@ func (d *Dispatcher) SendToUserWithReport(ctx context.Context, userID string, pa
 	}
 
 	opts := d.defaultOptions()
+	// Distinguish operator-initiated test pushes from real chat traffic in
+	// the orbit_push_attempts_total counter so the PushDeliveryFailureRate
+	// alert is not skewed by Push Inspector usage.
+	opts.pushType = pushTypeAdminTest
 	for _, sub := range subs {
 		// Honor the caller's deadline between devices. Without this check a
 		// cancelled context produces a "200 with all-failures" report — the
@@ -194,17 +198,17 @@ func (d *Dispatcher) dispatchOneWithReport(ctx context.Context, userID string, s
 		if delErr := d.deleteSubscription(userID, sub.Endpoint); delErr != nil {
 			d.logger.Warn("delete stale push subscription failed", "error", delErr, "user_id", userID)
 		}
-		d.recordAttempt("stale")
+		d.recordAttempt("stale", opts.pushType)
 		oc.Status = "stale"
 		oc.Error = "subscription expired or removed by provider"
 		return oc
 	case err == nil && statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices:
-		d.recordAttempt("ok")
+		d.recordAttempt("ok", opts.pushType)
 		oc.Status = "ok"
 		return oc
 	}
 
-	d.recordAttempt("fail")
+	d.recordAttempt("fail", opts.pushType)
 	oc.Status = "fail"
 	oc.Error = sanitizeSendError(err, statusCode, sub.Endpoint)
 	d.logger.Warn("admin test push delivery failed",

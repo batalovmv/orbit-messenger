@@ -50,12 +50,20 @@ type Config struct {
 	Logger              *slog.Logger
 	HTTPClient          HTTPClient
 	TTL                 int
-	// AttemptsCounter, when set, gets one Inc() per push attempt, labelled by
-	// outcome: "ok" (delivered), "fail" (terminal failure after retries), or
-	// "stale" (410/404 from the provider — subscription deleted, not a delivery
-	// failure). The counter is registered by the caller so the Dispatcher
-	// stays decoupled from the metrics registry and re-creating a Dispatcher
-	// in tests does not double-register.
+	// AttemptsCounter, when set, gets one Inc() per push attempt with two
+	// labels (in this exact order):
+	//   - result: "ok" (delivered), "fail" (terminal failure after retries),
+	//     or "stale" (410/404 from the provider — subscription deleted, not a
+	//     delivery failure)
+	//   - type:   "message" (chat messages, smart-notifications — default),
+	//     "call" (incoming call rings), "read_sync" (silent cross-device
+	//     read-receipt fanout), or "admin_test" (operator-initiated Push
+	//     Inspector probes)
+	// The counter is registered by the caller so the Dispatcher stays decoupled
+	// from the metrics registry and re-creating a Dispatcher in tests does not
+	// double-register. Mismatching label cardinality (e.g. registering with
+	// only one label) will panic at first Inc() — recordAttempt does not
+	// gracefully degrade.
 	AttemptsCounter *prometheus.CounterVec
 }
 
@@ -128,17 +136,30 @@ func (d *Dispatcher) Enabled() bool {
 }
 
 // sendOptions controls per-delivery web push parameters.
+//
+// pushType is the value emitted on the `type` label of orbit_push_attempts_total.
+// Keep these stable — Prometheus alert rules and Grafana dashboards key off
+// them. Adding a new payload kind means adding a new constant here AND
+// updating dashboards.
 type sendOptions struct {
-	ttl     int
-	urgency webpush.Urgency
+	ttl      int
+	urgency  webpush.Urgency
+	pushType string
 }
 
+const (
+	pushTypeMessage   = "message"
+	pushTypeCall      = "call"
+	pushTypeReadSync  = "read_sync"
+	pushTypeAdminTest = "admin_test"
+)
+
 func (d *Dispatcher) defaultOptions() sendOptions {
-	return sendOptions{ttl: d.ttl, urgency: webpush.UrgencyNormal}
+	return sendOptions{ttl: d.ttl, urgency: webpush.UrgencyNormal, pushType: pushTypeMessage}
 }
 
 func (d *Dispatcher) callOptions() sendOptions {
-	return sendOptions{ttl: callPushTTL, urgency: webpush.UrgencyHigh}
+	return sendOptions{ttl: callPushTTL, urgency: webpush.UrgencyHigh, pushType: pushTypeCall}
 }
 
 // readSyncOptions: low urgency so iOS/APNs treats the silent payload as
@@ -146,7 +167,7 @@ func (d *Dispatcher) callOptions() sendOptions {
 // The SW on the receiving end never shows UI for these — it only calls
 // closeNotifications on already-displayed banners, so urgency=low is correct.
 func (d *Dispatcher) readSyncOptions() sendOptions {
-	return sendOptions{ttl: readSyncPushTTL, urgency: webpush.UrgencyLow}
+	return sendOptions{ttl: readSyncPushTTL, urgency: webpush.UrgencyLow, pushType: pushTypeReadSync}
 }
 
 func (d *Dispatcher) SendToUsers(userIDs []string, payload []byte) error {
@@ -342,10 +363,10 @@ func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscrip
 			if err := d.deleteSubscription(userID, subscription.Endpoint); err != nil {
 				d.logger.Warn("delete stale push subscription failed", "error", err, "user_id", userID)
 			}
-			d.recordAttempt("stale")
+			d.recordAttempt("stale", opts.pushType)
 			return nil
 		case err == nil && statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices:
-			d.recordAttempt("ok")
+			d.recordAttempt("ok", opts.pushType)
 			return nil
 		}
 
@@ -362,19 +383,24 @@ func (d *Dispatcher) sendToSubscription(userID string, subscription PushSubscrip
 		d.sleepFn(time.Duration(1<<(attempt-1)) * 100 * time.Millisecond)
 	}
 
-	d.recordAttempt("fail")
+	d.recordAttempt("fail", opts.pushType)
 	d.logger.Warn("web push delivery failed", "error", lastErr, "user_id", userID, "endpoint", subscription.Endpoint)
 	return lastErr
 }
 
-// recordAttempt bumps the per-outcome counter when a metrics counter was wired
-// in. It is a no-op when AttemptsCounter is nil (unit tests, services that
-// chose not to instrument).
-func (d *Dispatcher) recordAttempt(result string) {
+// recordAttempt bumps the per-(outcome, type) counter when a metrics counter
+// was wired in. It is a no-op when AttemptsCounter is nil (unit tests,
+// services that chose not to instrument). pushType comes from sendOptions and
+// is one of the pushType* constants — empty falls back to "message" so older
+// callers that build sendOptions by hand do not produce blank label values.
+func (d *Dispatcher) recordAttempt(result, pushType string) {
 	if d == nil || d.attemptsCounter == nil {
 		return
 	}
-	d.attemptsCounter.WithLabelValues(result).Inc()
+	if pushType == "" {
+		pushType = pushTypeMessage
+	}
+	d.attemptsCounter.WithLabelValues(result, pushType).Inc()
 }
 
 func (d *Dispatcher) sendNotification(ctx context.Context, payload []byte, sub *webpush.Subscription, opts *webpush.Options) (*http.Response, error) {
