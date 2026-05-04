@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/httputil"
 	"github.com/mst-corp/orbit/pkg/response"
 )
 
@@ -24,7 +25,11 @@ type RateLimitConfig struct {
 }
 
 func AuthRateLimitIdentifierByIP(c *fiber.Ctx) string {
-	return "ip:" + c.IP()
+	// Defence in depth: even though gateway pre-strips the chain
+	// before forwarding via X-Trusted-Client-IP, fall back to the
+	// helper here so a future deploy that bypasses gateway (direct
+	// internal call) does not key by the raw chain.
+	return "ip:" + httputil.ClientIP(c)
 }
 
 // rateLimitScript atomically increments the counter and sets TTL on first hit.
@@ -46,7 +51,7 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Use IP for pre-auth routes. For post-auth routes, JWT middleware sets
 		// a Fiber local (not a header) so clients cannot spoof another user's bucket.
-		identifier := c.IP()
+		identifier := httputil.ClientIP(c)
 		if cfg.Identifier != nil {
 			if customIdentifier := cfg.Identifier(c); customIdentifier != "" {
 				identifier = customIdentifier

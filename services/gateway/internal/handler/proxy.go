@@ -15,6 +15,7 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/httputil"
 	"github.com/mst-corp/orbit/pkg/response"
 )
 
@@ -96,7 +97,12 @@ func doProxy(c *fiber.Ctx, url string, client *fasthttp.Client, frontendURL stri
 	if len(internalSecret) > 0 && internalSecret[0] != "" {
 		req.Header.Set("X-Internal-Token", internalSecret[0])
 	}
-	if clientIP := c.IP(); clientIP != "" {
+	// httputil.ClientIP strips the X-Forwarded-For chain that fiber's
+	// c.IP() returns when EnableTrustedProxyCheck is on — without
+	// this strip, downstream services receive "1.2.3.4, 5.6.7.8"
+	// which auth's session insert into postgres `inet` rejects
+	// (SQLSTATE 22P02 "invalid input syntax for type inet").
+	if clientIP := httputil.ClientIP(c); clientIP != "" {
 		req.Header.Set("X-Trusted-Client-IP", clientIP)
 	}
 	// Forward request body

@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/httputil"
 	"github.com/mst-corp/orbit/pkg/response"
 )
 
@@ -24,7 +25,11 @@ type RateLimitConfig struct {
 }
 
 func AuthRateLimitIdentifierByIP(c *fiber.Ctx) string {
-	return "ip:" + c.IP()
+	// httputil.ClientIP strips the X-Forwarded-For chain that fiber's
+	// c.IP() returns when EnableTrustedProxyCheck is on. Without the
+	// strip, NAT'd users would key by the full chain string instead
+	// of their real leftmost IP, collapsing rate-limit buckets.
+	return "ip:" + httputil.ClientIP(c)
 }
 
 // rateLimitScript atomically increments the counter and sets TTL on first hit.
@@ -60,7 +65,7 @@ func RateLimitMiddleware(cfg RateLimitConfig) fiber.Handler {
 			}
 		}
 		if identifier == "" {
-			identifier = c.IP()
+			identifier = httputil.ClientIP(c)
 		}
 
 		key := fmt.Sprintf("rl:%s:%s", cfg.KeyPrefix, identifier)

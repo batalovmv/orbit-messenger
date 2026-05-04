@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mst-corp/orbit/pkg/apperror"
+	"github.com/mst-corp/orbit/pkg/httputil"
 	"github.com/mst-corp/orbit/pkg/permissions"
 	"github.com/mst-corp/orbit/pkg/response"
 	"github.com/mst-corp/orbit/pkg/validator"
@@ -259,7 +260,7 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		return response.Error(c, appErr)
 	}
 
-	ip := c.IP()
+	ip := httputil.ClientIP(c)
 	ua := c.Get("User-Agent")
 
 	pair, user, err := h.svc.Login(c.Context(), req.Email, req.Password, req.TOTPCode, ip, ua)
@@ -309,7 +310,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Missing refresh token"))
 	}
 
-	ip := c.IP()
+	ip := httputil.ClientIP(c)
 	ua := c.Get("User-Agent")
 
 	pair, user, err := h.svc.Refresh(c.Context(), refreshToken, ip, ua)
