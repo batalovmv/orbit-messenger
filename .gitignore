@@ -91,3 +91,27 @@ e2e-implementation/
 phase-8-plan/
 SPRINT-*.md
 VERIFY-*.md
+
+# === Smoke test / UI screenshot artifacts (root-level only) ===
+/admin-*.png
+/admin-*.json
+/click-*.png
+/click-*.json
+/codex-*.png
+/debug-*.png
+/destructive-*.png
+/destructive-*.json
+/final-*.png
+/final-*.json
+/menu-debug.png
+/mobile-users-*.png
+/pwa-*.png
+/pwa-*.json
+/repeat-*.png
+/repeat-*.json
+/repeat2-*.png
+/repeat2-*.json
+/total-*.png
+/total-*.json
+/total-smoke-*.json
+/web/pwa-*.png
