@@ -44,11 +44,16 @@ services:
       retries: 5
 
   nats:
-    image: nats:2-alpine
+    build:
+      context: ./deploy/nats
+      dockerfile: Dockerfile
     ports:
       - "127.0.0.1:4222:4222"   # client
       - "127.0.0.1:8222:8222"   # monitoring
-    command: -js -m 8222 --auth ${NATS_TOKEN:?Set NATS_TOKEN in .env}
+    environment:
+      NATS_TOKEN: ${NATS_TOKEN:?Set NATS_TOKEN in .env}
+    volumes:
+      - nats_data:/data
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8222/healthz"]
       interval: 5s
@@ -520,3 +525,4 @@ volumes:
   clamav_data:
   minio_data:
   alertmanager_data:
+  nats_data:
