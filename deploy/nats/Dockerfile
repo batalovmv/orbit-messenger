@@ -23,7 +23,12 @@ VOLUME ["/data"]
 # when we add HA.
 EXPOSE 4222 8222
 
-# Fail loud and early if NATS_TOKEN is missing rather than silently
-# starting an open server. The exec form keeps PID 1 on nats-server
-# so docker stop sends SIGTERM directly (graceful JetStream flush).
-ENTRYPOINT ["/bin/sh", "-c", "if [ -z \"$NATS_TOKEN\" ]; then echo 'FATAL: NATS_TOKEN must be set' >&2; exit 1; fi; exec nats-server -c /etc/nats/nats.conf"]
+# Token-auth was removed 2026-05-04 (see nats.conf for rationale).
+# nats-js now starts unauthenticated — safe because Saturn's HTTP edge
+# does not route the raw NATS protocol on port 4222 to the public
+# internet, and cross-project docker network isolation gates internal
+# reachability. NATS_TOKEN env, if set, is ignored.
+#
+# Exec form keeps PID 1 on nats-server so docker stop sends SIGTERM
+# directly (graceful JetStream flush before disk close).
+ENTRYPOINT ["nats-server", "-c", "/etc/nats/nats.conf"]
