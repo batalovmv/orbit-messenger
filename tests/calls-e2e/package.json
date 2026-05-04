@@ -1,0 +1,14 @@
+{
+  "name": "orbit-calls-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone Playwright harness for end-to-end WebRTC call smoke tests against the live local Orbit stack. Separate from web/tests/playwright (which uses a mocked frontend) — calls need real backend, real NATS, real coturn.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install-browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
