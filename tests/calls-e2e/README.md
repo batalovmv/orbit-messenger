@@ -18,24 +18,26 @@ mocked frontend with stubbed WS — calls cannot be validated that way.
 
 ## Status (2026-05-04)
 
-Scaffold lands but the test does **not yet pass end-to-end**. The
-remaining gap is selector tuning for two surfaces:
+**End-to-end passing** in 6-7 s on the local stack. Tested observation:
 
-1. **Chat selection** — `.ListItem` first-match clicks the wrong chat
-   on stacks with seed group chats. Need to either filter by the known
-   direct-chat ID `35268255-199f-43a7-b469-c65950bb9641` (queried at
-   test setup) or use the search-then-pick path with a deterministic
-   peer name.
-2. **Call/Accept/Hangup buttons** — current selectors are best-effort
-   regex over aria-label/title; the actual app uses icon-class
-   selectors that don't expose accessible names. Concrete path: read
-   `web/src/components/calls/*` for the real selectors.
+```
+[bob] ICE state=connected after 535ms
+[alice] ICE state=connected after 547ms
+[bob] media flowing: sent=69B recv=801B after 10ms
+[alice] media flowing: sent=801B recv=69B after 12ms
+```
 
-What works so far:
-- Login (email + password fields, Enter to submit)
-- Both browser contexts launch with fake media + permissions
-- RTCPeerConnection instrumentation (window.__orbitPCs registry)
-- Wait helpers for ICE state and media flow
+Stable selectors used:
+
+| Surface | Selector |
+|---|---|
+| Email/password fields | `#sign-in-email` / `#sign-in-password` (with `pressSequentially` — fill() races Teact's controlled-state binding) |
+| Submit button | `getByRole('button', { name: /next\|далее/i })` |
+| LeftColumn ready | `#LeftColumn` |
+| Direct chat row | `.Chat.chat-item-clickable.private` filtered by display name regex (Saved Messages and bots also match `.private`) |
+| Call header button | `button[aria-label="Call"]` |
+| Accept (incoming) | `button:has(.icon-phone-discard)` first — accept renders before hangup in PhoneCall.tsx |
+| Hangup (active) | same first()-match — accept disappears after pickup, leaving only hangup |
 
 ## Pre-requisites
 

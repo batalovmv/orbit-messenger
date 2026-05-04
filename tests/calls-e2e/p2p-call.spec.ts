@@ -37,16 +37,23 @@ async function login(page: Page, email: string) {
   // text input on the auth screen is email, second (type=password) is
   // password — use simple positional selectors which are also stable
   // across i18n.
-  const emailInput = page.locator('input[type="text"]').first();
+  // The form has IDed inputs (#sign-in-email / #sign-in-password)
+  // which is the most stable handle. Use pressSequentially so the
+  // change handlers fire one character at a time — fill() can race
+  // the controlled-state update on Teact's value-binding model and
+  // leave the submit button stuck disabled.
+  const emailInput = page.locator('#sign-in-email').first();
   await emailInput.waitFor({ state: 'visible', timeout: 30_000 });
-  await emailInput.fill(email);
-  const passwordInput = page.locator('input[type="password"]').first();
-  await passwordInput.fill(PASSWORD);
-  // Submit — pressing Enter on the password field triggers the
-  // form's onSubmit which dispatches the login action. Clicking the
-  // Next button works too but the keyboard path is slightly more
-  // deterministic across the InputText component's focus/blur model.
-  await passwordInput.press('Enter');
+  await emailInput.click();
+  await emailInput.pressSequentially(email, { delay: 10 });
+  const passwordInput = page.locator('#sign-in-password').first();
+  await passwordInput.click();
+  await passwordInput.pressSequentially(PASSWORD, { delay: 10 });
+  // Submit — Enter on the password field is unreliable in our
+  // InputText component (the keydown handler is on a parent that may
+  // not be focused yet). Click the NEXT button explicitly. Localized
+  // text matters, so match by both English and Russian.
+  await page.getByRole('button', { name: /next|далее/i }).first().click();
   // After login the LeftColumn renders. #LeftColumn is the most
   // stable selector — it appears regardless of whether the chat list
   // has any rows yet (a fresh empty user still sees an empty
@@ -55,26 +62,18 @@ async function login(page: Page, email: string) {
   await page.locator('#LeftColumn').waitFor({ state: 'visible', timeout: 45_000 });
 }
 
-async function openDirectChatWith(page: Page, peerName: string) {
-  // The seeded peer's display name is set by tests/load/seed-loadtest-users.sql
-  // for the loadtest_* users. test@/user2@ get whatever display name was
-  // set at register time — look up by visible email-like text or the
-  // first chat row that's not ourselves.
-  // Search via the search input is the most stable; falls back to
-  // clicking the first non-self chat row.
-  const searchBox = page.getByPlaceholder(/search/i).first();
-  if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await searchBox.fill(peerName);
-    await page.locator('.ListItem, [role="button"]').filter({ hasText: peerName })
-      .first().click({ timeout: 5000 }).catch(() => undefined);
-    await searchBox.fill('');
-  }
-  // If search didn't land us on a chat, click the first chat row.
-  const chatHeader = page.locator('.MessageList, .messages-container, [data-testid="message-list"]').first();
-  if (!(await chatHeader.isVisible({ timeout: 2000 }).catch(() => false))) {
-    await page.locator('.ListItem').first().click();
-  }
-  await chatHeader.waitFor({ state: 'visible', timeout: 10_000 });
+async function openDirectChat(page: Page, peerNameMatch: RegExp) {
+  // The chat list contains multiple `.private` rows: Saved Messages
+  // (the user's own self-chat), any bots like BotFather, and the
+  // actual peer. Filter by visible peer name to land on the right
+  // one. peerNameMatch must NOT match "Saved Messages" / "BotFather".
+  const chatRow = page.locator('.Chat.chat-item-clickable.private')
+    .filter({ hasText: peerNameMatch }).first();
+  await chatRow.waitFor({ state: 'visible', timeout: 30_000 });
+  await chatRow.click({ timeout: 10_000 });
+  // Wait for the middle column to render with the call button —
+  // proves the chat actually opened and the call surface is mounted.
+  await page.locator('button[aria-label="Call"]').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 // Tap into the in-page RTCPeerConnection registry by patching the
@@ -178,25 +177,33 @@ test.describe('P2P call between two users', () => {
       login(bobPage, USER2_EMAIL),
     ]);
 
-    // 2. Both open the shared direct chat
+    // 2. Both open the shared direct chat. user2 displays as
+    //    "Test User" in alice's chat list and test@orbit.local
+    //    displays under whatever name was set at register time —
+    //    grep on the email-derived prefix to be tolerant of name
+    //    drift on either side.
+    // Display names from the seed: user2's name is "User Two" so
+    // alice's row shows "User Two"; test@orbit.local's name is
+    // "Test User" so bob's row shows "Test User". Match both with
+    // generous patterns to survive minor display-name edits.
     await Promise.all([
-      openDirectChatWith(alicePage, 'user2'),
-      openDirectChatWith(bobPage, 'test'),
+      openDirectChat(alicePage, /user two|user2/i),
+      openDirectChat(bobPage, /test user|^test/i),
     ]);
 
-    // 3. Alice clicks the call (audio) icon in the chat header.
-    //    The phone-icon is the most stable selector — title or aria
-    //    can vary by language. Fall back to the icon class.
-    const callButton = alicePage.locator(
-      'button[aria-label*="all" i], button[title*="all" i], button:has(.icon-phone), button:has(.icon-call)',
-    ).first();
-    await callButton.click({ timeout: 10_000 });
+    // 3. Alice clicks the call icon in the chat header.
+    await alicePage.locator('button[aria-label="Call"]').first().click({ timeout: 10_000 });
 
-    // 4. Bob's UI should show the incoming call within ~3s. Accept.
-    const acceptButton = bobPage.locator(
-      'button[aria-label*="ccept" i], button[title*="ccept" i], button:has(.icon-call), button:has-text("Accept")',
-    ).first();
-    await acceptButton.click({ timeout: 15_000 });
+    // 4. Bob's PhoneCall modal opens with the incoming-call layout
+    //    (Accept + Decline buttons). Both render as
+    //    `button:has(.icon-phone-discard)` and Accept is the FIRST
+    //    one — see web/src/components/calls/phone/PhoneCall.tsx
+    //    where {isIncomingRequested && <accept>} renders before the
+    //    standard hangup. Use first() consistently: during incoming
+    //    it is accept; after the modal switches to active-call it is
+    //    hangup. Same selector works on both sides for hangup later.
+    await bobPage.locator('button:has(.icon-phone-discard)').first()
+      .click({ timeout: 15_000 });
 
     // 5. Both PCs must reach ICE connected
     await Promise.all([
@@ -214,12 +221,11 @@ test.describe('P2P call between two users', () => {
     expect(bobStats.sent).toBeGreaterThan(0);
     expect(bobStats.recv).toBeGreaterThan(0);
 
-    // 7. Hangup from alice. Both UIs should clear within a few seconds
-    //    and the PC should close (iceConnectionState=closed).
-    const hangupButton = alicePage.locator(
-      'button[aria-label*="ang" i], button[title*="ang" i], button:has(.icon-hangup), button:has(.icon-close)',
-    ).first();
-    await hangupButton.click({ timeout: 10_000 });
+    // 7. Hangup from alice. The active-call layout has only one
+    //    phone-discard button (the accept one is gone after pickup),
+    //    so first() lands on hangup.
+    await alicePage.locator('button:has(.icon-phone-discard)').first()
+      .click({ timeout: 10_000 });
 
     // Verify alice's PC closed
     await expect.poll(async () => {
