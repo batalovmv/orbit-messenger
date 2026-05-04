@@ -138,6 +138,10 @@ const CompliancePanel = ({
 
   const showingChat = Boolean(selectedUserId && selectedChatId);
   const showingUserChats = Boolean(selectedUserId && !selectedChatId);
+  const bodyClassName = buildClassName(
+    styles.body,
+    selectedUserId ? styles.bodyShowingDetail : styles.bodyListOnly,
+  );
 
   return (
     <Modal
@@ -154,7 +158,7 @@ const CompliancePanel = ({
         <span>{lang('ComplianceBannerNotice')}</span>
       </div>
 
-      <div className={styles.body}>
+      <div className={bodyClassName}>
         <aside className={styles.sidebar}>
           <div className={styles.sidebarHeader}>{lang('ComplianceAllEmployees')}</div>
           <div className={styles.userList}>
@@ -191,7 +195,7 @@ const CompliancePanel = ({
             <div className={styles.chatPanel}>
               <header className={styles.chatPanelHeader}>
                 <button type="button" className={styles.backBtn} onClick={handleBack}>
-                  <i className="icon icon-back" aria-hidden />
+                  <i className="icon icon-arrow-left" aria-hidden />
                 </button>
                 <Avatar peer={selectedUser} size="small" />
                 <div className={styles.chatPanelTitle}>
@@ -211,7 +215,7 @@ const CompliancePanel = ({
             <div className={styles.chatPanel}>
               <header className={styles.chatPanelHeader}>
                 <button type="button" className={styles.backBtn} onClick={handleBack}>
-                  <i className="icon icon-back" aria-hidden />
+                  <i className="icon icon-arrow-left" aria-hidden />
                 </button>
                 <div className={styles.chatPanelTitle}>
                   {lang('ComplianceChatView')}
