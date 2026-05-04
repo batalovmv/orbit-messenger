@@ -165,9 +165,26 @@ func parsePostgresURL(raw string) (dsn string, password string, rawPassword stri
 }
 
 // NatsURL returns the NATS connection URL.
-// Saturn generates URLs with http:// and port 80, but NATS needs nats:// and port 4222.
+//
+// Source precedence (first non-empty wins):
+//   1. NATS_JS_URL — Saturn auto-generates this when a service is
+//      "Connected" to the nats-js application; the env var name is
+//      derived from the source service name and cannot be customised.
+//   2. ORBIT_NATS_URL — the local-dev convention used in docker-compose
+//      and predates the Saturn rename. Kept for backwards compat so
+//      developers running `docker compose up` don't have to change
+//      their .env.
+//   3. default `nats://localhost:4222` — only meaningful when running
+//      the binary outside any orchestrator.
+//
+// Saturn generates URLs with http:// and port 80, but NATS needs
+// nats:// and port 4222. The transformations below normalise either
+// shape.
 func NatsURL() string {
-	raw := EnvOr("ORBIT_NATS_URL", "nats://localhost:4222")
+	raw := EnvOr("NATS_JS_URL", "")
+	if raw == "" {
+		raw = EnvOr("ORBIT_NATS_URL", "nats://localhost:4222")
+	}
 	// Convert http(s):// to nats://
 	raw = strings.Replace(raw, "https://", "nats://", 1)
 	raw = strings.Replace(raw, "http://", "nats://", 1)
