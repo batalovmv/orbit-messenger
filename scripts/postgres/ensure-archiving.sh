@@ -3,9 +3,10 @@
 # postgres container start, including pre-existing PGDATA volumes that were
 # initialised before /docker-entrypoint-initdb.d/99-setup-archiving.sh existed.
 #
-# Postgres' official image runs every executable in /docker-entrypoint.d/*.sh
-# AFTER initdb but BEFORE the server starts (since 16.x). Drop this script
-# there. Idempotent — safe to re-run.
+# IMPORTANT: the postgres official image does NOT honour /docker-entrypoint.d/
+# (only nginx does). This script is invoked from postgres-wrapper.sh which
+# replaces the default CMD with: postgres-wrapper.sh -> ensure-archiving.sh ->
+# exec docker-entrypoint.sh postgres. Idempotent — safe to re-run.
 #
 # Required env (read from /etc/wal-g.env.sh at archive time, but we sanity-
 # check here so misconfig fails the start instead of silently leaving WAL

@@ -147,19 +147,30 @@ You should see exactly one `base_<lsn>` entry with today's date.
 
 ---
 
-## 3. Schedule full backups (one-time)
+## 3. Daily base backup — already wired
 
-Add a cron entry for daily full base backups. The simplest route is a sibling supercronic container that runs `wal-g backup-push`. Until that is wired, run manually as part of the on-call checklist.
+As of 2026-05-04 the postgres image runs supercronic in the background
+(spawned by `postgres-wrapper.sh` on every container start) which
+schedules `walg-base-backup.sh` per the `WALG_BACKUP_CRON` env. Default
+schedule is `0 2 * * *` (02:00 UTC daily). The script also runs
+`wal-g delete retain FULL 14 --confirm` so retention prunes itself.
 
-A future PR will add `deploy/walg-cron/` mirroring `deploy/backup-cron/`. Tracked in `PHASES.md` 8D.
+Override the schedule per environment by setting `WALG_BACKUP_CRON` on
+the postgres service (no rebuild needed).
+
+To trigger an on-demand base backup:
+
+```bash
+docker exec -u postgres orbit-postgres-1 /usr/local/bin/walg-base-backup.sh
+```
 
 Recommended schedule for a 150-user pilot tenant:
 
 | Backup | Schedule | Retention |
 |---|---|---|
 | WAL push (continuous) | every commit + `archive_timeout=60s` cap | 14 days |
-| WAL-G base backup | daily 02:00 UTC | 14 days (`wal-g delete retain FULL 14 --confirm`) |
-| Encrypted `pg_dump` | every 4 h (existing supercronic container) | R2 lifecycle: 7 daily / 4 weekly / 12 monthly |
+| WAL-G base backup | daily 02:00 UTC (`WALG_BACKUP_CRON`) | 14 days (`wal-g delete retain FULL 14 --confirm`) |
+| Encrypted `pg_dump` | every 4 h (existing `backup-cron` container) | R2 lifecycle: 7 daily / 4 weekly / 12 monthly |
 
 Belt-and-braces is intentional: WAL-G gives PITR; pg_dump gives a logical fallback that can be restored partial-table or onto a different major version.
 
@@ -190,7 +201,7 @@ The local stack uncovered four real bugs that would have ticked silently in prod
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `archive_mode = off` on a postgres container that was supposed to have WAL-G | `setup-archiving.sh` only ran on initdb; existing PGDATA volumes never got the config. | New `ensure-archiving.sh` runs at every container start via `/docker-entrypoint.d/`. |
+| `archive_mode = off` on a postgres container that was supposed to have WAL-G | `setup-archiving.sh` only ran on initdb; existing PGDATA volumes never got the config. The previous fix dropped `ensure-archiving.sh` into `/docker-entrypoint.d/` — but **the official postgres image does not honour that directory** (that's the nginx pattern). The script was dead code. | 2026-05-04 fix: `postgres-wrapper.sh` becomes the new `CMD`, calls `ensure-archiving.sh` on every start, then execs the official entrypoint. Same wrapper also spawns supercronic for the daily wal-g base backup. |
 | `pg_dump` cron failing every 4 h | `BACKUP_ENCRYPTION_PASSPHRASE` not set in `.env`; script's strict check killed every run. | Passphrase added to `.env` (≥32 chars). On Saturn, ensure the same env is present and rotated periodically. |
 | `gpg: can't create directory '//.gnupg': Permission denied` | Container runs as `nobody`; default `$HOME` is `/`, unwritable. | Script now `mktemp -d` and exports `GNUPGHOME` to a per-run dir. |
 | `Could not connect to http://localhost:9000/...` from the cron container | `R2_ENDPOINT=http://localhost:9000` in `.env` is for browser/host access; backup-cron talks across the docker network. | New `R2_ENDPOINT_INTERNAL` knob defaults to `http://minio:9000` for in-network services; the prod override flips it to the real R2 URL. |

@@ -5,12 +5,28 @@ RUN curl -fL https://github.com/wal-g/wal-g/releases/download/v3.0.8/wal-g-pg-22
     && mv /usr/local/bin/wal-g-pg-22.04-amd64 /usr/local/bin/wal-g \
     && chmod +x /usr/local/bin/wal-g
 RUN wal-g --version
+
+# supercronic: tiny single-binary cron used to schedule the daily
+# wal-g base backup from inside this container (sidecars can't read
+# PGDATA directly without exposing the docker socket).
+ARG SUPERCRONIC_VERSION=v0.2.34
+RUN curl -fsSL -o /usr/local/bin/supercronic \
+      "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" \
+    && chmod +x /usr/local/bin/supercronic
+
 COPY wal-g.env.sh /etc/wal-g.env.sh
 COPY setup-archiving.sh /docker-entrypoint-initdb.d/99-setup-archiving.sh
-# Runtime hook that re-applies archive config to existing PGDATA volumes. The
-# official postgres image runs /docker-entrypoint.d/*.sh on every start
-# (between initdb and starting the server), so this is the place for
-# idempotent post-init wiring.
-COPY ensure-archiving.sh /docker-entrypoint.d/00-ensure-archiving.sh
-RUN chmod +x /docker-entrypoint.d/00-ensure-archiving.sh \
-    && chmod +x /docker-entrypoint-initdb.d/99-setup-archiving.sh
+# Every-start hooks. The official postgres image does NOT honour
+# /docker-entrypoint.d/ (that's the nginx pattern, not postgres) — we
+# wire these via postgres-wrapper.sh which becomes the new CMD.
+COPY ensure-archiving.sh /usr/local/bin/ensure-archiving.sh
+COPY walg-base-backup.sh /usr/local/bin/walg-base-backup.sh
+COPY postgres-wrapper.sh /usr/local/bin/postgres-wrapper.sh
+RUN chmod +x /usr/local/bin/ensure-archiving.sh \
+    && chmod +x /docker-entrypoint-initdb.d/99-setup-archiving.sh \
+    && chmod +x /usr/local/bin/walg-base-backup.sh \
+    && chmod +x /usr/local/bin/postgres-wrapper.sh
+
+# Replace default CMD so every restart runs ensure-archiving + spawns
+# the wal-g base-backup cron, then execs the official entrypoint.
+CMD ["/usr/local/bin/postgres-wrapper.sh", "postgres"]
