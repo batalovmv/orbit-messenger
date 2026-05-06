@@ -138,6 +138,20 @@ func (m *mockUserStore) UpdateNotificationPriorityMode(_ context.Context, userID
 	return nil
 }
 
+func (m *mockUserStore) GetByOIDCSubject(_ context.Context, _, _ string) (*model.User, error) {
+	return nil, nil
+}
+func (m *mockUserStore) LinkOIDCSubject(_ context.Context, _ uuid.UUID, _, _ string) error {
+	return nil
+}
+func (m *mockUserStore) CreateOIDCUser(_ context.Context, u *model.User, _, _ string) error {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	m.users[u.ID] = u
+	return nil
+}
+
 type mockSessionStore struct {
 	sessions map[uuid.UUID]*model.Session
 	byToken  map[string]*model.Session

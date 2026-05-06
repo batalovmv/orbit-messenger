@@ -6,6 +6,8 @@ replace github.com/mst-corp/orbit/pkg => ../../pkg
 
 require (
 	github.com/alicebob/miniredis/v2 v2.37.0
+	github.com/coreos/go-oidc/v3 v3.11.0
+	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
@@ -14,6 +16,7 @@ require (
 	github.com/pquerna/otp v1.4.0
 	github.com/redis/go-redis/v9 v9.7.3
 	golang.org/x/crypto v0.45.0
+	golang.org/x/oauth2 v0.30.0
 )
 
 require (

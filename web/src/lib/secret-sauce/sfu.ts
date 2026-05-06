@@ -45,9 +45,11 @@ export interface SfuSession {
 }
 
 interface SignalMessage {
-  event: 'offer' | 'answer' | 'candidate';
+  event: 'offer' | 'answer' | 'candidate' | 'restart_ice';
   data: string;
 }
+
+const ICE_RESTART_DELAY_MS = 5000;
 
 let activeSession: SfuSession | undefined;
 
@@ -130,6 +132,34 @@ export async function joinSfuCall(options: SfuJoinOptions): Promise<SfuSession> 
     options.onConnectionStateChange?.(pc.connectionState);
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
       cleanup(session);
+    }
+  };
+
+  // ICE restart watchdog: if the connection lingers in 'disconnected' for
+  // more than ICE_RESTART_DELAY_MS, mark the next negotiation as a restart
+  // (new ufrag/pwd) and ask the SFU to resend its offer. The server-side
+  // handler for `restart_ice` is not yet implemented in services/calls
+  // (sfu_handler.go switch only knows answer/candidate), so for now this
+  // call is a forward-looking hook: it resets local ICE candidates so that
+  // when the SFU does redeliver an offer (e.g. after WS reconnect) the
+  // handshake converges faster. See NEXT-SESSION-PLAN-2026-05-06.md.
+  let iceWatchdog: ReturnType<typeof setTimeout> | undefined;
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'disconnected') {
+      if (iceWatchdog) clearTimeout(iceWatchdog);
+      iceWatchdog = setTimeout(() => {
+        if (pc.iceConnectionState !== 'disconnected') return;
+        try {
+          pc.restartIce();
+          sendSignal(ws, { event: 'restart_ice', data: '' });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[SFU] restartIce failed', err);
+        }
+      }, ICE_RESTART_DELAY_MS);
+    } else if (iceWatchdog) {
+      clearTimeout(iceWatchdog);
+      iceWatchdog = undefined;
     }
   };
 

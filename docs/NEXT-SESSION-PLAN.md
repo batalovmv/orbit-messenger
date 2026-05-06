@@ -1,231 +1,506 @@
-# План работ — следующая сессия
+# План работ — pilot launch sprint
 
-> Создан 2026-05-05 как контекст для перезапуска работы. Кратко: что
-> сделано в предыдущей сессии, что осталось, в каком порядке делать,
-> какие решения уже приняты и не нужно переобсуждать.
-
----
-
-## Что сделано в предыдущей сессии (2026-05-04)
-
-Пилот-блокеры закрыты на ~80%. 16 коммитов на main, все запушено и
-автодеплоится Saturn'ом. Полный список в `git log --oneline 9683828..HEAD`,
-ключевое:
-
-- Compliance-панель сделана responsive (desktop / tablet / mobile)
-- Очистка репо от smoke-артефактов + .gitignore-правила
-- INTERNAL_SECRET ротирован и выровнен по всем сервисам
-- NATS заменён на новый сервис `nats-js` с включённым JetStream (24h
-  replay, persistence, dedup) — без token-auth, потому что Saturn
-  Connection не умеет встраивать токен в auto-генерируемый URL
-- Kод научился читать `NATS_JS_URL` (Saturn) с fallback на
-  `ORBIT_NATS_URL` (локальный dev)
-- `TRUSTED_PROXIES` выставлен на gateway → rate-limit per real IP
-- Helper `httputil.ClientIP()` отрезает X-Forwarded-For chain → auth
-  больше не падает с SQLSTATE 22P02 на postgres `inet`-колонке
-- postgres-exporter + Prom alerts (`WalArchiveStalled`,
-  `WalArchiveFailures`, `CallPushFailureRate`)
-- Push metric с label `type` (message/call/read_sync/admin_test)
-- Локально: postgres-wrapper.sh с auto-archive + walg-cron, NATS
-  Dockerfile, calls e2e Playwright (Chromium), k6 WS load 150 VU
-- Live Translate prod-чек: backend готов, фронт wired (миграции 056/058)
-
-WAL/PITR через wal-g явно отказался: Saturn-managed Postgres не даёт
-shell, wal-g неприменим. Ostаются Saturn-managed daily backup +
-проверенный pg_dump в R2 (через personal S3, см. ниже).
+> Self-contained brief для следующего агента. Прочитай это **полностью**
+> до первого touch-а в коде, потом `docs/canon/state.json` +
+> `docs/canon/divergences.md`. Решения по архитектуре уже приняты —
+> не переобсуждай, иди делать.
+>
+> Создано 2026-05-06 после двух сессий (2026-05-05 + 2026-05-06).
 
 ---
 
-## TODO immediate (~1-2 часа на Saturn UI + ручной QA)
+## TL;DR
 
-### 1. Подтвердить что логин на проде восстановлен
-Вчерашний последний фикс (`49e921c` — strip X-Forwarded-For chain)
-должен был починить "Server is unavailable" на login. Шаги:
-
-1. Открыть https://orbit-messenger.saturn.ac/
-2. Залогиниться superadmin'ом
-3. Если "Server is unavailable" остался — open Saturn → Logs → auth →
-   filter Errors → пришли скрин в чат
-4. Если залогинился ок → переходим к пункту 2
-
-### 2. Welcome backfill для пострадавших юзеров
-Пока INTERNAL_SECRET был сломан (~26 апр – 4 мая), новые invited
-юзеры регистрировались но не попадали в default-чаты. Нужно их
-backfill'ить:
-
-1. Меню (бургер) → **Administration**
-2. Вкладка **Welcome**
-3. Найти кнопку backfill → клик → confirm
-4. Ответ типа `inserted: N` — N это сколько membership'ов добавилось
-
-### 3. Stop старого `orbit-nats`
-После того как nats-js работает >24h без проблем:
-
-1. Architecture → orbit-nats (старый, не nats-js)
-2. Stop / Disable / Delete (твоё решение — Stop безопаснее, можно
-   откатиться при проблеме)
-
-### 4. Cross-browser calls smoke (~30 мин)
-Chromium у нас уже автоматизирован в `tests/calls-e2e/`. Manual нужен
-для остальных по `docs/runbooks/cross-browser-call-test.md`:
-- Firefox stable (must)
-- Safari macOS (must)
-- iOS Safari (must — самая высокая вероятность поломки)
-- Edge (optional)
-- Chrome Android (must)
-
-Каждый ~10 мин. Записать что не работает.
-
-### 5. Live Translate prod check (~10 мин)
-По `docs/8d-qa-checklist.md` пункт 8D.4. UI strings RU,
-auto-translate, manual translate, settings save.
+- **150-юзер корпоративный пилот, счёт идёт на дни.**
+- Compliance-модель: **админ читает чаты И слышит звонки** — оба тракта на
+  бэкап. Юзеры это знают (плашка перед звонком, ToS в инвайт-флоу).
+- **42 dirty файла локально, ничего не запушено.** До push нужны
+  Saturn-side ресурсы (`backup-cron`, `nats-exporter`) — клики юзера, не
+  агента.
+- Работа разбита на фазы A→F, каждая — отдельный pushable unit.
+  Делать строго в порядке. После каждой фазы — чек-поинт «прод не упал».
 
 ---
 
-## TODO эта неделя — оставшиеся пилот-блокеры
+## Что готово на старте сессии
 
-### 6. R2 backup на персональный S3 (~30 мин)
-**Решение принято**: использовать твой личный S3 (не Cloudflare R2 и
-не отдельный backup-cron сервис на Saturn). Saturn UI поддерживает
-S3 с regional endpoint'ом (без custom endpoint поля).
+### Локально готово (uncommitted)
 
-Шаги:
-1. На твоём S3-провайдере (AWS / Yandex Object Storage / etc) создай
-   bucket `orbit-postgres-backups` (имя любое)
-2. Создай IAM user / API key с правами Object Read/Write **только** на
-   этот bucket
-3. Запиши Access Key ID + Secret Access Key + Region + Bucket name
-4. Saturn → orbit-postgres → Backups → Settings → S3 Storage Settings
-5. Чекни "Store backups in S3"
-6. Заполни поля:
-   - S3 Bucket Name: `orbit-postgres-backups`
-   - S3 Region: твой реальный регион (например `eu-west-1` или
-     `ru-central1`)
-   - S3 Access Key ID: твой
-   - S3 Secret Access Key: твой
-7. **Test Connection** → должно пройти
-8. Save Settings
-9. **Create Backup** вручную чтобы проверить что бэкап реально
-   доезжает до S3
-10. Зайди на S3 в bucket и убедись что объект появился
+1. **Smart Notifications C1-C5** (предыдущая сессия) — backend+SW+UI
+2. **SFU group calls 6-bug fix** + e2e спека (`tests/calls-e2e/sfu-3-call.spec.ts`)
+3. **Live Translate i18n** — `*Other` ключи добавлены
+4. **Saturn infra декларации:**
+   - `.saturn.yml` декларирует `backup-cron`
+   - `docker-compose.yml` добавляет `nats-exporter` (profile `monitoring`)
+   - `monitoring/prometheus/rules/orbit.yml` — alert rules JetStream
+   - 3 runbooks `docs/runbooks/saturn-{backup-cron-enablement,jetstream-prom,perf-smoke}.md`
+   - **Backup-cron live-tested против FirstVDS S3** локально — full
+     pg_dump → upload → download → decrypt → SQL verify roundtrip green
+5. **OIDC SSO backend MVP** (сегодня) — ADR 006 + миграция 070 + сервис
+   + handler + 10 unit-тестов с настоящей RS256/JWKS подписью. Routes
+   404 без `OIDC_PROVIDER_KEY` env. Подробнее ниже в фазе B.
+6. **SFU client-side ICE restart watchdog** — `web/src/lib/secret-sauce/sfu.ts`
 
-Если Test Connection упадёт — пришли error message, разберёмся.
+### Backend test status
 
-### 7. Performance smoke на Saturn (~2 часа)
-Локально мы прогнали k6 на 150 WS-connections и получили p95 connect
-8ms, 0 disconnects. Нужно повторить против Saturn чтобы убедиться
-что прод-цифры близки.
+```
+ok  services/auth/...        (OIDC новые + всё старое — 11s)
+```
 
-Шаги:
-1. Получить продовый JWT — на Saturn запусти `tests/load/mint-tokens.go`
-   с продовыми DATABASE_URL и JWT_SECRET (или экспортируй из postgres
-   pre-existing tokens)
-2. Запусти k6 локально с `BASE_URL=wss://gateway.saturn.ac/api/v1/ws`
-   (или whatever real URL)
-3. Сравни p95: connect, auth-ack, disconnects
-4. Если хуже локального — найти боттлнек
+Остальные сервисы не трогали в этой сессии, но в начале были зелёные.
 
-Артефакт: `audits/load-2026-05-XX-saturn.md`.
+### Frontend
 
-### 8. JetStream алерты в Saturn Prom (~1 час)
-- Добавить scrape config на `nats-js:8222/jsz` в Saturn managed Prom
-- Алерт `JetStreamConsumerLag` (consumer.delivered.consumer_seq отстаёт >10s)
+`tsc --noEmit` чистый. 28+ dirty файлов — не трогать, кроме как в рамках
+фаз ниже.
 
 ---
 
-## Wave 2 killer features (после пилота)
+## Saturn-side prerequisites (USER, не agent)
 
-В порядке приоритета:
+**До push любого PR с `.saturn.yml` изменениями (фаза A4) — сделай:**
 
-### Smart Notifications (~10 дней)
-Приоритет 1 после пилот-фидбека. Push+AI инфра уже готова. Нужен
-дедикейтед спринт. Не пытаться втиснуть между ops.
+### 1. Создать сервис `orbit-backup-cron` в Saturn UI
 
-### AI Meeting Notes (~17 дней)
-После Smart Notifications. Зависит от стабильности SFU group calls
-(см. параллельный трек ниже).
+- Add Service → custom container
+- Dockerfile path: `deploy/backup-cron/Dockerfile`
+- No exposed ports
+- Env vars (полный список — `docs/runbooks/saturn-backup-cron-enablement.md`):
+  - `R2_ENDPOINT=https://s3.firstvds.ru`
+  - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (FirstVDS, в 1Password)
+  - `R2_BACKUP_BUCKET=orbit-postgres-backups`
+  - `BACKUP_ENCRYPTION_PASSPHRASE` — `openssl rand -base64 48`,
+    **сохранить в 1Password** — без неё бэкапы нерасшифровываемы
+  - `DATABASE_URL` — копия с любого другого сервиса
+  - `BACKUP_CRON=0 */4 * * *`
 
-### Workflow Automations (~15 дней)
-После Meeting Notes.
+### 2. Создать сервис `orbit-nats-exporter` в Saturn UI
 
----
+- Image: `natsio/prometheus-nats-exporter:0.17.3`
+- Port: 7777
+- Args: `-port=7777 -jsz=all -varz -connz -subz http://nats-js:8222`
 
-## Параллельные крупные треки
+### 3. После пилота — для фазы B
 
-### SSO / корпоративный вход (~12 часов)
-**#2 из вчерашнего бэклога**. Сейчас invite-codes не масштабируется
-на 150 человек. Нужно:
+Зарегистрировать OAuth client в IdP (Google Workspace по умолчанию):
 
-1. Решение по провайдеру (требует твоего выбора):
-   - Yandex SSO (если корпоративная подписка Yandex 360)
-   - Google OIDC (общий вариант)
-   - Custom OAuth via Keycloak / Authentik (self-hosted — больше работы)
-   - Microsoft Entra (если Microsoft 365 в компании)
-2. После выбора — реализация standard OIDC flow в `services/auth`:
-   - Endpoint `/auth/oidc/login` → redirect на провайдера
-   - Callback `/auth/oidc/callback` → обмен code на токен → создаём
-     orbit user если ещё нет → выдаём JWT
-   - Конфиг переменные: `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`,
-     `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URL`
-3. Frontend: кнопка "Sign in with X" на login screen рядом с invite-code
-4. Existing users / migration: invite-code остаётся как fallback
+- Cloud Console → APIs & Services → Credentials → OAuth client ID
+- Type: Web app
+- Redirect URI: `https://new-tg-gwcikm.saturn.ac/api/v1/auth/oidc/google/callback`
+- В Saturn env (`orbit-auth`):
+  - `OIDC_PROVIDER_KEY=google`
+  - `OIDC_ISSUER=https://accounts.google.com`
+  - `OIDC_CLIENT_ID=...`
+  - `OIDC_CLIENT_SECRET=...` (из 1Password)
+  - `OIDC_REDIRECT_URL=...` (точно совпадает)
+  - `OIDC_ALLOWED_EMAIL_DOMAINS=yourcompany.com`
+  - `OIDC_FRONTEND_URL=https://new-tg-gwcikm.saturn.ac/`
+- Restart `orbit-auth`. Лог должен показать
+  `oidc: provider ready key=google issuer=...`
 
-**Когда делать**: до того как пилот вырастет за 50 юзеров.
-Сначала пилот на invite-codes, потом SSO для масштабирования.
+### 4. Для фазы B4 (sync worker)
 
-### Стабилизация SFU group calls 3+ участников (~3-5 дней)
-**#5 из вчерашнего бэклога**. Сейчас 1-on-1 P2P работает (наш
-автотест зелёный). Группы 3+ бывают глючные.
-
-Шаги:
-1. Расширить `tests/calls-e2e/p2p-call.spec.ts` до 3-browser scenario:
-   alice → bob accepts → carol joins → все три видят друг друга →
-   carol leaves → cleanup
-2. Воспроизвести локально с fake-media (`--use-fake-device-for-media-stream`)
-3. Если падает — debug `services/calls/internal/webrtc/sfu.go`
-4. Fix + extend e2e
+Включить Google Workspace Directory API + создать service account с
+domain-wide delegation на `https://www.googleapis.com/auth/admin.directory.user.readonly`.
+Положить JSON ключ в Saturn env как `OIDC_SYNC_GOOGLE_SA_JSON`.
 
 ---
 
-## Технический долг (low priority)
+## Принятые решения (не переобсуждать)
 
-- Удалить две `delete` ноды на Saturn (по запросу пользователя — не
-  трогать без явного разрешения)
-- Saturn FR: добавить custom S3 endpoint в Backup Settings (для
-  поддержки R2 / MinIO без AWS-style regional endpoints)
-- Финализировать `tests/calls-e2e/` README — добавить step-by-step
-  для Firefox/Safari после авто
-- Прогнать `pitr-restore.md` drill один раз на staging чтобы проверить
-  что local infrastructure (postgres-wrapper.sh + walg-cron) правильно
-  восстанавливается из R2
+Эти точки прошли пользовательский апрув в сессии 2026-05-06:
 
----
-
-## Принципы для следующей сессии
-
-1. **Сначала пилот-блокеры, потом фичи.** Killer features ждут пилот-фидбека
-2. **Не размазывать killer features.** Smart Notifications — отдельный
-   спринт целиком, не пытаться сделать "пол-фичи" между ops
-3. **Ops-задачи параллельно**, когда можно: R2 backup, JetStream alerts,
-   perf smoke не требуют моего code-time
-4. **Auto-test only для критичных браузеров.** Chromium auto, Firefox/
-   Safari iOS — manual smoke. Edge / Chrome Android — skip для пилота
-5. **Решения о провайдерах — твои.** Я предлагаю архитектуру, ты
-   выбираешь Yandex / Google / etc
-6. **Перед prod-операциями** — обязательная локальная репро (вчера
-   спасла от 401 inet-bug, NATS auth bug, X-Forwarded-For chain bug)
+| # | Решение | Почему |
+|---|---|---|
+| 1 | **Запись звонков ДА, но только аудио, только SFU group, не P2P** | Storage budget. P2P не идёт через сервер — потребует MediaRecorder на клиенте. Видео → ~800GB/мес vs аудио ~50GB/мес. |
+| 2 | **Retention записей звонков 90 дней** | Compliance baseline. Auto-GC через backup-cron. |
+| 3 | **Compliance-плашка перед стартом звонка обязательна** | ФЗ-152 + GDPR требуют явного информирования участников даже при corp-модели. |
+| 4 | **3c per-participant mute/share — Map в `useSfuStreamManager`** (не глобальный store) | UI-индикатор тайла, не нужен другим компонентам. Минимум кода. |
+| 5 | **3b WS-reconnect — UX-плашка «переподключиться?»**, не auto-resume | Auto-resume — инженерное удовольствие. Пилот 150 юзеров переживёт ручной клик. |
+| 6 | **3a server-side ICE restart — отложить за пилот** | Нет ICE-fail в логах = нет проблемы. Watchdog клиента уже стоит, на серверной стороне gap задокументирован. |
+| 7 | **OIDC: один env-конфиг провайдер**, без admin UI и БД-таблицы | YAGNI пока нет второго заказчика. ADR 006 имеет explicit cut list. |
+| 8 | **OIDC: silent linking by email** | Для корп-мессенджера IdP — source of truth. Если у атакующего есть Google-аккаунт жертвы в корп-домене, у нас проблемы похуже Orbit-логина. |
+| 9 | **OIDC: F3 multi-provider DB-таблица — выкинуть из бэклога** | Не возвращаться пока не появится второй tenant с другим IdP. |
+| 10 | **OIDC: `?access_token` в query**, не fragment | Прокси-логи под нашим контролем. Fragment ломается в HTTP redirect chain. |
 
 ---
 
-## Ближайший конкретный шаг следующей сессии
+## ФАЗА A — Commit hygiene (1 ч)
 
-1. Прочитать этот файл
-2. Подтвердить что login на orbit-messenger работает (если ещё не
-   проверено)
-3. Welcome backfill (10 секунд клика)
-4. R2 backup на личный S3 (30 минут — весь шаг 6 из этого плана)
-5. Решить с пользователем приоритет: cross-browser smoke vs SSO vs
-   killer features
+Превратить 42 dirty файла в логические PR'ы. **Каждый — отдельный
+коммит с conventional message.**
 
-После этого работа разбивается на дискретные задачи, каждая ~1-3
-часа, можно идти по очереди.
+| PR | Что | Files | Risk | Saturn-блок? |
+|---|---|---|---|---|
+| **A1** | Smart Notifications C1-C5 | `services/{messaging,gateway}/*` (изменения за вчера), `web/src/components/left/settings/SettingsSmartNotifications.tsx`, `web/src/components/middle/message/{ContextMenuContainer,MessageContextMenu}.tsx`, `web/src/serviceWorker/pushNotification.ts`, `Settings.scss`, `language.d.ts`, fallback strings | Low | Нет |
+| **A2** | SFU 6-bug fix + 3-browser e2e | `services/calls/internal/{handler,service}/*`, `services/gateway/internal/ws/*`, `web/src/hooks/useSfuStreamManager.ts`, `web/src/api/saturn/{methods,updates}/calls.ts`, `web/src/components/calls/group/GroupCall.tsx`, `web/src/global/actions/ui/calls.ts`, `tests/calls-e2e/{sfu-3-call.spec.ts,seed-sfu-group.sql}` | Medium — критический путь звонков | Нет |
+| **A3** | Live Translate i18n + p2p tweaks + остальной мусор | `web/src/lib/secret-sauce/p2p.ts`, fallback.strings, p2p-call.spec.ts, `services/messaging/internal/store/chat_store.go`, `services/messaging/internal/service/recording_publisher_test.go` | Low | Нет |
+| **A4** | Saturn infra (backup-cron + jetstream metrics + runbooks) | `.saturn.yml`, `docker-compose.yml`, `monitoring/prometheus/rules/orbit.yml`, `docs/runbooks/saturn-{backup-cron-enablement,jetstream-prom,perf-smoke}.md` | Medium | **ДА — пушить только после Saturn-side кликов** |
+| **A5** | OIDC SSO backend MVP + ICE watchdog + ADR 006 + mig 070 | `docs/canon/adr/006-oidc-sso.md`, `migrations/070_users_oidc_identity.sql`, `migrations/CHANGELOG.md`, `services/auth/{cmd,internal/handler,internal/service,internal/store}/*` (новые файлы и моки), `services/auth/go.{mod,sum}`, `web/src/lib/secret-sauce/sfu.ts`, `docs/canon/state.json` | Low — routes 404 без env | Нет |
+
+### Правила коммитов
+
+- Conventional commits на английском (`feat(auth): ...`, `fix(calls): ...`, `chore(infra): ...`)
+- Никаких squash через rebase — отдельные коммиты, потом отдельные PR
+- Перед push каждого PR прогнать `go test ./...` в задетых сервисах
+- A1→A2→A3→A5 можно пушить **до** Saturn-кликов. A4 — только после.
+- **Удалить `docs/NEXT-SESSION-PLAN-2026-05-06.md`** — он перекрывается этим файлом, путаница.
+
+---
+
+## ФАЗА B — SSO до конца (1 рабочий день)
+
+Без этого OIDC backend из A5 — мёртвый камень.
+
+### B1. FE-кнопка «Войти через {provider}» (~2-3 ч)
+
+- На login screen добавить блок над email/password формой
+- Кнопка conditioned на новый GET `/auth/oidc/config` (см. B2) — если
+  `enabled=false`, не рендерить
+- Click → `window.location = ${API}/auth/oidc/google/authorize?return_to=${encodeURIComponent(currentPath)}`
+- После redirect'а с провайдера — на любой странице фронта первым делом
+  читать `?access_token=` и `?expires_in=` из URL, передать в
+  существующую token-management infra (см. `web/src/api/saturn/client.ts`),
+  потом `history.replaceState` стирает params
+- **Файлы:** `web/src/components/auth/AuthPhoneNumber.tsx` (~50 строк),
+  `web/src/api/saturn/client.ts` (helper-функция absorb)
+- Локализация: `OIDCSignInButton` → "Войти через {provider}" / "Sign in with {provider}"
+
+### B2. Public OIDC config endpoint (~30 мин)
+
+- `GET /auth/oidc/config` (no auth) → `{enabled: bool, providerKey: string, displayName: string}`
+- 5 строк в `services/auth/internal/handler/oidc_handler.go`
+- `displayName` из нового env `OIDC_PROVIDER_DISPLAY_NAME` (default
+  capitalize providerKey: "google" → "Google")
+
+### B3. Локальный Dex для smoke-тестов (~1.5-2 ч)
+
+- В `docker-compose.yml` profile `oidc-dev` добавить сервис `dex` на
+  основе `ghcr.io/dexidp/dex:v2.41.1`
+- Config файл `deploy/dex/config.yaml`: static-passwords backend с
+  `alice@orbit.local` / `LoadTest!2026`, single OIDC client с
+  redirect-URL'ом на локальный auth (`http://localhost:8080/api/v1/auth/oidc/dex/callback`)
+- README-абзац: `docker compose --profile oidc-dev up -d dex` →
+  выставить `OIDC_*` env в auth → пройти flow в браузере
+- Фактический smoke не входит в B3 — это для следующего, кто будет
+  отлаживать продовую интеграцию
+
+### B4. Sync worker для деактивации (~3-4 ч)
+
+- Новый файл `services/auth/internal/service/oidc_sync.go` (~150 строк)
+- Интерфейс `DirectoryClient { ListActiveSubjects(ctx) ([]string, error) }`
+- Реализация `googleDirectoryClient` через `google.golang.org/api/admin/directory/v1`
+- Горутина в `services/auth/cmd/main.go`: `time.NewTicker(1 * time.Hour)`,
+  на тик — для каждого юзера с `oidc_provider IS NOT NULL AND is_active=true`
+  проверить, есть ли subject в provider. Нет → `userSvc.Deactivate(uid)` +
+  `s.sessions.DeleteAllByUser(uid)` + добавить ВСЕ jti в blacklist (см.
+  memory `Day 5.2 session revoke` — gateway-кэш закрывается per-jti
+  blacklist)
+- Unit-тесты с mock'нутым DirectoryClient в `oidc_sync_test.go`
+- Env: `OIDC_SYNC_ENABLED=true`, `OIDC_SYNC_INTERVAL=1h`,
+  `OIDC_SYNC_GOOGLE_SA_JSON` (multiline JSON ключ service account)
+
+### Готовность B
+
+- Локально: `docker compose --profile oidc-dev up -d` → пройти OIDC-flow
+  в браузере → юзер создан + добавлен в default chats + JWT в куках
+- Существующий invite-юзер (test@orbit.local) логинится через Dex →
+  привязка через email-match
+- Ручной тест: удалить юзера в Dex (через config reload) → подождать
+  тик → юзер в Orbit `is_active=false`, новый login отбит
+
+### Push после B
+
+- Разбить на 4 PR: B1, B2 — отдельно (мелкие FE+BE), B3 — отдельно
+  (infra), B4 — отдельно (worker)
+
+---
+
+## ФАЗА C — Pilot-quality калибровка звонков (~3 ч суммарно)
+
+### C1. Per-participant mute/screenshare UI (~1.5 ч)
+
+- В `useSfuStreamManager.ts` добавить `participantStates: Map<userId, {muted: boolean, sharing: boolean}>`
+  как `useState` или ref+forceUpdate
+- Подписаться на apiUpdates (через `addCallback` или новый emitter) для
+  событий `call_muted` / `call_unmuted` / `screen_share_*` — обновлять
+  Map с правильным userId
+- Заэкспортить из хука + протянуть в `GroupCall.tsx` тайлы
+- В тайле participant'а отрисовать иконки `mic-off` / `screen-share-on`
+- **Не лезть** в `wsHandler.ts:737` (там сейчас баг — broken P2P-shape).
+  Просто перестать туда диспатчить для group calls; для P2P оставить
+  как есть.
+- ~1 файл FE + минимальный диспатчинг в хук
+
+### C2. WS-reconnect UX-плашка (~1 ч)
+
+- Использовать существующий `reconnectingWS` ивент (см.
+  `web/src/api/saturn/client.ts` — там уже есть событие при
+  reconnect). При активном звонке (`global.calls.activeCallId`) и
+  `disconnect` event — toast «Связь потеряна. Нажмите чтобы
+  переподключиться» с кнопкой
+- При клике: `actions.leaveCall()` потом `actions.joinActiveCall(callId)`
+- 1 файл FE, ~30 строк
+
+### C3. (опционально) Server-side restart_ice handler
+
+- В `services/calls/internal/handler/sfu_handler.go:134` добавить
+  `case "restart_ice":` который вызывает `peer.RestartICE()` (Pion умеет)
+  и триггерит свежий offer через существующий offer pump в
+  `services/calls/internal/webrtc`
+- Unit-тест в `services/calls/internal/webrtc/sfu_test.go`
+- ~30-60 строк
+- **Если время поджимает — отложить за пилот.** Watchdog клиента уже
+  есть, без серверной части он просто no-op (server warn'ит «unknown
+  signal event»).
+
+### Push после C
+
+- C1+C2 одним PR (FE only)
+- C3 отдельным PR (Go only)
+
+---
+
+## ФАЗА D — Запись звонков (compliance, ~2 рабочих дня)
+
+### D1. Миграция 071 (~30 мин)
+
+```sql
+CREATE TABLE call_recordings (
+    id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    call_id              uuid NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    participant_user_id  uuid NOT NULL REFERENCES users(id),
+    s3_key               text NOT NULL,
+    encryption_key_id    text NOT NULL,  -- KMS key ref
+    started_at           timestamptz NOT NULL,
+    ended_at             timestamptz,
+    duration_sec         int,
+    size_bytes           bigint,
+    created_at           timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_call_recordings_call ON call_recordings(call_id, started_at);
+CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE ended_at IS NOT NULL;
+```
+
+Только аудио → одна строка per participant per call. Не per track.
+
+### D2. Pion track recording (~4-5 ч)
+
+- В `services/calls/internal/webrtc/peer.go`: при `pc.OnTrack` для
+  audio kind → создать `oggwriter.NewWith(...)` пишет в локальный
+  `os.CreateTemp("", "orbit-rec-*.ogg")`
+- Сохранить хендл в peer struct
+- При `room.Close()` или `peer.Close()`:
+  1. Закрыть oggwriter (flush)
+  2. Шифровать через `pkg/crypto` (тот же AES-256-GCM что для медиа
+     чатов) — генерируем per-recording key, key wrap'аем мастер-ключом
+  3. Upload в MinIO/S3 через `pkg/storage`
+  4. INSERT в `call_recordings` со всеми метаданными
+  5. Удалить tmp файл
+- **Important:** делать это в горутине после Close, чтобы не блокировать
+  cleanup. Если upload упал — лог + flag в записи `upload_failed`,
+  ретрай через cron не надо (потеря приемлема для compliance baseline)
+- Тесты: модульный с фейковым track + storage mock
+
+### D3. Compliance-плашка перед стартом звонка (~1.5 ч)
+
+- При первом старте/принятии звонка показать модал:
+  - Заголовок: «Звонки записываются»
+  - Текст: «В этой компании звонки сохраняются для compliance согласно
+    политике ИБ. Запись доступна администраторам по запросу. Продолжая,
+    вы подтверждаете информированность.»
+  - Чекбокс «Не показывать снова»
+  - Кнопка «Продолжить» (disabled пока чекбокс не отмечен ИЛИ юзер
+    впервые видит — тут продумать UX)
+- Per-user flag в localStorage `orbit-call-recording-acknowledged-v1`
+- Локализация: ключи `CallRecordingNoticeTitle`, `CallRecordingNoticeBody`,
+  `CallRecordingNoticeAck`, `CallRecordingNoticeContinue`
+- **Юридический crosscheck:** перед merge — попросить юзера показать
+  текст юристу. ФЗ-152 формулировки в РФ строгие.
+
+### D4. Admin endpoint для скачивания (~1.5 ч)
+
+- `GET /admin/calls/{call_id}/recordings` → list `call_recordings` for
+  this call с signed URL'ами (`pkg/storage.SignedDownloadURL`, TTL 1 час)
+- Permission gate: `SysViewAuditLog` или новый `SysListenCallRecordings`
+  (рекомендую новый — отделить право слушать от права читать audit)
+- Аудит: каждый запрос signed URL пишется в `audit_log` action
+  `call_recording.access` с `target_type=call_recording, target_id=recording.id`
+- В Admin UI добавить таб «Записи звонков» рядом с «Audit Log» — список
+  call_recordings с фильтром по call_id/participant/date
+
+### D5. GC ретеншена 90 дней (~1 ч)
+
+- В `deploy/backup-cron/scripts/` (или новом сервисе) добавить cron-job
+  раз в день:
+  ```bash
+  KEYS=$(psql -t -c "DELETE FROM call_recordings WHERE ended_at < now() - interval '90 days' RETURNING s3_key;")
+  echo "$KEYS" | xargs -I{} aws s3 rm "s3://${R2_BACKUP_BUCKET}/calls/{}"
+  ```
+- Альтернатива: bucket lifecycle rule + DELETE only DB. Проще, но БД и
+  S3 расходятся при сбое — лучше явный workflow.
+- Метрика `orbit_call_recordings_deleted_total` для мониторинга
+
+### D6. Storage budget alert (~30 мин)
+
+- Метрика `orbit_call_recordings_total_bytes` (sum size_bytes из БД,
+  scrape раз в 5 мин)
+- Prometheus alert `CallRecordingsStorageHigh` при > 100 GB → твой
+  триггер посмотреть retention или вырубить запись
+- Добавить в `monitoring/prometheus/rules/orbit.yml`
+
+### Push после D
+
+- D1 миграция — отдельным PR
+- D2+D3 — feat PR (запись + плашка)
+- D4 — отдельным PR (admin)
+- D5+D6 — отдельным PR (infra GC)
+
+---
+
+## ФАЗА E — Pilot launch (твоя работа)
+
+| Шаг | Кто | Артефакт |
+|---|---|---|
+| Saturn-side: enable OIDC env | Юзер | provider config |
+| Manual smoke в проде: SSO login → создать чат → видео-звонок → проверить запись доступна в admin | Юзер | screenshot/notes |
+| Импорт 150 юзеров (через первый OIDC-логин) | Юзер | список email'ов в IdP |
+| Watch dashboards 24-48 ч | Юзер + агент при инцидентах | Saturn dashboards |
+
+---
+
+## ФАЗА F — Post-pilot deferred (НЕ ДЕЛАТЬ ДО ПИЛОТА)
+
+Список того, что **намеренно отложено**:
+
+- **3a server-side ICE restart handler** (фаза C3 опциональная — может
+  переехать сюда)
+- **Per-chat priority override UI** (`PUT /chats/{id}/notification-priority`
+  бэкенд есть, фронт нет)
+- **Firefox e2e** для звонков (`tests/calls-e2e/playwright.config.ts`)
+- **AI Meeting Notes** (Wave 2 killer feature, отдельный sprint, нужен
+  Whisper local или NVIDIA Parakeet для русского)
+- **OIDC F3 multi-provider DB** (см. решение #9 в принятых)
+- **SAML, magic-link, social-login**
+- **Видео-recording звонков** (только аудио в MVP)
+- **Selective recording** (несовместимо с compliance-моделью)
+- **Поиск по содержимому записей** (нужна транскрипция + индекс)
+- **PITR restore drill локально** (есть pg_dump 4h RPO, full WAL/PITR
+  отложен — см. memory `WAL/PITR backlog`)
+
+---
+
+## Критический контекст
+
+### Тест-юзеры (все пароль `LoadTest!2026`)
+
+- `test@orbit.local` (alice, `3b4a280b-df0b-43e2-8fc3-629d33edb8c0`) — **superadmin**
+- `user2@orbit.local` (bob, `e83bfcf7-9563-43d2-adb3-80a3aa0a4025`)
+- `loadtest_0..149@orbit.local`
+
+⚠ В предыдущих брифах alice/bob ID были перепутаны — DB-snapshot выше
+канонический.
+
+### Ключевые ID
+
+- **Default-for-new-users чат** (mig 069): `997c7fcb-2075-47df-97bb-5dd15dc07d55` (`Orbit First Run`)
+- **SFU тест-группа** (e2e): `cccccccc-3333-4444-5555-666666666666` (test/user2/loadtest_0)
+
+### Локальный стек
+
+- `docker compose up -d` → 17 контейнеров healthy
+- Web: http://localhost:3000 (production build, nginx)
+- Auth direct: http://localhost:8081
+- Messaging direct: http://localhost:8082
+- Gateway: http://localhost:8080 (всё проксируется через `/api/v1/...`)
+
+### Прод
+
+- URL: **https://new-tg-gwcikm.saturn.ac/** (НЕ orbit-messenger.saturn.ac
+  из старых доков)
+- Saturn проект: https://saturn.ac/projects/u040wk444w0cosc8sgss0s4o
+- Auto-deploy по `git push origin main`
+
+### Где жить вещам
+
+| Тема | Путь |
+|---|---|
+| Smart Notifications | `services/{messaging,gateway,ai}/internal/...`, `web/src/components/left/settings/SettingsSmartNotifications.tsx`, `web/src/serviceWorker/pushNotification.ts` |
+| SFU | `services/calls/internal/{handler,service,webrtc}/`, `web/src/hooks/useSfuStreamManager.ts`, `web/src/lib/secret-sauce/sfu.ts` |
+| OIDC | `services/auth/internal/{handler/oidc_handler.go,service/oidc.go}`, `docs/canon/adr/006-oidc-sso.md` |
+| Saturn infra | `.saturn.yml`, `docker-compose.yml`, `monitoring/`, `docs/runbooks/saturn-*.md` |
+| E2E | `tests/calls-e2e/*` (Playwright, отдельный package, **не в `web/`**) |
+
+### Команды
+
+```bash
+# Запустить всё
+docker compose up -d
+
+# Migration
+docker exec -i orbit-postgres-1 psql -U orbit -d orbit < migrations/NNN_*.sql
+
+# Тесты сервиса
+cd services/<name> && go test ./... -count=1
+
+# Frontend type check
+cd web && npx tsc --noEmit
+
+# E2E call test (требует docker compose up)
+cd tests/calls-e2e && npx playwright test sfu-3-call.spec.ts
+```
+
+### Деп-ограничения
+
+- `services/auth` go.mod на **1.24** (НЕ 1.25 — convention запрещает)
+- `coreos/go-oidc/v3 v3.11.0` пиннуто (latest 3.18 требует Go 1.25)
+- `golang.org/x/oauth2 v0.30.0` пиннуто по той же причине
+- Не делать `go get -u` на этих двух без re-check go directive
+
+---
+
+## Открытые feature gaps (для контекста, не для немедленной работы)
+
+Найдены в сессии 2026-05-06, **зафиксированы в коде комментариями**:
+
+1. **`services/calls/internal/handler/sfu_handler.go:134`** — switch
+   только на `answer`/`candidate`. Клиент шлёт `restart_ice` (см.
+   `web/src/lib/secret-sauce/sfu.ts`) — сервер дропает с warn.
+   **Закрывается фазой C3.**
+
+2. **`web/src/api/saturn/updates/wsHandler.ts:737-799`** —
+   `handleCallMuteChanged` / `handleScreenShareChanged` мапит на
+   `updatePhoneCallPeerState` (P2P shape). В group call это перезаписывает
+   индикатор всех participant'ов одним. **Закрывается фазой C1** (но
+   через local map в хуке, не через global state).
+
+3. **SFU room resume при WS-разрыве** — клиент дропается из room без
+   автоматического возврата. **Закрывается фазой C2** (UX-плашка, не
+   auto-resume).
+
+---
+
+## Suggested first move
+
+1. `git status -s` → подтвердить, что dirty файлы из брифа на месте
+2. `git diff --stat` → ориентация на scope
+3. Прочитать `docs/canon/state.json` + этот файл + `docs/canon/divergences.md`
+4. Спросить юзера:
+   - **«Saturn-side ресурсы (`backup-cron` + `nats-exporter`) уже создал?»**
+     - Если ДА → начинаем фазу A полностью (включая A4)
+     - Если НЕТ → начинаем фазу A без A4 (пушим A1+A2+A3+A5), параллельно
+       юзер кликает в Saturn UI
+   - **«Когда пилот?»**
+     - 2-3 дня: A→B→C→D→E последовательно
+     - Завтра: A → B1+B2+B3 → C1+C2 → E (запись звонков отложить, без
+       compliance-плашки прода юзеров не пускать)
+     - Сегодня вечером: только A → E, без SSO (invite-коды), без
+       записи. Не рекомендуется
+   - **«Запись звонков обязательна на launch?»** — если да, фаза D
+     параллельно с B
+5. Закоммитить фазу A в порядке выше, прогнать тесты после каждого
+   commit'а
+6. Дальше — по выбранному маршруту
+
+**Не пушить ничего до подтверждения юзера, что Saturn-side готов.**

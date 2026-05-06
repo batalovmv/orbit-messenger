@@ -63,6 +63,18 @@ func (f *fakeUserStore) EnableTOTPAndRevokeSessions(ctx context.Context, id uuid
 func (f *fakeUserStore) UpdateNotificationPriorityMode(ctx context.Context, id uuid.UUID, m string) error {
 	return nil
 }
+func (f *fakeUserStore) GetByOIDCSubject(ctx context.Context, provider, subject string) (*model.User, error) {
+	return nil, nil
+}
+func (f *fakeUserStore) LinkOIDCSubject(ctx context.Context, userID uuid.UUID, provider, subject string) error {
+	return nil
+}
+func (f *fakeUserStore) CreateOIDCUser(ctx context.Context, u *model.User, provider, subject string) error {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	return nil
+}
 
 type fakeInviteStore struct {
 	getByCodeFn func(ctx context.Context, code string) (*model.Invite, error)

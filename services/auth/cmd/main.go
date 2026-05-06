@@ -194,6 +194,26 @@ func main() {
 		ResetAdmin: resetAdminRateLimit,
 	})
 
+	// OIDC SSO (ADR 006). Disabled when OIDC_PROVIDER_KEY is empty —
+	// in that mode the routes still exist but return 404 so the URL
+	// space is stable across deployments. Discovery has a hard 10s
+	// timeout to avoid hanging the whole service if the IdP is down.
+	oidcCfg := service.LoadOIDCConfigFromEnv(os.Getenv)
+	var oidcProvider *service.Provider
+	if oidcCfg.Enabled() {
+		discCtx, discCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		var err error
+		oidcProvider, err = service.NewProvider(discCtx, oidcCfg)
+		discCancel()
+		if err != nil {
+			slog.Error("oidc: provider discovery failed; SSO disabled", "error", err, "issuer", oidcCfg.Issuer)
+			oidcProvider = nil
+		} else {
+			slog.Info("oidc: provider ready", "key", oidcCfg.ProviderKey, "issuer", oidcCfg.Issuer)
+		}
+	}
+	handler.NewOIDCHandler(authSvc, oidcProvider, oidcCfg).Register(app)
+
 	// Graceful shutdown
 	go func() {
 		if err := app.Listen(":" + port); err != nil {

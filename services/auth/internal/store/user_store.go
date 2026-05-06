@@ -31,6 +31,16 @@ type UserStore interface {
 	// in a single DB transaction, closing the TOCTOU window between the two operations.
 	EnableTOTPAndRevokeSessions(ctx context.Context, id uuid.UUID, secret string) error
 	UpdateNotificationPriorityMode(ctx context.Context, userID uuid.UUID, mode string) error
+
+	// OIDC SSO (ADR 006, mig 070).
+	GetByOIDCSubject(ctx context.Context, provider, subject string) (*model.User, error)
+	// LinkOIDCSubject sets oidc_provider+oidc_subject on a user only if both
+	// are currently NULL — protects against silently overwriting an existing
+	// link. Returns pgx.ErrNoRows when the row was already linked.
+	LinkOIDCSubject(ctx context.Context, userID uuid.UUID, provider, subject string) error
+	// CreateOIDCUser inserts a passwordless user already linked to an OIDC
+	// identity. Used when /oidc/callback finds no email match in users.
+	CreateOIDCUser(ctx context.Context, u *model.User, provider, subject string) error
 }
 
 type userStore struct {
@@ -225,4 +235,73 @@ func (s *userStore) UpdateNotificationPriorityMode(ctx context.Context, userID u
 		`UPDATE users SET notification_priority_mode = $1, updated_at = NOW() WHERE id = $2`,
 		mode, userID)
 	return err
+}
+
+// GetByOIDCSubject returns the user linked to the given (provider, subject)
+// pair, or (nil, nil) if no link exists.
+func (s *userStore) GetByOIDCSubject(ctx context.Context, provider, subject string) (*model.User, error) {
+	u := &model.User{}
+	err := s.pool.QueryRow(ctx,
+		`SELECT id, email, password_hash, notification_priority_mode, phone, username, display_name, avatar_url, bio,
+		        status, custom_status, custom_status_emoji, role, account_type,
+		        is_active, deactivated_at, deactivated_by,
+		        totp_secret, totp_enabled,
+		        invited_by, invite_code, last_seen_at, created_at, updated_at
+		 FROM users
+		 WHERE oidc_provider = $1 AND oidc_subject = $2`, provider, subject,
+	).Scan(
+		&u.ID, &u.Email, &u.PasswordHash, &u.NotificationPriorityMode, &u.Phone, &u.Username, &u.DisplayName, &u.AvatarURL, &u.Bio,
+		&u.Status, &u.CustomStatus, &u.CustomStatusEmoji, &u.Role, &u.AccountType,
+		&u.IsActive, &u.DeactivatedAt, &u.DeactivatedBy,
+		&u.TOTPSecret, &u.TOTPEnabled,
+		&u.InvitedBy, &u.InviteCode, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return u, err
+}
+
+// LinkOIDCSubject binds an OIDC identity to an existing password-or-invite
+// user. Refuses to overwrite an existing link — the WHERE clause is the
+// load-bearing safety net here, not application-level checks. Returns
+// pgx.ErrNoRows if the row was either not found or already linked.
+func (s *userStore) LinkOIDCSubject(ctx context.Context, userID uuid.UUID, provider, subject string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users
+		    SET oidc_provider = $1, oidc_subject = $2, updated_at = NOW()
+		  WHERE id = $3 AND oidc_subject IS NULL`,
+		provider, subject, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("link oidc subject: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// CreateOIDCUser inserts a passwordless user pre-linked to an OIDC identity.
+// password_hash is set to the bcrypt-incompatible sentinel "!" so a future
+// password login attempt fails closed without a separate column check.
+func (s *userStore) CreateOIDCUser(ctx context.Context, u *model.User, provider, subject string) error {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("create oidc user: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // safe after Commit
+
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, display_name, role, oidc_provider, oidc_subject)
+		 VALUES ($1, '!', $2, $3, $4, $5)
+		 RETURNING id, status, is_active, totp_enabled, created_at, updated_at`,
+		u.Email, u.DisplayName, u.Role, provider, subject,
+	).Scan(&u.ID, &u.Status, &u.IsActive, &u.TOTPEnabled, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		return fmt.Errorf("create oidc user: insert: %w", err)
+	}
+	if err := s.installDefaultStickerPacks(ctx, tx, u.ID); err != nil {
+		return fmt.Errorf("create oidc user: install default sticker packs: %w", err)
+	}
+	return tx.Commit(ctx)
 }
