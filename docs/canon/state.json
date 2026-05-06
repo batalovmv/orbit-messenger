@@ -1,6 +1,6 @@
 {
   "phase": "8D",
-  "last_migration": "070",
+  "last_migration": "071",
   "go_versions": {"gateway": "1.25", "default": "1.24"},
   "removed_features": ["e2e_signal_protocol", "channels", "superadmin_bootstrap"],
   "frontend_framework": "Teact",
