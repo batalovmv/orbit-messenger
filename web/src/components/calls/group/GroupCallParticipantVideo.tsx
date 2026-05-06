@@ -44,6 +44,10 @@ type OwnProps = {
   participant: TypeGroupCallParticipant;
   className?: string;
   remoteStream?: MediaStream;
+  // SFU-driven per-participant indicators that bypass the legacy P2P
+  // `peerIsMuted` global state (which is single-peer-shaped and would
+  // otherwise paint every tile with the same value).
+  sfuState?: { isMuted: boolean; isScreenSharing: boolean };
 };
 
 type StateProps = {
@@ -61,6 +65,7 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
   user,
   chat,
   remoteStream,
+  sfuState,
 }) => {
   const lang = useOldLang();
 
@@ -73,8 +78,12 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
     type,
   } = layout;
   const {
-    isSelf, isMutedByMe, isMuted,
+    isSelf, isMutedByMe, isMuted: globalIsMuted,
   } = participant;
+  // SFU events (mute/unmute) take precedence over the participant blob
+  // because the latter still rides on the broken P2P-shape global state.
+  const isMuted = sfuState?.isMuted ?? globalIsMuted;
+  const isScreenSharing = Boolean(sfuState?.isScreenSharing);
   const isPinned = pinnedVideo?.id === participant.id && pinnedVideo?.type === type;
   const isSpeaking = (participant.amplitude || 0) > THRESHOLD;
   const isRaiseHand = Boolean(participant.raiseHandRating);
@@ -307,7 +316,14 @@ const GroupCallParticipantVideo: FC<OwnProps & StateProps> = ({
             <FullNameTitle peer={user || chat!} className={styles.name} />
             <div className={styles.status}>{status}</div>
           </div>
-          <OutlinedMicrophoneIcon participant={participant} className={styles.icon} noColor />
+          {isScreenSharing && (
+            <i className={buildClassName('icon', 'icon-share-screen-outlined', styles.icon)} aria-hidden />
+          )}
+          <OutlinedMicrophoneIcon
+            participant={sfuState ? { ...participant, isMuted } : participant}
+            className={styles.icon}
+            noColor
+          />
         </div>
       </div>
 

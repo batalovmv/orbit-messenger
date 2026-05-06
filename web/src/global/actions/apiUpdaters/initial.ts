@@ -245,6 +245,26 @@ function onUpdateConnectionState<T extends GlobalState>(
     return;
   }
 
+  // SFU group calls: if we lose connection mid-call, prompt the user to
+  // reconnect manually rather than auto-resuming. The pilot scope decided
+  // a one-click toast beats engineering an auto-resume that needs to
+  // re-derive ICE state, re-publish tracks, etc. (NEXT-SESSION-PLAN
+  // decision #5, 2026-05-06).
+  const wasReady = global.connectionState === 'connectionStateReady';
+  const lostConnection = wasReady
+    && (connectionState === 'connectionStateConnecting' || connectionState === 'connectionStateBroken');
+  const activeGroupCallId = global.groupCalls?.activeGroupCallId;
+  if (lostConnection && activeGroupCallId) {
+    actions.showNotification({
+      localId: 'sfu-connection-lost',
+      message: { key: 'CallReconnectLost' },
+      actionText: { key: 'CallReconnectRetry' },
+      action: { action: 'connectToActiveGroupCall', payload: undefined },
+      duration: 0,
+      tabId: tabState.id,
+    });
+  }
+
   global = {
     ...global,
     connectionState,

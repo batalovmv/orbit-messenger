@@ -430,6 +430,7 @@ const GroupCall: FC<OwnProps & StateProps> = ({
                     pinnedVideo={pinnedVideo}
                     participant={participant}
                     remoteStream={sfuVideoStreams.get(layout.participantId)}
+                    sfuState={sfuManager.participantStates.get(layout.participantId)}
                   />
                 );
               })}
@@ -473,6 +474,7 @@ const GroupCall: FC<OwnProps & StateProps> = ({
               participant={participant}
               className={styles.video}
               remoteStream={sfuVideoStreams.get(layout.participantId)}
+              sfuState={sfuManager.participantStates.get(layout.participantId)}
             />
           );
         })}

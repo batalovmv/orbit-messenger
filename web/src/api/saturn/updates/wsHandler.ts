@@ -9,6 +9,7 @@ import {
   buildApiMessage, buildApiPoll, getMessageSeqNum, parseSaturnReplyMarkup,
 } from '../apiBuilders/messages';
 import { setWsMessageHandler } from '../client';
+import { emitGroupCallParticipantState } from '../../../lib/secret-sauce/groupCallParticipantState';
 import { getActiveCallMode, setActiveCallId, setActiveCallMode, setActiveCallPeerId } from '../methods/calls';
 import { sendApiUpdate } from './apiUpdateEmitter';
 
@@ -744,6 +745,12 @@ function handleCallMuteChanged(data: Record<string, unknown>) {
   // Echo guard — our own mute is handled locally by the toggleStreamP2p path.
   if (userId === currentUserId) return;
 
+  // SFU group calls: feed the per-participant tile indicator via the
+  // dedicated emitter. Decoupled from the legacy P2P shape below so the
+  // group-call panel doesn't pick up the mis-shaped peerIsMuted that
+  // overwrites every tile with one peer's state.
+  emitGroupCallParticipantState({ kind: 'mute', userId, muted: isMuted });
+
   sendApiUpdate({
     '@type': 'updatePhoneCallPeerState',
     peerIsMuted: isMuted,
@@ -791,6 +798,8 @@ function handleScreenShareChanged(data: Record<string, unknown>, isActive: boole
 
   // Only react to the remote peer — the local user already knows their own state.
   if (userId === currentUserId) return;
+
+  emitGroupCallParticipantState({ kind: 'screenshare', userId, sharing: isActive });
 
   sendApiUpdate({
     '@type': 'updatePhoneCallPeerState',

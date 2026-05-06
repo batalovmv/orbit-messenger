@@ -154,6 +154,8 @@ export interface LangPair {
   'LoginEmail': undefined;
   'LoginSubtitle': undefined;
   'OIDCDivider': undefined;
+  'CallReconnectLost': undefined;
+  'CallReconnectRetry': undefined;
   'LoginQRLogin': undefined;
   'LoginQRTitle': undefined;
   'LoginQRHelp1': undefined;

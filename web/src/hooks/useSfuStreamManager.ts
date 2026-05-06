@@ -20,12 +20,19 @@ import {
   toggleSfuScreenShare,
   toggleSfuVideo,
 } from '../lib/secret-sauce/sfu';
+import { subscribeGroupCallParticipantState } from '../lib/secret-sauce/groupCallParticipantState';
 import { getAccessToken, getBaseUrl, request } from '../api/saturn/client';
 import { fetchICEServers } from '../api/saturn/methods/calls';
 import useLastCallback from './useLastCallback';
 
+export interface SfuParticipantState {
+  isMuted: boolean;
+  isScreenSharing: boolean;
+}
+
 export interface SfuStreamManager {
   remoteStreams: Map<string, SfuRemoteTrack>;
+  participantStates: Map<string, SfuParticipantState>;
   localStream?: MediaStream;
   isConnecting: boolean;
   isConnected: boolean;
@@ -39,14 +46,38 @@ export interface SfuStreamManager {
 
 // Workaround: TypeScript doesn't like instantiating Map with type args in useState
 const createEmptyStreamMap = () => new Map<string, SfuRemoteTrack>();
+const createEmptyStateMap = () => new Map<string, SfuParticipantState>();
 
 export function useSfuStreamManager(callId: string | undefined): SfuStreamManager {
   const [remoteStreams, setRemoteStreams] = useState<Map<string, SfuRemoteTrack>>(createEmptyStreamMap);
+  const [participantStates, setParticipantStates] = useState<Map<string, SfuParticipantState>>(createEmptyStateMap);
   const [localStream, setLocalStream] = useState<MediaStream | undefined>();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const sessionRef = useRef<SfuSession | undefined>();
+
+  // Listen for SFU participant state changes (mute, screen-share). Bound
+  // to callId so a panel-remount on call switch starts with a fresh map
+  // — stale state from the previous call would otherwise paint wrong
+  // indicators for the first frame.
+  useEffect(() => {
+    if (!callId) return undefined;
+    setParticipantStates(createEmptyStateMap());
+    const unsubscribe = subscribeGroupCallParticipantState((event) => {
+      setParticipantStates((prev) => {
+        const next = new Map(prev);
+        const current = next.get(event.userId) ?? { isMuted: false, isScreenSharing: false };
+        if (event.kind === 'mute') {
+          next.set(event.userId, { ...current, isMuted: event.muted });
+        } else {
+          next.set(event.userId, { ...current, isScreenSharing: event.sharing });
+        }
+        return next;
+      });
+    });
+    return unsubscribe;
+  }, [callId]);
 
   const handleRemoteTrack = useCallback((track: SfuRemoteTrack) => {
     setRemoteStreams((prev) => {
@@ -193,6 +224,7 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
   // are stable via useLastCallback, so only the state values feed deps.
   return useMemo(() => ({
     remoteStreams,
+    participantStates,
     localStream,
     isConnecting,
     isConnected,
@@ -204,6 +236,7 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     toggleScreenShare,
   }), [
     remoteStreams,
+    participantStates,
     localStream,
     isConnecting,
     isConnected,
