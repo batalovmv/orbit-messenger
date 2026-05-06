@@ -16,6 +16,15 @@ const TOKEN_REFRESH_MARGIN_MS = 60 * 1000; // Refresh 60s before expiry
 const WS_PING_INTERVAL_MS = 25 * 1000;
 const WS_RECONNECT_BASE_MS = 1000;
 const WS_RECONNECT_MAX_MS = 30 * 1000;
+// Cold-start race: if the gateway is mid-deploy, the TCP handshake can hang
+// for tens of seconds before the browser fires `error`. Force a tear-down
+// after this much time in CONNECTING so we cycle through reconnect logic
+// instead of leaving the user staring at a blank page.
+const WS_CONNECT_TIMEOUT_MS = 8 * 1000;
+// First connect attempt of the session retries faster than subsequent
+// failures — typical cold-start failure is just timing race with the
+// gateway becoming ready, no need to back off a full second.
+const WS_FIRST_ATTEMPT_BACKOFF_MS = 250;
 const ACCESS_TOKEN_STORAGE_KEY = 'saturn_access_token';
 const ACCESS_TOKEN_EXPIRES_AT_STORAGE_KEY = 'saturn_access_token_expires_at';
 const SESSION_ID_STORAGE_KEY = 'saturn_session_id';
@@ -81,6 +90,7 @@ export function resolveAuthGate() {
 let ws: WebSocket | undefined;
 let wsPingInterval: ReturnType<typeof setInterval> | undefined;
 let wsReconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+let wsConnectTimeout: ReturnType<typeof setTimeout> | undefined;
 let tokenRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let wsReconnectDelay = WS_RECONNECT_BASE_MS;
 let wsReconnectFireAt = 0;
@@ -417,11 +427,26 @@ export function connectWs() {
     console.log('[Saturn WS] Connecting to', wsUrl);
   }
   ws = new WebSocket(wsUrl);
+  // Guard against the cold-start hang: browsers can leave the socket in
+  // CONNECTING for ~30s before firing `error`. Force-close after our shorter
+  // budget so the standard reconnect path runs sooner.
+  const wsForThisAttempt = ws;
+  wsConnectTimeout = setTimeout(() => {
+    if (wsForThisAttempt.readyState === WebSocket.CONNECTING) {
+      // eslint-disable-next-line no-console
+      console.warn('[Saturn WS] Connect timed out, forcing close to retry', { url: wsUrl });
+      wsForThisAttempt.close();
+    }
+  }, WS_CONNECT_TIMEOUT_MS);
 
   ws.onopen = () => {
     if (DEBUG) {
       // eslint-disable-next-line no-console
       console.log('[Saturn WS] Connected, sending auth frame');
+    }
+    if (wsConnectTimeout) {
+      clearTimeout(wsConnectTimeout);
+      wsConnectTimeout = undefined;
     }
     // Send auth frame immediately — token is NOT in URL for security.
     // session_id lets the gateway exclude this connection from cross-device
@@ -475,17 +500,32 @@ export function connectWs() {
       // eslint-disable-next-line no-console
       console.warn('[Saturn WS] Closed:', event.code, event.reason, 'intentional:', wsIntentionalClose);
     }
+    if (wsConnectTimeout) {
+      clearTimeout(wsConnectTimeout);
+      wsConnectTimeout = undefined;
+    }
     stopPing();
     if (!wsIntentionalClose) {
       onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
+      // First failure of the session: deploy/cold-start race is the most
+      // likely cause and almost always recovers in <500ms. Retry fast.
+      if (!wsHasConnectedBefore && wsReconnectDelay > WS_FIRST_ATTEMPT_BACKOFF_MS) {
+        wsReconnectDelay = WS_FIRST_ATTEMPT_BACKOFF_MS;
+      }
       scheduleReconnect();
     }
   };
 
   ws.onerror = (event) => {
+    // The Event itself carries no detail per spec; capture what we can so
+    // the prod log tells us *which* connection failed and at what stage.
     // eslint-disable-next-line no-console
-    console.error('[Saturn WS] Error:', event);
-    // onclose will fire after onerror
+    console.error('[Saturn WS] Error:', {
+      url: wsUrl,
+      readyState: ws?.readyState,
+      type: (event as Event)?.type,
+    });
+    // onclose will fire after onerror — no need to schedule reconnect here.
   };
 }
 
@@ -494,6 +534,10 @@ export function disconnectWs() {
   if (wsReconnectTimeout) {
     clearTimeout(wsReconnectTimeout);
     wsReconnectTimeout = undefined;
+  }
+  if (wsConnectTimeout) {
+    clearTimeout(wsConnectTimeout);
+    wsConnectTimeout = undefined;
   }
   stopPing();
   if (ws) {
