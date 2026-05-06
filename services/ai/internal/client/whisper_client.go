@@ -98,6 +98,29 @@ type TranscribeResult struct {
 	Language string
 }
 
+// WhisperHTTPError is returned when the upstream provider responds with a
+// non-2xx status. The service layer pattern-matches on Status to translate
+// into apperror codes the frontend can show. Body is truncated to 2KB.
+type WhisperHTTPError struct {
+	Status int
+	Body   string
+}
+
+func (e *WhisperHTTPError) Error() string {
+	return fmt.Sprintf("whisper returned %d: %s", e.Status, e.Body)
+}
+
+// MediaFetchError wraps a non-2xx response from the internal media service.
+// Lets the service layer differentiate "media not found" (404) from
+// "internal token rejected" (401) so the user sees a meaningful banner.
+type MediaFetchError struct {
+	Status int
+}
+
+func (e *MediaFetchError) Error() string {
+	return fmt.Sprintf("media service returned %d", e.Status)
+}
+
 // TranscribeAudio sends the audio bytes to Whisper as a multipart POST.
 // filename is only used for MIME-type detection by OpenAI and should reflect
 // the original extension (e.g. "voice.ogg", "voice.mp4"). The content type
@@ -167,7 +190,7 @@ func (c *WhisperClient) TranscribeAudio(
 			"status", resp.StatusCode,
 			"body", string(errBody),
 		)
-		return nil, fmt.Errorf("whisper returned %d", resp.StatusCode)
+		return nil, &WhisperHTTPError{Status: resp.StatusCode, Body: string(errBody)}
 	}
 
 	var decoded struct {
@@ -213,7 +236,7 @@ func FetchMediaBytes(
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", fmt.Errorf("media service returned %d", resp.StatusCode)
+		return nil, "", &MediaFetchError{Status: resp.StatusCode}
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, whisperMaxFileSize+1))

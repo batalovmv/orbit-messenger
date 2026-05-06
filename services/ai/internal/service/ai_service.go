@@ -643,6 +643,46 @@ func splitSuggestions(raw string) []string {
 	return out
 }
 
+// mapWhisperError translates a *client.WhisperHTTPError into an apperror with
+// a user-meaningful HTTP status. We deliberately collapse provider-side
+// problems (auth, quota, outage) into 503 so the existing frontend
+// "AiNotConfigured" banner triggers — it's the closest existing UX bucket
+// for "transcription is unavailable, not your fault". Payload-too-large is
+// the only case where the user can act (record a shorter message), so it
+// surfaces as 400.
+func mapWhisperError(err error) error {
+	var hErr *client.WhisperHTTPError
+	if !errors.As(err, &hErr) {
+		return apperror.Internal("Transcription failed")
+	}
+	switch {
+	case hErr.Status == 401 || hErr.Status == 403:
+		return apperror.ServiceUnavailable("Transcription provider authentication failed")
+	case hErr.Status == 429:
+		return apperror.ServiceUnavailable("Transcription provider quota exceeded")
+	case hErr.Status == 413:
+		return apperror.BadRequest("Voice message too large to transcribe")
+	case hErr.Status >= 500:
+		return apperror.ServiceUnavailable("Transcription provider error")
+	default: // other 4xx — bad model id, unsupported format, etc.
+		return apperror.BadRequest("Transcription rejected by provider")
+	}
+}
+
+// mapMediaFetchError translates a *client.MediaFetchError into apperror.
+// 404 propagates to the user (their voice message is gone). Everything
+// else is on us — surface as 502 so monitoring picks it up.
+func mapMediaFetchError(err error) error {
+	var mErr *client.MediaFetchError
+	if !errors.As(err, &mErr) {
+		return apperror.Internal("Failed to fetch voice message")
+	}
+	if mErr.Status == 404 {
+		return apperror.NotFound("Voice message not found")
+	}
+	return apperror.BadGateway("Media service unavailable")
+}
+
 // ---------------------------------------------------------------------------
 // Transcribe (non-streaming, Whisper)
 // ---------------------------------------------------------------------------
@@ -670,7 +710,7 @@ func (s *AIService) Transcribe(
 		s.internalToken,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("fetch audio: %w", err)
+		return nil, mapMediaFetchError(err)
 	}
 
 	filename := "voice.ogg"
@@ -687,7 +727,7 @@ func (s *AIService) Transcribe(
 		if errors.Is(err, model.ErrAIUnavailable) {
 			return nil, apperror.ServiceUnavailable("Whisper provider not configured")
 		}
-		return nil, fmt.Errorf("whisper transcribe: %w", err)
+		return nil, mapWhisperError(err)
 	}
 
 	s.recordUsageAsync(userID, "transcribe", s.whisper.Model(), 0, 0)

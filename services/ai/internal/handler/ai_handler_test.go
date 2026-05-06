@@ -663,6 +663,172 @@ func TestTranslate_InvalidResponseFormat(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Transcribe error mapping — non-2xx from media or whisper must surface as
+// a meaningful HTTP code on the user-facing response, not a generic 500.
+// ---------------------------------------------------------------------------
+
+// newTranscribeApp wires a Fiber app with mocked media and whisper servers.
+// The handler returns whatever the test gives it.
+func newTranscribeApp(t *testing.T, mediaSrv, whisperSrv *httptest.Server) *fiber.App {
+	t.Helper()
+	mr := newMiniredis(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	whisperClient := client.NewWhisperClient("real-key", "whisper-1", slog.Default())
+	whisperClient.SetBaseURL(whisperSrv.URL)
+	messagingClient := client.NewMessagingClient("http://unused", "internal-secret")
+
+	svc := service.NewAIService(service.AIServiceConfig{
+		Whisper:         whisperClient,
+		Messaging:       messagingClient,
+		Redis:           rdb,
+		MediaServiceURL: mediaSrv.URL,
+		InternalToken:   "internal-secret",
+		Logger:          slog.Default(),
+	})
+
+	app := fiber.New()
+	h := NewAIHandler(svc, slog.Default())
+	h.Register(app)
+	return app
+}
+
+func postTranscribe(t *testing.T, app *fiber.App, mediaID string) (*http.Response, []byte) {
+	t.Helper()
+	body := fmt.Sprintf(`{"media_id":"%s"}`, mediaID)
+	req, _ := http.NewRequest(http.MethodPost, "/ai/transcribe", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-ID", uuid.New().String())
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	return resp, raw
+}
+
+// 401 (bad/scoped key) → 503 service_unavailable so the frontend shows the
+// configured-banner. The previous behaviour wrapped this in fmt.Errorf and
+// surfaced as a generic 500.
+func TestTranscribe_WhisperUnauthorized(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		_, _ = w.Write([]byte("fake-audio-bytes"))
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"Invalid API Key"}}`))
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 503 {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+// 429 (insufficient_quota — the actual prod error today) → 503 with a
+// distinct message so ops can recognise quota issues from the user banner.
+func TestTranscribe_WhisperQuotaExceeded(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		_, _ = w.Write([]byte("fake-audio-bytes"))
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"code":"insufficient_quota"}}`))
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 503 {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+// 413 (audio too large) → 400 so the frontend can show "voice message too
+// long to transcribe" rather than the generic banner.
+func TestTranscribe_WhisperPayloadTooLarge(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		_, _ = w.Write([]byte("fake-audio-bytes"))
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 400 {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+// Whisper 5xx → 503. Provider outage shouldn't read as our bug.
+func TestTranscribe_WhisperProviderError(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		_, _ = w.Write([]byte("fake-audio-bytes"))
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 503 {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+// Media 404 → 404, not 500. Caller deleted the message or supplied a
+// stale media_id.
+func TestTranscribe_MediaNotFound(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("whisper should not be reached when media fetch fails")
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 404 {
+		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// Media 401 (internal-token mismatch) → 502 — caller can't fix this, it's
+// our deploy misconfiguration. Not 500 so it shows up cleanly in alerts.
+func TestTranscribe_MediaUnauthorized(t *testing.T) {
+	mediaSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer mediaSrv.Close()
+	whisperSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("whisper should not be reached when media fetch fails")
+	}))
+	defer whisperSrv.Close()
+
+	app := newTranscribeApp(t, mediaSrv, whisperSrv)
+	resp, _ := postTranscribe(t, app, uuid.New().String())
+	if resp.StatusCode != 502 {
+		t.Fatalf("status = %d, want 502", resp.StatusCode)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Capabilities endpoint — frontend feature-gates UI by these flags so users
 // don't see broken buttons (e.g. Transcribe) when the corresponding provider
 // key is empty/"placeholder" on Saturn.
