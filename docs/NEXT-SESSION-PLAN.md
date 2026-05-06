@@ -27,21 +27,35 @@
 | B4 OIDC sync worker + Google directory client | ✅ done | `560d5a3` |
 | C1+C2 per-participant indicators + reconnect toast | ✅ done | `330285e` |
 | C3 server-side `restart_ice` handler | ✅ done | `69e94fd` |
-| D1 migration 071 (`call_recordings`) | ✅ done | `62d9de0` |
-| **D2 Pion track recording** | ⏭ deferred — следующая сессия | — |
-| **D3 Compliance плашка** | ⏭ deferred | — |
-| **D4 Admin endpoint скачивания** | ⏭ deferred | — |
-| **D5 GC ретеншен 90 дней** | ⏭ deferred | — |
-| **D6 Storage budget alert** | ⏭ deferred | — |
+| D1 migration 071 (`call_recordings`) | ❌ **reverted 2026-05-06** | `62d9de0` (originally) → `8e0b9c1` (revert) |
+| **Вся фаза D (запись звонков)** | ❌ **rejected 2026-05-06** — см. блок ниже | — |
 
 Локальная проверка по каждой фазе сделана: `go test ./...` для auth/calls,
 `tsc --noEmit` чистый, `docker compose --profile oidc-dev config` валиден,
 миграция 071 применена в локальный postgres и схема совпадает с тем, что
 ждёт `call_recordings`-FK у будущего D2 publisher'а.
 
-**14 коммитов на master, не запушены.** Tree clean. Saturn-side
+**16 коммитов на master, не запушены.** Tree clean. Saturn-side
 gating снят: orbit-backup-cron и orbit-nats-exporter не создаются,
-push можно делать в любой момент после согласования.
+push можно делать в любой момент.
+
+### Фаза D отменена (2026-05-06)
+
+Запись звонков (D1-D6) выкинута из бэклога после обсуждения:
+- Сообщения и звонки разной природы. Чаты текст+файлы, ищутся,
+  индексируются, админ реально найдёт что искал. Звонки — час аудио,
+  кто-то должен сесть и слушать; без транскрипции непригодно для
+  расследования.
+- Реальный use case "админ слушает прошлый звонок" на пилоте 150
+  юзеров — около нулевой. HR/security в практике решают по чатам и
+  логам, не по аудио.
+- Цена ненулевая: ~50 GB/мес storage, 2 дня инженерки, surface area
+  encryption + S3 + retention + admin UI + Pion relifecycle при
+  restart_ice.
+- Если через 2-3 месяца заказчик скажет "нам нужно слушать звонки" —
+  это сигнал реальной потребности; делается за неделю, данных за
+  прошлое не будет (deploy-date-forward — нормально для compliance
+  baseline).
 
 ---
 
@@ -276,106 +290,6 @@ domain-wide delegation на `https://www.googleapis.com/auth/admin.directory.use
 
 ---
 
-## ФАЗА D — Запись звонков (compliance, ~2 рабочих дня)
-
-### D1. Миграция 071 (~30 мин)
-
-```sql
-CREATE TABLE call_recordings (
-    id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    call_id              uuid NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
-    participant_user_id  uuid NOT NULL REFERENCES users(id),
-    s3_key               text NOT NULL,
-    encryption_key_id    text NOT NULL,  -- KMS key ref
-    started_at           timestamptz NOT NULL,
-    ended_at             timestamptz,
-    duration_sec         int,
-    size_bytes           bigint,
-    created_at           timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_call_recordings_call ON call_recordings(call_id, started_at);
-CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE ended_at IS NOT NULL;
-```
-
-Только аудио → одна строка per participant per call. Не per track.
-
-### D2. Pion track recording (~4-5 ч)
-
-- В `services/calls/internal/webrtc/peer.go`: при `pc.OnTrack` для
-  audio kind → создать `oggwriter.NewWith(...)` пишет в локальный
-  `os.CreateTemp("", "orbit-rec-*.ogg")`
-- Сохранить хендл в peer struct
-- При `room.Close()` или `peer.Close()`:
-  1. Закрыть oggwriter (flush)
-  2. Шифровать через `pkg/crypto` (тот же AES-256-GCM что для медиа
-     чатов) — генерируем per-recording key, key wrap'аем мастер-ключом
-  3. Upload в MinIO/S3 через `pkg/storage`
-  4. INSERT в `call_recordings` со всеми метаданными
-  5. Удалить tmp файл
-- **Important:** делать это в горутине после Close, чтобы не блокировать
-  cleanup. Если upload упал — лог + flag в записи `upload_failed`,
-  ретрай через cron не надо (потеря приемлема для compliance baseline)
-- Тесты: модульный с фейковым track + storage mock
-
-### D3. Compliance-плашка перед стартом звонка (~1 ч)
-
-Частный корпоративный мессенджер — никакого юридического crosscheck'а
-не нужно (решение юзера 2026-05-06). Просто внутренняя корп-нотификация.
-
-- При первом старте/принятии звонка показать модал:
-  - Заголовок: «Звонки записываются»
-  - Текст: «Звонки в Orbit сохраняются для внутренних целей компании
-    и доступны администраторам.»
-  - Кнопка «Продолжить»
-- Per-user flag в localStorage `orbit-call-recording-acknowledged-v1`
-- Локализация: ключи `CallRecordingNoticeTitle`, `CallRecordingNoticeBody`,
-  `CallRecordingNoticeContinue`
-
-### D4. Admin endpoint для скачивания (~1.5 ч)
-
-- `GET /admin/calls/{call_id}/recordings` → list `call_recordings` for
-  this call с signed URL'ами (`pkg/storage.SignedDownloadURL`, TTL 1 час)
-- Permission gate: `SysViewAuditLog` или новый `SysListenCallRecordings`
-  (рекомендую новый — отделить право слушать от права читать audit)
-- Аудит: каждый запрос signed URL пишется в `audit_log` action
-  `call_recording.access` с `target_type=call_recording, target_id=recording.id`
-- В Admin UI добавить таб «Записи звонков» рядом с «Audit Log» — список
-  call_recordings с фильтром по call_id/participant/date
-
-### D5. GC ретеншена 90 дней (~1 ч)
-
-Новых Saturn-сервисов не заводим (см. revert A4). GC живёт горутиной
-прямо в `services/calls` — это сервис, который пишет recordings, ему
-же их и удалять.
-
-- В `services/calls/cmd/main.go` запустить горутину `time.Ticker(24*time.Hour)`,
-  которая на тик:
-  1. `DELETE FROM call_recordings WHERE ended_at < now() - interval '90 days'
-     RETURNING s3_key` — массовый delete + сбор ключей.
-  2. Для каждого ключа — `pkg/storage.Delete(ctx, key)`.
-  3. Метрика `orbit_call_recordings_deleted_total` (counter).
-- Альтернатива (если влом): bucket lifecycle rule + DELETE только из БД.
-  Проще, но БД и S3 расходятся при сбое — явный workflow надёжнее.
-
-### D6. Storage budget alert (~30 мин)
-
-- Метрика `orbit_call_recordings_total_bytes` — gauge в `services/calls`,
-  обновлять раз в 5 минут запросом `SELECT COALESCE(SUM(size_bytes), 0)
-  FROM call_recordings WHERE ended_at IS NOT NULL`. Экспортировать через
-  существующий `pkg/metrics` без новых Saturn-сервисов.
-- Saturn-managed Prometheus уже умеет alert'ы (см. memory
-  `Saturn observability`); порог >100 GB конфигурится там в UI, не в
-  репо. Никаких новых rules-файлов.
-
-### Push после D
-
-- D1 миграция — отдельным PR
-- D2+D3 — feat PR (запись + плашка)
-- D4 — отдельным PR (admin)
-- D5+D6 — отдельным PR (infra GC)
-
----
 
 ## ФАЗА E — Pilot launch (твоя работа)
 
@@ -392,8 +306,6 @@ CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE en
 
 Список того, что **намеренно отложено**:
 
-- **3a server-side ICE restart handler** (фаза C3 опциональная — может
-  переехать сюда)
 - **Per-chat priority override UI** (`PUT /chats/{id}/notification-priority`
   бэкенд есть, фронт нет)
 - **Firefox e2e** для звонков (`tests/calls-e2e/playwright.config.ts`)
@@ -401,11 +313,18 @@ CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE en
   Whisper local или NVIDIA Parakeet для русского)
 - **OIDC F3 multi-provider DB** (см. решение #9 в принятых)
 - **SAML, magic-link, social-login**
-- **Видео-recording звонков** (только аудио в MVP)
-- **Selective recording** (несовместимо с compliance-моделью)
-- **Поиск по содержимому записей** (нужна транскрипция + индекс)
 - **PITR restore drill локально** (есть pg_dump 4h RPO, full WAL/PITR
   отложен — см. memory `WAL/PITR backlog`)
+
+### Отклонено (не deferred — именно НЕ делаем)
+
+- **Запись звонков (бывшая фаза D)** — отказались 2026-05-06. См.
+  блок «Фаза D отменена» в начале файла. Если через 2-3 месяца
+  заказчик попросит — делается за неделю с нуля, не нужно держать
+  заготовки в репо.
+- **orbit-backup-cron / orbit-nats-exporter Saturn-сервисы** — отказались
+  2026-05-06 (revert A4 в `a2e8c49`). Saturn observability через
+  managed dashboards.
 
 ---
 
@@ -499,59 +418,17 @@ cd tests/calls-e2e && npx playwright test sfu-3-call.spec.ts
 
 ---
 
-## Suggested first move (для следующей сессии — фокус на D2-D6)
+## Suggested first move (следующая сессия)
 
-1. `git log --oneline -15` → убедиться, что 12 локальных коммитов A→D1
-   на месте (последний — `62d9de0 feat(db): migration 071`).
-2. `git status -s` → должно быть пусто.
-3. Прочитать `docs/canon/state.json` (last_migration=071) + этот файл +
+1. `git log --oneline -20` → убедиться, что 16 локальных коммитов на
+   месте (последний — `8e0b9c1 Revert "feat(db): migration 071"`).
+2. `git status -s` → пусто.
+3. Прочитать `docs/canon/state.json` (last_migration=070) + этот файл +
    `docs/canon/divergences.md`.
 4. Спросить юзера:
-   - **«Saturn-side ресурсы (`backup-cron` + `nats-exporter`) уже создал?»**
-     Если ДА → можно `git push` всех 12 коммитов разом. Если НЕТ → пушить
-     до A4 (`f5407d5`) включительно НЕЛЬЗЯ; для не-A4 коммитов проще
-     дождаться кликов и запушить всё одной волной.
-   - **«Старт пилота когда?»** Если в течение 2 рабочих дней — фаза D
-     обязательна (D2-D6), параллельно юзер делает Saturn-side и
-     юридический crosscheck текста D3-плашки.
    - **«Готов IdP-конфиг (Google Workspace OAuth client + Directory API
      SA)?»** — без этого фазу B нельзя проверить в проде.
-5. Дальше — фаза D2-D6 строго в порядке плана выше. D2 — самая объёмная
-   и хрупкая (Pion + crypto + S3 + tmp-файлы), её **не** делегировать
-   sonnet-агенту целиком: сначала сам пройди по `peer.go` и
-   `pkg/crypto`/`pkg/storage`, чтобы понять, какие callback'и Pion
-   реально умеет. D3/D4/D5/D6 после D2 — гораздо более механические,
-   их можно отдать sonnet'у пакетом.
-
-**Не пушить ничего до подтверждения юзера, что Saturn-side готов.**
-
-## Заметки для D2-D6
-
-- **D2 риски:** Pion `pc.OnTrack` для audio kind зовётся ОДИН раз на
-  трек, но трек может остановиться/перезапуститься при `restart_ice` —
-  oggwriter надо умело закрывать-переоткрывать. Проще: писать в
-  отдельный файл per `OnTrack` invocation, а на Close агрегировать.
-  Encryption: можно reuse `pkg/crypto.SealAESGCM` (уже использовалось
-  для медиа чатов в Phase 4); per-recording random key, key wrap
-  через мастер.
-- **D3 текст:** частный корп-мессенджер, юридический crosscheck НЕ
-  нужен (решение юзера 2026-05-06). Просто внутренняя нотификация
-  про запись. Per-user ack в localStorage под ключом
-  `orbit-call-recording-acknowledged-v1`; если когда-нибудь поменяешь
-  формулировку — бампни версию (`-v2`), чтобы юзеры пере-подтвердили.
-- **D4 IDOR:** не забыть проверку, что `call_id` в URL действительно
-  принадлежит compliance-роли, а не юзеру (сейчас `SysViewAuditLog`
-  гейт уже стоит — просто не забыть его пересмотреть для нового
-  permission `SysListenCallRecordings` если решишь его создать).
-- **D5/D6:** Saturn orbit-backup-cron как сервис не создаётся
-  (см. revert A4) — D5-крон ставить горутиной с `time.Ticker(24*time.Hour)`
-  внутри уже задеплоенного `services/calls`. Метрика D6
-  `orbit_call_recordings_total_bytes` — туда же, scrape `SUM(size_bytes)`
-  из `call_recordings` раз в 5 минут и экспортировать через существующий
-  `pkg/metrics`. Никаких новых Saturn-контейнеров. S3 listing для метрики
-  не использовать — стоит денег и асинхронен.
-
-## Фаза E
-
-См. оригинальную секцию выше — план не поменялся. После пуша всех
-коммитов и Saturn-side подготовки запускается фаза E (юзерская).
+   - **«Готов пушить?»** — push gate снят (нет Saturn-side зависимостей).
+     Saturn auto-deploy подхватит все 16 коммитов разом.
+5. После push — фаза E (юзерская): включить OIDC env, прокликать smoke,
+   импортировать 150 юзеров, watch dashboards.
