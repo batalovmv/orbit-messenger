@@ -1,5 +1,5 @@
 import type {
-  ApiAvailableEffect, ApiMessage, ApiReactionEmoji, ApiSticker, ApiTopicWithState,
+  ApiAvailableEffect, ApiConfig, ApiMessage, ApiReactionEmoji, ApiSticker, ApiTopicWithState,
 } from '../../../api/types';
 import type { ActionReturnType } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
@@ -60,12 +60,36 @@ addActionHandler('loadAvailableReactions', async (global): Promise<void> => {
   // no need to preload through the mediaLoader pipeline
 
   global = getGlobal();
+  // Restore the user's chosen quick-reaction emoji from localStorage. Saturn
+  // doesn't sync this to the server (no MTProto SetDefaultReaction analogue),
+  // so localStorage is the source of truth across reloads. Falls back to the
+  // first available reaction (heart) so Settings → Stickers exposes the
+  // picker entry and Message hover shows something on a fresh login.
+  let restoredDefault = global.config?.defaultReaction;
+  if (!restoredDefault) {
+    const savedEmoticon = typeof window !== 'undefined'
+      ? window.localStorage?.getItem('orbit-default-reaction') ?? undefined
+      : undefined;
+    const matching = savedEmoticon
+      ? result.find((r) => r.reaction.type === 'emoji' && r.reaction.emoticon === savedEmoticon)
+      : undefined;
+    const fallback = result.find((r) => !r.isInactive);
+    restoredDefault = matching?.reaction ?? fallback?.reaction;
+  }
+
   global = {
     ...global,
     reactions: {
       ...global.reactions,
       availableReactions: result,
     },
+    // Cast — Orbit doesn't run MTProto, so the canonical ApiConfig fields
+    // (maxGroupSize, expiresAt, ...) never get populated. We only read
+    // defaultReaction off this object today.
+    config: {
+      ...global.config,
+      defaultReaction: restoredDefault,
+    } as ApiConfig,
   };
   setGlobal(global);
 
@@ -305,17 +329,15 @@ addActionHandler('setDefaultReaction', async (global, actions, payload): Promise
 
   global = getGlobal();
 
-  if (!global.config) {
-    actions.loadConfig(); // Refetch new config, if it is somehow not loaded
-    return;
-  }
-
+  // On Orbit, global.config may not yet exist (no MTProto bootstrap). Create
+  // a partial config rather than dropping the user's pick — the only field
+  // anything reads off it for now is defaultReaction.
   global = {
     ...global,
     config: {
       ...global.config,
       defaultReaction: reaction,
-    },
+    } as ApiConfig,
   };
   setGlobal(global);
 });
