@@ -109,6 +109,29 @@ func TestPeer_NewAndClose(t *testing.T) {
 	}
 }
 
+// TestPeer_RestartICE_ReturnsErrorOnFreshPC documents the contract: a
+// peer that has not yet completed its first offer/answer cycle has no
+// ICE agent to restart, and Pion returns a typed error rather than
+// panicking. This is the failure mode the handler logs ("sfu: restart
+// ice"); the corresponding success path (RestartICE after an established
+// connection) requires a full DTLS handshake and lives in the e2e suite.
+func TestPeer_RestartICE_ReturnsErrorOnFreshPC(t *testing.T) {
+	s, err := NewSFU(newTestLogger())
+	if err != nil {
+		t.Fatalf("NewSFU: %v", err)
+	}
+	room := s.GetOrCreateRoom(uuid.New())
+	peer, err := NewPeer(uuid.New(), &fakeWSConn{}, room, newTestLogger())
+	if err != nil {
+		t.Fatalf("NewPeer: %v", err)
+	}
+	defer peer.Close()
+
+	if err := peer.RestartICE(); err == nil {
+		t.Fatalf("expected RestartICE to error on a peer with no ICE agent")
+	}
+}
+
 func TestRoom_PeerCountAfterRemove(t *testing.T) {
 	s, err := NewSFU(newTestLogger())
 	if err != nil {

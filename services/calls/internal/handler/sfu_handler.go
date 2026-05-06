@@ -141,6 +141,15 @@ func (h *SFUHandler) handle(c *websocket.Conn) {
 			if err := peer.AddICECandidate(msg.Data); err != nil {
 				logger.Warn("sfu: add ice", "error", err)
 			}
+		case "restart_ice":
+			// Client-driven recovery from a transient network failure. We
+			// craft a fresh offer with ICERestart=true; the existing offer
+			// pump on the WS sends it back to the client, which answers
+			// with re-derived candidates. Idempotent — a second restart
+			// while the first is in flight just supersedes it.
+			if err := peer.RestartICE(); err != nil {
+				logger.Warn("sfu: restart ice", "error", err)
+			}
 		default:
 			logger.Warn("sfu: unknown signal event", "event", msg.Event)
 		}

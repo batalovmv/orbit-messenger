@@ -188,6 +188,22 @@ func (p *Peer) HandleAnswer(sdp string) error {
 	return p.PC.SetRemoteDescription(answer)
 }
 
+// RestartICE triggers a fresh offer with ICERestart=true so the client can
+// rebuild candidate pairs after a network move (Wi-Fi <-> mobile, NAT
+// rebind). The browser-side watchdog in web/src/lib/secret-sauce/sfu.ts
+// sends a `restart_ice` signal when its DTLS state goes failed; without
+// this server-side counterpart the call dies on every network blip.
+func (p *Peer) RestartICE() error {
+	offer, err := p.PC.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+	if err != nil {
+		return err
+	}
+	if err := p.PC.SetLocalDescription(offer); err != nil {
+		return err
+	}
+	return p.WriteOffer(offer)
+}
+
 // AddICECandidate applies a trickle-ICE candidate received from the client.
 func (p *Peer) AddICECandidate(payload string) error {
 	cand := webrtc.ICECandidateInit{}
