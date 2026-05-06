@@ -56,6 +56,6 @@ staticPasswords:
   # Substituting on every dev box would drift; pinning it here keeps the
   # smoke loop hermetic.
   - email: alice@orbit.local
-    hash: "$2y$10$5Wb4M0wNpmShJRqA8GjT6.dOG1l5oc/AXxqzMjPN6Lz4KJjC4mZJG"
+    hash: "$2b$10$/RMndTmjnnTzejaOwIFyUeRSf6FUTdtxb3sb5gbfxPyvVgDvUri9S"
     username: alice
     userID: "00000000-0000-0000-0000-000000000001"
