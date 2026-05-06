@@ -26,17 +26,20 @@ const (
 	whisperRequestTimeout = 180 * time.Second
 )
 
-// WhisperClient transcribes audio via OpenAI's Whisper API. Same design
-// principle as AnthropicClient: plain net/http, no SDK.
+// WhisperClient transcribes audio via OpenAI's Whisper API or any
+// drop-in-compatible provider (e.g. Groq's `/openai/v1/audio/transcriptions`)
+// when OPENAI_BASE_URL is set. Same design principle as AnthropicClient:
+// plain net/http, no SDK.
 //
 // We only use non-streaming transcription (Whisper's streaming variant is
 // effectively verbose JSON responses, not SSE, and offers no UX advantage
 // for short voice messages).
 type WhisperClient struct {
-	apiKey string
-	model  string
-	http   *http.Client
-	logger *slog.Logger
+	apiKey  string
+	model   string
+	baseURL string
+	http    *http.Client
+	logger  *slog.Logger
 }
 
 func NewWhisperClient(apiKey, modelName string, logger *slog.Logger) *WhisperClient {
@@ -47,19 +50,37 @@ func NewWhisperClient(apiKey, modelName string, logger *slog.Logger) *WhisperCli
 		modelName = whisperDefaultModel
 	}
 	return &WhisperClient{
-		apiKey: strings.TrimSpace(apiKey),
-		model:  modelName,
-		http:   &http.Client{Timeout: whisperRequestTimeout},
-		logger: logger,
+		apiKey:  strings.TrimSpace(apiKey),
+		model:   modelName,
+		baseURL: whisperBaseURL,
+		http:    &http.Client{Timeout: whisperRequestTimeout},
+		logger:  logger,
 	}
 }
 
 func NewWhisperClientFromEnv(logger *slog.Logger) *WhisperClient {
-	return NewWhisperClient(
+	c := NewWhisperClient(
 		os.Getenv("OPENAI_API_KEY"),
 		os.Getenv("WHISPER_MODEL"),
 		logger,
 	)
+	if base := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")); base != "" {
+		c.SetBaseURL(base)
+	}
+	return c
+}
+
+// SetBaseURL overrides the API base URL. Used by tests and the Saturn
+// OPENAI_BASE_URL env var to route through Groq (or any other OpenAI
+// Whisper-compatible provider).
+func (c *WhisperClient) SetBaseURL(url string) {
+	c.baseURL = strings.TrimRight(strings.TrimSpace(url), "/")
+}
+
+// BaseURL returns the URL the client will hit. Useful for tests and
+// debug-time visibility into which provider this deploy points at.
+func (c *WhisperClient) BaseURL() string {
+	return c.baseURL
 }
 
 func (c *WhisperClient) Configured() bool {
@@ -126,7 +147,7 @@ func (c *WhisperClient) TranscribeAudio(
 		return nil, fmt.Errorf("whisper multipart close: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, whisperBaseURL+"/audio/transcriptions", &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/audio/transcriptions", &body)
 	if err != nil {
 		return nil, fmt.Errorf("build whisper request: %w", err)
 	}

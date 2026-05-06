@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,6 +55,11 @@ func main() {
 	anthropicBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
 	whisperKey := os.Getenv("OPENAI_API_KEY")
 	whisperModel := config.EnvOr("WHISPER_MODEL", "whisper-1")
+	// OPENAI_BASE_URL routes Whisper through any OpenAI-compatible provider.
+	// We use Groq's `/openai/v1` endpoint to avoid OpenAI's per-request
+	// pricing — Groq's free tier covers our pilot. Empty falls back to
+	// api.openai.com.
+	whisperBaseURL := strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 
 	logger.Info("starting ai service",
 		"port", port,
@@ -62,6 +68,8 @@ func main() {
 		"anthropic_configured", anthropicKey != "" && anthropicKey != "placeholder",
 		"whisper_configured", whisperKey != "" && whisperKey != "placeholder",
 		"anthropic_model", anthropicModel,
+		"whisper_model", whisperModel,
+		"whisper_base_override", whisperBaseURL != "",
 	)
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
@@ -100,6 +108,9 @@ func main() {
 		classifyClient.SetBaseURL(anthropicBaseURL)
 	}
 	whisperClient := client.NewWhisperClient(whisperKey, whisperModel, logger)
+	if whisperBaseURL != "" {
+		whisperClient.SetBaseURL(whisperBaseURL)
+	}
 	messagingClient := client.NewMessagingClient(messagingURL, internalSecret)
 
 	// Metrics registry has to be built before the service so the classifier
