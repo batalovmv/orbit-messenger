@@ -1,0 +1,61 @@
+# Dex configuration for local OIDC smoke tests against orbit-auth.
+#
+# This is dev-only — DO NOT ship to prod. Static passwords are bcrypt-hashed
+# but the issuer is plain HTTP and there is no token rotation policy. To
+# bring it up:
+#   docker compose --profile oidc-dev up -d dex
+# Then export these in the auth service env (or a .env.dex file):
+#   OIDC_PROVIDER_KEY=dex
+#   OIDC_PROVIDER_DISPLAY_NAME=Dex (local)
+#   OIDC_ISSUER=http://dex:5556/dex
+#   OIDC_CLIENT_ID=orbit-local
+#   OIDC_CLIENT_SECRET=local-dev-secret
+#   OIDC_REDIRECT_URL=http://localhost:8080/api/v1/auth/oidc/dex/callback
+#   OIDC_FRONTEND_URL=http://localhost:3000/
+#   OIDC_ALLOWED_EMAIL_DOMAINS=orbit.local
+# Restart orbit-auth, then sign in at http://localhost:3000/ — the SSO
+# button should show "Sign in with Dex (local)".
+#
+# Test user (matches the existing alice@orbit.local invite seed):
+#   email:    alice@orbit.local
+#   password: LoadTest!2026
+
+issuer: http://dex:5556/dex
+
+storage:
+  type: sqlite3
+  config:
+    file: /var/dex/dex.db
+
+web:
+  http: 0.0.0.0:5556
+
+# 24h tokens are short enough that mistakes don't linger but long enough
+# that a developer doesn't have to re-login mid-session.
+expiry:
+  idTokens: 24h
+
+oauth2:
+  # Skip the consent screen for known clients — speeds up the smoke loop.
+  skipApprovalScreen: true
+
+staticClients:
+  - id: orbit-local
+    name: Orbit (local)
+    redirectURIs:
+      # Browser-side redirect target: the gateway forwards this through to
+      # auth's /auth/oidc/dex/callback handler.
+      - http://localhost:8080/api/v1/auth/oidc/dex/callback
+    secret: local-dev-secret
+
+enablePasswordDB: true
+
+staticPasswords:
+  # bcrypt hash of "LoadTest!2026" — generated with:
+  #   htpasswd -bnBC 10 "" "LoadTest!2026" | tr -d ':\n'
+  # Substituting on every dev box would drift; pinning it here keeps the
+  # smoke loop hermetic.
+  - email: alice@orbit.local
+    hash: "$2y$10$5Wb4M0wNpmShJRqA8GjT6.dOG1l5oc/AXxqzMjPN6Lz4KJjC4mZJG"
+    username: alice
+    userID: "00000000-0000-0000-0000-000000000001"

@@ -496,6 +496,22 @@ services:
       - prometheus
     restart: unless-stopped
 
+  # Dex — local-only OIDC IdP for SSO smoke tests. Brought up via the
+  # `oidc-dev` profile so it's invisible in normal `docker compose up`. See
+  # deploy/dex/config.yaml for the static client + alice@orbit.local user
+  # and `docs/runbooks/saturn-jetstream-prom.md` for context. Do NOT ship.
+  dex:
+    image: ghcr.io/dexidp/dex:v2.41.1
+    profiles:
+      - oidc-dev
+    ports:
+      - "127.0.0.1:5556:5556"
+    volumes:
+      - ./deploy/dex/config.yaml:/etc/dex/config.yaml:ro
+      - dex_data:/var/dex
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    restart: unless-stopped
+
 configs:
   prometheus_config:
     content: |
@@ -552,3 +568,4 @@ volumes:
   minio_data:
   alertmanager_data:
   nats_data:
+  dex_data:
