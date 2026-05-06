@@ -406,6 +406,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Bridges NATS server's monitoring HTTP API (port 8222: /varz, /jsz, ...)
+  # to a Prometheus /metrics endpoint on :7777. Without this, JetStream
+  # consumer-lag and stream health are invisible to Prom — `nats:8222`
+  # speaks JSON, not OpenMetrics. Flags select which subsystems to scrape.
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.17.3
+    profiles:
+      - monitoring
+    command:
+      - "-port=7777"
+      - "-jsz=all"
+      - "-varz"
+      - "-connz"
+      - "-subz"
+      - "http://nats:8222"
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     profiles:
@@ -506,6 +526,12 @@ configs:
           static_configs:
             - targets:
                 - postgres-exporter:9187
+
+        - job_name: nats
+          metrics_path: /metrics
+          static_configs:
+            - targets:
+                - nats-exporter:7777
 
       alerting:
         alertmanagers:
