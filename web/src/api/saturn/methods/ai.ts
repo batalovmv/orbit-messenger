@@ -39,6 +39,11 @@ export type AiTranscribeResponse = {
   language?: string;
 };
 
+export type AiCapabilities = {
+  anthropic_configured: boolean;
+  whisper_configured: boolean;
+};
+
 export type AiUsageStats = {
   total_requests: number;
   by_endpoint: Record<string, number>;
@@ -286,6 +291,10 @@ export async function transcribeVoice(args: AiTranscribeRequest): Promise<AiTran
 
 export async function fetchAiUsage(): Promise<AiUsageStats | undefined> {
   return request<AiUsageStats>('GET', '/ai/usage');
+}
+
+export async function fetchAiCapabilities(): Promise<AiCapabilities | undefined> {
+  return request<AiCapabilities>('GET', '/ai/capabilities');
 }
 
 /**

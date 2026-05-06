@@ -93,6 +93,18 @@ func (s *AIService) ClassifierMetrics() *ClassifierMetrics {
 	return s.classifierMetrics
 }
 
+// AnthropicConfigured reports whether the Claude API key is present and not
+// the deploy-time placeholder. Drives the /ai/capabilities response.
+func (s *AIService) AnthropicConfigured() bool {
+	return s.anthropic != nil && s.anthropic.Configured()
+}
+
+// WhisperConfigured reports whether the OpenAI Whisper key is present and
+// not the deploy-time placeholder. Drives the /ai/capabilities response.
+func (s *AIService) WhisperConfigured() bool {
+	return s.whisper != nil && s.whisper.Configured()
+}
+
 // ---------------------------------------------------------------------------
 // Rate limiting
 // ---------------------------------------------------------------------------

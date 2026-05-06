@@ -66,6 +66,16 @@ type TranscribeResponse struct {
 	Language string `json:"language,omitempty"`
 }
 
+// CapabilitiesResponse tells the frontend which AI providers are wired up so
+// it can hide UI affordances (e.g. the Transcribe button) when the
+// corresponding key is missing on the deployment. Mirrors the flags exposed
+// by /health but is reachable through the public /api/v1/ai/* gateway
+// proxy, so the web client can read it without internal-token access.
+type CapabilitiesResponse struct {
+	AnthropicConfigured bool `json:"anthropic_configured"`
+	WhisperConfigured   bool `json:"whisper_configured"`
+}
+
 type SearchRequest struct {
 	Query  string `json:"query"`
 	ChatID string `json:"chat_id,omitempty"`

@@ -1,7 +1,7 @@
-import { memo, useState } from '../../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../../lib/teact/teact';
 
 import buildClassName from '../../../util/buildClassName';
-import { transcribeVoice } from '../../../api/saturn/methods/ai';
+import { fetchAiCapabilities, transcribeVoice } from '../../../api/saturn/methods/ai';
 
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
@@ -22,6 +22,31 @@ type CacheEntry = { text: string; language?: string };
 // Prevents duplicate API calls when a voice message re-renders (e.g. scroll).
 const transcriptionCache = new Map<string, CacheEntry>();
 
+// Module-level capability cache. We probe /ai/capabilities once per session
+// so every voice message can hide the Transcribe button when Whisper is not
+// configured on this deployment (OPENAI_API_KEY missing on Saturn). Default
+// `true` keeps the button visible while the probe is in-flight or if it
+// fails — better to show a button that 503s than to hide a working one.
+let isWhisperAvailable = true;
+let capabilitiesProbe: Promise<void> | undefined;
+const capabilitySubscribers = new Set<(available: boolean) => void>();
+
+function ensureCapabilitiesProbe() {
+  if (capabilitiesProbe) return capabilitiesProbe;
+  capabilitiesProbe = fetchAiCapabilities()
+    .then((caps) => {
+      if (caps && caps.whisper_configured === false) {
+        isWhisperAvailable = false;
+        capabilitySubscribers.forEach((notify) => notify(false));
+      }
+    })
+    .catch(() => {
+      // Probe failure: leave the button visible. Click will still surface
+      // the 503 banner via the existing error path.
+    });
+  return capabilitiesProbe;
+}
+
 const COLLAPSE_THRESHOLD = 500;
 
 const AiTranscribeButton = ({ mediaId }: OwnProps) => {
@@ -31,6 +56,17 @@ const AiTranscribeButton = ({ mediaId }: OwnProps) => {
   const [error, setError] = useState<string | undefined>();
   const [isLoading, startLoading, stopLoading] = useFlag(false);
   const [isExpanded, expand, collapse] = useFlag(true);
+  const [isWhisperHidden, setIsWhisperHidden] = useState(!isWhisperAvailable);
+
+  useEffect(() => {
+    if (!isWhisperAvailable) return undefined;
+    ensureCapabilitiesProbe();
+    const onChange = (available: boolean) => setIsWhisperHidden(!available);
+    capabilitySubscribers.add(onChange);
+    return () => {
+      capabilitySubscribers.delete(onChange);
+    };
+  }, []);
 
   const handleTranscribe = useLastCallback(async () => {
     setError(undefined);
@@ -65,6 +101,10 @@ const AiTranscribeButton = ({ mediaId }: OwnProps) => {
       expand();
     }
   });
+
+  if (isWhisperHidden && !cached) {
+    return undefined;
+  }
 
   if (isLoading) {
     return (

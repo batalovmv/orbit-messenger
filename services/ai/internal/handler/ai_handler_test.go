@@ -661,3 +661,142 @@ func TestTranslate_InvalidResponseFormat(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", resp.StatusCode, raw)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Capabilities endpoint — frontend feature-gates UI by these flags so users
+// don't see broken buttons (e.g. Transcribe) when the corresponding provider
+// key is empty/"placeholder" on Saturn.
+// ---------------------------------------------------------------------------
+
+// newCapsApp builds a Fiber app where the AI service has explicit Anthropic
+// and Whisper clients with the given keys. Empty/"placeholder" keys mean
+// the corresponding Configured() returns false.
+func newCapsApp(t *testing.T, anthropicKey, whisperKey string) *fiber.App {
+	t.Helper()
+	mr := newMiniredis(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	anthropicClient := client.NewAnthropicClient(anthropicKey, "test-model", slog.Default())
+	whisperClient := client.NewWhisperClient(whisperKey, "whisper-1", slog.Default())
+	messagingClient := client.NewMessagingClient("http://unused", "test-token")
+
+	svc := service.NewAIService(service.AIServiceConfig{
+		Anthropic: anthropicClient,
+		Whisper:   whisperClient,
+		Messaging: messagingClient,
+		Redis:     rdb,
+		Logger:    slog.Default(),
+	})
+
+	app := fiber.New()
+	h := NewAIHandler(svc, slog.Default())
+	h.Register(app)
+	return app
+}
+
+func TestCapabilities_BothConfigured(t *testing.T) {
+	app := newCapsApp(t, "real-anthropic-key", "real-whisper-key")
+
+	req, _ := http.NewRequest(http.MethodGet, "/ai/capabilities", nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+
+	var body struct {
+		AnthropicConfigured bool `json:"anthropic_configured"`
+		WhisperConfigured   bool `json:"whisper_configured"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.AnthropicConfigured {
+		t.Errorf("anthropic_configured = false, want true")
+	}
+	if !body.WhisperConfigured {
+		t.Errorf("whisper_configured = false, want true")
+	}
+}
+
+func TestCapabilities_WhisperPlaceholder(t *testing.T) {
+	app := newCapsApp(t, "real-anthropic-key", "placeholder")
+
+	req, _ := http.NewRequest(http.MethodGet, "/ai/capabilities", nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+
+	var body struct {
+		AnthropicConfigured bool `json:"anthropic_configured"`
+		WhisperConfigured   bool `json:"whisper_configured"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !body.AnthropicConfigured {
+		t.Errorf("anthropic_configured = false, want true")
+	}
+	if body.WhisperConfigured {
+		t.Errorf("whisper_configured = true, want false (placeholder key)")
+	}
+}
+
+func TestCapabilities_BothEmpty(t *testing.T) {
+	app := newCapsApp(t, "", "")
+
+	req, _ := http.NewRequest(http.MethodGet, "/ai/capabilities", nil)
+	req.Header.Set("X-User-ID", uuid.New().String())
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, raw)
+	}
+
+	var body struct {
+		AnthropicConfigured bool `json:"anthropic_configured"`
+		WhisperConfigured   bool `json:"whisper_configured"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.AnthropicConfigured {
+		t.Errorf("anthropic_configured = true, want false")
+	}
+	if body.WhisperConfigured {
+		t.Errorf("whisper_configured = true, want false")
+	}
+}
+
+func TestCapabilities_RequiresUserID(t *testing.T) {
+	app := newCapsApp(t, "", "")
+
+	req, _ := http.NewRequest(http.MethodGet, "/ai/capabilities", nil)
+	// no X-User-ID — should be rejected by getUserID
+
+	resp, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 401 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 401, got %d: %s", resp.StatusCode, raw)
+	}
+}

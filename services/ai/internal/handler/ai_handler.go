@@ -39,6 +39,20 @@ func (h *AIHandler) Register(router fiber.Router) {
 	router.Post("/ai/search", h.search)
 	router.Post("/ai/ask", h.ask)
 	router.Get("/ai/usage", h.usage)
+	router.Get("/ai/capabilities", h.capabilities)
+}
+
+// GET /ai/capabilities — frontend uses this to hide UI for unconfigured
+// providers (e.g. the Transcribe button when OPENAI_API_KEY is empty).
+// Auth: any authenticated user — the response carries no secrets.
+func (h *AIHandler) capabilities(c *fiber.Ctx) error {
+	if _, err := getUserID(c); err != nil {
+		return response.Error(c, err)
+	}
+	return response.JSON(c, fiber.StatusOK, model.CapabilitiesResponse{
+		AnthropicConfigured: h.svc.AnthropicConfigured(),
+		WhisperConfigured:   h.svc.WhisperConfigured(),
+	})
 }
 
 // POST /ai/ask — single-turn Claude call used by the @orbit-ai mention
