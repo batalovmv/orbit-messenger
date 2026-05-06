@@ -71,16 +71,3 @@ components:
     build:
       dockerfile: web/Dockerfile
     port: 80
-
-  # Daily/4h pg_dump → encrypted upload to FirstVDS S3 via aws-cli
-  # `--endpoint-url`. Saturn-managed Postgres has no shell access so
-  # wal-g/PITR is not possible; this is the canonical offsite recovery
-  # path. Schedule + retention controlled by env (BACKUP_CRON,
-  # bucket-side lifecycle rule). No port — supercronic loop, not HTTP.
-  backup-cron:
-    resource: orbit-backup-cron
-    path:
-      - deploy/backup-cron/**
-      - scripts/backup-postgres.sh
-    build:
-      dockerfile: deploy/backup-cron/Dockerfile

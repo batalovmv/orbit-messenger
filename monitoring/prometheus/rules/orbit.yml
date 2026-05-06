@@ -201,39 +201,3 @@ groups:
         annotations:
           summary: "WAL push failed {{ $value }} time(s) in 10 min"
           description: "wal-g rejected at least one WAL push. Investigate before failed_count climbs further — every failed segment is a gap in PITR coverage. Check R2 credentials, network from postgres container, and disk space in pg_wal."
-
-  # JetStream health. Source: prometheus-nats-exporter (monitoring profile)
-  # bridging NATS port 8222 → /metrics on :7777. Saturn-side requires the
-  # same exporter wired against `nats-js:8222` and a scrape target added
-  # to Saturn's managed Prom — see docs/runbooks/saturn-jetstream-prom.md.
-  - name: orbit.nats
-    interval: 60s
-    rules:
-      # Sustained backlog on any JetStream consumer. num_pending counts
-      # messages already in the stream but not yet delivered to that
-      # consumer. A healthy consumer drains in seconds; >1000 pending
-      # for 5 min means the consumer is wedged or its workload outran
-      # it (slow handler, downstream timeout, app crash-loop).
-      - alert: JetStreamConsumerLag
-        expr: jetstream_consumer_num_pending{job="nats"} > 1000
-        for: 5m
-        labels:
-          severity: warning
-          service: nats
-        annotations:
-          summary: "JetStream consumer {{ $labels.consumer_name }} lagging ({{ $value }} pending)"
-          description: "Consumer {{ $labels.consumer_name }} on stream {{ $labels.stream_name }} has {{ $value }} pending messages for >5 min. Check the subscriber service logs (likely bots/messaging/integrations) for handler errors or restart-loops."
-
-      # Consumer has unacked messages piling up — usually means the handler
-      # is panicking or the ack policy is misconfigured. Different signal
-      # from num_pending: those are undelivered, these are delivered but
-      # not acked yet.
-      - alert: JetStreamConsumerAckPending
-        expr: jetstream_consumer_num_ack_pending{job="nats"} > 100
-        for: 5m
-        labels:
-          severity: warning
-          service: nats
-        annotations:
-          summary: "JetStream consumer {{ $labels.consumer_name }} not acking ({{ $value }} unacked)"
-          description: "Consumer {{ $labels.consumer_name }} on stream {{ $labels.stream_name }} has {{ $value }} unacked messages for >5 min. Likely a handler panic — check service logs and look for redelivery storms."
