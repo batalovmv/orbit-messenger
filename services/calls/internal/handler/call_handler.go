@@ -129,9 +129,9 @@ func (h *CallHandler) CreateCall(c *fiber.Ctx) error {
 		return response.Error(c, apperror.BadRequest("Invalid call mode, must be p2p or group"))
 	}
 
-	if req.Mode == "group" && len(req.MemberIDs) == 0 {
-		return response.Error(c, apperror.BadRequest("member_ids is required for group calls"))
-	}
+	// member_ids is optional: when omitted for a group call, the service
+	// auto-fetches the full chat membership for the call_incoming fanout.
+	// The handler keeps only the upper bound + parse checks.
 	if len(req.MemberIDs) > 50 {
 		return response.Error(c, apperror.BadRequest("member_ids must not exceed 50 items"))
 	}

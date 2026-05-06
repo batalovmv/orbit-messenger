@@ -520,17 +520,29 @@ export function getSfuRemoteStreams(): ReadonlyMap<string, MediaStream> {
  * Saturn createGroupCall — POST /calls with mode='group'. Returns the call
  * row (including sfu_ws_url) so the action layer can hand it off to
  * connectToActiveGroupCall via callApi('joinGroupCall').
+ *
+ * Accepts both shapes:
+ *   - TG-style { peer: chat } from the action handler in ui/calls.ts
+ *   - explicit { chatId, type, memberIds } for direct callers
+ * memberIds is optional — backend auto-fetches chat membership when omitted.
  */
-export async function createGroupCall({ chatId, type, memberIds }: {
-  chatId: string;
+export async function createGroupCall(args: {
+  chatId?: string;
   type?: 'voice' | 'video';
   memberIds?: string[];
+  peer?: { id: string };
 }): Promise<SaturnCall | undefined> {
+  const chatId = args.chatId || args.peer?.id;
+  if (!chatId) {
+    // eslint-disable-next-line no-console
+    console.error('[Saturn:calls] createGroupCall called without chatId or peer');
+    return undefined;
+  }
   return createCall({
     chatId,
-    type: type || 'voice',
+    type: args.type || 'voice',
     mode: 'group',
-    memberIds,
+    memberIds: args.memberIds,
   });
 }
 

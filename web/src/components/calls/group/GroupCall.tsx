@@ -187,12 +187,17 @@ const GroupCall: FC<OwnProps & StateProps> = ({
 
   const sfuManager = useSfuStreamManager(groupCallId);
 
+  // Depend on groupCallId only. join/leave are stable via useLastCallback,
+  // and the sfuManager object's identity is memoized — but listing it
+  // here used to fire the effect every render and tear the SFU session
+  // down within ~8 ms of the first join (2026-05-05 incident).
+  // eslint-disable-next-line react-hooks-static-deps/exhaustive-deps
   useEffect(() => {
     sfuManager.join();
     return () => {
       sfuManager.leave();
     };
-  }, [groupCallId, sfuManager]);
+  }, [groupCallId]);
 
   // Build a userId → MediaStream map from SFU remote tracks (video kind only).
   const sfuVideoStreams = useMemo(() => {

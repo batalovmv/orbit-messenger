@@ -8,7 +8,7 @@
 //   const { remoteStreams, isConnected, join, leave } = useSfuStreamManager(callId);
 //   // remoteStreams passed to video grid components
 
-import { useCallback, useEffect, useRef, useState } from '../lib/teact/teact';
+import { useCallback, useEffect, useMemo, useRef, useState } from '../lib/teact/teact';
 import { getGlobal } from '../global';
 
 import {
@@ -20,8 +20,9 @@ import {
   toggleSfuScreenShare,
   toggleSfuVideo,
 } from '../lib/secret-sauce/sfu';
-import { getAccessToken, getBaseUrl } from '../api/saturn/client';
+import { getAccessToken, getBaseUrl, request } from '../api/saturn/client';
 import { fetchICEServers } from '../api/saturn/methods/calls';
+import useLastCallback from './useLastCallback';
 
 export interface SfuStreamManager {
   remoteStreams: Map<string, SfuRemoteTrack>;
@@ -70,8 +71,18 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     });
   }, []);
 
-  const join = useCallback(async () => {
-    if (!callId || isConnecting || isConnected) return;
+  // Refs let join() see fresh isConnecting/isConnected values without
+  // listing them as deps — so join's identity stays stable across the
+  // ~50 renders that fire while the call is mounting (otherwise
+  // GroupCall.tsx's effect re-fires per render and tears down the SFU
+  // session within a few ms of joining — the 2026-05-05 thrash bug).
+  const isConnectingRef = useRef(isConnecting);
+  const isConnectedRef = useRef(isConnected);
+  isConnectingRef.current = isConnecting;
+  isConnectedRef.current = isConnected;
+
+  const join = useLastCallback(async () => {
+    if (!callId || isConnectingRef.current || isConnectedRef.current) return;
 
     setIsConnecting(true);
     setError(undefined);
@@ -91,6 +102,21 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
         throw new Error('Not authenticated: missing access token');
       }
       const wsBaseUrl = getBaseUrl().replace(/^http/, 'ws');
+
+      // Register this user as a call participant BEFORE opening the SFU
+      // WebSocket. The gateway sfu_proxy enforces a `checkCallMembership`
+      // gate (sfu_proxy.go:170) and rejects WS upgrades for users who
+      // aren't in the participants table. The initiator is auto-added by
+      // CreateCall, so this is a no-op for them; for joiners (bob/carol
+      // in the e2e fixture) it's load-bearing — without it the WS is
+      // closed before the auth_ok frame can fly.
+      // 409 / "already a participant" is fine and expected on rejoins.
+      try {
+        await request<{ status: string }>('POST', `/calls/${callId}/join`);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[useSfuStreamManager] join REST failed', e);
+      }
 
       // Fetch ICE servers from the calls service so coturn is used for NAT traversal.
       const iceServersRaw = await fetchICEServers({ callId });
@@ -129,9 +155,9 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
       setError(err instanceof Error ? err : new Error(String(err)));
       setIsConnecting(false);
     }
-  }, [callId, isConnecting, isConnected, handleRemoteTrack, handleRemoteTrackRemoved]);
+  });
 
-  const leave = useCallback(() => {
+  const leave = useLastCallback(() => {
     if (sessionRef.current) {
       leaveSfuCall();
       sessionRef.current = undefined;
@@ -139,19 +165,19 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     setLocalStream(undefined);
     setRemoteStreams(new Map());
     setIsConnected(false);
-  }, []);
+  });
 
-  const toggleMute = useCallback((muted: boolean) => {
+  const toggleMute = useLastCallback((muted: boolean) => {
     toggleSfuMute(muted);
-  }, []);
+  });
 
-  const toggleVideo = useCallback((enabled: boolean) => {
+  const toggleVideo = useLastCallback((enabled: boolean) => {
     toggleSfuVideo(enabled);
-  }, []);
+  });
 
-  const toggleScreenShare = useCallback(async (enabled: boolean) => {
+  const toggleScreenShare = useLastCallback(async (enabled: boolean) => {
     await toggleSfuScreenShare(enabled);
-  }, []);
+  });
 
   // Cleanup on unmount
   useEffect(() => {
@@ -162,7 +188,10 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     };
   }, []);
 
-  return {
+  // Memoize the returned object so it changes identity only when the
+  // exposed STATE actually changes — not on every render. Callbacks
+  // are stable via useLastCallback, so only the state values feed deps.
+  return useMemo(() => ({
     remoteStreams,
     localStream,
     isConnecting,
@@ -173,5 +202,16 @@ export function useSfuStreamManager(callId: string | undefined): SfuStreamManage
     toggleMute,
     toggleVideo,
     toggleScreenShare,
-  };
+  }), [
+    remoteStreams,
+    localStream,
+    isConnecting,
+    isConnected,
+    error,
+    join,
+    leave,
+    toggleMute,
+    toggleVideo,
+    toggleScreenShare,
+  ]);
 }

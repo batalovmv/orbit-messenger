@@ -598,6 +598,11 @@ function handleCallIncoming(data: Record<string, unknown>) {
 
   if (mode === 'group') {
     // Register the group call in global state so GroupCallTopPane shows a "Join" banner.
+    // Carry sfuWsUrl from the backend payload — without it,
+    // connectToActiveGroupCall mis-routes to the legacy Colibri path,
+    // fails to join, and triggers leaveGroupCall on the joiner side
+    // before SFU media has a chance to negotiate (2026-05-05 incident).
+    const sfuWsUrl = (call.sfu_ws_url as string | undefined) || undefined;
     sendApiUpdate({
       '@type': 'updateGroupCall',
       call: {
@@ -609,7 +614,8 @@ function handleCallIncoming(data: Record<string, unknown>) {
         version: 0,
         chatId: chatId || '',
         isLoaded: true,
-      },
+        sfuWsUrl,
+      } as Partial<ApiGroupCall> as ApiGroupCall,
     });
     if (chatId) {
       sendApiUpdate({

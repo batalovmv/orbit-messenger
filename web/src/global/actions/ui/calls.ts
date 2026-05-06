@@ -11,6 +11,7 @@ import { copyTextToClipboard } from '../../../util/clipboard';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { omit } from '../../../util/iteratees';
 import * as langProvider from '../../../util/oldLangProvider';
+import { Bundles, loadBundle } from '../../../util/moduleLoader';
 import safePlay from '../../../util/safePlay';
 import { callApi } from '../../../api/saturn';
 import { getMainUsername } from '../../helpers';
@@ -146,13 +147,30 @@ addActionHandler('createGroupCall', async (global, actions, payload): Promise<vo
   if (!result) return;
 
   global = getGlobal();
+  // SaturnCall.participants is an ARRAY (per-row from the calls service),
+  // but ApiGroupCall expects a Record<userId, GroupCallParticipant>. Drop
+  // it before merging — per-participant updates arrive via separate WS
+  // events that the participants reducer handles. Keep `sfuWsUrl` from
+  // the saturn payload (camel-cased copy of `sfu_ws_url`) so the
+  // connectToActiveGroupCall action recognises this as an SFU call and
+  // skips the legacy Colibri fallback (which used to fire `leaveGroupCall`
+  // and tear the room down within ~8 ms — 2026-05-05 incident).
+  const saturnExtras = result as unknown as { sfu_ws_url?: string };
   global = updateGroupCall(global, result.id, {
-    ...result,
+    id: result.id,
     chatId,
-  });
+    sfuWsUrl: saturnExtras.sfu_ws_url,
+  } as Partial<typeof result> as any);
   setGlobal(global);
 
-  actions.requestMasterAndJoinGroupCall({ id: result.id, accessHash: result.accessHash, tabId });
+  // SaturnCall has no accessHash — the TG-shaped action layer expects one
+  // for legacy invite-link flows we don't use. Pass an empty string so the
+  // signature is satisfied; downstream Saturn code ignores it.
+  actions.requestMasterAndJoinGroupCall({
+    id: result.id,
+    accessHash: (result as unknown as { accessHash?: string }).accessHash ?? '',
+    tabId,
+  });
 });
 
 addActionHandler('createGroupCallInviteLink', async (global, actions, payload): Promise<void> => {
@@ -401,9 +419,14 @@ addActionHandler('requestCall', (global, actions, payload): ActionReturnType => 
   };
   setGlobal(global);
 
-  // Trigger the actual POST /calls request immediately instead of relying on
-  // PhoneCall component mount (which may not happen).
-  actions.connectToActivePhoneCall();
+  // The Calls bundle (which registers `connectToActivePhoneCall`) is preloaded
+  // 5 s after Main mounts; if the user hits the call button before that timer
+  // fires, the action handler isn't on the dispatcher yet and the dispatch
+  // throws "t.connectToActivePhoneCall is not a function". Force-load the
+  // bundle, then dispatch — loadBundle is idempotent so the warm-path is free.
+  void loadBundle(Bundles.Calls).then(() => {
+    actions.connectToActivePhoneCall();
+  });
 
   actions.toggleGroupCallPanel({ force: false, tabId });
 });

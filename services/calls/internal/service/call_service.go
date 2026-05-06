@@ -57,6 +57,7 @@ type CreateCallRequest struct {
 
 // CreateCall initiates a new call.
 func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req CreateCallRequest) (*model.Call, error) {
+	s.logger.Info("create call: enter", "chat_id", req.ChatID, "initiator_id", initiatorID, "mode", req.Mode, "type", req.Type)
 	// Check no active call exists for this chat
 	existing, err := s.calls.GetActiveForChat(ctx, req.ChatID)
 	if err != nil {
@@ -64,6 +65,15 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 	}
 	if existing != nil {
 		s.attachSfuURL(existing)
+		// Re-publish call_incoming only when the same initiator is retrying.
+		// Republishing for a different caller would (a) ring the wrong user
+		// — the payload's InitiatorID is the original caller, not the
+		// retrier — and (b) muddle the UI ("incoming from X" with X being
+		// the previous initiator who isn't actually calling).
+		if existing.InitiatorID == initiatorID && (existing.Status == model.CallStatusRinging || existing.Status == model.CallStatusActive) {
+			s.republishCallIncoming(ctx, existing, req.MemberIDs, initiatorID)
+		}
+		s.logger.Info("create call: returning existing", "call_id", existing.ID, "status", existing.Status, "initiator_id", existing.InitiatorID, "caller_id", initiatorID)
 		return existing, nil
 	}
 
@@ -136,6 +146,25 @@ func (s *CallService) CreateCall(ctx context.Context, initiatorID uuid.UUID, req
 
 	s.logger.Info("call created", "call_id", call.ID, "chat_id", req.ChatID, "type", req.Type, "mode", req.Mode)
 	return call, nil
+}
+
+// republishCallIncoming re-emits the call_incoming NATS event for an existing
+// active/ringing call. Used on the CreateCall idempotent return path so a
+// retrying initiator (or a callee that missed the first ring) gets a fresh
+// signal. Mirrors the publish path at the end of CreateCall.
+func (s *CallService) republishCallIncoming(ctx context.Context, call *model.Call, suppliedMemberIDs []string, initiatorID uuid.UUID) {
+	memberIDs := suppliedMemberIDs
+	if len(memberIDs) == 0 {
+		fetched, fetchErr := s.calls.GetChatMemberIDs(ctx, call.ChatID)
+		if fetchErr != nil {
+			s.logger.Warn("republish call_incoming: failed to fetch chat member ids", "error", fetchErr, "call_id", call.ID)
+			return
+		}
+		memberIDs = fetched
+	}
+	subject := fmt.Sprintf("orbit.call.%s.lifecycle", call.ID)
+	s.nats.Publish(subject, "call_incoming", call, memberIDs, initiatorID.String())
+	s.logger.Info("call_incoming republished", "call_id", call.ID, "members", len(memberIDs))
 }
 
 func (s *CallService) attachSfuURL(call *model.Call) {
