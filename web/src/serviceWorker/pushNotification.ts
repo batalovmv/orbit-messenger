@@ -216,7 +216,42 @@ async function playNotificationSound(id: string) {
   });
 }
 
-function showNotification({
+// Smart Notifications user prefs (Chunk 5). Persisted via the Cache API
+// because localStorage is window-only and the SW must read on cold push.
+// Main thread writes the same JSON via savePrefs() in
+// SettingsSmartNotifications.tsx; the URL key is identical on both sides.
+const SMART_PREFS_CACHE = 'orbit-smart-prefs-v1';
+const SMART_PREFS_KEY = '/prefs/smart_notifications.json';
+
+type PriorityKey = 'urgent' | 'important' | 'normal' | 'low';
+interface PriorityPrefs { enabled: boolean; sound: boolean }
+type SmartPrefs = Record<PriorityKey, PriorityPrefs>;
+
+const DEFAULT_SMART_PREFS: SmartPrefs = {
+  urgent: { enabled: true, sound: true },
+  important: { enabled: true, sound: true },
+  normal: { enabled: true, sound: true },
+  low: { enabled: true, sound: false },
+};
+
+async function loadSmartPrefs(): Promise<SmartPrefs> {
+  try {
+    const cache = await caches.open(SMART_PREFS_CACHE);
+    const resp = await cache.match(SMART_PREFS_KEY);
+    if (!resp) return DEFAULT_SMART_PREFS;
+    const parsed = await resp.json() as Partial<SmartPrefs>;
+    return {
+      urgent: { ...DEFAULT_SMART_PREFS.urgent, ...(parsed.urgent || {}) },
+      important: { ...DEFAULT_SMART_PREFS.important, ...(parsed.important || {}) },
+      normal: { ...DEFAULT_SMART_PREFS.normal, ...(parsed.normal || {}) },
+      low: { ...DEFAULT_SMART_PREFS.low, ...(parsed.low || {}) },
+    };
+  } catch {
+    return DEFAULT_SMART_PREFS;
+  }
+}
+
+async function showNotification({
   chatId,
   messageId,
   body,
@@ -230,10 +265,25 @@ function showNotification({
   const isFirstBatch = new Date().valueOf() - lastSyncAt < 1000;
   const tag = String(isFirstBatch ? 0 : chatId || 0);
 
-  // Low-priority notifications are silent; urgent ones are persistent
-  const isLowPriority = priority === 'low';
-  const isUrgent = priority === 'urgent';
-  const effectiveSilent = isSilent || isLowPriority;
+  const prefs = await loadSmartPrefs();
+  const priorityKey: PriorityKey = (priority === 'urgent' || priority === 'important' || priority === 'low')
+    ? priority
+    : 'normal';
+  const userPref = prefs[priorityKey];
+
+  // User opted out of this priority entirely — drop the notification.
+  // Reaction badges have their own visibility logic (see callers above)
+  // and aren't gated by the smart-notifications panel.
+  if (!reaction && !userPref.enabled) {
+    return Promise.resolve([]);
+  }
+
+  // Low-priority notifications are silent by SW default; urgent ones are
+  // persistent. The user's "Play sound" toggle layers on top — disabling
+  // it forces silent regardless of priority.
+  const isLowPriority = priorityKey === 'low';
+  const isUrgent = priorityKey === 'urgent';
+  const effectiveSilent = isSilent || isLowPriority || !userPref.sound;
 
   const options: NotificationOptions = {
     body,

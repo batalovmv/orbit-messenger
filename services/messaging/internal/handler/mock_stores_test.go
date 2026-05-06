@@ -110,6 +110,10 @@ func (m *mockChatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]s
 	return nil, nil
 }
 
+func (m *mockChatStore) GetUserClassifierHint(_ context.Context, _ uuid.UUID) (string, error) {
+	return "member", nil
+}
+
 func (m *mockChatStore) AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error {
 	if m.addMemberFn != nil {
 		return m.addMemberFn(ctx, chatID, userID, role)

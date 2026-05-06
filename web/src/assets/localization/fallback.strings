@@ -3033,10 +3033,21 @@
 "SmartNotificationsDesc" = "AI prioritizes your notifications based on importance";
 "SmartNotificationsModeSmart" = "Smart";
 "SmartNotificationsModeOff" = "Off";
+"SmartNotificationsStatsTitle" = "Recent classifications";
+"SmartNotificationsStatsEmpty" = "No data yet — turn Smart mode on and receive a few messages.";
+"SmartNotificationsStatsTotal" = "{count} messages classified";
+"SmartNotificationsStatsSince" = "Since {date}";
+"SmartNotificationsBehaviorTitle" = "Behavior per priority";
+"SmartNotificationsBehaviorDesc" = "Choose how each priority level is delivered. Low priority is silent by default.";
+"SmartNotificationsBehaviorEnabled" = "Show banner";
+"SmartNotificationsBehaviorSound" = "Play sound";
 "NotificationPriorityUrgent" = "Urgent";
 "NotificationPriorityImportant" = "Important";
 "NotificationPriorityNormal" = "Normal";
 "NotificationPriorityLow" = "Low";
+"NotificationPrioritySuggest" = "Suggest priority";
+"NotificationPriorityFeedbackSent" = "Feedback sent";
+"NotificationPriorityFeedbackFailed" = "Could not send feedback";
 
 "ShowTranslateButton" = "Show Translate Button";
 "ShowTranslateChatButton" = "Translate Entire Chats";

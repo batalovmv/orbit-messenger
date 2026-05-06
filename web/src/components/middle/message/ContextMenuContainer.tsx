@@ -68,6 +68,7 @@ import {
   selectUserStatus,
   selectWebPageFromMessage,
 } from '../../../global/selectors';
+import { sendNotificationFeedback } from '../../../api/saturn/methods/notifications';
 import { selectMessageDownloadableMedia } from '../../../global/selectors/media';
 import { selectSavedDialogIdFromMessage, selectThreadInfo } from '../../../global/selectors/threads';
 import buildClassName from '../../../util/buildClassName';
@@ -634,6 +635,23 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     closeMenu();
   });
 
+  // Smart Notifications Chunk 4: send a per-message priority override
+  // back to the AI classifier as a feedback signal. classified_priority
+  // is currently unknown on the client (the push payload carries it but
+  // we don't persist it past the SW), so we send "normal" as the
+  // observed value and let the user_override carry the user's intent.
+  // Backend records both in notification_priority_feedback for future
+  // training-loop work.
+  const handleSuggestPriority = useLastCallback((priority: 'urgent' | 'important' | 'normal' | 'low') => {
+    closeMenu();
+    if (!message.saturnId) return;
+    void sendNotificationFeedback(message.saturnId, 'normal', priority).then(() => {
+      showNotification({ message: { key: 'NotificationPriorityFeedbackSent' } });
+    }).catch(() => {
+      showNotification({ message: { key: 'NotificationPriorityFeedbackFailed' } });
+    });
+  });
+
   const handleHideTranslation = useLastCallback(() => {
     clearMessageTranslation(message.id);
     closeMenu();
@@ -760,6 +778,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onReactionPickerOpen={handleReactionPickerOpen}
         onTranslate={handleTranslate}
         onTranslateTo={handleTranslateTo}
+        onSuggestPriority={message.saturnId && !isOwnMessage(message) ? handleSuggestPriority : undefined}
         defaultTranslateLang={defaultTranslateLang}
         canHideTranslation={canHideTranslation}
         onHideTranslation={handleHideTranslation}

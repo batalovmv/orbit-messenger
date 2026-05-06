@@ -77,6 +77,12 @@ type NATSEvent struct {
 	MemberIDs []string        `json:"member_ids"`
 	SenderID  string          `json:"sender_id,omitempty"`
 	Timestamp string          `json:"timestamp"`
+	// Notification classifier hints — populated by messaging on `new_message`
+	// envelopes. Empty on every other event. Gateway uses these per-recipient
+	// to decide push priority (see dispatchPushNotifications).
+	SenderRole     string   `json:"sender_role,omitempty"`
+	MentionUserIDs []string `json:"mention_user_ids,omitempty"`
+	ReplyToUserID  string   `json:"reply_to_user_id,omitempty"`
 }
 
 // ClientMessage is a message received from the WebSocket client.

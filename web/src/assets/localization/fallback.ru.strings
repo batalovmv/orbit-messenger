@@ -1,4 +1,4 @@
-"Month1" = "Январь";
+﻿"Month1" = "Январь";
 "Month2" = "Февраль";
 "Month3" = "Март";
 "Month4" = "Апрель";
@@ -1565,6 +1565,9 @@
 "NotificationPriorityLow" = "Низкий";
 "NotificationPriorityNormal" = "Обычный";
 "NotificationPriorityTitle" = "Приоритет уведомлений";
+"NotificationPrioritySuggest" = "Указать приоритет";
+"NotificationPriorityFeedbackSent" = "Спасибо за отзыв";
+"NotificationPriorityFeedbackFailed" = "Не удалось отправить отзыв";
 "NotificationPriorityUrgent" = "Срочный";
 "NotificationsOffline" = "Уведомления в офлайне";
 "NotificationsSound" = "Громкость звука";
@@ -2703,6 +2706,14 @@
 "SmartNotificationsModeOff" = "Выключено";
 "SmartNotificationsModeSmart" = "Умный режим";
 "SmartNotificationsUpdateFailed" = "Не удалось обновить настройки уведомлений";
+"SmartNotificationsStatsTitle" = "Недавние классификации";
+"SmartNotificationsStatsEmpty" = "Пока нет данных — включите Умный режим и получите несколько сообщений.";
+"SmartNotificationsStatsTotal" = "{count} сообщений обработано";
+"SmartNotificationsStatsSince" = "С {date}";
+"SmartNotificationsBehaviorTitle" = "Поведение по приоритетам";
+"SmartNotificationsBehaviorDesc" = "Выберите как доставляется каждый приоритет. Низкий — без звука по умолчанию.";
+"SmartNotificationsBehaviorEnabled" = "Показывать баннер";
+"SmartNotificationsBehaviorSound" = "Звук уведомления";
 "SomethingWentWrong" = "Что-то пошло не так";
 "SponsoredPeerBadge" = "Реклама";
 "Square" = "Квадрат";

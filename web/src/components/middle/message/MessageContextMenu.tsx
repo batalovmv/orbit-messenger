@@ -139,6 +139,10 @@ type OwnProps = {
   onShowReactors?: NoneToVoidFunction;
   onTranslate?: NoneToVoidFunction;
   onTranslateTo?: (langCode: string) => void;
+  // Smart Notifications feedback (chunk 4): user marks the priority this
+  // message *should* have triggered. Optional — parent passes only when
+  // the message has a Saturn UUID and is from another user.
+  onSuggestPriority?: (priority: 'urgent' | 'important' | 'normal' | 'low') => void;
   onHideTranslation?: NoneToVoidFunction;
   onShowOriginal?: NoneToVoidFunction;
   onSelectLanguage?: NoneToVoidFunction;
@@ -236,6 +240,7 @@ const MessageContextMenu: FC<OwnProps> = ({
   onReactionPickerOpen,
   onTranslate,
   onTranslateTo,
+  onSuggestPriority,
   onHideTranslation,
   onShowOriginal,
   onSelectLanguage,
@@ -460,6 +465,29 @@ const MessageContextMenu: FC<OwnProps> = ({
         )}
         {canHideTranslation && (
           <MenuItem icon="close" onClick={onHideTranslation}>{lang('AiHideTranslation')}</MenuItem>
+        )}
+        {onSuggestPriority && (
+          <NestedMenuItem
+            icon="lamp"
+            submenu={(
+              <>
+                <MenuItem icon="favorite" onClick={() => onSuggestPriority('urgent')}>
+                  {lang('NotificationPriorityUrgent')}
+                </MenuItem>
+                <MenuItem icon="pin" onClick={() => onSuggestPriority('important')}>
+                  {lang('NotificationPriorityImportant')}
+                </MenuItem>
+                <MenuItem icon="message" onClick={() => onSuggestPriority('normal')}>
+                  {lang('NotificationPriorityNormal')}
+                </MenuItem>
+                <MenuItem icon="mute" onClick={() => onSuggestPriority('low')}>
+                  {lang('NotificationPriorityLow')}
+                </MenuItem>
+              </>
+            )}
+          >
+            {lang('NotificationPrioritySuggest')}
+          </NestedMenuItem>
         )}
         {canShowOriginal && (
           <MenuItem icon="language" onClick={onShowOriginal}>

@@ -2250,10 +2250,19 @@ export interface LangPair {
   'SmartNotificationsDesc': undefined;
   'SmartNotificationsModeSmart': undefined;
   'SmartNotificationsModeOff': undefined;
+  'SmartNotificationsStatsTitle': undefined;
+  'SmartNotificationsStatsEmpty': undefined;
+  'SmartNotificationsBehaviorTitle': undefined;
+  'SmartNotificationsBehaviorDesc': undefined;
+  'SmartNotificationsBehaviorEnabled': undefined;
+  'SmartNotificationsBehaviorSound': undefined;
   'NotificationPriorityUrgent': undefined;
   'NotificationPriorityImportant': undefined;
   'NotificationPriorityNormal': undefined;
   'NotificationPriorityLow': undefined;
+  'NotificationPrioritySuggest': undefined;
+  'NotificationPriorityFeedbackSent': undefined;
+  'NotificationPriorityFeedbackFailed': undefined;
   'ShowTranslateButton': undefined;
   'ShowTranslateChatButton': undefined;
   'DoNotTranslate': undefined;
@@ -4286,6 +4295,12 @@ export interface LangPairWithVariables<V = LangVariable> {
   };
   'ExactTextCopied': {
     '0': V;
+  };
+  'SmartNotificationsStatsTotal': {
+    'count': V;
+  };
+  'SmartNotificationsStatsSince': {
+    'date': V;
   };
   'AdminUsersSessionsCount': {
     'count': V;

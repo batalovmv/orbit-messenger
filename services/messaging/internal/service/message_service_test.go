@@ -102,6 +102,47 @@ func TestSendMessage_MentionEntity_PublishesMentionEvent(t *testing.T) {
 	}
 }
 
+// Smart Notifications Chunk 3: verifies the publisher carries SenderRole
+// classifier hint. Admin senders get "admin" → gateway rule classifier
+// elevates DM pushes to "urgent".
+func TestSendMessage_AdminSender_PublishesAdminHint(t *testing.T) {
+	chatID := uuid.New()
+	senderID := uuid.New()
+	rec := &RecordingPublisher{}
+
+	cs := groupChatStore(chatID)
+	cs.getUserClassifierHintFn = func(_ context.Context, uid uuid.UUID) (string, error) {
+		if uid == senderID {
+			return "admin", nil
+		}
+		return "member", nil
+	}
+	ms := &mockMessageStore{
+		createFn: func(_ context.Context, msg *model.Message) error {
+			msg.ID = uuid.New()
+			msg.CreatedAt = time.Now()
+			return nil
+		},
+		getByIDFn: func(_ context.Context, _ uuid.UUID) (*model.Message, error) {
+			content := "hi"
+			return &model.Message{ID: uuid.New(), ChatID: chatID, SenderID: &senderID, Content: &content}, nil
+		},
+	}
+
+	svc := newTestMessageService(ms, cs, rec, nil)
+	if _, err := svc.SendMessage(context.Background(), chatID, senderID, "hi", nil, nil, "text"); err != nil {
+		t.Fatalf("SendMessage: %v", err)
+	}
+
+	newMsgEvents := rec.FindByEvent("new_message")
+	if len(newMsgEvents) != 1 {
+		t.Fatalf("expected 1 new_message event, got %d", len(newMsgEvents))
+	}
+	if got := newMsgEvents[0].Hints.SenderRole; got != "admin" {
+		t.Errorf("expected SenderRole=admin, got %q", got)
+	}
+}
+
 func TestSendMessage_NoEntities_NoMentionEvents(t *testing.T) {
 	chatID := uuid.New()
 	senderID := uuid.New()

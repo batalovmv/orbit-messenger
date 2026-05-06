@@ -313,7 +313,10 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		msgType = "text"
 	}
 
-	// Validate reply_to_id belongs to the same chat
+	// Validate reply_to_id belongs to the same chat. Hold the replied-to
+	// sender so the NATS publish below can pass it as a ClassifierHint
+	// (gateway maps it to per-recipient ReplyToMe).
+	var replyToSenderID string
 	if replyToID != nil {
 		replyMsg, err := s.messages.GetByID(ctx, *replyToID)
 		if err != nil {
@@ -324,6 +327,9 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 		}
 		if replyMsg.ChatID != chatID {
 			return nil, apperror.BadRequest("Cannot reply to a message from a different chat")
+		}
+		if replyMsg.SenderID != nil {
+			replyToSenderID = replyMsg.SenderID.String()
 		}
 	}
 
@@ -355,35 +361,29 @@ func (s *MessageService) SendMessage(ctx context.Context, chatID, senderID uuid.
 	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
 
-	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
+	// Extract @mention user IDs once — used both as a classifier hint on the
+	// new_message envelope and as the iteration set for per-user mention
+	// publishes below. Pre-extraction avoids parsing entities twice.
+	mentionUserIDs := extractMentionUserIDs(entities)
 
-	// Parse @mention entities and notify mentioned users
-	if len(entities) > 0 {
-		var ents []struct {
-			Type   string `json:"type"`
-			UserID string `json:"user_id"`
-		}
-		if json.Unmarshal(entities, &ents) == nil {
-			for _, e := range ents {
-				if e.Type == "mention" && e.UserID != "" {
-					// Validate user_id is a proper UUID to prevent NATS subject injection
-					if _, err := uuid.Parse(e.UserID); err != nil {
-						continue
-					}
-					mentionSubject := fmt.Sprintf("orbit.user.%s.mention", e.UserID)
-					s.nats.Publish(mentionSubject, "mention", map[string]interface{}{
-						"id":              full.ID.String(),
-						"chat_id":         chatID.String(),
-						"message_id":      msg.ID.String(),
-						"sender_id":       senderID.String(),
-						"type":            full.Type,
-						"content":         full.Content,
-						"sender_name":     full.SenderName,
-						"sequence_number": full.SequenceNumber,
-					}, []string{e.UserID})
-				}
-			}
-		}
+	s.nats.PublishMessage(subject, "new_message", full, memberIDs, senderID.String(), ClassifierHints{
+		SenderRole:     s.resolveSenderClassifierHint(ctx, senderID),
+		MentionUserIDs: mentionUserIDs,
+		ReplyToUserID:  replyToSenderID,
+	})
+
+	for _, uid := range mentionUserIDs {
+		mentionSubject := fmt.Sprintf("orbit.user.%s.mention", uid)
+		s.nats.Publish(mentionSubject, "mention", map[string]interface{}{
+			"id":              full.ID.String(),
+			"chat_id":         chatID.String(),
+			"message_id":      msg.ID.String(),
+			"sender_id":       senderID.String(),
+			"type":            full.Type,
+			"content":         full.Content,
+			"sender_name":     full.SenderName,
+			"sequence_number": full.SequenceNumber,
+		}, []string{uid})
 	}
 
 	// @orbit-ai literal mention: when enabled, forward the prompt to the
@@ -417,6 +417,63 @@ func (s *MessageService) maybeHandleOrbitAIMention(chatID, senderID uuid.UUID, c
 // the message (case-insensitive, delimited by start-of-string /
 // whitespace) and returns everything that follows it as the user's
 // question. Empty string = no mention or empty prompt.
+// resolveSenderClassifierHint returns "admin" / "bot" / "member" for the
+// smart-notifications classifier, with a Redis-cached lookup keyed on
+// user_id. The role rarely changes (admin promotion is a deliberate
+// admin action) so a 1h TTL is plenty and avoids hammering postgres
+// once per published message at chat-throughput scale.
+//
+// Fail-open to "member" on cache or db errors — wrong-but-bounded
+// behaviour is better than blocking the publish path on a transient
+// users-table outage.
+func (s *MessageService) resolveSenderClassifierHint(ctx context.Context, userID uuid.UUID) string {
+	const cacheTTL = time.Hour
+	cacheKey := "msg:sender_role:" + userID.String()
+	if s.redis != nil {
+		if cached, err := s.redis.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+			return cached
+		}
+	}
+	hint, err := s.chats.GetUserClassifierHint(ctx, userID)
+	if err != nil || hint == "" {
+		return "member"
+	}
+	if s.redis != nil {
+		_ = s.redis.Set(ctx, cacheKey, hint, cacheTTL).Err()
+	}
+	return hint
+}
+
+// extractMentionUserIDs pulls the user IDs of all @mention entities. Returns
+// nil for an empty/invalid entities blob. Each entity is validated as a UUID
+// before being kept — both as defence against malformed clients and to
+// prevent NATS subject injection on the mention publish path that consumes
+// the same list. Duplicates are kept (rare in practice and gateway is the
+// one that does set membership).
+func extractMentionUserIDs(entities json.RawMessage) []string {
+	if len(entities) == 0 {
+		return nil
+	}
+	var ents []struct {
+		Type   string `json:"type"`
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(entities, &ents); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(ents))
+	for _, e := range ents {
+		if e.Type != "mention" || e.UserID == "" {
+			continue
+		}
+		if _, err := uuid.Parse(e.UserID); err != nil {
+			continue
+		}
+		out = append(out, e.UserID)
+	}
+	return out
+}
+
 func extractOrbitAIPrompt(content string) string {
 	lower := strings.ToLower(content)
 	idx := strings.Index(lower, "@orbit-ai")
@@ -962,7 +1019,9 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		}
 	}
 
-	// Validate reply_to_id belongs to the same chat
+	// Validate reply_to_id belongs to the same chat. Hold the replied-to
+	// sender so the NATS publish below can pass it as a ClassifierHint.
+	var replyToSenderID string
 	if replyToID != nil {
 		replyMsg, err := s.messages.GetByID(ctx, *replyToID)
 		if err != nil {
@@ -973,6 +1032,9 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		}
 		if replyMsg.ChatID != chatID {
 			return nil, apperror.BadRequest("Cannot reply to a message from a different chat")
+		}
+		if replyMsg.SenderID != nil {
+			replyToSenderID = replyMsg.SenderID.String()
 		}
 	}
 
@@ -1016,7 +1078,11 @@ func (s *MessageService) SendMediaMessage(ctx context.Context, chatID, senderID 
 		slog.Error("failed to get member IDs for NATS publish", "chat_id", chatID, "error", err)
 	}
 	subject := fmt.Sprintf("orbit.chat.%s.message.new", chatID.String())
-	s.nats.Publish(subject, "new_message", full, memberIDs, senderID.String())
+	s.nats.PublishMessage(subject, "new_message", full, memberIDs, senderID.String(), ClassifierHints{
+		SenderRole:     s.resolveSenderClassifierHint(ctx, senderID),
+		MentionUserIDs: extractMentionUserIDs(entities),
+		ReplyToUserID:  replyToSenderID,
+	})
 
 	return full, nil
 }

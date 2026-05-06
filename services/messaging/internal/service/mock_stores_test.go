@@ -49,6 +49,9 @@ type mockChatStore struct {
 	setChatDefaultStatusFn       func(ctx context.Context, chatID uuid.UUID, isDefault bool, joinOrder int) error
 	backfillDefaultMembershipsFn func(ctx context.Context) ([]store.DefaultBackfillInsert, error)
 	previewDefaultMembershipsFn  func(ctx context.Context) (*store.DefaultMembershipPreview, error)
+
+	// Smart Notifications classifier hint (per-user role tag).
+	getUserClassifierHintFn func(ctx context.Context, userID uuid.UUID) (string, error)
 }
 
 func (m *mockChatStore) ListByUser(ctx context.Context, userID uuid.UUID, cursor string, limit int) ([]model.ChatListItem, string, bool, error) {
@@ -113,6 +116,12 @@ func (m *mockChatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]s
 		return m.getMemberIDsFn(ctx, chatID)
 	}
 	return nil, nil
+}
+func (m *mockChatStore) GetUserClassifierHint(ctx context.Context, userID uuid.UUID) (string, error) {
+	if m.getUserClassifierHintFn != nil {
+		return m.getUserClassifierHintFn(ctx, userID)
+	}
+	return "member", nil
 }
 func (m *mockChatStore) AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error {
 	if m.addMemberFn != nil {

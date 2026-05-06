@@ -790,6 +790,126 @@ func TestDispatchPushNotifications_SkipsOffModeUsers(t *testing.T) {
 
 func strPtr(s string) *string { return &s }
 
+// TestDispatchPushNotifications_MentionsBumpToImportant verifies that when
+// the new_message envelope carries MentionUserIDs, those recipients receive
+// a separate push call with priority="important" — even when the contextless
+// baseline classifier would have returned "normal". This is the meat of the
+// per-recipient priority elevation: a generic message in a group becomes
+// "important" only for the @mentioned user, not for everyone in the chat.
+func TestDispatchPushNotifications_MentionsBumpToImportant(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	senderID := uuid.New().String()
+	mentioned := uuid.New().String()
+	other := uuid.New().String()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"muted_user_ids":[]}`)
+	}))
+	defer server.Close()
+
+	type call struct {
+		userIDs  []string
+		priority string
+	}
+	var calls []call
+	pushSender := &mockPushSender{
+		sendToUsersWithPriorityFn: func(userIDs []string, payload []byte, priority string) error {
+			calls = append(calls, call{append([]string{}, userIDs...), priority})
+			return nil
+		},
+	}
+
+	sub := NewSubscriber(NewHub(), nil, server.URL, "internal-secret", rdb, pushSender)
+	sub.httpClient = server.Client()
+
+	msgData, _ := json.Marshal(pushMessageData{
+		ID:             uuid.New().String(),
+		ChatID:         uuid.New().String(),
+		Content:        strPtr("hey check this"),
+		SenderName:     "Test",
+		SequenceNumber: 1,
+	})
+
+	sub.dispatchPushNotifications(NATSEvent{
+		Event:          EventNewMessage,
+		Data:           msgData,
+		SenderID:       senderID,
+		MentionUserIDs: []string{mentioned},
+	}, []string{senderID, mentioned, other})
+
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 push calls (one per priority bucket), got %d: %+v", len(calls), calls)
+	}
+	var importantCall, baselineCall *call
+	for i := range calls {
+		switch calls[i].priority {
+		case "important":
+			importantCall = &calls[i]
+		case "normal":
+			baselineCall = &calls[i]
+		}
+	}
+	if importantCall == nil || len(importantCall.userIDs) != 1 || importantCall.userIDs[0] != mentioned {
+		t.Errorf("expected mentioned user in important bucket, got %+v", importantCall)
+	}
+	if baselineCall == nil || len(baselineCall.userIDs) != 1 || baselineCall.userIDs[0] != other {
+		t.Errorf("expected non-mentioned user in normal bucket, got %+v", baselineCall)
+	}
+}
+
+func TestDispatchPushNotifications_ReplyTargetGetsImportant(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	senderID := uuid.New().String()
+	replyTarget := uuid.New().String()
+	other := uuid.New().String()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"muted_user_ids":[]}`)
+	}))
+	defer server.Close()
+
+	got := map[string]string{}
+	pushSender := &mockPushSender{
+		sendToUsersWithPriorityFn: func(userIDs []string, payload []byte, priority string) error {
+			for _, u := range userIDs {
+				got[u] = priority
+			}
+			return nil
+		},
+	}
+
+	sub := NewSubscriber(NewHub(), nil, server.URL, "internal-secret", rdb, pushSender)
+	sub.httpClient = server.Client()
+
+	msgData, _ := json.Marshal(pushMessageData{
+		ID:             uuid.New().String(),
+		ChatID:         uuid.New().String(),
+		Content:        strPtr("agree"),
+		SenderName:     "Test",
+		SequenceNumber: 2,
+	})
+
+	sub.dispatchPushNotifications(NATSEvent{
+		Event:         EventNewMessage,
+		Data:          msgData,
+		SenderID:      senderID,
+		ReplyToUserID: replyTarget,
+	}, []string{senderID, replyTarget, other})
+
+	if got[replyTarget] != "important" {
+		t.Errorf("expected reply target to get important, got %q", got[replyTarget])
+	}
+	if got[other] != "normal" {
+		t.Errorf("expected non-target to stay normal, got %q", got[other])
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Day 4b: read_sync silent push fallback for offline users
 // ---------------------------------------------------------------------------

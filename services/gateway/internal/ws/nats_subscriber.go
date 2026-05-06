@@ -441,23 +441,66 @@ func (s *Subscriber) dispatchPushNotifications(event NATSEvent, memberIDs []stri
 		return
 	}
 
-	// Classify notification priority (fail-open to "normal")
-	priority := defaultPriority
+	senderRole := event.SenderRole
+	if senderRole == "" {
+		senderRole = "member"
+	}
+	chatType := inferChatType(event)
+	messageText := stringPtrToString(msg.Content)
+
+	// Compute the contextless baseline priority once. Recipients hit by
+	// per-recipient signals (mention or reply target) get bumped below.
+	// Without the bump path, mention/reply signals would cost N classifier
+	// calls, one per recipient — wasteful since the rule outcome is fixed.
+	baseline := defaultPriority
 	if s.classifier != nil {
-		priority = s.classifier.Classify(context.Background(), classifyRequest{
+		baseline = s.classifier.Classify(context.Background(), classifyRequest{
 			SenderID:    event.SenderID,
-			SenderRole:  "member", // TODO(Sprint3): enrich from NATSEvent.sender_role
-			ChatType:    inferChatType(event),
-			MessageText: stringPtrToString(msg.Content),
-			HasMention:  false, // TODO(Sprint3): enrich from NATSEvent.has_mention
-			ReplyToMe:   false, // TODO(Sprint3): enrich from NATSEvent.reply_to_me
+			SenderRole:  senderRole,
+			ChatType:    chatType,
+			MessageText: messageText,
+			HasMention:  false,
+			ReplyToMe:   false,
 		})
 	}
 
-	payload = injectPriorityIntoPayload(payload, priority)
+	mentionSet := make(map[string]struct{}, len(event.MentionUserIDs))
+	for _, uid := range event.MentionUserIDs {
+		mentionSet[uid] = struct{}{}
+	}
 
-	if err := s.pushDispatcher.SendToUsersWithPriority(recipients, payload, priority); err != nil {
-		slog.Error("nats: push dispatch failed", "error", err, "chat_id", msg.ChatID, "priority", priority)
+	// Bucket recipients by their effective priority. The common case has
+	// one bucket (no mentions/replies in the chat) and we hit a single
+	// SendToUsersWithPriority call. With mentions, the elevated bucket
+	// gets its own call so urgency/sound flags propagate correctly to
+	// only the users for whom the message is actually important.
+	buckets := make(map[string][]string, 2)
+	for _, uid := range recipients {
+		_, mentioned := mentionSet[uid]
+		isReplyTarget := event.ReplyToUserID != "" && uid == event.ReplyToUserID
+		priority := baseline
+		if mentioned || isReplyTarget {
+			priority = elevatePriority(priority)
+		}
+		buckets[priority] = append(buckets[priority], uid)
+	}
+
+	for priority, group := range buckets {
+		bucketPayload := injectPriorityIntoPayload(payload, priority)
+		if err := s.pushDispatcher.SendToUsersWithPriority(group, bucketPayload, priority); err != nil {
+			slog.Error("nats: push dispatch failed", "error", err, "chat_id", msg.ChatID, "priority", priority, "recipients", len(group))
+		}
+	}
+}
+
+// elevatePriority bumps a priority up by one notch for recipients hit by
+// a per-recipient signal (mention, reply-to-me). Idempotent at the top.
+func elevatePriority(p string) string {
+	switch p {
+	case "low", "normal":
+		return "important"
+	default:
+		return p
 	}
 }
 
