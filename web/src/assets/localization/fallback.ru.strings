@@ -1493,6 +1493,8 @@
 "LoginRegisterLastNamePlaceholder" = "Фамилия";
 "LoginSelectCountryTitle" = "Страна";
 "LoginSubtitle" = "Введите электронную почту и пароль для входа.";
+"OIDCSignInButton" = "Войти через {provider}";
+"OIDCDivider" = "или";
 "ManageLinksInfoHelp" = "Вы можете создавать дополнительные пригласительные ссылки с ограниченным сроком действия или числом пользователей.";
 "MaximumReactionsHeader" = "Максимум реакций";
 "MediaAudioEmpty" = "Голосовых сообщений пока нет";

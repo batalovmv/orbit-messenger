@@ -1101,9 +1101,9 @@ function detectOs(userAgent: string) {
 }
 
 export {
-  checkAuth, createAuthInvite, loginWithEmail, logout, provideAuthPhoneNumber, provideAuthCode,
+  checkAuth, createAuthInvite, fetchOIDCConfig, loginWithEmail, logout, provideAuthPhoneNumber, provideAuthCode,
   provideAuthPassword, provideAuthRegistration, registerWithInvite,
-  restartAuth, restartAuthWithQr, restartAuthWithPasskey, validateInviteCode,
+  restartAuth, restartAuthWithQr, restartAuthWithPasskey, startOIDCAuthorize, validateInviteCode,
 } from './auth';
 
 export { getPasswordInfo, checkPassword, updatePassword, clearPassword } from './twoFaSettings';

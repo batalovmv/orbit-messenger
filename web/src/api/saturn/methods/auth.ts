@@ -8,6 +8,39 @@ import { buildApiUser, buildApiUserFullInfo, buildApiUserStatus } from '../apiBu
 import * as client from '../client';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 
+export type OIDCConfigResponse = {
+  enabled: boolean;
+  providerKey: string;
+  displayName: string;
+};
+
+// fetchOIDCConfig probes the auth service for a configured SSO provider.
+// Always returns a response — when SSO is off the backend responds with
+// enabled:false rather than 404 so the SPA has one consistent decode path.
+// Used by the sign-in screen to decide whether to render the SSO button.
+export async function fetchOIDCConfig() {
+  try {
+    return await client.request<OIDCConfigResponse>(
+      'GET', '/auth/oidc/config', undefined, { noAuth: true, skipAuthReady: true },
+    );
+  } catch {
+    // Network or 5xx — degrade gracefully to "no SSO" so the rest of the
+    // login screen still works.
+    return { enabled: false, providerKey: '', displayName: '' };
+  }
+}
+
+// startOIDCAuthorize navigates the browser to the auth service's
+// /authorize endpoint, which redirects to the IdP. We must use a full
+// navigation (not fetch) because the browser needs to follow the IdP's
+// redirect chain and eventually post back to /callback.
+export function startOIDCAuthorize(providerKey: string, returnTo: string) {
+  const base = `${window.location.origin}/api/v1`;
+  const url = new URL(`${base}/auth/oidc/${encodeURIComponent(providerKey)}/authorize`);
+  if (returnTo) url.searchParams.set('return_to', returnTo);
+  window.location.assign(url.toString());
+}
+
 export async function validateInviteCode({ code }: { code: string }) {
   const result = await client.request<{ valid: boolean; email?: string; role: string }>(
     'POST', '/auth/invite/validate', { code }, { noAuth: true },

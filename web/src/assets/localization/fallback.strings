@@ -172,6 +172,8 @@
 "LoginPassword" = "Password";
 "LoginEmail" = "Email";
 "LoginSubtitle" = "Enter your email and password to sign in.";
+"OIDCSignInButton" = "Sign in with {provider}";
+"OIDCDivider" = "or";
 "LoginQRLogin" = "Log in by QR Code";
 "LoginQRTitle" = "Log in to Orbit by QR Code";
 "LoginQRHelp1" = "Open Orbit on your phone";

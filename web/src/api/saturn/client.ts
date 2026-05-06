@@ -94,6 +94,40 @@ export function init(apiUrl: string, updateCallback: OnApiUpdate) {
   restorePersistedAccessToken();
 }
 
+// absorbOIDCAccessTokenFromUrl reads the access_token + expires_in query
+// params left behind by the auth service's OIDC callback redirect, primes
+// the in-memory token store, then strips the params from history so the
+// SPA URL stays clean (no token in the visible address bar, no risk of
+// the token surviving a copy-paste of the URL).
+//
+// Returns true when a token was absorbed — caller can short-circuit any
+// initial refresh round-trip in that case.
+export function absorbOIDCAccessTokenFromUrl(): boolean {
+  if (typeof window === 'undefined' || !window.location.search) return false;
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('access_token');
+  const expiresIn = Number(params.get('expires_in') || 0);
+  if (!token || !expiresIn) return false;
+
+  setAccessToken(token, expiresIn);
+
+  // Strip only the OIDC params; keep the rest of the query intact so any
+  // pre-existing app state encoded in the URL (e.g. ?to=...) survives.
+  params.delete('access_token');
+  params.delete('expires_in');
+  const remaining = params.toString();
+  const newUrl = window.location.pathname
+    + (remaining ? `?${remaining}` : '')
+    + window.location.hash;
+  try {
+    window.history.replaceState(window.history.state, '', newUrl);
+  } catch {
+    // History API can fail in odd embedding contexts — token is already
+    // in memory, the address bar staying as-is is a cosmetic miss.
+  }
+  return true;
+}
+
 export function getBaseUrl() {
   return baseUrl;
 }

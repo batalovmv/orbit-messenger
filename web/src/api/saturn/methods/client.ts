@@ -16,6 +16,11 @@ export function init(initialArgs: ApiInitialArgs, onUpdate: OnApiUpdate) {
   const apiUrl = `${window.location.origin}/api/v1`;
 
   saturnClient.init(apiUrl, onUpdate);
+  // OIDC callback hands the SPA an access_token via querystring. Pulling
+  // it into the in-memory token store before checkAuth runs lets the
+  // rest of the boot sequence treat the SSO landing as a normal logged-in
+  // session — no extra refresh, no UI flash through the login screen.
+  saturnClient.absorbOIDCAccessTokenFromUrl();
   initUpdateEmitter(onUpdate);
   initWsHandler();
 

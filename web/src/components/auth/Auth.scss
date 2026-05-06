@@ -60,6 +60,40 @@
     }
   }
 
+  .oidc-sso-block {
+    margin-bottom: 1.5rem;
+
+    .oidc-sign-in-button {
+      width: 100%;
+      margin-bottom: 1.25rem;
+      border: 1px solid var(--color-borders);
+      color: var(--color-primary);
+      font-weight: var(--font-weight-medium);
+    }
+
+    .oidc-divider {
+      position: relative;
+      margin-bottom: 1rem;
+      font-size: 0.8125rem;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.0625rem;
+
+      &::before,
+      &::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: calc(50% - 2.25rem);
+        height: 1px;
+        background: var(--color-borders);
+      }
+
+      &::before { left: 0; }
+      &::after { right: 0; }
+    }
+  }
+
   body.is-tauri #auth-phone-number-form & {
     padding-top: 3rem;
 

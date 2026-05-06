@@ -153,6 +153,7 @@ export interface LangPair {
   'LoginPassword': undefined;
   'LoginEmail': undefined;
   'LoginSubtitle': undefined;
+  'OIDCDivider': undefined;
   'LoginQRLogin': undefined;
   'LoginQRTitle': undefined;
   'LoginQRHelp1': undefined;
@@ -2821,6 +2822,9 @@ export interface LangPairWithVariables<V = LangVariable> {
     'limit3': V;
     'limit4': V;
     'limit5': V;
+  };
+  'OIDCSignInButton': {
+    'provider': V;
   };
   'SpeakingWithVolume': {
     'volume': V;
