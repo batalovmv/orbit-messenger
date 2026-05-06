@@ -6,6 +6,40 @@
 > не переобсуждай, иди делать.
 >
 > Создано 2026-05-06 после двух сессий (2026-05-05 + 2026-05-06).
+> Обновлено 2026-05-06 в третьей сессии: фазы A → C полностью закрыты,
+> D1 (миграция 071) тоже. Коммиты локальные, **не запушены** — Saturn-side
+> ресурсы (`backup-cron`, `nats-exporter`) пока не созданы.
+
+---
+
+## Статус на 2026-05-06 после третьей сессии
+
+| Фаза | Состояние | Коммиты |
+|---|---|---|
+| A1 Smart Notifications C1-C5 | ✅ done | `6812a39` |
+| A2 SFU 6-bug fix + e2e | ✅ done | `6bc6d39` |
+| A3 Live Translate + p2p tweaks | ✅ done | `ec71937` |
+| A4 Saturn infra (backup-cron + jetstream) | ✅ done locally, **не пушить до Saturn-кликов** | `f5407d5` |
+| A5 OIDC backend MVP + ICE watchdog | ✅ done | `d44f4f2` |
+| B2 `/auth/oidc/config` endpoint | ✅ done | `9c3ccb0` |
+| B1 SSO кнопка на login screen | ✅ done | `856ac48` |
+| B3 Local Dex profile (`oidc-dev`) | ✅ done | `1fe9c7e` |
+| B4 OIDC sync worker + Google directory client | ✅ done | `560d5a3` |
+| C1+C2 per-participant indicators + reconnect toast | ✅ done | `330285e` |
+| C3 server-side `restart_ice` handler | ✅ done | `69e94fd` |
+| D1 migration 071 (`call_recordings`) | ✅ done | `62d9de0` |
+| **D2 Pion track recording** | ⏭ deferred — следующая сессия | — |
+| **D3 Compliance плашка** | ⏭ deferred | — |
+| **D4 Admin endpoint скачивания** | ⏭ deferred | — |
+| **D5 GC ретеншен 90 дней** | ⏭ deferred | — |
+| **D6 Storage budget alert** | ⏭ deferred | — |
+
+Локальная проверка по каждой фазе сделана: `go test ./...` для auth/calls,
+`tsc --noEmit` чистый, `docker compose --profile oidc-dev config` валиден,
+миграция 071 применена в локальный postgres и схема совпадает с тем, что
+ждёт `call_recordings`-FK у будущего D2 publisher'а.
+
+**12 коммитов на master, не запушены.** Tree clean.
 
 ---
 
@@ -481,26 +515,56 @@ cd tests/calls-e2e && npx playwright test sfu-3-call.spec.ts
 
 ---
 
-## Suggested first move
+## Suggested first move (для следующей сессии — фокус на D2-D6)
 
-1. `git status -s` → подтвердить, что dirty файлы из брифа на месте
-2. `git diff --stat` → ориентация на scope
-3. Прочитать `docs/canon/state.json` + этот файл + `docs/canon/divergences.md`
+1. `git log --oneline -15` → убедиться, что 12 локальных коммитов A→D1
+   на месте (последний — `62d9de0 feat(db): migration 071`).
+2. `git status -s` → должно быть пусто.
+3. Прочитать `docs/canon/state.json` (last_migration=071) + этот файл +
+   `docs/canon/divergences.md`.
 4. Спросить юзера:
    - **«Saturn-side ресурсы (`backup-cron` + `nats-exporter`) уже создал?»**
-     - Если ДА → начинаем фазу A полностью (включая A4)
-     - Если НЕТ → начинаем фазу A без A4 (пушим A1+A2+A3+A5), параллельно
-       юзер кликает в Saturn UI
-   - **«Когда пилот?»**
-     - 2-3 дня: A→B→C→D→E последовательно
-     - Завтра: A → B1+B2+B3 → C1+C2 → E (запись звонков отложить, без
-       compliance-плашки прода юзеров не пускать)
-     - Сегодня вечером: только A → E, без SSO (invite-коды), без
-       записи. Не рекомендуется
-   - **«Запись звонков обязательна на launch?»** — если да, фаза D
-     параллельно с B
-5. Закоммитить фазу A в порядке выше, прогнать тесты после каждого
-   commit'а
-6. Дальше — по выбранному маршруту
+     Если ДА → можно `git push` всех 12 коммитов разом. Если НЕТ → пушить
+     до A4 (`f5407d5`) включительно НЕЛЬЗЯ; для не-A4 коммитов проще
+     дождаться кликов и запушить всё одной волной.
+   - **«Старт пилота когда?»** Если в течение 2 рабочих дней — фаза D
+     обязательна (D2-D6), параллельно юзер делает Saturn-side и
+     юридический crosscheck текста D3-плашки.
+   - **«Готов IdP-конфиг (Google Workspace OAuth client + Directory API
+     SA)?»** — без этого фазу B нельзя проверить в проде.
+5. Дальше — фаза D2-D6 строго в порядке плана выше. D2 — самая объёмная
+   и хрупкая (Pion + crypto + S3 + tmp-файлы), её **не** делегировать
+   sonnet-агенту целиком: сначала сам пройди по `peer.go` и
+   `pkg/crypto`/`pkg/storage`, чтобы понять, какие callback'и Pion
+   реально умеет. D3/D4/D5/D6 после D2 — гораздо более механические,
+   их можно отдать sonnet'у пакетом.
 
 **Не пушить ничего до подтверждения юзера, что Saturn-side готов.**
+
+## Заметки для D2-D6
+
+- **D2 риски:** Pion `pc.OnTrack` для audio kind зовётся ОДИН раз на
+  трек, но трек может остановиться/перезапуститься при `restart_ice` —
+  oggwriter надо умело закрывать-переоткрывать. Проще: писать в
+  отдельный файл per `OnTrack` invocation, а на Close агрегировать.
+  Encryption: можно reuse `pkg/crypto.SealAESGCM` (уже использовалось
+  для медиа чатов в Phase 4); per-recording random key, key wrap
+  через мастер.
+- **D3 юридика:** текст из плана — это плейсхолдер. **ОБЯЗАТЕЛЬНО**
+  показать юристу до merge. ФЗ-152 (Россия) и GDPR (если есть EU
+  юзеры) формулировки строгие. Per-user ack persisted в localStorage
+  под ключом `orbit-call-recording-acknowledged-v1` — если меняется
+  текст, версию надо бампать (`-v2`) чтобы все юзеры пере-подтвердили.
+- **D4 IDOR:** не забыть проверку, что `call_id` в URL действительно
+  принадлежит compliance-роли, а не юзеру (сейчас `SysViewAuditLog`
+  гейт уже стоит — просто не забыть его пересмотреть для нового
+  permission `SysListenCallRecordings` если решишь его создать).
+- **D5/D6:** D5-крон жить может в `deploy/backup-cron/scripts/`
+  (рядом с pg_dump уже там). Метрика D6 `orbit_call_recordings_total_bytes`
+  лучше всего скрапиться из БД (sum size_bytes), не из S3 — S3 listing
+  стоит денег и асинхронен.
+
+## Фаза E
+
+См. оригинальную секцию выше — план не поменялся. После пуша всех
+коммитов и Saturn-side подготовки запускается фаза E (юзерская).
