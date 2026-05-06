@@ -355,6 +355,7 @@ function restorePersistedAccessToken() {
 
     accessToken = storedToken;
     tokenExpiresAt = storedExpiresAt;
+    scheduleTokenRefresh();
   } catch {
     clearPersistedAccessToken();
   }

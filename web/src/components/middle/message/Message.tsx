@@ -1508,6 +1508,8 @@ const Message = ({
   }
 
   function renderForwardTitle() {
+    const forwardUser = forwardInfo?.hiddenUserName
+      || (senderPeer ? getPeerFullTitle(oldLang, senderPeer) : undefined);
     return (
       <span className="forward-title-container">
         {asForwarded && (
@@ -1515,7 +1517,9 @@ const Message = ({
         )}
         {asForwarded && (
           <span className="forward-title">
-            {oldLang('ForwardedFrom')}
+            {forwardUser
+              ? oldLang('ForwardedFrom', { user: forwardUser })
+              : oldLang('ForwardedMessage')}
           </span>
         )}
       </span>
