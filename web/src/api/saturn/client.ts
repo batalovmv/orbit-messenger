@@ -81,6 +81,7 @@ export function resolveAuthGate() {
 let ws: WebSocket | undefined;
 let wsPingInterval: ReturnType<typeof setInterval> | undefined;
 let wsReconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+let tokenRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let wsReconnectDelay = WS_RECONNECT_BASE_MS;
 let wsReconnectFireAt = 0;
 let wsIntentionalClose = false;
@@ -137,6 +138,7 @@ export function setAccessToken(token: string, expiresIn: number) {
   tokenExpiresAt = Date.now() + expiresIn * 1000;
   persistAccessToken();
   setSaturnSessionHint();
+  scheduleTokenRefresh();
 }
 
 export function getAccessToken() {
@@ -158,6 +160,10 @@ export async function ensureAuth(): Promise<string | undefined> {
 export function clearAuth() {
   accessToken = undefined;
   tokenExpiresAt = 0;
+  if (tokenRefreshTimer) {
+    clearTimeout(tokenRefreshTimer);
+    tokenRefreshTimer = undefined;
+  }
   clearPersistedAccessToken();
   clearSaturnSessionHint();
 }
@@ -515,6 +521,26 @@ function stopPing() {
   }
 }
 
+// Proactively refresh the token before it expires and reconnect WS if it dropped.
+// Self-reschedules each time setAccessToken is called with a fresh token.
+function scheduleTokenRefresh() {
+  if (tokenRefreshTimer) clearTimeout(tokenRefreshTimer);
+  tokenRefreshTimer = undefined;
+  if (!tokenExpiresAt) return;
+  const delay = tokenExpiresAt - TOKEN_REFRESH_MARGIN_MS - Date.now();
+  if (delay <= 0) return;
+  tokenRefreshTimer = setTimeout(async () => {
+    tokenRefreshTimer = undefined;
+    await ensureToken();
+    // If the WS dropped while the token was expiring, reconnect now that we have a fresh one
+    if (accessToken && Date.now() < tokenExpiresAt && wsHasConnectedBefore && !wsIntentionalClose) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        scheduleReconnect();
+      }
+    }
+  }, delay);
+}
+
 function scheduleReconnect() {
   if (wsReconnectTimeout) return;
   // Add ±25% jitter to avoid thundering herd on reconnect
@@ -526,8 +552,8 @@ function scheduleReconnect() {
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX_MS);
     // Ensure token is valid before attempting WS reconnect
     await ensureToken();
-    // If refresh failed (no access token), stop reconnecting — user will be signed out
-    if (!accessToken) {
+    // If refresh failed or token is still expired, stop reconnecting — user will be signed out
+    if (!accessToken || Date.now() >= tokenExpiresAt) {
       if (hasSessionHint() && typeof navigator !== 'undefined' && !navigator.onLine) {
         onUpdate?.({ '@type': 'updateConnectionState', connectionState: 'connectionStateConnecting' });
         scheduleReconnect();

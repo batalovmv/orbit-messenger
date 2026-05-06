@@ -588,6 +588,7 @@ export function buildApiMessage(msg: SaturnMessage): ApiMessage {
     isDeleting: msg.is_deleted,
     replyInfo: msg.reply_to_id ? buildReplyInfo(msg) : undefined,
     forwardInfo: msg.is_forwarded ? buildForwardInfo(msg) : undefined,
+    isForwardingAllowed: !msg.is_deleted,
     reactions: buildApiReactions(msg.reactions, currentUserId),
     areReactionsPossible: msg.is_deleted ? undefined : true,
     groupedId: msg.grouped_id,

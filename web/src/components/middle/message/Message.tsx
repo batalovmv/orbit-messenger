@@ -573,7 +573,7 @@ const Message = ({
     && !isInDocumentGroupNotLast
     && !isStoryMention
   );
-  const canForward = false;
+  const canForward = Boolean(message.isForwardingAllowed) && !isLocal && !action;
   const canFocus = Boolean(isPinnedList
     || (forwardInfo
       && (forwardInfo.isChannelPost || isChatWithSelf || isRepliesChat || isAnonymousForwards)
