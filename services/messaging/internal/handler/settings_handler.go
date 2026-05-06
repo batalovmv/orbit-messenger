@@ -44,10 +44,15 @@ func NewSettingsHandler(
 	return h
 }
 
+// RegisterInternal registers server-to-server routes that don't carry a user
+// context (no X-User-ID). Must be mounted behind RequireInternalOnly.
+func (h *SettingsHandler) RegisterInternal(app fiber.Router) {
+	app.Post("/internal/notification-settings/muted-users", h.ListMutedUsers)
+}
+
 func (h *SettingsHandler) Register(app fiber.Router) {
 	app.Get("/internal/push-subscriptions/:userId", h.GetInternalPushSubscriptions)
 	app.Delete("/internal/push-subscriptions/:userId", h.DeleteInternalPushSubscription)
-	app.Post("/internal/notification-settings/muted-users", h.ListMutedUsers)
 	app.Get("/users/me/settings/privacy", h.GetPrivacySettings)
 	app.Put("/users/me/settings/privacy", h.UpdatePrivacySettings)
 	app.Get("/users/me/settings/appearance", h.GetUserSettings)

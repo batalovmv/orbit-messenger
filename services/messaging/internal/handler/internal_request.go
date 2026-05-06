@@ -28,6 +28,19 @@ func requireInternalRequest(c *fiber.Ctx, secret string) error {
 	return nil
 }
 
+// RequireInternalOnly returns a Fiber middleware for server-to-server routes
+// where no user context is present. Only validates X-Internal-Token.
+func RequireInternalOnly(secret string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := c.Get("X-Internal-Token")
+		if secret == "" || token == "" ||
+			subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
+			return response.Error(c, apperror.Forbidden("Internal access only"))
+		}
+		return c.Next()
+	}
+}
+
 // RequireInternalToken returns a Fiber middleware that validates X-Internal-Token
 // on every request. X-User-ID is only trusted when the token is valid.
 // This prevents identity spoofing if the service is reached outside the gateway.

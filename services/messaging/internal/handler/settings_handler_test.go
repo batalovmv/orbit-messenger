@@ -179,6 +179,7 @@ func newSettingsAppWithStores(pushStore *mockPushSubscriptionStore, notifStore *
 		opts...,
 	)
 	h := NewSettingsHandler(settingsSvc, pushStore, slog.Default(), internalSecret)
+	h.RegisterInternal(app)
 	h.Register(app)
 	return app
 }

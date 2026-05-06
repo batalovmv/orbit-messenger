@@ -323,6 +323,11 @@ func main() {
 	// Hardened by the gateway with rate limiting before reaching this point.
 	featureFlagHandler.RegisterPublic(app)
 
+	// Server-to-server routes: token-only, no user context required.
+	// Used by gateway for internal lookups (e.g. muted-users check before push).
+	serverInternal := app.Group("", handler.RequireInternalOnly(internalSecret))
+	settingsHandler.RegisterInternal(serverInternal)
+
 	// Register routes behind internal token middleware.
 	// X-User-ID is only trusted when X-Internal-Token is valid,
 	// preventing identity spoofing if the service is reached outside the gateway.
