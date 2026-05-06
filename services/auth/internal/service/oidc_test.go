@@ -475,6 +475,45 @@ func TestOIDC_LoadConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestOIDC_DisplayLabel(t *testing.T) {
+	cases := []struct {
+		name     string
+		cfg      *OIDCConfig
+		expected string
+	}{
+		{"explicit display name", &OIDCConfig{ProviderKey: "google", DisplayName: "Google Workspace"}, "Google Workspace"},
+		{"fallback title-case", &OIDCConfig{ProviderKey: "okta"}, "Okta"},
+		{"empty provider", &OIDCConfig{}, ""},
+		{"nil config", nil, ""},
+		{"display name with spaces trimmed", &OIDCConfig{ProviderKey: "google", DisplayName: "  Acme SSO  "}, "Acme SSO"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.cfg.DisplayLabel(); got != c.expected {
+				t.Errorf("DisplayLabel()=%q want %q", got, c.expected)
+			}
+		})
+	}
+}
+
+func TestOIDC_LoadConfigFromEnv_DisplayName(t *testing.T) {
+	env := map[string]string{
+		"OIDC_PROVIDER_KEY":          "google",
+		"OIDC_PROVIDER_DISPLAY_NAME": " Acme Corp SSO ",
+		"OIDC_ISSUER":                "https://accounts.google.com",
+		"OIDC_CLIENT_ID":             "cid",
+		"OIDC_CLIENT_SECRET":         "secret",
+		"OIDC_REDIRECT_URL":          "https://app/callback",
+	}
+	cfg := LoadOIDCConfigFromEnv(func(k string) string { return env[k] })
+	if cfg.DisplayName != "Acme Corp SSO" {
+		t.Errorf("DisplayName not trimmed: got %q", cfg.DisplayName)
+	}
+	if cfg.DisplayLabel() != "Acme Corp SSO" {
+		t.Errorf("DisplayLabel: got %q", cfg.DisplayLabel())
+	}
+}
+
 func TestOIDC_SanitiseReturnTo(t *testing.T) {
 	cases := []struct {
 		in, frontend, want string

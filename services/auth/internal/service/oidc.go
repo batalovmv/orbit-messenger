@@ -36,12 +36,29 @@ import (
 // the routes (handler returns 404). All non-empty fields are required.
 type OIDCConfig struct {
 	ProviderKey         string   // path segment, e.g. "google"
+	DisplayName         string   // human-facing label, e.g. "Google Workspace"
 	Issuer              string   // discovery base, e.g. https://accounts.google.com
 	ClientID            string
 	ClientSecret        string
 	RedirectURL         string   // must match what's registered with the IdP
 	AllowedEmailDomains []string // empty = any domain
 	FrontendURL         string   // post-callback redirect target
+}
+
+// DisplayLabel returns DisplayName if set, otherwise a Title-cased ProviderKey
+// ("google" -> "Google"). Used by the public /auth/oidc/config endpoint so the
+// FE can label its sign-in button without hard-coding the provider name.
+func (c *OIDCConfig) DisplayLabel() string {
+	if c == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(c.DisplayName); name != "" {
+		return name
+	}
+	if c.ProviderKey == "" {
+		return ""
+	}
+	return strings.ToUpper(c.ProviderKey[:1]) + c.ProviderKey[1:]
 }
 
 // Enabled reports whether the auth service should expose /oidc routes.
@@ -343,6 +360,7 @@ func sanitiseReturnTo(returnTo, frontendURL string) string {
 func LoadOIDCConfigFromEnv(getenv func(string) string) *OIDCConfig {
 	cfg := &OIDCConfig{
 		ProviderKey:  strings.TrimSpace(getenv("OIDC_PROVIDER_KEY")),
+		DisplayName:  strings.TrimSpace(getenv("OIDC_PROVIDER_DISPLAY_NAME")),
 		Issuer:       strings.TrimSpace(getenv("OIDC_ISSUER")),
 		ClientID:     strings.TrimSpace(getenv("OIDC_CLIENT_ID")),
 		ClientSecret: getenv("OIDC_CLIENT_SECRET"),

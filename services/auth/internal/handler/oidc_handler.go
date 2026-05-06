@@ -32,9 +32,31 @@ func NewOIDCHandler(svc *service.AuthService, provider *service.Provider, cfg *s
 // returns 404 internally when the provider isn't enabled, so the URL space
 // is consistent regardless of configuration (no surprise 404 vs 405).
 func (h *OIDCHandler) Register(app *fiber.App) {
+	// /auth/oidc/config is intentionally registered before the :provider group
+	// so the literal "config" segment never gets eaten as a provider key.
+	app.Get("/auth/oidc/config", h.Config)
 	g := app.Group("/auth/oidc/:provider")
 	g.Get("/authorize", h.Authorize)
 	g.Get("/callback", h.Callback)
+}
+
+// Config is a public endpoint the SPA polls on first paint to decide whether
+// to render the SSO sign-in button. Always answers 200 — when SSO is off the
+// FE simply hides the button. Returning a stable shape (rather than 404)
+// avoids the FE having to special-case missing-endpoint vs disabled-provider.
+func (h *OIDCHandler) Config(c *fiber.Ctx) error {
+	if h.cfg == nil || !h.cfg.Enabled() || h.provider == nil {
+		return c.JSON(fiber.Map{
+			"enabled":     false,
+			"providerKey": "",
+			"displayName": "",
+		})
+	}
+	return c.JSON(fiber.Map{
+		"enabled":     true,
+		"providerKey": h.cfg.ProviderKey,
+		"displayName": h.cfg.DisplayLabel(),
+	})
 }
 
 func (h *OIDCHandler) enabled(c *fiber.Ctx) bool {
