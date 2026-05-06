@@ -9,7 +9,6 @@ import {
   checkIfNotificationsSupported,
   checkIfOfflinePushFailed,
   playNotifySound,
-  subscribe,
 } from '../../../util/notifications';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -57,18 +56,13 @@ const SettingsNotifications: FC<OwnProps & StateProps> = ({
   const areNotificationsSupported = checkIfNotificationsSupported();
   const areOfflineNotificationsSupported = areNotificationsSupported && !checkIfOfflinePushFailed();
 
-  useEffect(() => {
-    if (
-      !isActive
-      || hasWebNotifications
-      || !areNotificationsSupported
-      || Notification.permission !== 'default'
-    ) {
-      return;
-    }
-
-    void subscribe();
-  }, [areNotificationsSupported, hasWebNotifications, isActive]);
+  // Permission prompt is intentionally NOT triggered just by opening Settings —
+  // that would fire `Notification.requestPermission()` on a panel-open which
+  // the user did not initiate, which is bad UX and counts against the site's
+  // permission-prompt quota in some browsers. The user explicitly toggling
+  // the "Web notifications" checkbox below routes through
+  // `updateWebNotificationSettings` (settings.ts), which calls
+  // `requestPermission()` + `subscribe()` only when the user opted in.
 
   const areGroupsMuted = Boolean(notifyDefaults?.groups?.mutedUntil);
   const areUsersMuted = Boolean(notifyDefaults?.users?.mutedUntil);

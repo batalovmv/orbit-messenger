@@ -182,7 +182,11 @@ if (IS_SERVICE_WORKER_SUPPORTED && !DEBUG) {
         }
       }
 
-      await navigator.serviceWorker.register(new URL('../serviceWorker', import.meta.url));
+      // Stable script URL — see webpack.config.ts comment on the
+      // `serviceWorker` entry. Per-deploy contenthashing here would
+      // make each register() create a fresh registration alongside
+      // the previous one instead of running the proper update flow.
+      await navigator.serviceWorker.register('/serviceWorker.js');
 
       if (DEBUG) {
         // eslint-disable-next-line no-console

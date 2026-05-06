@@ -78,7 +78,20 @@ export default function createConfig(
   return {
     mode,
     cache: mode === 'development' ? false : undefined,
-    entry: './src/index.tsx',
+    // The SW is its own entry so it gets a stable output filename
+    // (`serviceWorker.js`, no contenthash). The browser identifies a
+    // SW registration by its script URL — if that URL changes on every
+    // deploy, each register() creates a NEW registration alongside the
+    // old one instead of running the proper "update found → installing
+    // → activate" flow that skipWaiting + clients.claim is built around.
+    // Stable URL → byte-by-byte content compare → real update flow.
+    entry: {
+      main: './src/index.tsx',
+      serviceWorker: {
+        import: './src/serviceWorker/index.ts',
+        filename: 'serviceWorker.js',
+      },
+    },
     target: 'web',
 
     devServer: {
@@ -235,6 +248,11 @@ export default function createConfig(
         baseUrl: BASE_URL,
         csp: CSP,
         template: 'src/index.html',
+        // The SW entry must NOT be injected into index.html as a <script>.
+        // It's loaded by the browser via navigator.serviceWorker.register()
+        // in setupServiceWorker.ts; injecting it here would execute SW
+        // globals (self.addEventListener('push', ...)) on the window.
+        excludeChunks: ['serviceWorker'],
       }),
       new CopyWebpackPlugin({
         patterns: [
