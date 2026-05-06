@@ -3425,7 +3425,13 @@
 "Chat.PlayOnceVoiceMessageTooltip" = "This voice message can only be played once";
 "Chat.PrivateMessageEditTimestamp.Date" = "Edited {date}";
 "Chat.Title.Topic" = "{chat} · {topic}";
-"Chat.Translate.Menu.To" = "Translate to {language}";
+"Chat.Translate.Menu.To" = "Translate to...";
+"TranslateToButton" = "Translate to {language}";
+"TranslateToButtonOther" = "Translate to {language}";
+"DoNotTranslateLanguage" = "Do not translate {language}";
+"DoNotTranslateLanguageOther" = "Do not translate {language}";
+"AddedToDoNotTranslate" = "{language} added to exceptions";
+"AddedToDoNotTranslateOther" = "{language} added to exceptions";
 "Chat.UnpinAllMessagesConfirmation_one" = "Do you want to unpin {count} message in this chat?";
 "Chat.UnpinAllMessagesConfirmation_other" = "Do you want to unpin all {count} messages in this chat?";
 "Chat.Voice.Single.Close" = "Close";

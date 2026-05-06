@@ -603,10 +603,18 @@ export async function processSignalingMessage(message: P2pMessage) {
       break;
     }
     case 'InitialSetup': {
+      // NATS at-least-once delivery + replay can hand us the same InitialSetup
+      // more than once. The first one drives the SDP exchange to `stable`; a
+      // second `setRemoteDescription` from `stable` throws InvalidStateError
+      // and pollutes prod logs ×N. Drop duplicates here — the flag must be
+      // set BEFORE the first await below, otherwise a duplicate that arrives
+      // while setRemoteDescription is still pending would also pass the guard.
+      if (state.gotInitialSetup) return;
       const {
         connection, isOutgoing,
       } = state;
       if (!connection) return;
+      state.gotInitialSetup = true;
 
       const newConference = {
         transport: {
@@ -672,7 +680,6 @@ export async function processSignalingMessage(message: P2pMessage) {
         await connection.setLocalDescription(answer);
         sendInitialSetup(parseSdp(connection.localDescription!, true) as P2pParsedSdp);
       }
-      state.gotInitialSetup = true;
       if (state.pendingCandidateTimer) {
         clearTimeout(state.pendingCandidateTimer);
         state.pendingCandidateTimer = undefined;

@@ -1,4 +1,4 @@
-﻿"Month1" = "Январь";
+"Month1" = "Январь";
 "Month2" = "Февраль";
 "Month3" = "Март";
 "Month4" = "Апрель";
@@ -465,8 +465,11 @@
 "TranslatingMessage" = "Переводим…";
 "ShowOriginalButton" = "Показать оригинал";
 "TranslateToButton" = "Перевести на {language}";
+"TranslateToButtonOther" = "Перевести на {language}";
 "DoNotTranslateLanguage" = "Не переводить {language}";
+"DoNotTranslateLanguageOther" = "Не переводить {language}";
 "AddedToDoNotTranslate" = "Язык {language} добавлен в исключения";
+"AddedToDoNotTranslateOther" = "Язык {language} добавлен в исключения";
 "TranslateMenuCocoon" = "Переводы через {link}";
 "TranslateMenuCocoonLinkText" = "наш AI-сервис";
 "Chat.Translate.Menu.To" = "Выбрать язык перевода";
@@ -1565,10 +1568,10 @@
 "NotificationPriorityLow" = "Низкий";
 "NotificationPriorityNormal" = "Обычный";
 "NotificationPriorityTitle" = "Приоритет уведомлений";
+"NotificationPriorityUrgent" = "Срочный";
 "NotificationPrioritySuggest" = "Указать приоритет";
 "NotificationPriorityFeedbackSent" = "Спасибо за отзыв";
 "NotificationPriorityFeedbackFailed" = "Не удалось отправить отзыв";
-"NotificationPriorityUrgent" = "Срочный";
 "NotificationsOffline" = "Уведомления в офлайне";
 "NotificationsSound" = "Громкость звука";
 "NotificationsWeb" = "Веб-уведомления";

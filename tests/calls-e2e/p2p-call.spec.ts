@@ -1,4 +1,26 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
+import { execSync } from 'node:child_process';
+
+// Drop any leftover ringing/active call rows before the test runs.
+// Without this, a crash mid-test (or a previous run that never reached
+// hangup) leaves an `active` p2p row in the calls table. CreateCall is
+// idempotent on (chat_id, status IN ringing/active) and returns the
+// stale row to subsequent POSTs without re-publishing call_incoming —
+// so the callee never sees the modal. ExpireRingingCalls only handles
+// `ringing`, not `active`, so this state would otherwise persist
+// indefinitely across docker compose down/up (postgres_data volume).
+function cleanupStaleCalls() {
+  try {
+    execSync(
+      'docker compose exec -T postgres psql -U orbit -d orbit -c '
+        + '"UPDATE calls SET status=\'ended\', ended_at=NOW() WHERE status IN (\'ringing\',\'active\');"',
+      { stdio: 'pipe' },
+    );
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[p2p-call] stale-call cleanup failed (non-fatal):', (e as Error).message);
+  }
+}
 
 // End-to-end P2P call smoke test against the live local Orbit stack.
 //
@@ -147,6 +169,10 @@ async function pollMediaFlowing(page: Page, label: string, timeoutMs = 15_000) {
 }
 
 test.describe('P2P call between two users', () => {
+  test.beforeAll(() => {
+    cleanupStaleCalls();
+  });
+
   test('alice initiates, bob accepts, ICE connects, media flows, hangup clears state', async ({ browser }) => {
     // Two isolated contexts so cookies/localStorage don't collide.
     const aliceCtx = await browser.newContext();

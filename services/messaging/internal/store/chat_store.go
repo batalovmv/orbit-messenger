@@ -29,6 +29,11 @@ type ChatStore interface {
 	GetMembers(ctx context.Context, chatID uuid.UUID, cursor string, limit int) ([]model.ChatMember, string, bool, error)
 	SearchMembers(ctx context.Context, chatID uuid.UUID, query string, limit int) ([]model.ChatMember, error)
 	GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error)
+	// GetUserClassifierHint returns a coarse role tag for the smart-notifications
+	// classifier: "admin" (admin/superadmin), "bot" (account_type='bot'),
+	// or "member" (default). Returns "member" on a missing/banned user so the
+	// caller never has to special-case nil. Uncached; callers cache in Redis.
+	GetUserClassifierHint(ctx context.Context, userID uuid.UUID) (string, error)
 	AddMember(ctx context.Context, chatID, userID uuid.UUID, role string) error
 	IsMember(ctx context.Context, chatID, userID uuid.UUID) (bool, string, error)
 	GetContactIDs(ctx context.Context, userID uuid.UUID) ([]string, error)
@@ -482,6 +487,26 @@ func (s *chatStore) GetMembers(ctx context.Context, chatID uuid.UUID, cursor str
 	}
 
 	return members, nextCursor, hasMore, rows.Err()
+}
+
+func (s *chatStore) GetUserClassifierHint(ctx context.Context, userID uuid.UUID) (string, error) {
+	var role, accountType string
+	err := s.pool.QueryRow(ctx,
+		`SELECT role, account_type FROM users WHERE id = $1 AND is_active = true`, userID,
+	).Scan(&role, &accountType)
+	if err == pgx.ErrNoRows {
+		return "member", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if accountType == "bot" {
+		return "bot", nil
+	}
+	if role == "admin" || role == "superadmin" {
+		return "admin", nil
+	}
+	return "member", nil
 }
 
 func (s *chatStore) GetMemberIDs(ctx context.Context, chatID uuid.UUID) ([]string, error) {

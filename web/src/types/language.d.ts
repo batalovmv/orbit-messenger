@@ -2569,6 +2569,7 @@ export interface LangPair {
   'Chat.MessagingRestrictedPlaceholder': undefined;
   'Chat.MessagingRestrictedPlaceholderAction': undefined;
   'Chat.PlayOnceVoiceMessageTooltip': undefined;
+  'Chat.Translate.Menu.To': undefined;
   'Chat.Voice.Single.Close': undefined;
   'ChatList.EmptyTopicsCreate': undefined;
   'ChatList.EmptyTopicsDescription': undefined;
@@ -4428,7 +4429,22 @@ export interface LangPairWithVariables<V = LangVariable> {
     'chat': V;
     'topic': V;
   };
-  'Chat.Translate.Menu.To': {
+  'TranslateToButton': {
+    'language': V;
+  };
+  'TranslateToButtonOther': {
+    'language': V;
+  };
+  'DoNotTranslateLanguage': {
+    'language': V;
+  };
+  'DoNotTranslateLanguageOther': {
+    'language': V;
+  };
+  'AddedToDoNotTranslate': {
+    'language': V;
+  };
+  'AddedToDoNotTranslateOther': {
     'language': V;
   };
   'Conversation.ContextMenuSendGiftTo': {

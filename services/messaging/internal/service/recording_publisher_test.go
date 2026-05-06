@@ -12,6 +12,7 @@ type RecordedEvent struct {
 	Data      interface{}
 	MemberIDs []string
 	SenderID  string
+	Hints     ClassifierHints
 }
 
 // RecordingPublisher replaces NATSPublisher in tests, capturing all published events.
@@ -34,6 +35,20 @@ func (r *RecordingPublisher) Publish(subject, event string, data interface{}, me
 		e.SenderID = senderID[0]
 	}
 	r.Events = append(r.Events, e)
+}
+
+// PublishMessage records the event + classifier hints.
+func (r *RecordingPublisher) PublishMessage(subject, event string, data interface{}, memberIDs []string, senderID string, hints ClassifierHints) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.Events = append(r.Events, RecordedEvent{
+		Subject:   subject,
+		Event:     event,
+		Data:      data,
+		MemberIDs: memberIDs,
+		SenderID:  senderID,
+		Hints:     hints,
+	})
 }
 
 // Reset clears all recorded events.
