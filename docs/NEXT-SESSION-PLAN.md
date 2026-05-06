@@ -19,7 +19,7 @@
 | A1 Smart Notifications C1-C5 | ✅ done | `6812a39` |
 | A2 SFU 6-bug fix + e2e | ✅ done | `6bc6d39` |
 | A3 Live Translate + p2p tweaks | ✅ done | `ec71937` |
-| A4 Saturn infra (backup-cron + jetstream) | ✅ done locally, **не пушить до Saturn-кликов** | `f5407d5` |
+| A4 Saturn infra (backup-cron + jetstream) | ❌ **reverted 2026-05-06** — юзер отказался от orbit-backup-cron и orbit-nats-exporter, работаем только с уже созданными Saturn-сервисами | `f5407d5` (originally) → `a2e8c49` (revert) |
 | A5 OIDC backend MVP + ICE watchdog | ✅ done | `d44f4f2` |
 | B2 `/auth/oidc/config` endpoint | ✅ done | `9c3ccb0` |
 | B1 SSO кнопка на login screen | ✅ done | `856ac48` |
@@ -39,7 +39,9 @@
 миграция 071 применена в локальный postgres и схема совпадает с тем, что
 ждёт `call_recordings`-FK у будущего D2 publisher'а.
 
-**12 коммитов на master, не запушены.** Tree clean.
+**14 коммитов на master, не запушены.** Tree clean. Saturn-side
+gating снят: orbit-backup-cron и orbit-nats-exporter не создаются,
+push можно делать в любой момент после согласования.
 
 ---
 
@@ -63,13 +65,10 @@
 1. **Smart Notifications C1-C5** (предыдущая сессия) — backend+SW+UI
 2. **SFU group calls 6-bug fix** + e2e спека (`tests/calls-e2e/sfu-3-call.spec.ts`)
 3. **Live Translate i18n** — `*Other` ключи добавлены
-4. **Saturn infra декларации:**
-   - `.saturn.yml` декларирует `backup-cron`
-   - `docker-compose.yml` добавляет `nats-exporter` (profile `monitoring`)
-   - `monitoring/prometheus/rules/orbit.yml` — alert rules JetStream
-   - 3 runbooks `docs/runbooks/saturn-{backup-cron-enablement,jetstream-prom,perf-smoke}.md`
-   - **Backup-cron live-tested против FirstVDS S3** локально — full
-     pg_dump → upload → download → decrypt → SQL verify roundtrip green
+4. ~~**Saturn infra декларации:**~~ — **отменено 2026-05-06** (revert
+   `a2e8c49`). orbit-backup-cron и orbit-nats-exporter Saturn-сервисы не
+   создаются. Локальный `deploy/backup-cron/*` остаётся в репо для
+   pg_dump 4h RPO smoke-тестов, но в Saturn не деплоится.
 5. **OIDC SSO backend MVP** (сегодня) — ADR 006 + миграция 070 + сервис
    + handler + 10 unit-тестов с настоящей RS256/JWKS подписью. Routes
    404 без `OIDC_PROVIDER_KEY` env. Подробнее ниже в фазе B.
@@ -92,29 +91,11 @@ ok  services/auth/...        (OIDC новые + всё старое — 11s)
 
 ## Saturn-side prerequisites (USER, не agent)
 
-**До push любого PR с `.saturn.yml` изменениями (фаза A4) — сделай:**
+> **Решение 2026-05-06:** новые Saturn-сервисы НЕ создаются. orbit-backup-cron
+> и orbit-nats-exporter отменены (фаза A4 откатилась коммитом `a2e8c49`).
+> Работаем только с уже задеплоенными контейнерами на Saturn.
 
-### 1. Создать сервис `orbit-backup-cron` в Saturn UI
-
-- Add Service → custom container
-- Dockerfile path: `deploy/backup-cron/Dockerfile`
-- No exposed ports
-- Env vars (полный список — `docs/runbooks/saturn-backup-cron-enablement.md`):
-  - `R2_ENDPOINT=https://s3.firstvds.ru`
-  - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (FirstVDS, в 1Password)
-  - `R2_BACKUP_BUCKET=orbit-postgres-backups`
-  - `BACKUP_ENCRYPTION_PASSPHRASE` — `openssl rand -base64 48`,
-    **сохранить в 1Password** — без неё бэкапы нерасшифровываемы
-  - `DATABASE_URL` — копия с любого другого сервиса
-  - `BACKUP_CRON=0 */4 * * *`
-
-### 2. Создать сервис `orbit-nats-exporter` в Saturn UI
-
-- Image: `natsio/prometheus-nats-exporter:0.17.3`
-- Port: 7777
-- Args: `-port=7777 -jsz=all -varz -connz -subz http://nats-js:8222`
-
-### 3. После пилота — для фазы B
+### 1. Для фазы B (OIDC SSO в проде)
 
 Зарегистрировать OAuth client в IdP (Google Workspace по умолчанию):
 
@@ -132,7 +113,7 @@ ok  services/auth/...        (OIDC новые + всё старое — 11s)
 - Restart `orbit-auth`. Лог должен показать
   `oidc: provider ready key=google issuer=...`
 
-### 4. Для фазы B4 (sync worker)
+### 2. Для фазы B4 (sync worker)
 
 Включить Google Workspace Directory API + создать service account с
 domain-wide delegation на `https://www.googleapis.com/auth/admin.directory.user.readonly`.
@@ -337,21 +318,19 @@ CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE en
   ретрай через cron не надо (потеря приемлема для compliance baseline)
 - Тесты: модульный с фейковым track + storage mock
 
-### D3. Compliance-плашка перед стартом звонка (~1.5 ч)
+### D3. Compliance-плашка перед стартом звонка (~1 ч)
+
+Частный корпоративный мессенджер — никакого юридического crosscheck'а
+не нужно (решение юзера 2026-05-06). Просто внутренняя корп-нотификация.
 
 - При первом старте/принятии звонка показать модал:
   - Заголовок: «Звонки записываются»
-  - Текст: «В этой компании звонки сохраняются для compliance согласно
-    политике ИБ. Запись доступна администраторам по запросу. Продолжая,
-    вы подтверждаете информированность.»
-  - Чекбокс «Не показывать снова»
-  - Кнопка «Продолжить» (disabled пока чекбокс не отмечен ИЛИ юзер
-    впервые видит — тут продумать UX)
+  - Текст: «Звонки в Orbit сохраняются для внутренних целей компании
+    и доступны администраторам.»
+  - Кнопка «Продолжить»
 - Per-user flag в localStorage `orbit-call-recording-acknowledged-v1`
 - Локализация: ключи `CallRecordingNoticeTitle`, `CallRecordingNoticeBody`,
-  `CallRecordingNoticeAck`, `CallRecordingNoticeContinue`
-- **Юридический crosscheck:** перед merge — попросить юзера показать
-  текст юристу. ФЗ-152 формулировки в РФ строгие.
+  `CallRecordingNoticeContinue`
 
 ### D4. Admin endpoint для скачивания (~1.5 ч)
 
@@ -366,23 +345,28 @@ CREATE INDEX idx_call_recordings_retention ON call_recordings(ended_at) WHERE en
 
 ### D5. GC ретеншена 90 дней (~1 ч)
 
-- В `deploy/backup-cron/scripts/` (или новом сервисе) добавить cron-job
-  раз в день:
-  ```bash
-  KEYS=$(psql -t -c "DELETE FROM call_recordings WHERE ended_at < now() - interval '90 days' RETURNING s3_key;")
-  echo "$KEYS" | xargs -I{} aws s3 rm "s3://${R2_BACKUP_BUCKET}/calls/{}"
-  ```
-- Альтернатива: bucket lifecycle rule + DELETE only DB. Проще, но БД и
-  S3 расходятся при сбое — лучше явный workflow.
-- Метрика `orbit_call_recordings_deleted_total` для мониторинга
+Новых Saturn-сервисов не заводим (см. revert A4). GC живёт горутиной
+прямо в `services/calls` — это сервис, который пишет recordings, ему
+же их и удалять.
+
+- В `services/calls/cmd/main.go` запустить горутину `time.Ticker(24*time.Hour)`,
+  которая на тик:
+  1. `DELETE FROM call_recordings WHERE ended_at < now() - interval '90 days'
+     RETURNING s3_key` — массовый delete + сбор ключей.
+  2. Для каждого ключа — `pkg/storage.Delete(ctx, key)`.
+  3. Метрика `orbit_call_recordings_deleted_total` (counter).
+- Альтернатива (если влом): bucket lifecycle rule + DELETE только из БД.
+  Проще, но БД и S3 расходятся при сбое — явный workflow надёжнее.
 
 ### D6. Storage budget alert (~30 мин)
 
-- Метрика `orbit_call_recordings_total_bytes` (sum size_bytes из БД,
-  scrape раз в 5 мин)
-- Prometheus alert `CallRecordingsStorageHigh` при > 100 GB → твой
-  триггер посмотреть retention или вырубить запись
-- Добавить в `monitoring/prometheus/rules/orbit.yml`
+- Метрика `orbit_call_recordings_total_bytes` — gauge в `services/calls`,
+  обновлять раз в 5 минут запросом `SELECT COALESCE(SUM(size_bytes), 0)
+  FROM call_recordings WHERE ended_at IS NOT NULL`. Экспортировать через
+  существующий `pkg/metrics` без новых Saturn-сервисов.
+- Saturn-managed Prometheus уже умеет alert'ы (см. memory
+  `Saturn observability`); порог >100 GB конфигурится там в UI, не в
+  репо. Никаких новых rules-файлов.
 
 ### Push после D
 
@@ -550,19 +534,22 @@ cd tests/calls-e2e && npx playwright test sfu-3-call.spec.ts
   Encryption: можно reuse `pkg/crypto.SealAESGCM` (уже использовалось
   для медиа чатов в Phase 4); per-recording random key, key wrap
   через мастер.
-- **D3 юридика:** текст из плана — это плейсхолдер. **ОБЯЗАТЕЛЬНО**
-  показать юристу до merge. ФЗ-152 (Россия) и GDPR (если есть EU
-  юзеры) формулировки строгие. Per-user ack persisted в localStorage
-  под ключом `orbit-call-recording-acknowledged-v1` — если меняется
-  текст, версию надо бампать (`-v2`) чтобы все юзеры пере-подтвердили.
+- **D3 текст:** частный корп-мессенджер, юридический crosscheck НЕ
+  нужен (решение юзера 2026-05-06). Просто внутренняя нотификация
+  про запись. Per-user ack в localStorage под ключом
+  `orbit-call-recording-acknowledged-v1`; если когда-нибудь поменяешь
+  формулировку — бампни версию (`-v2`), чтобы юзеры пере-подтвердили.
 - **D4 IDOR:** не забыть проверку, что `call_id` в URL действительно
   принадлежит compliance-роли, а не юзеру (сейчас `SysViewAuditLog`
   гейт уже стоит — просто не забыть его пересмотреть для нового
   permission `SysListenCallRecordings` если решишь его создать).
-- **D5/D6:** D5-крон жить может в `deploy/backup-cron/scripts/`
-  (рядом с pg_dump уже там). Метрика D6 `orbit_call_recordings_total_bytes`
-  лучше всего скрапиться из БД (sum size_bytes), не из S3 — S3 listing
-  стоит денег и асинхронен.
+- **D5/D6:** Saturn orbit-backup-cron как сервис не создаётся
+  (см. revert A4) — D5-крон ставить горутиной с `time.Ticker(24*time.Hour)`
+  внутри уже задеплоенного `services/calls`. Метрика D6
+  `orbit_call_recordings_total_bytes` — туда же, scrape `SUM(size_bytes)`
+  из `call_recordings` раз в 5 минут и экспортировать через существующий
+  `pkg/metrics`. Никаких новых Saturn-контейнеров. S3 listing для метрики
+  не использовать — стоит денег и асинхронен.
 
 ## Фаза E
 
