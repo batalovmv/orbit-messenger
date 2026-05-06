@@ -214,6 +214,34 @@ func main() {
 	}
 	handler.NewOIDCHandler(authSvc, oidcProvider, oidcCfg).Register(app)
 
+	// OIDC directory-sync worker (phase B4). Deactivates users that have
+	// been removed from the IdP. Only starts when both OIDC and the sync
+	// feature flag are enabled.
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	syncCfg := service.LoadOIDCSyncConfigFromEnv(os.Getenv)
+	if syncCfg.Enabled && oidcProvider != nil {
+		saJSON := os.Getenv("OIDC_SYNC_GOOGLE_SA_JSON")
+		domain := ""
+		if len(oidcCfg.AllowedEmailDomains) > 0 {
+			domain = oidcCfg.AllowedEmailDomains[0]
+		}
+		if saJSON == "" || domain == "" {
+			slog.Warn("oidc-sync: enabled but missing SA JSON or domain — skipping",
+				"has_sa_json", saJSON != "",
+				"has_domain", domain != "",
+			)
+		} else {
+			dirClient, dirErr := service.NewGoogleDirectoryClient(workerCtx, saJSON, domain)
+			if dirErr != nil {
+				slog.Error("oidc-sync: directory client init failed — sync disabled", "error", dirErr)
+			} else {
+				syncCfg.ProviderKey = oidcCfg.ProviderKey
+				worker := service.NewOIDCSyncWorker(syncCfg, authSvc, dirClient, logger)
+				go worker.Run(workerCtx)
+			}
+		}
+	}
+
 	// Graceful shutdown
 	go func() {
 		if err := app.Listen(":" + port); err != nil {
@@ -226,6 +254,9 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	// Stop the directory-sync worker before HTTP shutdown.
+	workerCancel()
 
 	slog.Info("shutting down auth service")
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {

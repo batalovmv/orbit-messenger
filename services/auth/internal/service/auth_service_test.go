@@ -20,6 +20,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/services/auth/internal/model"
+	"github.com/mst-corp/orbit/services/auth/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,10 @@ func (f *fakeUserStore) CreateOIDCUser(ctx context.Context, u *model.User, provi
 		u.ID = uuid.New()
 	}
 	return nil
+}
+func (f *fakeUserStore) Deactivate(_ context.Context, _ uuid.UUID) error { return nil }
+func (f *fakeUserStore) ListOIDCActiveUsers(_ context.Context, _ string) ([]store.OIDCActiveUser, error) {
+	return nil, nil
 }
 
 type fakeInviteStore struct {

@@ -41,6 +41,21 @@ type UserStore interface {
 	// CreateOIDCUser inserts a passwordless user already linked to an OIDC
 	// identity. Used when /oidc/callback finds no email match in users.
 	CreateOIDCUser(ctx context.Context, u *model.User, provider, subject string) error
+
+	// Deactivate marks a user as inactive. Used by the OIDC directory-sync
+	// worker when the user is no longer present in the IdP.
+	Deactivate(ctx context.Context, id uuid.UUID) error
+
+	// OIDCActiveUser is a lightweight projection used by the directory-sync
+	// worker to enumerate users that need to be checked against the IdP.
+	// ListOIDCActiveUsers returns all active users bound to a given provider.
+	ListOIDCActiveUsers(ctx context.Context, providerKey string) ([]OIDCActiveUser, error)
+}
+
+// OIDCActiveUser is a lightweight projection returned by ListOIDCActiveUsers.
+type OIDCActiveUser struct {
+	ID      uuid.UUID
+	Subject string
 }
 
 type userStore struct {
@@ -280,6 +295,46 @@ func (s *userStore) LinkOIDCSubject(ctx context.Context, userID uuid.UUID, provi
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+// Deactivate sets is_active=false and records the deactivation timestamp.
+// Used by the OIDC directory-sync worker; deactivated_by is left NULL
+// because the deactivation is autonomous (no human actor).
+func (s *userStore) Deactivate(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE users SET is_active = false, deactivated_at = NOW(), updated_at = NOW()
+		 WHERE id = $1 AND is_active = true`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("deactivate user %s: %w", id, err)
+	}
+	return nil
+}
+
+// ListOIDCActiveUsers returns the ID and OIDC subject for every active user
+// bound to providerKey. Column order matches OIDCActiveUser field order.
+func (s *userStore) ListOIDCActiveUsers(ctx context.Context, providerKey string) ([]OIDCActiveUser, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, oidc_subject
+		 FROM users
+		 WHERE oidc_provider = $1 AND is_active = true AND oidc_subject IS NOT NULL`,
+		providerKey,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list oidc active users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []OIDCActiveUser
+	for rows.Next() {
+		var u OIDCActiveUser
+		if err := rows.Scan(&u.ID, &u.Subject); err != nil {
+			return nil, fmt.Errorf("list oidc active users: scan: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
 
 // CreateOIDCUser inserts a passwordless user pre-linked to an OIDC identity.

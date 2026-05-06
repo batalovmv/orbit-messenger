@@ -151,6 +151,15 @@ func (m *mockUserStore) CreateOIDCUser(_ context.Context, u *model.User, _, _ st
 	m.users[u.ID] = u
 	return nil
 }
+func (m *mockUserStore) Deactivate(_ context.Context, id uuid.UUID) error {
+	if u, ok := m.users[id]; ok {
+		u.IsActive = false
+	}
+	return nil
+}
+func (m *mockUserStore) ListOIDCActiveUsers(_ context.Context, _ string) ([]store.OIDCActiveUser, error) {
+	return nil, nil
+}
 
 type mockSessionStore struct {
 	sessions map[uuid.UUID]*model.Session

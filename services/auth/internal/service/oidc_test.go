@@ -27,6 +27,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/mst-corp/orbit/services/auth/internal/model"
+	"github.com/mst-corp/orbit/services/auth/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -296,6 +297,17 @@ func (r *recordingUserStore) CreateOIDCUser(_ context.Context, u *model.User, pr
 	r.bySubject[provider+":"+subject] = u
 	r.created = append(r.created, u)
 	return nil
+}
+func (r *recordingUserStore) Deactivate(_ context.Context, id uuid.UUID) error {
+	for _, u := range r.byEmail {
+		if u.ID == id {
+			u.IsActive = false
+		}
+	}
+	return nil
+}
+func (r *recordingUserStore) ListOIDCActiveUsers(_ context.Context, _ string) ([]store.OIDCActiveUser, error) {
+	return nil, nil
 }
 
 // driveCallback walks the AuthorizeURL → /token → HandleCallback path
