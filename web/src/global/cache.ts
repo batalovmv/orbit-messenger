@@ -245,11 +245,21 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
 
   // Saturn: populate knownChatIds from cached state so isUserId() works
   // before fresh API data arrives. Store on window to avoid circular chunk deps.
+  // Direct (1:1) chats must NOT be registered — their chatId doubles as the
+  // peer reference for code paths that expect isUserId(chatId)===true (e.g.
+  // selectDefaultReaction's private-chat branch). Saturn's direct chats have
+  // their own UUID separate from the peer's user UUID, so the userIdSet check
+  // alone misclassifies them as groups.
   if (newState.chats?.byId) {
     const userIdSet = newState.users?.byId ? new Set(Object.keys(newState.users.byId)) : new Set<string>();
     const saturnChatIds: string[] = [];
     for (const chatId of Object.keys(newState.chats.byId)) {
-      if (/^[0-9a-f]{8}-/.test(chatId) && !userIdSet.has(chatId)) {
+      const chat = newState.chats.byId[chatId];
+      if (
+        /^[0-9a-f]{8}-/.test(chatId)
+        && !userIdSet.has(chatId)
+        && chat?.type !== 'chatTypePrivate'
+      ) {
         saturnChatIds.push(chatId);
       }
     }

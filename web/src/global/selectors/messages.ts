@@ -1202,7 +1202,12 @@ export function selectDefaultReaction<T extends GlobalState>(global: T, chatId: 
   if (chatId === SERVICE_NOTIFICATIONS_USER_ID) return undefined;
 
   const isPrivate = isUserId(chatId);
-  const defaultReaction = global.config?.defaultReaction;
+  // Orbit's Saturn backend doesn't populate `global.config` (MTProto vestige
+  // from the TG Web A fork), so we fall back to the first available reaction
+  // — the heart on Telegram's stock list. Without this, the hover-triggered
+  // quick-reaction strip in Message.tsx is gated to `false` and never renders.
+  const defaultReaction = global.config?.defaultReaction
+    ?? global.reactions.availableReactions?.find((r) => !r.isInactive)?.reaction;
   if (!defaultReaction) {
     return undefined;
   }
